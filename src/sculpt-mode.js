@@ -1,6 +1,7 @@
 // Sculpt mode (#739): the pure parts of the fifth viewport mode. The stage
 // component (sculpt-stage.jsx) and App use these; verify-sculpt-mode pins them.
 import { placementInFront, SCULPT_KIND } from "./scene-objects.js";
+import { effortOptions, modelIsSelectable, readStoredModel } from "./workflow/agent-client.js";
 
 /** The sculpt turntable's render layer. dualview.jsx owns 2-5; nothing else
  * draws on 6, so only the sculpt camera sees the turntable floor and lights. */
@@ -112,4 +113,47 @@ export function assetDataUrl(asset) {
 	let binary = "";
 	for (let index = 0; index < bytes.length; index += 0x8000) binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
 	return `data:${asset.type};base64,${globalThis.btoa(binary)}`;
+}
+
+/** Sculpt remembers its own model and effort, apart from the Agent panel's chat model. */
+export const SCULPT_MODEL_KEY = "cozyclay.sculpt.model";
+
+export function readSculptModel(storage = globalThis.localStorage) {
+	try {
+		const value = JSON.parse(storage?.getItem(SCULPT_MODEL_KEY) ?? "null");
+		return value && typeof value.model === "string" ? { model: value.model, effort: typeof value.effort === "string" ? value.effort : null } : null;
+	} catch {
+		return null;
+	}
+}
+
+export function storeSculptModel(choice, storage = globalThis.localStorage) {
+	try {
+		if (choice?.model) storage?.setItem(SCULPT_MODEL_KEY, JSON.stringify({ model: choice.model, effort: choice.effort ?? null }));
+	} catch {
+		// Storage denial must never break picking a model.
+	}
+}
+
+/**
+ * The model and effort Sculpt runs on, from the sidecar's `/agent/models`
+ * answer: the current pick, else Sculpt's remembered one, else the Agent
+ * panel's model, else the first model a signed-in provider can run. Only a
+ * model the list still carries and its provider can run is ever chosen, and
+ * an effort the model does not offer falls back to its default (null).
+ */
+export function sculptModelChoice(advertised, current = null, stored = readSculptModel(), agentModel = readStoredModel()) {
+	const models = Array.isArray(advertised?.models) ? advertised.models : [];
+	const providers = Array.isArray(advertised?.providers) ? advertised.providers : [];
+	const runnable = (key) => Boolean(key) && models.some((entry) => entry.id === key) && modelIsSelectable(providers, key);
+	const model = [current?.model, stored?.model, agentModel].find(runnable)
+		?? models.find((entry) => modelIsSelectable(providers, entry.id))?.id ?? "";
+	const offered = effortOptions(models.find((entry) => entry.id === model));
+	const wanted = model === current?.model ? current?.effort : model === stored?.model ? stored?.effort : null;
+	return { model, effort: wanted && offered.includes(wanted) ? wanted : null };
+}
+
+/** How a model key is named to the operator: its catalogue label, else the key. */
+export function sculptModelLabel(advertised, key) {
+	return (Array.isArray(advertised?.models) ? advertised.models : []).find((entry) => entry.id === key)?.label ?? key ?? "";
 }

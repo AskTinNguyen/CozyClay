@@ -18,6 +18,10 @@ const modesFor = (previsMode) => (previsMode === "storyboard" ? WORKFLOW_MODES.f
 const {
 	SCULPT_LAYER, SCULPT_VIEWS, agentSessionReady, createCommandTap, isolatedObjectIds,
 	sculptAgentClient, sculptFraming, sculptPlacement, sculptTargetFromSelection,
+	sculptModelChoice,
+	sculptModelLabel,
+	readSculptModel,
+	storeSculptModel,
 } = await import("../src/sculpt-mode.js");
 const { placementInFront, SCULPT_KIND } = await import("../src/scene-objects.js");
 
@@ -157,6 +161,34 @@ check("the run's agent client carries the live editor context", () => {
 	assert.deepEqual(sent[0].request, { surface: "studio", text: "go", context: { host: { workspaceHandle: "h" } } });
 	assert.equal(sent[0].onEvent, onEvent);
 	assert.equal(sent[0].signal, "signal");
+});
+
+check("Sculpt picks a model the sidecar can run: current, then remembered, then the Agent panel's, then the first runnable", () => {
+	const advertised = {
+		providers: [
+			{ id: "openai-codex", signedIn: true, models: [{ key: "openai-codex/gpt-6-astra" }, { key: "openai-codex/gpt-6.1-sol" }] },
+			{ id: "anthropic", signedIn: false, models: [{ key: "anthropic/opus" }] },
+		],
+		models: [
+			{ id: "openai-codex/gpt-6-astra", label: "GPT-6 Astra", efforts: ["low", "medium", "high"], defaultEffort: "medium" },
+			{ id: "openai-codex/gpt-6.1-sol", label: "GPT-6.1 Sol", efforts: ["medium", "high"] },
+			{ id: "anthropic/opus", label: "Opus" },
+		],
+	};
+	const sol = { model: "openai-codex/gpt-6.1-sol", effort: "high" };
+	assert.deepEqual(sculptModelChoice(advertised, sol, null, null), sol, "the current pick stays while runnable");
+	assert.deepEqual(sculptModelChoice(advertised, null, sol, "openai-codex/gpt-6-astra"), sol, "Sculpt's own memory beats the Agent panel's model");
+	assert.deepEqual(sculptModelChoice(advertised, null, null, "openai-codex/gpt-6.1-sol"), { model: "openai-codex/gpt-6.1-sol", effort: null }, "the Agent panel's model is the first default");
+	assert.deepEqual(sculptModelChoice(advertised, { model: "anthropic/opus", effort: null }, null, null), { model: "openai-codex/gpt-6-astra", effort: null }, "a provider without a credential is never chosen");
+	assert.deepEqual(sculptModelChoice(advertised, { model: "openai-codex/gpt-6-astra", effort: "ultra" }, null, null), { model: "openai-codex/gpt-6-astra", effort: null }, "an effort the model lacks falls back to its default");
+	assert.deepEqual(sculptModelChoice({ models: [], providers: [] }, sol, sol, null), { model: "", effort: null }, "no list, no guess");
+	assert.equal(sculptModelLabel(advertised, "openai-codex/gpt-6.1-sol"), "GPT-6.1 Sol");
+	assert.equal(sculptModelLabel(advertised, "x/unknown"), "x/unknown");
+	const store = new Map();
+	const storage = { getItem: (key) => store.get(key) ?? null, setItem: (key, value) => store.set(key, value) };
+	storeSculptModel(sol, storage);
+	assert.deepEqual(readSculptModel(storage), sol);
+	assert.equal(readSculptModel({ getItem: () => "{broken" }), null);
 });
 
 if (failures) {
