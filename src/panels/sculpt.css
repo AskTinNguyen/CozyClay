@@ -1,0 +1,56 @@
+/* Unlayered and rooted like src/panels/details.css: the Foldout's v2 Details primitives
+   (.v2-details-section.v2-details-section .btn / .inspector-hint) are unlayered too, so the
+   overrides below repeat that root to win on specificity. */
+.sculpt-panel { display: grid; gap: var(--sp-1); padding: 4px var(--sp-2) var(--sp-2); }
+.v2-details-section.v2-details-section .sculpt-panel .btn.full { margin-top: 0; }
+.v2-details-section.v2-details-section .sculpt-panel .btn:disabled { opacity: .45; cursor: not-allowed; }
+.sculpt-label { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-1); color: var(--text-2); font-size: 11px; font-weight: 500; white-space: nowrap; }
+.sculpt-label small { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--text-3); }
+
+/* Reference well */
+.sculpt-well { position: relative; border-radius: var(--r-2); border: 1px solid var(--row-divider); background: var(--field); overflow: hidden; }
+.sculpt-well-empty { display: grid; justify-items: center; gap: 4px; padding: var(--sp-3) var(--sp-2); border-style: dashed; border-color: var(--divider-strong); color: var(--text-2); text-align: center; cursor: pointer; transition: border-color var(--fast), background var(--fast); }
+.sculpt-well-empty:hover, .sculpt-well-empty[data-dragging="true"] { border-color: var(--select); background: var(--select-tint); color: var(--text-1); }
+.sculpt-well-empty:focus-visible { outline: none; border-color: var(--select); box-shadow: 0 0 0 2px var(--select-tint); }
+.sculpt-well-title { font-size: 12px; font-weight: 500; color: var(--text-1); }
+.sculpt-well-sub { font-size: 11px; color: var(--text-3); }
+.v2-details-section.v2-details-section .sculpt-well-empty .btn.ghost { width: auto; margin-top: 4px; pointer-events: none; }
+.sculpt-well-filled img { display: block; width: 100%; max-height: 220px; object-fit: contain; background: var(--surface-0); }
+.v2-details-section.v2-details-section .sculpt-well-replace { position: absolute; right: 6px; bottom: 6px; width: auto; background: var(--overlay); color: var(--text-1); }
+
+/* Primary action */
+.v2-details-section.v2-details-section .sculpt-cancel { color: var(--danger); background: none; box-shadow: inset 0 0 0 1px var(--danger); }
+.v2-details-section.v2-details-section .sculpt-cancel:hover { background: var(--surface-active); color: var(--danger); }
+.v2-details-section.v2-details-section .sculpt-refusal { color: var(--text-2); }
+
+/* Progress */
+.sculpt-progress { display: grid; gap: var(--sp-1); padding: var(--sp-1); border-radius: var(--r-2); background: var(--surface-raised); }
+.sculpt-stepper { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0; padding: 0; list-style: none; }
+.sculpt-step { position: relative; display: grid; justify-items: center; gap: 4px; color: var(--text-3); font-size: 11px; }
+/* Connector from the previous step's dot to this one. */
+.sculpt-step + .sculpt-step::before { content: ""; position: absolute; top: 4px; right: 50%; width: 100%; height: 1px; background: var(--divider-strong); }
+.sculpt-step[data-state="complete"]::before, .sculpt-step[data-state="current"]::before { background: var(--select); }
+.sculpt-step-dot { position: relative; z-index: 1; width: 9px; height: 9px; border-radius: 50%; border: 1px solid var(--divider-strong); background: var(--surface-raised); }
+.sculpt-step[data-state="complete"] { color: var(--text-2); }
+.sculpt-step[data-state="complete"] .sculpt-step-dot { background: var(--select); border-color: var(--select); }
+.sculpt-step[data-state="current"] { color: var(--text-1); font-weight: 600; }
+.sculpt-step[data-state="current"] .sculpt-step-dot { border-color: var(--select); background: var(--select); box-shadow: 0 0 0 3px var(--select-tint); animation: sculpt-pulse 1.4s var(--ease) infinite; }
+@keyframes sculpt-pulse { 50% { box-shadow: 0 0 0 5px var(--select-tint); } }
+@media (prefers-reduced-motion: reduce) { .sculpt-step[data-state="current"] .sculpt-step-dot { animation: none; } }
+
+.sculpt-stats { display: flex; justify-content: space-between; color: var(--text-2); font-size: 11px; font-variant-numeric: tabular-nums; }
+.sculpt-iou { display: grid; gap: 4px; }
+.sculpt-iou .sculpt-label small { color: var(--text-1); font-family: var(--mono); }
+.sculpt-iou-target { color: var(--text-3); }
+.sculpt-iou-bar { position: relative; height: 6px; border-radius: 3px; background: var(--field); }
+.sculpt-iou-fill { position: absolute; inset: 0 auto 0 0; width: calc(var(--sculpt-iou) * 100%); border-radius: inherit; background: var(--primary); transition: width var(--med) var(--ease); }
+.sculpt-iou-bar[data-reached="true"] .sculpt-iou-fill { background: var(--ok); }
+.sculpt-iou-marker { position: absolute; top: -3px; bottom: -3px; left: calc(var(--sculpt-target) * 100%); width: 2px; margin-left: -1px; border-radius: 1px; background: var(--select); }
+.v2-details-section.v2-details-section .sculpt-done { color: var(--ok); }
+.v2-details-section.v2-details-section .sculpt-error { color: var(--danger); }
+
+/* Overlay sheet */
+.sculpt-sheet { display: grid; gap: 6px; }
+.v2-details-section.v2-details-section .sculpt-sheet .btn[aria-pressed="true"] { color: var(--text-1); box-shadow: inset 0 0 0 1px var(--select); }
+.sculpt-sheet-image { display: block; width: 100%; border-radius: var(--r-1); border: 1px solid var(--row-divider); background: var(--surface-0); }
+
