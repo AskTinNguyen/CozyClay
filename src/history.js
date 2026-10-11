@@ -46,8 +46,6 @@ export function canRedo(history) {
 	return history.future.length > 0;
 }
 
-// ---------------------------------------------------------------- tx ----
-//
 // `cancel` is teardown-only by contract: it must not call back into the
 // coordinator (`endTransaction`/`settleTransaction`). The coordinator owns
 // the close — it retires the token BEFORE running `cancel`, so a close

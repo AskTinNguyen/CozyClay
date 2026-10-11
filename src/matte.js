@@ -110,15 +110,6 @@ export function borderSeeds({ data, width, height }, points = null) {
 }
 
 /**
- * Drop the background, in place on a copy.
- *
- * `tolerance` (0–1) is the one control a person should ever need: it scales
- * both the bound against the seed colours and the local step. `shrink` eats
- * the fringe of background-coloured pixels that survives any threshold, and
- * `feather` softens what is left so the card's edge does not read as a
- * cut-out-with-scissors line against the set.
- */
-/**
  * `within`, when given, fences the growth: a pixel can only be entered if it is
  * marked there. That is what lets the eraser be the same tool as the brush —
  * growing back through a region that is already selected, and stopping where
@@ -177,8 +168,6 @@ export function backgroundMask(pixels, { points = null, tolerance = 0.18, within
 	return background;
 }
 
-/* -------------------------------------------------------------- brush ---- */
-
 /**
  * A round stroke into the paint layer: `value` 1 means "this is background
  * after all", -1 means "put that back". The paint layer is kept SEPARATE from
@@ -235,8 +224,6 @@ export function combineMask(auto, paint, { width, height, paintWidth = width, pa
 	return out;
 }
 
-/* -------------------------------------------------------------- apply ---- */
-
 /**
  * Turn a mask into transparency: erode the fringe, soften the boundary, write
  * the alpha. Split from the growth above so the editor can show a mask, let
@@ -257,7 +244,6 @@ function dropEdgeLines(data, width, height) {
 	let changed = 0;
 	for (let i = 0; i < total; i += 1) {
 		if (data[i * 4 + 3] < 8 || visited[i]) continue;
-		// flood this kept component
 		stack.length = 0;
 		stack.push(i);
 		visited[i] = 1;
@@ -336,7 +322,6 @@ export function applyMask(pixels, mask, { shrink = 1, feather = 1 } = {}) {
 		grown = next;
 	}
 
-	/* -- alpha, then a soft edge that only touches the boundary ------------- */
 	const alpha = new Float32Array(total);
 	let removed = 0;
 	for (let pixel = 0; pixel < total; pixel++) {
@@ -387,8 +372,6 @@ export function removeBackground(pixels, { points = null, tolerance = 0.18, shri
 	return applyMask(pixels, grown, { shrink, feather });
 }
 
-/* --------------------------------------------------------------- trim ---- */
-
 /** The box the picture still occupies, or null when nothing survived. */
 export function opaqueBounds({ data, width, height }, threshold = 8) {
 	let minX = width;
@@ -421,8 +404,6 @@ export function cropPixels({ data, width, height }, box) {
 	}
 	return { data: out, width: box.width, height: box.height };
 }
-
-/* ------------------------------------------------------------- browser ---- */
 
 function defaultCanvas(width, height) {
 	if (typeof OffscreenCanvas === "function") return new OffscreenCanvas(width, height);

@@ -30,8 +30,6 @@ export function cameraPresetFraming(id, subject = {}, filmback = {}) {
 	return { id, pos, yaw, pitch, fovDeg, focalMm: preset.focalMm };
 }
 
-/* ------------------------------------------------------------ framing --- */
-
 /**
  * Snapshot the shot camera as a plain framing record.
  * yaw/pitch follow the YXZ free-look convention in controls.jsx.
@@ -150,8 +148,6 @@ export function interpolateFraming(a, b, anchor, t, ease = easeInOut, filmback =
 		fovDeg: (focalMmToFov(focalMm, filmback.sensorId, filmback.aspectRatio) * 180) / Math.PI,
 	};
 }
-
-/* ----------------------------------------------------------- naming ---- */
 
 const DEG = 180 / Math.PI;
 
@@ -287,8 +283,6 @@ export function moveSlate(move) {
 	].map((part) => part.toUpperCase());
 	return `${end[0]} → ${end[1]} · ${move.label.toUpperCase()}`;
 }
-
-/* ------------------------------------------------- multi-key sequences --- */
 
 /**
  * Sample an N-key camera move at a frame. Keys are sorted frame-unique

@@ -1,5 +1,5 @@
 import { bucketMs, track, EXECUTION_TELEMETRY_VALUES } from "./analytics.js";
-export { AGENT_TOOL_CATEGORIES, MCP_TOOL_CATEGORIES, EXECUTION_TELEMETRY_EVENTS, EXECUTION_TELEMETRY_PROPERTY_KEYS, EXECUTION_TELEMETRY_VALUES } from "./analytics.js";
+export { AGENT_TOOL_CATEGORIES, EXECUTION_TELEMETRY_EVENTS, EXECUTION_TELEMETRY_PROPERTY_KEYS, EXECUTION_TELEMETRY_VALUES } from "./analytics.js";
 const WORKFLOW_FAILURE_CODES = new Set(["aborted", "capture_failed", "generation_failed", "unknown"]);
 const AGENT_FAILURE_CODES = new Set(["aborted", "auth", "rate_limited", "tool_failed", "upstream", "unknown"]);
 function secureId() {
@@ -61,7 +61,7 @@ export function startWorkflowExecution(metadata, { capture = track, now = () => 
 	const emit = (event, props) => {
 		if (runId) safeCapture(capture, event, props);
 	};
-	if (runId) emit("workflow:run_requested", {
+	emit("workflow:run_requested", {
 		surface: "workflow",
 		...(EXECUTION_TELEMETRY_VALUES.node_count_bucket.has(metadata.node_count_bucket) ? { node_count_bucket: metadata.node_count_bucket } : {}),
 		run_id: runId,

@@ -1133,7 +1133,7 @@ export function curveToPoints2d(curve) {
 	for (let i = 0; i < count; i += 1) {
 		// Rounded rather than floored so the sampling is symmetric about the
 		// middle; i = count-1 lands exactly on `last`, i = 0 exactly on 0.
-		const source = count === 1 ? 0 : Math.round((i * last) / (count - 1));
+		const source = Math.round((i * last) / (count - 1));
 		const point = visible[source];
 		points2d.push([point.u, point.v]);
 	}
