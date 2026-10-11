@@ -259,7 +259,8 @@ expect(
 // The studio source spans App.jsx and app-stage.jsx (module-level extraction); pin against both.
 import { readStudioSource } from "./bus/verify-domain-modules.mjs";
 const appSource = readStudioSource()
-	+ await readFile(new URL("../src/app-stage.jsx", import.meta.url), "utf8");
+	+ await readFile(new URL("../src/app-stage.jsx", import.meta.url), "utf8")
+	+ await readFile(new URL("../src/use-line-editing.js", import.meta.url), "utf8");
 for (const [nodeId, focusId] of [["rig.head", "head"], ["rig.chest", "chest"], ["rig.leftShoulder", "leftShoulder"], ["rig.rightShoulder", "rightShoulder"]]) {
 	expect(`${nodeId} routes to its exact IK control`, appSource.includes(`"${nodeId}": "${focusId}"`));
 }
