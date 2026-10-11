@@ -15,7 +15,7 @@
  *
  * Pure: image buffers in, numbers and RGBA out. The MCP tool owns the files.
  */
-import { expandSculptParts } from "./sculpt-recipe.js";
+import { expandSculptParts, patchSculptRecipe } from "./sculpt-recipe.js";
 
 const COMPARE_SIZE = 256;
 
@@ -316,4 +316,34 @@ export function bestViewForReference(recipe, image, { yaws = [-45, -30, -15, 0, 
 		if (!best || result.report.iou > best.report.iou) best = result;
 	}
 	return best;
+}
+
+/**
+ * The one scoring path behind MCP compare_sculpt and the editor's sculpt.compare:
+ * score the recipe (at `yaw`, or the best of -45..45 when it is undefined), and
+ * when `candidates` are given, score each patched recipe from that same view and
+ * rank them with the current sculpt. Nothing is applied.
+ * Returns { result, ranked?: [{ label, result }] best first, refused?: [{ label, error }] }.
+ */
+export function scoreSculptAgainstReference(recipe, image, { yaw, elevation = 0, candidates } = {}) {
+	const score = (next, view) => (view === undefined ? bestViewForReference(next, image, { elevation }) : compareSculptToReference(next, image, { yaw: view, elevation }));
+	const result = score(recipe, yaw);
+	if (!candidates) return { result };
+	// Every candidate is scored from the same view as the current sculpt, so the ranking compares shapes, not angles.
+	const view = result.report.view.yaw;
+	const ranked = [{ label: "current", result }];
+	const refused = [];
+	for (const candidate of candidates) {
+		const patched = patchSculptRecipe(recipe, candidate.edits);
+		if (!patched.ok) refused.push({ label: candidate.label, error: patched.error });
+		else ranked.push({ label: candidate.label, result: score(patched.recipe, view) });
+	}
+	ranked.sort((a, b) => b.result.report.iou - a.result.report.iou);
+	return { result, ranked, refused };
+}
+
+/** One ranking row: the candidate's score against the current sculpt's. */
+export function rankingRow({ label, result }, current) {
+	const { report } = result;
+	return { label, iou: report.iou, delta: Number((report.iou - current.report.iou).toFixed(3)), missingByBand: report.missingByBand, extraByPart: report.extraByPart.slice(0, 3) };
 }

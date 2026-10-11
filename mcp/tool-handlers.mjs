@@ -31,7 +31,7 @@ import { z } from "zod";
 import { MAX_COMMAND_TIMEOUT_MS } from "./live-hub.mjs";
 import { readMeshFromPath } from "./mesh-file.mjs";
 import { encodePng, readImageFromPath } from "./image-file.mjs";
-import { bestViewForReference, compareSculptToReference } from "../src/sculpt-compare.js";
+import { rankingRow, scoreSculptAgainstReference } from "../src/sculpt-compare.js";
 import { DEFAULT_POSE } from "../src/poses.js";
 import { generationArgs } from '../src/motion/generation.js';
 import { BLOCK_MAX_SECONDS, PROMPT_GUIDE, normalizePhases, splitLongBeat, tileClipFrames } from "./ardy-prompts.mjs";
@@ -1265,24 +1265,15 @@ export const createToolHandlers = ({ projectRootPromise } = {}) => {
 				if (target.renderer !== SCULPT_KIND || !target.recipe) return { content: [{ type: "text", text: `${id} is a ${target.renderer}, not a sculpt.` }], isError: true };
 				let image;
 				try { image = await readImageFromPath(reference); } catch (error) { return { content: [{ type: "text", text: error.message }], isError: true }; }
-				const score = (recipe, view = yaw) => (view === undefined ? bestViewForReference(recipe, image, { elevation }) : compareSculptToReference(recipe, image, { yaw: view, elevation }));
 				let result;
 				try {
-					result = score(target.recipe);
+					const scored = scoreSculptAgainstReference(target.recipe, image, { yaw, elevation, candidates });
+					result = scored.result;
 					if (candidates) {
-						// Every candidate is scored from the same view as the current sculpt, so the ranking compares shapes, not angles.
-						const view = result.report.view.yaw;
-						const ranked = [{ label: "current", result }];
-						const refused = [];
-						for (const candidate of candidates) {
-							const patched = patchSculptRecipe(target.recipe, candidate.edits);
-							if (!patched.ok) refused.push({ label: candidate.label, error: patched.error });
-							else ranked.push({ label: candidate.label, result: score(patched.recipe, view) });
-						}
-						ranked.sort((a, b) => b.result.report.iou - a.result.report.iou);
+						const { ranked, refused } = scored;
 						const best = ranked[0];
 						const png = encodePng(best.result.sheet.width, best.result.sheet.height, best.result.sheet.data);
-						const summary = { id, view: best.result.report.view, ranking: ranked.map(({ label, result: r }) => ({ label, iou: r.report.iou, delta: Number((r.report.iou - result.report.iou).toFixed(3)), missingByBand: r.report.missingByBand, extraByPart: r.report.extraByPart.slice(0, 3) })), ...(refused.length ? { refused } : {}),
+						const summary = { id, view: best.result.report.view, ranking: ranked.map((row) => rankingRow(row, result)), ...(refused.length ? { refused } : {}),
 							note: `Nothing was applied. Apply the winner with sculpt_object { id: "${id}", edits }.` };
 						return { content: [{ type: "text", text: JSON.stringify(summary) }, { type: "image", data: png.toString("base64"), mimeType: "image/png" }] };
 					}
