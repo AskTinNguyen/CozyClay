@@ -6,8 +6,9 @@ import { createServer } from 'vite';
 // Load the shipped hook without mounting renderer hardware. Constants and aim
 // math remain the shipped source; no shot editing or history is substituted.
 const stage = readFileSync(new URL('../../src/app-stage.jsx', import.meta.url), 'utf8');
+const ardyContract = readFileSync(new URL('../../src/ardy-bridge-contract.js', import.meta.url), 'utf8');
 const controls = readFileSync(new URL('../../src/controls.jsx', import.meta.url), 'utf8');
-const constants = ['DEFAULT_ENVIRONMENT', 'DEFAULT_DURATION_S', 'TIMELINE_FPS'].map(name => stage.match(new RegExp(`export const ${name} = [^;]+;`))[0]).join('\n');
+const constants = ['DEFAULT_ENVIRONMENT', 'DEFAULT_DURATION_S', 'TIMELINE_FPS'].map(name => (stage + ardyContract).match(new RegExp(`export const ${name} = [^;]+;`))[0]).join('\n');
 const presets = stage.slice(stage.indexOf('export const PRESETS ='), stage.indexOf('\n};', stage.indexOf('export const PRESETS =')) + 3);
 const aim = controls.slice(controls.indexOf('export function aimAt('), controls.indexOf('\n}', controls.indexOf('export function aimAt(')) + 2);
 const server = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false }, optimizeDeps: { noDiscovery: true, include: [] }, appType: 'custom',

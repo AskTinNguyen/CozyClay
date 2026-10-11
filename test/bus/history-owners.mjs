@@ -7,7 +7,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { createServer } from 'vite';
 import { freeReferences } from './verify-domain-modules.mjs';
 
-const source = readFileSync(new URL('../../src/app-stage.jsx', import.meta.url), 'utf8');
+const source = readFileSync(new URL('../../src/app-stage.jsx', import.meta.url), 'utf8')
+  + readFileSync(new URL('../../src/ardy-bridge-contract.js', import.meta.url), 'utf8');
 const ast = parseSync('stage.jsx', source).program, definitions = new Map(), imports = new Map();
 for (const node of ast.body) {
   if (node.type === 'ImportDeclaration') for (const spec of node.specifiers) imports.set(spec.local.name, node);

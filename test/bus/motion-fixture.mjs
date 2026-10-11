@@ -13,7 +13,8 @@ import { CSKEL27_NEUTRAL } from '../../src/ardy/cskel27-neutral.js';
 
 // Follow only the shipped constants/pure helpers used by motion. The renderer
 // components co-located in app-stage are not needed to mount the real hook.
-const stage = readFileSync(new URL('../../src/app-stage.jsx', import.meta.url), 'utf8');
+const stage = readFileSync(new URL('../../src/app-stage.jsx', import.meta.url), 'utf8')
+  + readFileSync(new URL('../../src/ardy-bridge-contract.js', import.meta.url), 'utf8');
 const motionSource = readFileSync(new URL('../../src/domains/motion.js', import.meta.url), 'utf8');
 const ast = parseSync('stage.jsx', stage).program, definitions = new Map(), imports = new Map();
 for (const node of ast.body) {

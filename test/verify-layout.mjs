@@ -12,6 +12,7 @@ function expect(name, condition) {
 import { readStudioSource } from "./bus/verify-domain-modules.mjs";
 const app = readStudioSource()
 	+ readFileSync(new URL("../src/app-stage.jsx", import.meta.url), "utf8")
+	+ readFileSync(new URL("../src/ardy-bridge-contract.js", import.meta.url), "utf8")
 	+ readFileSync(new URL("../src/motion/generation.js", import.meta.url), "utf8");
 const extract = readFileSync(new URL("../tools/ardy/extract.mjs", import.meta.url), "utf8");
 const bridge = readFileSync(new URL("../tools/ardy/bridge.mjs", import.meta.url), "utf8");

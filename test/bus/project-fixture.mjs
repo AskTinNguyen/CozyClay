@@ -8,8 +8,9 @@ import { PROJECT_SESSION_KEY } from '../../src/project.js';
 import { objectsFixture } from './objects-fixture.mjs';
 
 const source = readFileSync(new URL('../../src/app-stage.jsx', import.meta.url), 'utf8');
+const ardyContract = readFileSync(new URL('../../src/ardy-bridge-contract.js', import.meta.url), 'utf8');
 const constants = ['TIMELINE_FPS', 'DEFAULT_DURATION_S', 'DEFAULT_WORKSPACE_LAYOUT'].map(name =>
-  source.match(new RegExp(`export const ${name} = [\\s\\S]*?;`))[0]).join('\n');
+  (source + ardyContract).match(new RegExp(`export const ${name} = [\\s\\S]*?;`))[0]).join('\n');
 const server = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false }, appType: 'custom', plugins: [{
   name: 'project-without-renderer', enforce: 'pre', load(id) {
     if (id.endsWith('/src/app-stage.jsx')) return constants;
