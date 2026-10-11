@@ -10,7 +10,9 @@ import { freeReferences } from './verify-domain-modules.mjs';
 import { motionArraysToNpzMembers, writeNpz } from '../../tools/ardy/npz.mjs';
 import { createStudioTools } from '../../bin/agent/studio-tools.mjs';
 
-const stage = readFileSync(new URL('../../src/app-stage.jsx', import.meta.url), 'utf8');
+const stage = readFileSync(new URL('../../src/app-stage.jsx', import.meta.url), 'utf8')
+  + readFileSync(new URL('../../src/ardy-bridge-contract.js', import.meta.url), 'utf8')
+  + readFileSync(new URL('../../src/stage-startup-defaults.js', import.meta.url), 'utf8');
 const source = readFileSync(new URL('../../src/domains/motion.js', import.meta.url), 'utf8');
 const ast = parseSync('stage.jsx', stage).program, names = new Map(), selected = new Set();
 for (const node of ast.body) {
