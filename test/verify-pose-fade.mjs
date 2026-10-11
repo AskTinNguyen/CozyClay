@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import * as THREE from "three";
-import { applyPoseFade, POSE_FADE_DEFAULT, POSE_FADE_STORAGE_KEY, readPoseFadeOpacity, writePoseFadeOpacity } from "../src/pose-fade.js";
+import { applyPoseFade, withPoseFadeLifted, POSE_FADE_DEFAULT, POSE_FADE_STORAGE_KEY, readPoseFadeOpacity, writePoseFadeOpacity } from "../src/pose-fade.js";
 
 function prop() {
 	const shared = new THREE.MeshStandardMaterial({ opacity: 1 });
@@ -74,6 +74,19 @@ test("the chosen opacity is remembered and bad stored values fall back", () => {
 	assert.equal(readPoseFadeOpacity(storage), 1);
 	storage.setItem(POSE_FADE_STORAGE_KEY, "nope");
 	assert.equal(readPoseFadeOpacity(storage), POSE_FADE_DEFAULT);
+});
+
+test("a capture lifts the fade for the draw and puts it back without another frame", () => {
+	const { root, shared } = prop();
+	const sync = () => applyPoseFade(root, 0.2);
+	sync();
+	const during = withPoseFadeLifted(sync, () => ({ opacity: shared.opacity, hits: hits(root) }));
+	assert.equal(during.opacity, 1, "the capture draws the set as authored");
+	assert.ok(during.hits > 0);
+	assert.equal(shared.opacity, 0.2, "the fade is back before any frame renders");
+	assert.equal(hits(root), 0, "a pick after the capture goes past the faded prop");
+	assert.throws(() => withPoseFadeLifted(sync, () => { throw new Error("draw failed"); }));
+	assert.equal(hits(root), 0, "a failed capture also restores the fade");
 });
 
 test("two instances of one imported graph keep their own opacity (#659)", async () => {
