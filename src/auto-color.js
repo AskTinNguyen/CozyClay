@@ -20,7 +20,7 @@ export function hashObjectId(id) {
 		hash ^= id.charCodeAt(index);
 		hash = Math.imul(hash, 16777619) >>> 0;
 	}
-	return hash >>> 0;
+	return hash;
 }
 
 const GOLDEN_RATIO_CONJUGATE = 0.61803398875;

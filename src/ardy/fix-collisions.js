@@ -39,8 +39,6 @@ import {
  * outside its keyed range by ikEvaluate's blend window.
  */
 
-/* --- capsule table ---------------------------------------------------------- */
-
 /**
  * Body capsules. `movable.chain`/`movable.joint` name the IK chain and the
  * joint of that chain to drive ("mid" = elbow/knee, "effector" = wrist/
@@ -76,8 +74,6 @@ const CAPSULE_DEFS = [
 	{ id: "rightShin", start: "mixamorigRightLeg", end: "mixamorigRightFoot", radiusJoint: "RightLeg", movable: { chain: "rightFoot", joint: "effector" }, priority: 1 },
 	{ id: "rightFoot", start: "mixamorigRightFoot", end: "mixamorigRightToeBase", radiusJoint: "RightFoot", maxRadius: 0.07, movable: { chain: "rightFoot", joint: "effector" }, priority: 1 },
 ];
-
-/* --- fingers ---------------------------------------------------------------- */
 
 /**
  * FINGER CAPSULES. The hand capsule spans wrist → middle-finger base, which is
@@ -302,8 +298,6 @@ export function buildCollisionCapsules(rig, radii = null) {
 	return capsules;
 }
 
-/* --- rest-relative calibration ---------------------------------------------- */
-
 /** Stable key for an unordered capsule pair. */
 function pairKey(idA, idB) {
 	return idA < idB ? `${idA}|${idB}` : `${idB}|${idA}`;
@@ -389,8 +383,6 @@ export function restPairOverlaps(rig, radii = null) {
 	return overlaps;
 }
 
-/* --- detection -------------------------------------------------------------- */
-
 /** Closest points between two segments (Ericson, Real-Time Collision
  * Detection — the textbook segment/segment distance). Writes into outA/outB
  * and returns the squared distance. */
@@ -457,8 +449,6 @@ function bonesRelated(b0, b1) {
 function capsulesAdjacent(ca, cb) {
 	return ca.bones.some((ba) => cb.bones.some((bb) => bonesRelated(ba, bb)));
 }
-
-/* --- hinged pairs ------------------------------------------------------------ */
 
 /**
  * HINGED PAIRS. A blanket "skip everything within HOP_LIMIT" made whole classes
@@ -584,8 +574,6 @@ function pairGeometry(ca, cb) {
 	geometry.hinge = shared === 1;
 	return geometry;
 }
-
-/* --- external blockers ------------------------------------------------------- */
 
 /**
  * EXTERNAL BLOCKERS. Everything above is the character against itself; a hand
@@ -1016,8 +1004,6 @@ function chainsInPlay(pens) {
 	return ids;
 }
 
-/* --- escape direction ------------------------------------------------------- */
-
 /**
  * REST-BIASED ESCAPE. The separation normal is the SHORTEST way out, which for
  * a deep hit is regularly the wrong side of the blocker: a forearm driven into
@@ -1157,8 +1143,6 @@ function escapeVector(rig, capsule, chains, normal, contactPoint, distance, weig
 	return biased.multiplyScalar(distance / Math.max(MIN_ALIGN, align));
 }
 
-/* --- side preservation ------------------------------------------------------ */
-
 /** Chains whose end joint must not change sides of the body because of a fix. */
 const SIDE_CHAINS = ["leftHand", "rightHand"];
 
@@ -1183,9 +1167,6 @@ function sagittalSide(rig, point) {
 	const origin = new THREE.Vector3().setFromMatrixPosition(hips.matrixWorld);
 	return point.clone().sub(origin).dot(lateral.normalize());
 }
-
-/* --- resolution ------------------------------------------------------------- */
-
 
 const NO_PUSH = Object.freeze({ ran: false, moved: false });
 
@@ -1339,7 +1320,6 @@ export function fixCollisions(rig, chains, {
 		return outcome.moved;
 	};
 
-	/* --- one pass, at a given home-bias weight ----------------------------- */
 	// Every push of a pass is computed from the pose the pass STARTED in, so the
 	// same penetration list can be replayed at a different weight (the side
 	// guard below) and produce a deterministic result either way.
@@ -1376,7 +1356,6 @@ export function fixCollisions(rig, chains, {
 		return passChanged;
 	};
 
-	/* --- side-preservation guard ------------------------------------------- */
 	/**
 	 * A hand must not change sides of the body because of a fix. The heuristic,
 	 * deliberately blunt: measure each arm chain's WRIST against the sagittal
@@ -1433,7 +1412,6 @@ export function fixCollisions(rig, chains, {
 	 * permitted chain when a filter is in force. */
 	const fixablePens = (capsules) => fixablePenetrations(capsules, { offset, slackFactor, blockers, onlyChains });
 
-	/* --- what this frame started as, so a bad fix can be refused whole ------ */
 	/** Every bone a fix or a yield can write, with its full local transform. */
 	const frameSnapshot = () => {
 		const entries = [];
@@ -1540,7 +1518,6 @@ export function fixCollisions(rig, chains, {
 		changed = changed || passChanged;
 		if (!passChanged) break;
 	}
-	/* --- capped torso/head yield -------------------------------------------- */
 	/**
 	 * The last resort, and only ever a last one: the limb passes are over and a
 	 * movable × static pair is still penetrating, so the STATIC side leans away
@@ -1725,7 +1702,6 @@ export function fixCollisions(rig, chains, {
 	// changed the pose, and the caller must key it.
 	changed = changed || poseDirty;
 
-	/* --- the accept gate ---------------------------------------------------- */
 	/**
 	 * A frame's fix is kept only if it is BETTER than the pose it started from.
 	 * Two ways it can fail to be, each measured against the entry pose:
@@ -1857,7 +1833,6 @@ export function fixCollisionsRange({
 	const start = Math.max(0, Math.round(startFrame));
 	const end = Math.max(start, Math.round(endFrame));
 
-	/* --- sweep 1: record the clip as it stands, writing nothing ------------ */
 	const bones = layerBones(chains, fkJoints);
 	const chainIds = [...chains.keys()];
 	const readChainQuats = () => new Map(chainIds.map((id) => [id, chains.get(id).bones.map((b) => b.quaternion.clone())]));
@@ -1892,7 +1867,6 @@ export function fixCollisionsRange({
 		if (!layerActive) clipQuats.push(readChainQuats());
 	}
 
-	/* --- what a frame-to-frame step is allowed to be ------------------------ */
 	/**
 	 * THE STEP CAP, per chain, measured on the clip the pass was handed. A
 	 * correction is allowed to move a limb; what it is not allowed to do is move
@@ -1923,7 +1897,6 @@ export function fixCollisionsRange({
 		stepCap.set(id, Math.min(STEP_CAP_ABS, Math.max(STEP_CAP_FLOOR, STEP_CAP_FACTOR * worst)));
 	}
 
-	/* --- sweep 2: fix each frame against that recorded pose ---------------- */
 	const keyed = [];
 	// Frame → deepest penetration left standing. A map, not a list: a frame the
 	// blend-window round revisits reports its LAST word, and a frame that round
@@ -1937,7 +1910,6 @@ export function fixCollisionsRange({
 		if (residual > 0) residuals.set(frame, residual);
 		else residuals.delete(frame);
 	};
-	/* --- temporal continuity ------------------------------------------------ */
 	/**
 	 * WHY THIS EXISTS. Every frame above is solved on its own, from the clip,
 	 * which is what makes each one honest — and what made a RUN of them garbage.
@@ -2192,7 +2164,6 @@ export function fixCollisionsRange({
 		};
 	}
 
-	/* --- sweep 3: the blend window's own frames, ONCE ----------------------- */
 	/**
 	 * Sweeps 1 and 2 judge every frame against the CLIP, which is what stops the
 	 * pass chasing its own tail. The cost is that the ramp each new key runs out
@@ -2241,7 +2212,6 @@ export function fixCollisionsRange({
 		keyed.sort((a, b) => a - b);
 	}
 
-	/* --- final sweep: the truth on the pose the viewer will actually see ----- */
 	/**
 	 * Everything above judges a frame at the moment it is solved. What the viewer
 	 * gets is the EVALUATED pose — clip plus every key's blend ramp — and the last

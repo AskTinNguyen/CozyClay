@@ -1,7 +1,4 @@
-const I2V_MOTION_MODEL = "minimax/h3-max-turbo/image-to-video";
-const I2V_MOTION_RESOLUTION = "480P";
 export const I2V_MOTION_MIN_DURATION = 5;
-const I2V_MOTION_MAX_DURATION = 15;
 // The durations the AI motion card offers. 15 s (362 frames) is the measured upper
 // end the H3 endpoint accepts and the extractor handles (#380 sit-to-bench).
 export const I2V_MOTION_DURATIONS = Object.freeze([5, 10, 15]);

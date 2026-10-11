@@ -251,8 +251,6 @@ export function createMatteEditor(canvas, {
 		report();
 	}
 
-	/* --------------------------------------------------------- pointer --- */
-
 	/** Where a pointer is, in FULL-resolution picture pixels: stage → picture,
 	 * through the same placement the paint is drawn with. */
 	function at(event) {
@@ -370,8 +368,6 @@ export function createMatteEditor(canvas, {
 		growFromStroke();
 		if (canvas.hasPointerCapture?.(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
 	};
-	/* ------------------------------------------------------------ view --- */
-
 	/** Zoom about a point on screen, so what is under the cursor stays under
 	 * the cursor — the only zoom that lets you keep working on the thing you
 	 * were looking at. */
@@ -415,8 +411,6 @@ export function createMatteEditor(canvas, {
 	canvas.addEventListener("wheel", onWheel, { passive: false });
 	canvas.addEventListener("keydown", onKeyDown);
 	canvas.addEventListener("keyup", onKeyUp);
-
-	/* ------------------------------------------------------------- api --- */
 
 	return {
 		/**
