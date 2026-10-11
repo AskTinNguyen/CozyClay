@@ -237,7 +237,6 @@ export default function BottomDock({ tab: requestedTab = "animation", onTabChang
 			workflowMode={workflowMode === "pose" ? "motion" : workflowMode}
 			waypointMode={waypointMode}
 			waypoints={waypoints}
-			pathSpeed={pathSpeed}
 			pendingWaypointFrame={pendingWaypointFrame}
 			previsMode={previsMode}
 			promptClips={promptClips}

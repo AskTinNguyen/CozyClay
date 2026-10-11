@@ -223,9 +223,6 @@ export function ShotCameraGhost({ camRef, fovDeg, aspect, visible, selected }) {
 	);
 }
 
-/** The authored root path on the set floor while path editing is on: numbered
-    pins connected in walk order. Lives on the gizmo layer, so the shot camera
-    shows it but exports never do (the bird's-eye board draws its own copy). */
 /**
  * The drawn camera rail in the 3D Scene view: editor furniture on the gizmo
  * layer, so PlayView, the ink prepass and exports never see it.

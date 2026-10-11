@@ -39,8 +39,8 @@ export const SCRUB_RANGE_STEPS = 100;
 
 /** The span one full `SCRUB_TRAVEL_PX` drag covers for a field. */
 export function scrubRangeFor({ scrubRange, step } = {}) {
-	if (typeof scrubRange === "number" && Number.isFinite(scrubRange) && scrubRange > 0) return scrubRange;
-	const size = typeof step === "number" && Number.isFinite(step) && step > 0 ? step : 1;
+	if (Number.isFinite(scrubRange) && scrubRange > 0) return scrubRange;
+	const size = Number.isFinite(step) && step > 0 ? step : 1;
 	return size * SCRUB_RANGE_STEPS;
 }
 
@@ -95,7 +95,7 @@ export function createScrubGesture({ x, value, step, precision, scrubRange }) {
  * 1.7000000000000002 in the input.
  */
 export function snapScrubValue(value, { step, precision = 2 } = {}) {
-	const size = typeof step === "number" && Number.isFinite(step) && step > 0 ? step : 0;
+	const size = Number.isFinite(step) && step > 0 ? step : 0;
 	const snapped = size > 0 ? Math.round(value / size) * size : value;
 	const digits = Number.isFinite(precision) ? Math.max(0, Math.min(15, Math.round(precision))) : 2;
 	return Number(snapped.toFixed(digits));

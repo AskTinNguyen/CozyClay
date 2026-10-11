@@ -105,8 +105,6 @@ export const DEFAULT_ENVIRONMENT = "a sunlit modern living room";
 export const DEFAULT_CAMERA_POSITION = { x: 0.97, y: 1.62, z: 2.39 };
 export const REST_BONES = Object.fromEntries(POSE_BONES.map((b) => [b.id, [0, 0, 0]]));
 
-/* ----------------------------------------------------------------- app --- */
-
 // Unity's tool keys. They are free because camera movement now lives behind a
 // held right button. (docs/unity-reference.md §9.2)
 export const GIZMO_HOTKEYS = { KeyW: "move", KeyE: "rotate", KeyR: "scale" };

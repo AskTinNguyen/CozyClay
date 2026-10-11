@@ -13,7 +13,6 @@ import { wrapAngle } from "./scene-objects.js";
 import { LEGACY_FRAME_FPS, TIMELINE_FRAME_FPS, toTimelineFrame } from "./timeline-fps.js";
 
 const CHARACTER_POSITION_LIMITS = elementByPath("character.position");
-const CHARACTER_ROTATION_LIMITS = elementByPath("character.rot");
 const CHARACTER_SCALE_LIMITS = elementByPath("character.scale");
 const KEY_LIGHT_LIMITS = Object.fromEntries(["x", "y", "z", "intensity", "warmth"].map((axis) => [axis, elementByPath(`stage.keyLight.${axis}`)]));
 

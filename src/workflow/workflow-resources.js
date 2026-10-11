@@ -52,8 +52,6 @@ export function outputKind(value) {
 	return value.trim() ? "other" : null;
 }
 
-/* ------------------------------------------------------------- paths ---- */
-
 function outputPaths(data) {
 	const paths = [["resultUrl"], ["videoUrl"], ["lastOutput", "renderUrl"], ["lastOutput", "sceneUrl"], ["fileUrl"]];
 	if (Array.isArray(data.versions)) data.versions.forEach((_, index) => paths.push(["versions", index, "dataUrl"]));
@@ -106,8 +104,6 @@ async function mapOutputs(graph, visit) {
 	return { ...graph, nodes };
 }
 
-/* -------------------------------------------------------------- refs ---- */
-
 /**
  * Every output slot that holds something, with where it lives and what it is.
  * `field` reads like a path (`versions[2].dataUrl`) so a manifest row can point
@@ -125,8 +121,6 @@ export function workflowOutputRefs(graph) {
 	}
 	return refs;
 }
-
-/* ----------------------------------------------------------- data URLs -- */
 
 function bytesToBase64(bytes) {
 	let binary = "";
@@ -195,8 +189,6 @@ export function imageDimensions(bytes) {
 	}
 	return null;
 }
-
-/* --------------------------------------------------------- intern/resolve */
 
 /**
  * Save path. Every `data:image/*` output becomes `{ assetRef }` and the bytes

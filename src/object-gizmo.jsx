@@ -228,21 +228,6 @@ export default function ObjectGizmo({ object, objects = [], mode = "move", snap 
 		rootRef.current?.traverse((node) => node.layers?.set(GIZMO_LAYER));
 	});
 
-	/** pointer -> NDC inside the rect the shot camera actually rendered into */
-	const pointerRay = (event) => {
-		const pane = paneRef.current;
-		const camera = camRef.current;
-		if (!pane || !camera) return null;
-		const bounds = pane.getBoundingClientRect();
-		if (bounds.width < 2 || bounds.height < 2) return null;
-		const rect = imageRect(bounds);
-		tools.ndc.set(
-			((event.clientX - rect.x) / rect.w) * 2 - 1,
-			-((event.clientY - rect.y) / rect.h) * 2 + 1,
-		);
-		return Math.abs(tools.ndc.x) <= 1 && Math.abs(tools.ndc.y) <= 1 ? tools.ndc : null;
-	};
-
 	/** the scene object under the pointer, if any (meshes carry the id on an
 	 * ancestor group, so the hit walks up to find it) */
 	const pickObject = () => {

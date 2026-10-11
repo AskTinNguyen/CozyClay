@@ -60,27 +60,22 @@ export function Car({ position = [0, 0, 0], rotY = 0, color = CLAY_CAR, topColor
 		: { color: topColor, roughness: 0.5, metalness: 0.2 };
 	return (
 		<group position={position} rotation={[0, rotY, 0]}>
-			{/* lower body */}
 			<mesh position={[0, 0.62, 0]}>
 				<boxGeometry args={[1.78, 0.62, 4.45]} />
 				<meshStandardMaterial {...bodyMaterial} />
 			</mesh>
-			{/* cabin: centred over the wheelbase, not stacked on the tail */}
 			<mesh position={[0, 1.12, -0.15]}>
 				<boxGeometry args={[1.58, 0.5, 2.2]} />
 				<meshStandardMaterial {...topMaterial} />
 			</mesh>
-			{/* greenhouse glass band */}
 			<mesh position={[0, 1.14, -0.15]}>
 				<boxGeometry args={[1.62, 0.3, 1.9]} />
 				<meshStandardMaterial color={CLAY_GLASS} roughness={0.15} metalness={0.6} />
 			</mesh>
-			{/* windshield slope */}
 			<mesh position={[0, 1.05, 0.95]} rotation={[0.5, 0, 0]}>
 				<boxGeometry args={[1.56, 0.42, 0.08]} />
 				<meshStandardMaterial color={CLAY_GLASS} roughness={0.15} metalness={0.6} />
 			</mesh>
-			{/* rear glass slope */}
 			<mesh position={[0, 1.05, -1.25]} rotation={[-0.55, 0, 0]}>
 				<boxGeometry args={[1.56, 0.42, 0.08]} />
 				<meshStandardMaterial color={CLAY_GLASS} roughness={0.15} metalness={0.6} />
@@ -102,7 +97,6 @@ export function SmallPlane({ position = [0, 0, 0], rotY = 0, autoColor = undefin
 		autoColor ? autoFlat(autoColor) : { color, roughness, metalness };
 	return (
 		<group position={position} rotation={[0, rotY, 0]}>
-			{/* fuselage and tapered nose */}
 			<mesh position={[0, 0.76, 0]} rotation={[Math.PI / 2, 0, 0]}>
 				<cylinderGeometry args={[0.23, 0.31, 2.75, 16]} />
 				<meshStandardMaterial {...mat(CLAY_PLANE, 0.58, 0.18)} />
@@ -112,7 +106,6 @@ export function SmallPlane({ position = [0, 0, 0], rotY = 0, autoColor = undefin
 				<meshStandardMaterial {...mat(CLAY_PLANE_TRIM, 0.52, 0.2)} />
 			</mesh>
 
-			{/* main wing and tail plane */}
 			<mesh position={[0, 0.73, 0.15]}>
 				<boxGeometry args={[3.4, 0.09, 0.58]} />
 				<meshStandardMaterial {...mat(CLAY_PLANE, 0.62, 0.14)} />
@@ -126,13 +119,11 @@ export function SmallPlane({ position = [0, 0, 0], rotY = 0, autoColor = undefin
 				<meshStandardMaterial {...mat(CLAY_PLANE, 0.62, 0.12)} />
 			</mesh>
 
-			{/* cockpit canopy */}
 			<mesh position={[0, 1.02, 0.42]} scale={[0.62, 0.46, 0.9]}>
 				<sphereGeometry args={[0.42, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2]} />
 				<meshStandardMaterial color={CLAY_GLASS} roughness={0.16} metalness={0.55} />
 			</mesh>
 
-			{/* propeller hub and blades */}
 			<group position={[0, 0.76, 1.86]}>
 				<mesh rotation={[Math.PI / 2, 0, 0]}>
 					<cylinderGeometry args={[0.11, 0.11, 0.2, 12]} />
@@ -144,7 +135,6 @@ export function SmallPlane({ position = [0, 0, 0], rotY = 0, autoColor = undefin
 				</mesh>
 			</group>
 
-			{/* simple landing gear */}
 			{[-0.55, 0.55].map((x) => (
 				<group key={x} position={[x, 0.2, 0.15]}>
 					<mesh position={[0, 0.24, 0]} rotation={[0, 0, x < 0 ? -0.35 : 0.35]}>

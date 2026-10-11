@@ -284,7 +284,6 @@ export default function MenuBar({ preferences }) {
 		closeMenus(false);
 		onSelect();
 	};
-	// One storyboard Export item: every one needs a panel to describe.
 	const panelItem = (testId, label, title, onSelect, shortcut = null) => (
 		<button
 			type="button"

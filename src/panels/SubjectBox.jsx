@@ -1,6 +1,6 @@
 import { ko, isKo } from "../locale.js";
 
-export default function SubjectBox({ label, value, onChange, onRemove, onPose, posing, color, onColorChange, onColorEditStart }) {
+export default function SubjectBox({ label, onRemove, onPose, posing, color, onColorChange, onColorEditStart }) {
 	return (
 		<div className="subject-box v2-subject-box">
 			<div className="subject-box-head">

@@ -41,8 +41,6 @@ export const PROJECT_MAX_RESOURCE_BYTES = 256 * 1024 * 1024;
 // A motion id is the SHA-256 of the raw NPZ bytes (see motion-resources.js).
 const MOTION_ID_PATTERN = /^[0-9a-f]{64}$/i;
 
-/* ---------------------------- workflow graph --------------------------- */
-
 function plainRecord(value) {
 	if (!value || typeof value !== "object") return false;
 	const prototype = Object.getPrototypeOf(value);
@@ -166,8 +164,6 @@ export function storeWorkflowGraph(graph, storage = globalThis.localStorage) {
 	try { globalThis.dispatchEvent?.(new CustomEvent("cozyclay:workflow-change")); } catch { /* non-browser runtime */ }
 	return normalized;
 }
-
-/* ------------------------------- envelope ------------------------------- */
 
 function asArrayBuffer(bytes) {
 	if (bytes instanceof ArrayBuffer) return bytes;
@@ -510,8 +506,6 @@ export function readProjectDocument(raw) {
 	};
 }
 
-/* ------------------------- file system access --------------------------- */
-
 export function hasFileSystemAccess() {
 	return typeof window !== "undefined" && typeof window.showSaveFilePicker === "function" && typeof window.showOpenFilePicker === "function";
 }
@@ -547,8 +541,6 @@ export async function readProjectFile(handle) {
 	return { name: file.name.replace(/\.cclayproject$|\.json$/i, ""), text: await file.text(), savedAt: file.lastModified };
 }
 
-/* --------------------------- fallback (no FS API) ------------------------ */
-
 export function downloadProjectFallback(serialized, name) {
 	const blob = new Blob([serialized], { type: "application/json" });
 	const url = URL.createObjectURL(blob);
@@ -573,8 +565,6 @@ export function openProjectFallback() {
 		input.click();
 	});
 }
-
-/* ------------------------------- IDB handle ------------------------------ */
 
 function openIdb() {
 	return new Promise((resolve, reject) => {
