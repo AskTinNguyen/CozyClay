@@ -1245,15 +1245,17 @@ export const createToolHandlers = ({ projectRootPromise } = {}) => {
 					"Unlike capture_frame and sculpt_object, compare_sculpt scores a sculpt's shape against a reference image instead of rendering the shot or changing the sculpt. " +
 					"Give the sculpt's id and the path of the reference (PNG or JPEG on this machine; a flat background or transparency). It reads the reference's subject as a mask, draws the sculpt's silhouette from a view (yaw: the camera's azimuth, 0 in front, positive toward the subject's own left; elevation: degrees above), " +
 					"fits it to the subject's height and position, and returns IoU, the width-to-height delta, which height band is missing area (top, middle, bottom) and which parts stick out, plus a sheet: reference | overlay (grey both, red missing, blue extra). " +
-					"Omit yaw to try -45..45 and keep the best. Shape only: colour is not scored. Works without an editor.",
+					"Omit yaw to try -45..45 and keep the best. Pass candidates (up to 12 labelled edit sets) to score several fixes in one call without applying any; the answer ranks them against the current sculpt. Shape only: colour is not scored. Works without an editor.",
 				inputSchema: {
 					id: z.string().min(1).describe("the sculpt's object id"),
 					reference: z.string().min(1).describe("filesystem path to the reference PNG or JPEG"),
 					yaw: z.number().min(-180).max(180).optional().describe("reference camera azimuth in degrees; omitted tries -45..45"),
 					elevation: z.number().min(-60).max(60).optional().describe("reference camera elevation in degrees; default 0"),
+					candidates: z.array(z.object({ label: z.string().min(1).max(60), edits: z.array(z.object({}).passthrough()).min(1).max(48) })).min(1).max(12).optional()
+						.describe("alternative edit sets to score side by side without applying any; returns them ranked by IoU with the winner's sheet"),
 				},
 			},
-			async ({ id, reference, yaw, elevation = 0 }) => {
+			async ({ id, reference, yaw, elevation = 0, candidates }) => {
 				const workspaceHandle = liveWorkspace.getStore();
 				if (liveHub?.connected) {
 					try { await refreshLiveDescription(workspaceHandle); } catch (error) { return liveError(error); }
@@ -1263,9 +1265,27 @@ export const createToolHandlers = ({ projectRootPromise } = {}) => {
 				if (target.renderer !== SCULPT_KIND || !target.recipe) return { content: [{ type: "text", text: `${id} is a ${target.renderer}, not a sculpt.` }], isError: true };
 				let image;
 				try { image = await readImageFromPath(reference); } catch (error) { return { content: [{ type: "text", text: error.message }], isError: true }; }
+				const score = (recipe, view = yaw) => (view === undefined ? bestViewForReference(recipe, image, { elevation }) : compareSculptToReference(recipe, image, { yaw: view, elevation }));
 				let result;
 				try {
-					result = yaw === undefined ? bestViewForReference(target.recipe, image, { elevation }) : compareSculptToReference(target.recipe, image, { yaw, elevation });
+					result = score(target.recipe);
+					if (candidates) {
+						// Every candidate is scored from the same view as the current sculpt, so the ranking compares shapes, not angles.
+						const view = result.report.view.yaw;
+						const ranked = [{ label: "current", result }];
+						const refused = [];
+						for (const candidate of candidates) {
+							const patched = patchSculptRecipe(target.recipe, candidate.edits);
+							if (!patched.ok) refused.push({ label: candidate.label, error: patched.error });
+							else ranked.push({ label: candidate.label, result: score(patched.recipe, view) });
+						}
+						ranked.sort((a, b) => b.result.report.iou - a.result.report.iou);
+						const best = ranked[0];
+						const png = encodePng(best.result.sheet.width, best.result.sheet.height, best.result.sheet.data);
+						const summary = { id, view: best.result.report.view, ranking: ranked.map(({ label, result: r }) => ({ label, iou: r.report.iou, delta: Number((r.report.iou - result.report.iou).toFixed(3)), missingByBand: r.report.missingByBand, extraByPart: r.report.extraByPart.slice(0, 3) })), ...(refused.length ? { refused } : {}),
+							note: `Nothing was applied. Apply the winner with sculpt_object { id: "${id}", edits }.` };
+						return { content: [{ type: "text", text: JSON.stringify(summary) }, { type: "image", data: png.toString("base64"), mimeType: "image/png" }] };
+					}
 				} catch (error) {
 					return { content: [{ type: "text", text: error.message }], isError: true };
 				}

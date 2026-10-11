@@ -71,6 +71,7 @@ The record stores the normalized recipe, plus `footprint` and `height` measured 
   - a sheet: the reference beside an overlay (grey = both, red = missing, blue = extra)
 
   Leaving out `yaw` tries −45° to 45° and keeps the best. Only shape is scored, not colour.
+- **Try several fixes at once.** `compare_sculpt { id, reference, candidates: [{ label, edits }, …] }` scores up to 12 alternative edit sets from the same view in one call and applies none of them. It returns a ranking against the current sculpt (IoU, delta, bands, parts) and the winner's sheet. Apply the winner with `sculpt_object { id, edits }`. Each candidate costs about 0.1 s of local computation and no model turn, so in one round the agent can test one idea per mismatch instead of guessing which single fix is right.
 - **One round, one call.** `sculpt_object { …, capture: true }` returns the editor frame with the receipt when an editor is connected.
 
 ## Agent workflow (image → sculpt)
@@ -78,7 +79,7 @@ The record stores the normalized recipe, plus `footprint` and `height` measured 
 1. **Read the image before writing anything.** Name the subject, the parts and their contact relationships. List the 3–5 features that make the subject recognizable (for the turtle: oversized glasses, bulging eyes, the buck tooth, the belly plate). Say which sides the image hides.
 2. **Block out in 4–8 parts.** Get the silhouette and the proportions right first. Measure in head units from the image and do not guess from a stock figure.
 3. **Place it, then measure.** Call `sculpt_object`, then `compare_sculpt` with the reference path. Read `missingByBand` and `extraByPart` before you look at the sheet.
-4. **Patch, don't rewrite.** Send `edits` that fix the biggest mismatch first: proportion, then placement, then colour. Allow three rounds at most, or stop once IoU stops rising, then report what still differs.
+4. **Patch, don't rewrite.** Write 3–6 candidate `edits` (one per mismatch you see), rank them with `compare_sculpt { candidates }`, and apply the winner. Fix the biggest mismatch first: proportion, then placement, then colour. Allow three rounds at most, or stop once IoU stops rising, then report what still differs.
 5. **Identity details last.** Add eyes, rims and plates as small parts on a parent once the body reads.
 
 Ask, infer and omit follow `agent-prompt-to-scene.md`. Infer the hidden back and say so. Never ask for more views unless the user wants a likeness.

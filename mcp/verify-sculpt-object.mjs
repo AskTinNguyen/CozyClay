@@ -81,6 +81,21 @@ assert.ok(report.iou > 0.95, JSON.stringify(report));
 assert.equal(scored.content[1].type, "image");
 const sheet = decodePng(Buffer.from(scored.content[1].data, "base64"));
 assert.deepEqual([sheet.width, sheet.height], [240, 200], "reference | overlay, side by side");
+// Candidates: several fixes scored in one call, ranked, none applied.
+const before = JSON.stringify((await describe.handler({})).content[0].text.match(/sculpt-2 .*/)[0]);
+const ranked = await compare.handler({ id: "sculpt-2", reference: refPath, yaw: 0, candidates: [
+	{ label: "too-wide", edits: [{ set: "slab", size: [0.8, 1.2, 0.2] }] },
+	{ label: "exact", edits: [{ set: "slab", size: [0.4, 1.2, 0.2] }] },
+	{ label: "broken", edits: [{ set: "ghost", color: "#000000" }] },
+] });
+assert.equal(ranked.isError, undefined, ranked.content[0].text);
+const ranking = JSON.parse(ranked.content[0].text);
+assert.deepEqual(ranking.ranking.map((row) => row.label).slice(-1), ["too-wide"], "the worse fix ranks last");
+assert.ok(ranking.ranking.find((row) => row.label === "too-wide").delta < -0.2);
+assert.match(ranking.refused[0].error, /no part named "ghost"/);
+assert.match(ranking.note, /Nothing was applied/);
+assert.equal(ranked.content[1].type, "image", "the winner's sheet");
+assert.equal(JSON.stringify((await describe.handler({})).content[0].text.match(/sculpt-2 .*/)[0]), before, "scoring candidates changes nothing");
 assert.match((await compare.handler({ id: "sculpt-2", reference: "/no/such/ref.png" })).content[0].text, /Could not read the reference image/);
 assert.match((await compare.handler({ id: "ghost", reference: refPath })).content[0].text, /No object "ghost"/);
 const notPng = join(tmpdir(), `cozyclay-sculpt-ref-${process.pid}.txt`);
