@@ -20,7 +20,7 @@ function probeMcpRuntime(runtime = MCP_RUNTIME) {
 	if (!existsSync(server)) throw new Error("MCP server is missing");
 	if (!existsSync(join(runtime, "tools", "ardy", "bridge.mjs"))) throw new Error("motion bridge is missing");
 	const runtimeRequire = createRequire(join(runtime, "package.json"));
-	for (const dependency of ["@modelcontextprotocol/sdk/server/mcp.js", "three", "ws", "zod"]) runtimeRequire.resolve(dependency);
+	for (const dependency of ["@modelcontextprotocol/sdk/server/mcp.js", "jpeg-js", "three", "ws", "zod"]) runtimeRequire.resolve(dependency);
 	return server;
 }
 

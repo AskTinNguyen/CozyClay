@@ -165,6 +165,14 @@ Their transitive runtime dependencies, which the agent sidecar also loads, are:
 - `ignore` — License: MIT — https://github.com/kaelzhang/node-ignore
 - `yaml` — License: ISC — https://github.com/eemeli/yaml
 
+## jpeg-js
+
+The MCP runtime decodes JPEG reference images for `compare_sculpt` with `jpeg-js`, on the local machine.
+
+- Copyright (c) 2014, Eugene Ware and Adobe
+- License: BSD-3-Clause
+- Source: https://github.com/jpeg-js/jpeg-js
+
 ## CozyClay license scope
 
 The CozyClay combined work in this repository is distributed under AGPL-3.0-or-later, subject to the transition details in `LICENSING.md`. That license does not replace or relicense Three.js, ARDY, ARDY model checkpoints, the bundled fonts, the character rigs, or any other third-party component.
