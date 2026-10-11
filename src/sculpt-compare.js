@@ -347,3 +347,36 @@ export function rankingRow({ label, result }, current) {
 	const { report } = result;
 	return { label, iou: report.iou, delta: Number((report.iou - current.report.iou).toFixed(3)), missingByBand: report.missingByBand, extraByPart: report.extraByPart.slice(0, 3) };
 }
+
+/**
+ * The reference outline measured in pixels, for the agent's first draft: the subject's
+ * width:height and, for `rows` horizontal slices from the head top down, the filled
+ * spans across that slice. x is a fraction of the subject's height from its horizontal
+ * centre, positive toward image right (the subject's own left in a front view); y is a
+ * fraction of height from the top. Measuring beats eyeballing: a measured draft scored
+ * IoU 0.945 where an eyeballed one scored about 0.75.
+ */
+export function measureReferenceOutline(image, { rows = 12 } = {}) {
+	const { width, height, mask } = referenceMask(image);
+	let top = height, bottom = -1, left = width, right = -1;
+	for (let y = 0; y < height; y += 1) for (let x = 0; x < width; x += 1) {
+		if (!mask[y * width + x]) continue;
+		if (y < top) top = y; if (y > bottom) bottom = y; if (x < left) left = x; if (x > right) right = x;
+	}
+	if (bottom < 0) throw new Error("no subject found in the reference image");
+	const h = bottom - top + 1, centre = (left + right + 1) / 2;
+	const round = value => Math.round(value * 100) / 100;
+	const slices = [];
+	for (let i = 0; i < rows; i += 1) {
+		const y = Math.min(bottom, Math.round(top + ((i + 0.5) / rows) * h));
+		const spans = [];
+		let start = -1;
+		for (let x = 0; x <= width; x += 1) {
+			const on = x < width && mask[y * width + x];
+			if (on && start < 0) start = x;
+			if (!on && start >= 0) { if (x - start >= 2) spans.push([round((start - centre) / h), round((x - centre) / h)]); start = -1; }
+		}
+		slices.push({ y: round((y - top) / h), spans });
+	}
+	return { widthToHeight: round((right - left + 1) / h), rows: slices };
+}

@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { normalizeSculptRecipe } from "../src/sculpt-recipe.js";
-import { bestViewForReference, compareSculptToReference, referenceMask, sculptViewPolygons } from "../src/sculpt-compare.js";
+import { bestViewForReference, compareSculptToReference, measureReferenceOutline, referenceMask, sculptViewPolygons } from "../src/sculpt-compare.js";
 
 let failures = 0;
 async function check(name, fn) {
@@ -114,6 +114,18 @@ await check("the measured Snorlax draft keeps scoring above 0.9 from the front",
 	for (const [start, length] of ref.runs) for (let i = start; i < start + length; i += 1) data.set([63, 95, 90, 255], i * 4);
 	const { report } = compareSculptToReference(snorlax.recipe, { width: ref.width, height: ref.height, data }, { yaw: 0 });
 	assert.ok(report.iou > 0.9, JSON.stringify(report));
+});
+
+await check("the measured outline finds the raised arms apart from the head, in height fractions", () => {
+	const ref = JSON.parse(readFileSync(new URL("./fixtures/sculpt-snorlax-mask.json", import.meta.url), "utf8"));
+	const data = new Uint8Array(ref.width * ref.height * 4).fill(255);
+	for (const [start, length] of ref.runs) for (let i = start; i < start + length; i += 1) data.set([63, 95, 90, 255], i * 4);
+	const outline = measureReferenceOutline({ width: ref.width, height: ref.height, data });
+	assert.equal(outline.rows.length, 12);
+	assert.ok(outline.widthToHeight > 0.8 && outline.widthToHeight < 1.05, String(outline.widthToHeight));
+	assert.ok(outline.rows.every(row => row.y >= 0 && row.y <= 1 && row.spans.every(([a, b]) => a < b && a >= -0.6 && b <= 0.6)), JSON.stringify(outline));
+	assert.ok(outline.rows.slice(1, 4).some(row => row.spans.length >= 2), "an upper slice crosses an arm and the head separately");
+	assert.ok(outline.rows.at(-1).spans.length >= 1, "the feet reach the bottom slice");
 });
 
 if (failures) {

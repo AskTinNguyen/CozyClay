@@ -52,6 +52,8 @@ import { createAgentTransport } from "./workflow/agent-client.js";
 import SculptPanel from "./panels/SculptPanel.jsx";
 import { createAgentPort, createSculptRun } from "./sculpt-run.js";
 import { SculptTurntable } from "./sculpt-stage.jsx";
+import { measureReferenceOutline } from "./sculpt-compare.js";
+import { browserSculptImages } from "./commands/sculpt-images.js";
 import { agentSessionReady, createCommandTap, sculptAgentClient, sculptTargetFromSelection } from "./sculpt-mode.js";
 import { StudioProtocolError } from "./studio-agent-protocol.js";
 import { elementByPath } from "./studio-elements.js";
@@ -1606,6 +1608,8 @@ export default function App() {
 			agent: createAgentPort(sculptAgentClient(sculptTransport, () => buildStudioAgentContext())),
 			reference: sculptReference,
 			sculptId: sculptTarget?.id ?? null,
+			score: (args) => appContext.bus.run("sculpt.compare", args, { origin: "ui" }),
+			measure: async (reference) => measureReferenceOutline(await browserSculptImages.decode(reference)),
 		});
 		sculptRunRef.current = run;
 		let shownId = sculptTarget?.id ?? null;

@@ -30,16 +30,45 @@ function dataUrlFromSheet(sheet) {
 	return `data:image/raw;base64,${globalThis.btoa(binary)}`;
 }
 
-function makeTurnText(reference, sculptId, continuation) {
+// The reference as sculpt.compare takes it: the stored asset when there is one.
+const referenceArg = reference => (reference?.assetId ? { assetId: reference.assetId } : { dataUrl: reference?.dataUrl });
+
+// The recipe rules the agent needs to get object.sculpt right the first time (sculpt-recipe.js).
+const RECIPE_RULES = "Recipe: { \"version\": 1, \"parts\": [{ \"id\", \"shape\", \"size\": [x,y,z] metres, \"position\": [x,y,z] centre, \"rotation\": [x,y,z] degrees, \"color\": \"#rrggbb\", \"parent\"?, \"mirror\"?, \"roundness\"? 0-1, \"taper\"? }] }. id: lowercase a-z, 0-9 and -, starting with a letter or digit, at most 40 characters. shape is exactly one of blob, box, cylinder, torus, frame (no cone, sphere or other names). Up to 48 parts after mirrors. Floor is y=0 (feet touch it), front is +z, the subject's left is +x, mirror: true adds the reflection across x=0. roundness works backwards from its name: 0 is a smooth ellipsoid and 1 is a rounded box. roundness belongs only on blob and box, taper only on blob: leave both off cylinder, torus and frame. Keep roundness at 0.2 or below on every organic part (body, belly, head, face, limbs); go above 0.3 only for hard-edged objects. Use box only for hard-edged things.";
+
+// A compact score for the next turn: what is missing where, and which parts stick out.
+function reportText(report) {
+	if (!report) return "";
+	const extra = Array.isArray(report.extraByPart) ? report.extraByPart.slice(0, 4) : report.extraByPart;
+	return ` Score detail: ${JSON.stringify({ widthToHeight: report.widthToHeight, missingByBand: report.missingByBand, extraByPart: extra })}.`;
+}
+
+function outlineText(outline) {
+	if (!outline) return "";
+	return ` The harness measured the reference outline in pixels (front view; x is a fraction of the subject's height from its centre, + toward image right = the subject's own left; y is a fraction of height from the head top; spans are the filled runs across each slice): ${JSON.stringify(outline)}. Put parts on these measurements.`;
+}
+
+function makeTurnText(reference, sculptId, continuation, outline = null) {
+	const ref = JSON.stringify(referenceArg(reference));
 	if (continuation) {
-		return `Round ${continuation.round} of ${continuation.maxRounds}. IoU is ${continuation.iou ?? "unknown"}; rank 3-6 candidate edit sets with sculpt.compare candidates, apply the winner with object.sculpt edits${sculptId ? ` to sculpt ${sculptId}` : ""}, then sculpt.compare again.`;
+		return [
+			`Round ${continuation.round} of ${continuation.maxRounds}. The harness scored sculpt ${sculptId} at IoU ${continuation.iou ?? "unknown"} against the reference.${reportText(continuation.report)}`,
+			`Write 3-6 candidate edit sets that fix the biggest mismatch (proportion first, then placement), rank them with ONE run_action sculpt.compare { "id": "${sculptId}", "reference": ${ref}, "candidates": [{ "label", "edits" }] },`,
+			`apply the best-ranked set with ONE run_action object.sculpt { "id": "${sculptId}", "edits": [...] }, then end the turn with one short line. Do not inspect first; the harness scores the result after your turn.`,
+			RECIPE_RULES,
+		].join(" ");
 	}
 	return [
-		"Run a measured sculpt from the attached reference image.",
-		"Measure the visible outline landmarks first: limb tips, head top, and feet as fractions of the subject height.",
-		"Write the recipe using object.sculpt (or patch the supplied sculpt id when given), keeping parts on those measured landmarks.",
-		`Use sculpt.compare with the reference image${reference?.name ? ` (${reference.name})` : ""} and report the IoU and what the image hides.`,
-		...(sculptId ? [`The existing sculpt id is ${sculptId}; patch it in place rather than creating another sculpt.`] : []),
+		"Sculpt the subject of the attached reference image as a clay recipe.",
+		outline
+			? `Use the measured outline below, scaled to a real-world height in metres.${outlineText(outline)}`
+			: "First measure the visible outline in the image: the subject's bounding box, then where the head top, each limb tip and the feet sit as fractions of its height, and convert them to metres for a real-world height.",
+		sculptId
+			? `Then rewrite sculpt ${sculptId} with ONE run_action object.sculpt { "id": "${sculptId}", "recipe": ... }, keeping parts on the measured landmarks.`
+			: "Then create it with ONE run_action object.sculpt { \"name\", \"recipe\" }, keeping parts on the measured landmarks.",
+		"No inspect calls are needed and do not call sculpt.compare: the harness scores the sculpt after your turn and tells you the result.",
+		"End the turn with one short line naming what the image hides.",
+		RECIPE_RULES,
 	].join(" ");
 }
 
@@ -50,7 +79,7 @@ function makeTurnText(reference, sculptId, continuation) {
 // The sidecar's Studio envelope requires UUIDs for both the session and the turn.
 export function createAgentPort(client, { sessionId = crypto.randomUUID() } = {}) {
 	return {
-		async *sendTurn({ text, attachments = [], signal }) {
+		async *sendTurn({ text, attachments = [], signal, effort }) {
 			const events = [];
 			let wake;
 			let ended = false;
@@ -60,6 +89,7 @@ export function createAgentPort(client, { sessionId = crypto.randomUUID() } = {}
 				sessionId,
 				turnId: crypto.randomUUID(),
 				text,
+				...(effort ? { effort } : {}),
 				...(attachments.length ? { attachments } : {}),
 				context: null,
 			}, push, signal);
@@ -81,6 +111,12 @@ export function createSculptRun({
 	maxRounds = 3,
 	timeBudgetMs = 180000,
 	now = Date.now,
+	// Optional ({ id, reference }) -> sculpt.compare result. The harness scores a turn the agent left unscored.
+	score = null,
+	// Optional (reference) -> measureReferenceOutline result, put into the first turn's text.
+	measure = null,
+	// Measured: "high" made the first turn twice as slow for no better draft, so the default effort stays.
+	draftEffort = undefined,
 } = {}) {
 	if (!agent?.sendTurn) throw new TypeError("sculpt run requires an agent port");
 	const listeners = new Set();
@@ -90,6 +126,8 @@ export function createSculptRun({
 	let settled = false;
 	let startedAt = 0;
 	let turnSculpted = false;
+	let turnScored = false;
+	let lastReport = null;
 	let retryCount = 0;
 	let turnPromise = null;
 
@@ -107,6 +145,7 @@ export function createSculptRun({
 			const id = args.id ?? ids[0] ?? event?.sculptId ?? state.sculptId;
 			if (id) {
 				turnSculpted = true;
+				turnScored = false; // a score taken before this edit no longer describes the sculpt
 				const stage = state.round > 1 ? "refine" : "draft";
 				if (state.stage === stage) state = { ...state, sculptId: id, round: Math.max(1, state.round) };
 				else publish({ sculptId: id, round: Math.max(1, state.round), stage, message: "Draft sculpt applied." });
@@ -115,8 +154,10 @@ export function createSculptRun({
 		}
 		if (name !== "sculpt.compare" && event?.type !== "sculpt.compare") return;
 		const report = result?.report ?? event?.report;
+		if (result && Number.isFinite(Number(result.report?.iou ?? result.iou))) lastReport = result.report ?? result;
 		const iou = Number(report?.iou ?? result?.iou ?? event?.iou);
 		const sheet = result?.sheetDataUrl ?? event?.sheetDataUrl ?? dataUrlFromSheet(result?.sheet);
+		if (Number.isFinite(iou)) turnScored = true;
 		publish({
 			stage: "score",
 			...(Number.isFinite(iou) ? { iou } : {}),
@@ -126,8 +167,9 @@ export function createSculptRun({
 	};
 	const unsubscribeBus = bus?.subscribe?.(onBus) ?? (() => {});
 
-	const consumeTurn = async text => {
+	const consumeTurn = async (text, effort) => {
 		turnSculpted = false;
+		turnScored = false;
 		const events = [];
 		let turnError = null;
 		const callback = event => {
@@ -136,7 +178,7 @@ export function createSculptRun({
 			// A refused or failed turn is the run's failure, not a turn that forgot to sculpt.
 			if (event?.type === "error") turnError ??= new Error(event.message || event.code || "The agent turn failed.");
 		};
-		const returned = agent.sendTurn({ text, attachments: reference?.dataUrl ? [{ dataUrl: reference.dataUrl, name: reference.name }] : [], signal: controller.signal }, callback);
+		const returned = agent.sendTurn({ text, attachments: reference?.dataUrl ? [{ dataUrl: reference.dataUrl, name: reference.name }] : [], signal: controller.signal, ...(effort ? { effort } : {}) }, callback);
 		if (isAsyncIterable(returned)) {
 			for await (const event of returned) callback(event);
 		} else await returned;
@@ -146,11 +188,17 @@ export function createSculptRun({
 	const loop = async () => {
 		startedAt = now();
 		publish({ stage: "measure", round: 0, message: INITIAL_MESSAGE, error: null });
-		let text = makeTurnText(reference, sculptId, false);
+		let outline = null;
+		if (measure) {
+			try { outline = await measure(referenceArg(reference)); } catch (error) { publish({ message: `Could not measure the reference: ${String(error?.message || error)}` }); }
+		}
+		if (controller.signal.aborted) { publish({ stage: "cancelled", message: "Sculpt run cancelled." }); settled = true; return; }
+		let text = makeTurnText(reference, sculptId, false, outline);
 		while (!controller.signal.aborted) {
 			if (elapsed() >= timeBudgetMs) break;
 			const roundBefore = state.round;
-			turnPromise = consumeTurn(text);
+			// The first draft decides most of the score, so it gets the deeper reasoning.
+			turnPromise = consumeTurn(text, roundBefore === 0 ? draftEffort : undefined);
 			try { await turnPromise; } catch (error) {
 				if (controller.signal.aborted) break;
 				publish({ stage: "failed", error: String(error?.message || error), message: "Sculpt run failed." });
@@ -170,11 +218,21 @@ export function createSculptRun({
 				return;
 			}
 			retryCount = 0;
+			if (!turnScored && score && state.sculptId) {
+				const args = { id: state.sculptId, reference: referenceArg(reference) };
+				try {
+					const value = await score(args);
+					onBus({ action: "sculpt.compare", args, result: value?.output ?? value });
+				} catch (error) {
+					publish({ message: `Scoring failed: ${String(error?.message || error)}` });
+				}
+				if (controller.signal.aborted) break;
+			}
 			if (state.iou !== null && state.iou >= targetIou) break;
 			if (state.round >= maxRounds || elapsed() >= timeBudgetMs) break;
 			const nextRound = Math.max(1, state.round + 1);
 			publish({ stage: "refine", round: nextRound, message: `Preparing refinement round ${nextRound} of ${maxRounds}.` });
-			text = makeTurnText(reference, state.sculptId, { round: nextRound, maxRounds, iou: state.iou });
+			text = makeTurnText(reference, state.sculptId, { round: nextRound, maxRounds, iou: state.iou, report: lastReport });
 		}
 		if (controller.signal.aborted) {
 			publish({ stage: "cancelled", message: "Sculpt run cancelled." });

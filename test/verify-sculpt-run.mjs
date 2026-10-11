@@ -132,4 +132,82 @@ await runCase("a refused turn fails the run with the refusal, without a retry", 
 	assert.match(run.getState().error, /sessionId must be a UUID/);
 });
 
+await runCase("the harness scores a turn the agent left unscored, and tells the agent the exact reference", async () => {
+	const f = fixture({ turns: [[sculpt()], [sculpt()]] });
+	const texts = [];
+	const inner = f.agent.sendTurn;
+	f.agent.sendTurn = function (request) { texts.push(request.text); return inner.call(this, request); };
+	const scored = [];
+	const run = createSculptRun({ ...f, reference: { ...reference, assetId: "asset-snorlax" }, targetIou: 0.9, score: async (args) => { scored.push(args); return { output: { report: { iou: 0.93 }, sheetDataUrl: "data:image/png;base64,s" } }; } });
+	await run.start();
+	return { run, sent: f.sent, scored, texts };
+}, ({ run, sent, scored, texts }) => {
+	assert.deepEqual(scored, [{ id: "sculpt-1", reference: { assetId: "asset-snorlax" } }]);
+	assert.equal(sent(), 1, "the harness score reached the target, so no continuation");
+	assert.equal(run.getState().iou, 0.93);
+	assert.equal(run.getState().stage, "done");
+	assert.match(texts[0], /do not call sculpt\.compare/);
+	assert.match(texts[0], /exactly one of blob, box, cylinder, torus, frame/);
+});
+
+await runCase("a continuation carries the harness score, the exact reference and the candidate step", async () => {
+	const f = fixture({ turns: [[sculpt()], [sculpt()]] });
+	const texts = [];
+	const inner = f.agent.sendTurn;
+	f.agent.sendTurn = function (request) { texts.push(request.text); return inner.call(this, request); };
+	const efforts = [];
+	const innerEffort = f.agent.sendTurn;
+	f.agent.sendTurn = function (request) { efforts.push(request.effort); return innerEffort.call(this, request); };
+	const scores = [0.5, 0.95];
+	const run = createSculptRun({ ...f, maxRounds: 2, reference: { ...reference, assetId: "asset-snorlax" }, score: async () => ({ output: { iou: scores.shift(), missingByBand: { top: 0.1 }, extraByPart: [{ id: "arm", fraction: 0.02 }] } }) });
+	await run.start();
+	return { run, texts, efforts };
+}, ({ run, texts, efforts }) => {
+	assert.equal(texts.length, 2);
+	assert.match(texts[1], /IoU 0\.5/);
+	assert.deepEqual(efforts, [undefined, undefined], "turns use the default effort unless draftEffort is set");
+	assert.match(texts[1], /"reference": \{"assetId":"asset-snorlax"\}/);
+	assert.match(texts[1], /"candidates"/);
+	assert.match(texts[1], /missingByBand/);
+	assert.equal(run.getState().iou, 0.95);
+});
+
+await runCase("the harness does not re-score a turn the agent already scored", async () => {
+	const f = fixture({ turns: [[sculpt(), compare(0.95)]] });
+	let calls = 0;
+	const run = createSculptRun({ ...f, score: async () => { calls += 1; return { report: { iou: 0.1 } }; } });
+	await run.start();
+	return { run, calls: () => calls };
+}, ({ run, calls }) => {
+	assert.equal(calls(), 0);
+	assert.equal(run.getState().iou, 0.95);
+});
+
+await runCase("a candidate score taken before the winning edit does not stop the harness re-scoring", async () => {
+	const f = fixture({ turns: [[sculpt()], [compare(0.6), sculpt()]] });
+	const scores = [0.6, 0.92];
+	let calls = 0;
+	const run = createSculptRun({ ...f, maxRounds: 2, score: async () => { calls += 1; return { iou: scores.shift() }; } });
+	await run.start();
+	return { run, calls: () => calls };
+}, ({ run, calls }) => {
+	assert.equal(calls(), 2, "round 2's compare came before its object.sculpt, so the harness scores again");
+	assert.equal(run.getState().iou, 0.92);
+});
+
+await runCase("the harness measurement goes into the first turn", async () => {
+	const f = fixture({ turns: [[sculpt(), compare(0.95)]] });
+	const texts = [];
+	const inner = f.agent.sendTurn;
+	f.agent.sendTurn = function (request) { texts.push(request.text); return inner.call(this, request); };
+	const measured = [];
+	const run = createSculptRun({ ...f, reference: { ...reference, assetId: "asset-snorlax" }, measure: async (ref) => { measured.push(ref); return { widthToHeight: 0.93, rows: [{ y: 0.04, spans: [[0.15, 0.26]] }] }; } });
+	await run.start();
+	return { texts, measured };
+}, ({ texts, measured }) => {
+	assert.deepEqual(measured, [{ assetId: "asset-snorlax" }]);
+	assert.match(texts[0], /"widthToHeight":0\.93/);
+	assert.match(texts[0], /\[0\.15,0\.26\]/);
+});
+
 if (process.exitCode) process.exit(1);
