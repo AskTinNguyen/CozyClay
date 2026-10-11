@@ -628,6 +628,7 @@ integrity and report honesty.
 | --- | --- |
 | `COZYCLAY_SUPERVISOR=off` | no review at all; the route answers 204 |
 | `COZYCLAY_SUPERVISOR_EFFORT` | the reasoning effort, default `high` |
+| `COZYCLAY_SUPERVISOR_AUTOFIX=blocker` | a note whose blockers carry fixes is marked `autofix: { eligible: true, severity: "blocker" }`; default off |
 
 The note is one more sequenced event on the turn's record, so
 `GET /agent/turn/<turnId>/events?after=N` replays it after `done`. The panel
@@ -637,7 +638,7 @@ reads it from its own route, which takes the same `studio_owner` cookie:
 curl -s http://127.0.0.1:5180/agent/turn/<turnId>/supervisor -H 'cookie: studio_owner=…'
 ```
 ```json
-{"type":"supervisor","turnId":"…","verdict":"reviewed","model":"cliproxy/claude-opus-5-5","effort":"high","elapsedMs":41210,"summary":"…","items":[{"text":"…","status":"done","evidence":"…"}],"issues":[{"severity":"concern","kind":"framing","text":"…","evidence":"…"}],"counts":{"blocker":0,"concern":1,"note":0},"eventSeq":14}
+{"type":"supervisor","turnId":"…","verdict":"reviewed","model":"cliproxy/claude-opus-5-5","effort":"high","elapsedMs":41210,"summary":"…","items":[{"text":"…","status":"done","evidence":"…"}],"issues":[{"severity":"concern","kind":"framing","text":"…","evidence":"…","fix":{"action":"shot.frame","args":{"shotId":"shot-1","subjectIds":["char-a","char-b"],"framing":{"intent":{"size":"medium shot"}}}}}],"fixes":[{"issueIndex":0,"severity":"concern","action":"shot.frame","args":{"shotId":"shot-1","subjectIds":["char-a","char-b"],"framing":{"intent":{"size":"medium shot"}}}}],"droppedFixes":[],"counts":{"blocker":0,"concern":1,"note":0,"fixes":1},"eventSeq":14}
 ```
 
 `status` is `done`, `partial`, `refused` or `missing`; `severity` is
@@ -650,6 +651,37 @@ runs out, when the turn was not reviewed or the switch is off, 404 for an
 unknown turn and 403 for another session's cookie. The card's
 **Send as next prompt** button puts the blockers and concerns into the
 composer and sends them as an ordinary turn; nothing is sent on its own.
+
+### Fixes
+
+An issue may carry a `fix`: one `run_action` call, `{ "action", "args" }`,
+written with the real ids and values from the receipts and geometry. The
+reviewer's digest lists what a fix may name: `ACTIONS` is the turn's own
+action index (id and label), and `ACTION SCHEMAS` holds the input schemas of
+the pre-selected actions the index declares (`character.setPose`,
+`character.move`, `character.update`, `shot.frame`, `shot.set`,
+`shot.setRange`, `object.update`, `object.remove`, `objects.arrange`,
+`stage.set`, `edit.undo`, `view.update`), read with
+`inspect_studio { scope: "actions", ids }` and bounded to 6 KB (whole schemas
+only; the ids that did not fit are listed under `omitted`).
+
+Every fix is validated before the note is stored: its action must be in the
+action index, its `args` must be an object, and when the action's schema was
+read every key in its `required` list must be present. A fix that fails is
+removed from its issue and reported in `droppedFixes` as
+`{ issueIndex, action, reason }` (`unknown action`, `args is not an object`,
+`missing required key "<key>"`, `malformed fix`); the issue itself stays.
+The kept ones are repeated in `fixes` as
+`{ issueIndex, severity, action, args }`, and `counts.fixes` counts them.
+
+When a note has fixes, the expanded card shows each one as a code line under
+its issue and the button reads **Apply fixes as next prompt**. The prompt it
+sends asks for exactly those calls, in order, in one `script` call followed
+by `verify_result`, one line per fix (`- [severity] <issue> -> run_action
+{"action":…,"args":…}`); blockers and concerns without a fix follow under
+**Also check:**. `COZYCLAY_SUPERVISOR_AUTOFIX=blocker` never starts a turn:
+turns belong to the panel, and the sidecar only marks the note `autofix`, which
+the card mentions in the button's tooltip.
 
 ## Sessions
 

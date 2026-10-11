@@ -751,6 +751,7 @@
 .agent-supervisor-summary { margin: 0; line-height: 1.5; word-break: break-word; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
 .agent-supervisor-card[data-open="true"] .agent-supervisor-summary { display: block; }
 .agent-supervisor-badge.blocker { border-color: var(--agent-alert-edge); background: var(--agent-alert-bg); color: var(--agent-alert); }
+.agent-supervisor-fix { display: block; margin-top: var(--agent-space-1); font: var(--agent-font-sm) ui-monospace, monospace; white-space: pre-wrap; word-break: break-all; color: var(--agent-text-dim); }
 .agent-supervisor-badge.note { border-color: var(--agent-border-strong); background: transparent; color: var(--agent-text-dim); }
 
 .agent-failure-card { border-color: #6d3a52; background: #2a1c26; }
@@ -1190,3 +1191,18 @@
 	.agent-resize { display: none; }
 }
 }
+
+/* The supervisor switch beside the model picks (#728). */
+.agent-supervisor-toggle {
+	flex: 0 0 auto;
+	font: inherit;
+	font-size: 12px;
+	padding: 4px 8px;
+	border-radius: 6px;
+	border: 1px solid var(--agent-border, #444);
+	background: transparent;
+	color: var(--agent-text-dim, #999);
+	cursor: pointer;
+}
+.agent-supervisor-toggle.is-on { color: var(--agent-text, #ddd); border-color: var(--agent-border-focus, #6a9); }
+.agent-supervisor-toggle:focus-visible { outline: 2px solid var(--agent-border-focus, #6a9); outline-offset: 1px; }

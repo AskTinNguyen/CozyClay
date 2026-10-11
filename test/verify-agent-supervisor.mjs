@@ -6,6 +6,9 @@
 //       review's model call is even issued, then GET /agent/turn/<id>/supervisor
 //       and the events replay carry the note; read-only turns, the env switch,
 //       a wrong owner and a garbage verdict each answer what they should.
+//   (c) fixes (#743): validateFixes keeps only fixes the action index and the
+//       schemas admit, the route returns them on the note, and the panel's
+//       follow-up asks for exactly those run_action calls.
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { once } from "node:events";
@@ -15,7 +18,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai/providers/faux";
 import { createAgentHandler } from "../bin/agent/agent-routes.mjs";
-import { buildSupervisorInput, parseSupervisorVerdict, shouldSupervise, SUPERVISOR_RUBRIC } from "../bin/agent/supervisor.mjs";
+import { buildSupervisorInput, parseSupervisorVerdict, shouldSupervise, SUPERVISOR_RUBRIC, validateFixes } from "../bin/agent/supervisor.mjs";
+import { supervisorFollowUp } from "../src/workflow/agent-client.js";
 import { createFakeModel } from "./fixtures/fake-model.mjs";
 import { contextFixture, envelopeFixture, receiptFixture } from "./verify-studio-agent-protocol.mjs";
 
@@ -24,6 +28,7 @@ process.env.COZYCLAY_AGENT_SESSIONS_DIR = sessionDir;
 process.on("exit", () => rmSync(sessionDir, { recursive: true, force: true }));
 delete process.env.COZYCLAY_SUPERVISOR;
 delete process.env.COZYCLAY_SUPERVISOR_EFFORT;
+delete process.env.COZYCLAY_SUPERVISOR_AUTOFIX;
 
 const png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
@@ -72,11 +77,53 @@ async function bounded(promise, label = "fixture event") {
 	console.log("PASS the digest is bounded and the verdict parser accepts only a valid verdict");
 }
 
+// --- (c) fixes: pure validation and the follow-up text --------------------------
+const ACTION_INDEX = [{ id: "character.setPose", label: "Set pose" }, { id: "shot.frame", label: "Frame shot" }, { id: "object.update", label: "Update object" }, { id: "scene.rename", label: "Rename scene" }];
+const ACTION_SCHEMAS = [
+	{ id: "character.setPose", label: "Set pose", input: { type: "object", properties: { characterId: { type: "string" }, posture: { type: "string" } }, required: ["characterId", "posture"], additionalProperties: false } },
+	{ id: "shot.frame", label: "Frame shot", input: { type: "object", properties: { shotId: { type: "string" }, subjectIds: { type: "array" }, framing: { type: "object" } }, required: ["shotId"], additionalProperties: false } },
+	{ id: "object.update", label: "Update object", input: { type: "object", properties: { id: { type: "string" }, position: { type: "object" } }, required: ["id"], additionalProperties: true } },
+];
+{
+	const issue = (severity, fix) => ({ severity, kind: "framing", text: `${severity} issue`, evidence: "e", ...(fix ? { fix } : {}) });
+	const framed = { action: "shot.frame", args: { shotId: "shot-1", subjectIds: ["char-a"], framing: { intent: { size: "medium shot" } } } };
+	const checked = validateFixes([issue("blocker", framed), issue("concern", { action: "character.teleport", args: { characterId: "char-a" } }), issue("note")], { index: ACTION_INDEX, schemas: ACTION_SCHEMAS });
+	assert.deepEqual(checked.issues[0].fix, framed, "a fix whose action is indexed and whose args satisfy the schema is kept");
+	assert.equal(checked.issues[1].fix, undefined, "an unknown action's fix is removed from its issue");
+	assert.equal(checked.issues[1].text, "concern issue", "the issue itself stays");
+	assert.deepEqual(checked.dropped, [{ issueIndex: 1, action: "character.teleport", reason: "unknown action" }]);
+	const missing = validateFixes([issue("blocker", { action: "character.setPose", args: { characterId: "char-b" } })], { index: ACTION_INDEX, schemas: ACTION_SCHEMAS });
+	assert.equal(missing.issues[0].fix, undefined);
+	assert.equal(missing.dropped.length, 1);
+	assert.match(missing.dropped[0].reason, /required key "posture"/, "the reason names the missing key");
+	assert.deepEqual(validateFixes([issue("concern", { action: "object.update", args: "table-1" })], { index: ACTION_INDEX }).dropped, [{ issueIndex: 0, action: "object.update", reason: "args is not an object" }]);
+	assert.equal(validateFixes([issue("concern", { action: "scene.rename", args: {} })], { index: ACTION_INDEX, schemas: ACTION_SCHEMAS }).dropped.length, 0, "without a schema only the index and the args shape are checked");
+	const verdict = parseSupervisorVerdict(JSON.stringify({ items: [], issues: [issue("concern", framed), issue("note")], summary: "s" }));
+	assert.deepEqual(verdict.issues[0].fix, framed, "the parser keeps a fix for validation");
+	assert.equal(Object.hasOwn(verdict.issues[1], "fix"), false, "and adds none to an issue without one");
+
+	const input = buildSupervisorInput({ request: "r", actions: { index: ACTION_INDEX, schemas: ACTION_SCHEMAS } });
+	const block = name => input.text.split("\n").find(entry => entry.startsWith(`${name}: `));
+	assert.deepEqual(JSON.parse(block("ACTIONS").slice("ACTIONS: ".length)), ["character.setPose (Set pose)", "shot.frame (Frame shot)", "object.update (Update object)", "scene.rename (Rename scene)"]);
+	assert.deepEqual(JSON.parse(block("ACTION SCHEMAS").slice("ACTION SCHEMAS: ".length))["character.setPose"].required, ["characterId", "posture"]);
+	const big = Array.from({ length: 12 }, (_, index) => ({ id: `big.${index}`, input: { type: "object", description: "x".repeat(900) } }));
+	const bounded = JSON.parse(buildSupervisorInput({ actions: { index: [], schemas: big } }).text.split("\n").find(entry => entry.startsWith("ACTION SCHEMAS: ")).slice("ACTION SCHEMAS: ".length));
+	assert.ok(JSON.stringify(bounded).length <= 6000 + 200 && bounded.omitted.length > 0 && Object.keys(bounded).length > 1, "schemas are bounded to 6 KB and the rest named");
+
+	const note = { issues: [issue("blocker", framed), issue("concern"), issue("note")], fixes: [{ issueIndex: 0, severity: "blocker", ...framed }] };
+	const text = supervisorFollowUp(note).split("\n");
+	assert.equal(text[0], "Supervisor review \u2014 apply these fixes exactly, in order, in ONE script call, then verify_result; do not re-derive them:");
+	assert.equal(text[1], `- [blocker] blocker issue -> run_action ${JSON.stringify(framed)}`);
+	assert.deepEqual(text.slice(2), ["Also check:", "- [concern] concern issue (e)"], "an unfixed concern follows under its own header, the note does not");
+	assert.equal(supervisorFollowUp({ issues: note.issues }), "Supervisor review \u2014 please address:\n- [blocker] blocker issue (e)\n- [concern] concern issue (e)", "without fixes the text is unchanged");
+	console.log("PASS fixes are validated against the action index and schemas, and the follow-up runs them verbatim");
+}
+
 // --- (b) the route ------------------------------------------------------------
 const VERDICT = { items: [{ text: "의자 배치", status: "done", evidence: "receipt-1 chair" }], issues: [{ severity: "blocker", kind: "honesty", text: "검증 주장", evidence: "no verify_result" }, { severity: "concern", kind: "framing", text: "의자가 잘림", evidence: "clipped true" }], summary: "의자는 놓였지만 보고가 과장됨." };
 const isSupervisorCall = context => context.systemPrompt === SUPERVISOR_RUBRIC;
 
-async function fixture({ readOnly = false, supervisorReply = JSON.stringify(VERDICT) } = {}) {
+async function fixture({ readOnly = false, supervisorReply = JSON.stringify(VERDICT), actionIndex } = {}) {
 	const log = [], commands = [], modelCalls = [];
 	const gate = deferred();
 	let reads = 0;
@@ -84,11 +131,12 @@ async function fixture({ readOnly = false, supervisorReply = JSON.stringify(VERD
 	const shot = id => ({ id, name: id === "shot-1" ? "Shot 1" : "Shot 2", range: { startFrame: id === "shot-1" ? 0 : 72, endFrameExclusive: 144 }, keyCount: 1 });
 	// The turn is admitted at the submitted context; the scene the review reads
 	// afterwards has the shot this turn created.
-	const readContext = async () => reads++ === 0 ? contextFixture() : { ...base, revision: { ...base.revision, scene: 42 }, view: { ...base.view, frame: 12 }, shot: { ...shot("shot-1"), mode: "keys" }, shots: [shot("shot-1"), shot("shot-2")] };
+	const readContext = async () => reads++ === 0 ? { ...contextFixture(), ...(actionIndex ? { actionIndex } : {}) } : { ...base, revision: { ...base.revision, scene: 42 }, view: { ...base.view, frame: 12 }, shot: { ...shot("shot-1"), mode: "keys" }, shots: [shot("shot-1"), shot("shot-2")] };
 	const hub = {
 		async command(name, args) {
 			commands.push({ name, args });
 			if (name === "arrange_objects") return { ...receiptFixture(), affectedIds: ["chair", "shot-2"] };
+			if (name === "inspect_studio" && args.scope === "actions") return { revision: { scene: 42 }, actions: ACTION_SCHEMAS.filter(row => args.ids.includes(row.id)) };
 			if (name === "inspect_studio") return { revision: { scene: 41 }, entities: [] };
 			if (name === "verify_result") return { receiptId: null, revision: 42, checks: { coverage: "current-scene-targets" }, visualRefs: [], geometry: { subjects: [], pairs: [], shots: [{ shotId: "shot-2", subjectIds: [], camera: null, cameraSide: null, occluders: [] }], axisConsistent: null } };
 			if (name === "capture_framing_png") {
@@ -122,8 +170,8 @@ async function fixture({ readOnly = false, supervisorReply = JSON.stringify(VERD
 	server.listen(0, "127.0.0.1");
 	await once(server, "listening");
 	const origin = `http://127.0.0.1:${server.address().port}`;
-	const turn = async (text = "선택된 캐릭터 왼쪽 1.4m에 의자 하나 놔줘") => {
-		const body = { ...envelopeFixture(), sessionId: randomUUID(), turnId: randomUUID(), text, model: "faux/scripted" };
+	const turn = async (text = "선택된 캐릭터 왼쪽 1.4m에 의자 하나 놔줘", extra = {}) => {
+		const body = { ...envelopeFixture(), sessionId: randomUUID(), turnId: randomUUID(), text, model: "faux/scripted", ...extra };
 		const response = await fetch(`${origin}/agent/turn`, { method: "POST", headers: { "content-type": "application/json", origin }, body: JSON.stringify(body) });
 		const stream = await bounded(response.text(), "turn stream");
 		log.push("stream-ended");
@@ -158,7 +206,10 @@ let authoredTypes;
 	assert.equal(note.verdict, "reviewed");
 	assert.equal(note.model, "faux/scripted");
 	assert.equal(note.effort, "high");
-	assert.deepEqual(note.counts, { blocker: 1, concern: 1, note: 0 });
+	assert.deepEqual(note.counts, { blocker: 1, concern: 1, note: 0, fixes: 0 });
+	assert.deepEqual(note.fixes, [], "a verdict without fixes carries none");
+	assert.equal(note.autofix, undefined);
+	assert.ok(!f.commands.some(command => command.name === "inspect_studio" && command.args.scope === "actions"), "no action index, no schema read");
 	assert.deepEqual(note.items, VERDICT.items);
 	assert.deepEqual(note.issues, VERDICT.issues);
 	assert.equal(note.summary, VERDICT.summary);
@@ -202,6 +253,21 @@ let authoredTypes;
 	console.log("PASS COZYCLAY_SUPERVISOR=off answers 204 and spends no provider call");
 }
 
+// The author's own switch: a turn sent with supervisor:false is accepted and
+// skips the review exactly like the env switch, while the next turn without
+// the flag is reviewed again.
+{
+	const f = await fixture();
+	f.gate.resolve();
+	const { turnId, cookie, frames } = await f.turn(undefined, { supervisor: false });
+	assert.deepEqual(frameTypes(frames), authoredTypes, "the turn stream is identical with the per-turn switch off");
+	assert.equal((await f.get(`/agent/turn/${encodeURIComponent(turnId)}/supervisor`, cookie)).status, 204);
+	assert.equal(f.modelCalls.length, 2, "no extra provider call for a turn that opted out");
+	assert.ok(!f.commands.some(command => ["verify_result", "capture_framing_png", "capture_plan_png"].includes(command.name)), "no editor reads for a review");
+	await f.close();
+	console.log("PASS a turn sent with supervisor:false answers 204 and spends no provider call");
+}
+
 // A read-only turn is not reviewed.
 {
 	const f = await fixture({ readOnly: true });
@@ -223,7 +289,40 @@ let authoredTypes;
 	const note = await response.json();
 	assert.equal(note.verdict, "unavailable");
 	assert.equal(typeof note.reason, "string");
-	assert.deepEqual(note.counts, { blocker: 0, concern: 0, note: 0 });
+	assert.deepEqual(note.counts, { blocker: 0, concern: 0, note: 0, fixes: 0 });
 	await f.close();
 	console.log("PASS a garbage verdict becomes an unavailable note");
+}
+
+// A verdict with fixes: the reviewer sees the action index and the pre-selected
+// schemas, the valid fix lands on the note, the unknown one is dropped, and the
+// autofix switch only marks the note.
+{
+	process.env.COZYCLAY_SUPERVISOR_AUTOFIX = "blocker";
+	const fix = { action: "object.update", args: { id: "chair", position: { x: -1.4, y: 0, z: 0 } } };
+	const reply = { ...VERDICT, issues: [{ ...VERDICT.issues[0], kind: "spatial", fix }, { ...VERDICT.issues[1], fix: { action: "chair.teleport", args: { id: "chair" } } }] };
+	const f = await fixture({ supervisorReply: `Verdict:\n${JSON.stringify(reply)}`, actionIndex: ACTION_INDEX });
+	f.gate.resolve();
+	const { turnId, cookie } = await f.turn();
+	const response = await bounded(f.get(`/agent/turn/${encodeURIComponent(turnId)}/supervisor`, cookie), "supervisor long-poll");
+	assert.equal(response.status, 200);
+	const note = await response.json();
+	assert.equal(note.verdict, "reviewed");
+	assert.equal(note.fixes.length, 1);
+	assert.deepEqual(note.fixes[0], { issueIndex: 0, severity: "blocker", ...fix });
+	assert.equal(note.counts.fixes, 1);
+	assert.deepEqual(note.issues[0].fix, fix);
+	assert.equal(note.issues[1].fix, undefined);
+	assert.deepEqual(note.droppedFixes, [{ issueIndex: 1, action: "chair.teleport", reason: "unknown action" }]);
+	assert.deepEqual(note.autofix, { eligible: true, severity: "blocker" }, "a blocker fix under COZYCLAY_SUPERVISOR_AUTOFIX=blocker is marked eligible");
+	assert.equal(f.modelCalls.filter(call => !call.supervisor).length, 2, "the sidecar starts no turn of its own");
+	const schemaRead = f.commands.find(command => command.name === "inspect_studio" && command.args.scope === "actions");
+	assert.deepEqual(schemaRead.args.ids, ["character.setPose", "shot.frame", "object.update"], "only the pre-selected actions the index declares are read");
+	const digest = f.modelCalls.find(call => call.supervisor).context.messages[0].content.find(part => part.type === "text").text;
+	assert.ok(digest.includes("\nACTIONS: ") && digest.includes("\nACTION SCHEMAS: "), "the digest carries ACTIONS and ACTION SCHEMAS");
+	for (const id of ["character.setPose", "shot.frame", "object.update", "scene.rename"]) assert.ok(digest.includes(id), `the digest lists ${id}`);
+	assert.ok(digest.includes("\"required\":[\"characterId\",\"posture\"]"), "the digest carries the pre-selected schemas");
+	delete process.env.COZYCLAY_SUPERVISOR_AUTOFIX;
+	await f.close();
+	console.log("PASS a verdict's valid fix lands on the note, an unknown one is dropped, and autofix only marks the note");
 }

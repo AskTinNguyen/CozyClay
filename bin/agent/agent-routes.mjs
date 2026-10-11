@@ -674,7 +674,8 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 			else telemetry.finished(turnOutcome, turnFailureCode || "tool_failed");
 			// Marked before the done frame leaves, so a client that asks for the
 			// review the moment its stream ends finds it pending, not absent.
-			if (supervisor && process.env.COZYCLAY_SUPERVISOR !== "off" && !controller.signal.aborted && shouldSupervise(turnFrames)) record.supervisor = "pending";
+			// The author's own switch (value.supervisor === false) skips this turn's review.
+			if (supervisor && process.env.COZYCLAY_SUPERVISOR !== "off" && value.supervisor !== false && !controller.signal.aborted && shouldSupervise(turnFrames)) record.supervisor = "pending";
 			}
 			send(frame);
 		};
@@ -711,10 +712,13 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 			let frame;
 			try {
 				frame = await runSupervisor({ registry: await ensureWorkflowModels(), modelKey, effort: process.env.COZYCLAY_SUPERVISOR_EFFORT || "high", turnId: value.turnId, request: value.text, frames: turnFrames, reply: lastReply,
-					hub, workspaceHandle: value.context.host.workspaceHandle, admission, baseline: value.context });
+					hub, workspaceHandle: value.context.host.workspaceHandle, admission, baseline: value.context, actions: current?.actionIndex ?? [] });
 			} catch (error) {
-				frame = { type: "supervisor", turnId: value.turnId, verdict: "unavailable", model: modelKey, effort: null, elapsedMs: Date.now() - startedAt, summary: "", items: [], issues: [], counts: { blocker: 0, concern: 0, note: 0 }, reason: "The supervisor could not start." };
+				frame = { type: "supervisor", turnId: value.turnId, verdict: "unavailable", model: modelKey, effort: null, elapsedMs: Date.now() - startedAt, summary: "", items: [], issues: [], fixes: [], droppedFixes: [], counts: { blocker: 0, concern: 0, note: 0, fixes: 0 }, reason: "The supervisor could not start." };
 			}
+			// COZYCLAY_SUPERVISOR_AUTOFIX=blocker (#743) only marks a note whose
+			// blockers carry fixes; turns stay the panel's to start, never the sidecar's.
+			if (process.env.COZYCLAY_SUPERVISOR_AUTOFIX === "blocker" && frame.fixes?.some(fix => fix.severity === "blocker")) frame = { ...frame, autofix: { eligible: true, severity: "blocker" } };
 			record.supervisor = "done";
 			emitStudioEvent(value.turnId, frame);
 		})();

@@ -1041,6 +1041,18 @@ expect("no timer drives the auth transition", !/set(Interval|Timeout)\([^)]*(sig
 		&& expanded.includes("note · Chair faces the wall") && expanded.includes('aria-expanded="true"'), expanded);
 	expect("the send button reads in Korean under the Korean locale", render("ko", { note }).includes("다음 턴으로 보내기"));
 	const unavailable = render("en", { note: { ...note, verdict: "unavailable", reason: "the reviewer request timed out", summary: "", items: [], issues: [], counts: { blocker: 0, concern: 0, note: 0 } } });
+	// A note with fixes (#743): each fix is a code line under its issue, and the
+	// button says it applies them.
+	const pose = { action: "character.setPose", args: { characterId: "char-b", posture: "sit" } };
+	const fixNote = { ...note, issues: [{ ...note.issues[0], fix: pose }, ...note.issues.slice(1)], fixes: [{ issueIndex: 0, severity: "blocker", ...pose }], counts: { ...note.counts, fixes: 1 } };
+	expect("the fixes label goes through ko()", panel.includes('ko("Apply fixes as next prompt", "수정안 다음 턴으로 보내기")'));
+	const withFixes = render("en", { note: fixNote, defaultOpen: true });
+	const fixLine = `<code class="agent-supervisor-fix" data-fix-action="character.setPose">run_action ${JSON.stringify(pose).replaceAll('"', "&quot;")}</code>`;
+	expect("expanded: the fix is a code line under its issue", withFixes.includes(`Claims a verify that never ran — no verify_result call${fixLine}</li>`) && (withFixes.match(/agent-supervisor-fix/g) ?? []).length === 1, withFixes);
+	expect("a note with fixes offers to apply them", withFixes.includes("Apply fixes as next prompt") && !withFixes.includes("Send as next prompt") && !withFixes.includes("title="), withFixes);
+	expect("the fixes label reads in Korean under the Korean locale", render("ko", { note: fixNote }).includes("수정안 다음 턴으로 보내기"));
+	expect("autofix only adds the button tooltip", render("en", { note: { ...fixNote, autofix: { eligible: true, severity: "blocker" } } }).includes('title="Autofix is on: the blocker fixes would be applied as written"'));
+	expect("collapsed: no fix line", !render("en", { note: fixNote }).includes("agent-supervisor-fix"));
 	expect("an unavailable review is one muted line", unavailable === '<div class="agent-card agent-supervisor-card" data-supervisor-verdict="unavailable"><p class="agent-supervisor-summary">Supervisor review unavailable — the reviewer request timed out</p></div>', unavailable);
 }
 
