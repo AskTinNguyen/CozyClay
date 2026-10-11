@@ -85,6 +85,58 @@ The record stores the normalized recipe, plus `footprint` and `height` measured 
 
 Ask, infer and omit follow `agent-prompt-to-scene.md`. Infer the hidden back and say so. Never ask for more views unless the user wants a likeness.
 
+## Sculpt mode (#739)
+
+Sculpt mode is the Studio's fifth viewport mode. It runs the workflow above for you on one sculpt, on an isolated turntable.
+
+**Running it**
+
+1. Press **5**, or pick Sculpt in the viewport mode toolbar. If a sculpt is selected, the mode opens on that sculpt and a run re-sculpts it in place. Otherwise the first run creates a new sculpt. The main view shows only that sculpt on a turntable; W, E and R swing it to front, side and back. The shot preview still shows the whole scene.
+2. Drop, paste or choose a reference image (PNG, JPEG or WebP) in the **Sculpt from image** panel.
+3. Press **Start**. Start needs the Agent: sign in (⌘B) or configure a provider key, and the live editor must be connected. Without them the button stays disabled and the panel says why.
+4. Watch the stages: **Measure → Draft → Score → Refine**. The panel shows the round, the elapsed time, the IoU against the 0.9 target and, once scored, the overlay sheet. **Cancel** stops the run at any point.
+5. Fix details by chatting with the Agent (⌘B) while the sculpt is selected. These are ordinary `object.sculpt` edits, one undo each.
+6. Press **Place in scene**. The sculpt stands on the ground in front of the scene camera, stays selected, and the editor returns to Stage. One undo puts it back where it was.
+
+| Mode 5, nothing selected | A sculpt on the isolated turntable | After Place in scene |
+|---|---|---|
+| ![Sculpt mode empty state](images/sculpt-mode-empty.png) | ![Sculpt on the isolated turntable](images/sculpt-mode-turntable.png) | ![Sculpt placed in the scene, back in Stage](images/sculpt-mode-placed.png) |
+
+![A real run on the Snorlax reference: done after 2 rounds at IoU 0.771](images/sculpt-mode-run.png)
+
+**What the run does**
+
+```mermaid
+flowchart LR
+  M[Measure landmarks] --> D[Draft: object.sculpt]
+  D --> S[Score: sculpt.compare]
+  S -->|IoU >= 0.9, round 3, or 3 min| E[Done]
+  S -->|otherwise| C[Rank 3-6 candidate edit sets]
+  C --> A[Apply the winner: object.sculpt edits]
+  A --> S
+```
+
+- Each round is one agent turn. The first turn measures the reference outline (limb tips, head top and feet as fractions of height) before it places any parts, then drafts and scores. Each later turn ranks 3–6 candidate edit sets with `sculpt.compare { candidates }`, applies the winner and scores again.
+- The harness owns the score. Each turn's text gives the exact `sculpt.compare` arguments, including the stored reference's `assetId`. If a turn ends without a successful score, the harness runs `sculpt.compare` itself, so the stop decision and the next round's text always use a real IoU.
+- The run stops at the first of: IoU ≥ 0.9, 3 rounds, or a 3-minute budget. The budget is checked between turns, so the turn in flight finishes first. A turn that ends without an `object.sculpt` is retried once with a firm reminder; a second miss fails the run. A turn the sidecar refuses fails the run at once with the refusal.
+- Each run sends one `sculpt_run` analytics event when it ends. It carries the outcome (`done`, `cancelled` or `failed`), the rounds, the final IoU rounded to 0.01, the duration in ms, and whether the run re-sculpted an existing sculpt. It never includes the image, the recipe or any names.
+
+**Measured in a live editor (Snorlax reference, Studio agent gpt-6-astra, 2026-10-11)**
+
+Every row is one real run, from pressing Start to Done, in a real editor tab. Each row lists the fix that went in before that run.
+
+| Run | Change before the run | Wall time | Rounds | IoU |
+|---|---|---|---|---|
+| 1 | — | 2 s | 0 | — (the sidecar refused the turn: the session id was not a UUID) |
+| 2 | UUID session; refused turns fail the run | 198 s | 3 | — (every agent `sculpt.compare` named the file, not the asset) |
+| 3 | Exact `reference` in the text; the harness scores unscored turns | 209 s | 1 | 0.742 |
+| 4 | Read-only jobs in an agent turn get no undo entry; recipe rules in the text | 230 s | 2 | 0.778 |
+| 5 | The harness measures the outline in pixels; a candidate score taken before an edit is not reused | 181 s | 3 | 0.734 |
+| 6 | First turn at effort "high" (reverted afterwards) | 253 s | 1 | 0.773 |
+| 7 | Final settings: default effort; the text says which shapes take roundness and taper | 206 s | 2 | **0.771**, no refused recipe |
+
+The loop is now reliable: no refused turns, no stale scores, and three rounds fit in about three minutes. The **0.9 target is not reached** with the Studio model. Its first draft lands at 0.73–0.78, and candidate rounds add little. The drafts that reached 0.945 (see below) came from a stronger model that measured the image and spent minutes on a 31-part recipe. Raising the draft's quality is follow-up work (#740: generated views, parallel drafts).
+
 ## Measured: one loop vs parallel (Snorlax, 2026-10-11)
 
 Same reference, a front view with both arms raised. Scores come from `compare_sculpt` at yaw 0 and were re-run independently afterward.
