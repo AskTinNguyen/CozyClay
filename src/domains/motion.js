@@ -105,6 +105,7 @@ import { openMotionDb, getMotion, putMotion } from "../motion-store.js";
 import { resolveMotionSource, decodeMotionResource, encodeMotionResource, sha256Hex } from "../motion-resources.js";
 import { applyRangePin, captureRangePinTarget, normalizeRangePin, rangePinTargetWorld, rangePinTracks, removeRangePinKeys } from "../ardy/range-pin.js";
 import { rangePinObjectMatrixAt } from "../range-pin-object-transform.js";
+import { ensureRangePinState, overlappingRangePin, rangePinConflictFrames, rangePinOverlapMessage } from "./motion/motion-range-pin-rules.js";
 
 import { sameMotionIntent, emptyMotionLayer, encodeMotionKeys, decodeMotionKeys, cloneRangePin, encodeRangePins, decodeRangePins, encodeRangePinResiduals, decodeRangePinResiduals } from "./motion/motion-intent-codec.js";
 // Plain intent owns take identities and JSON keys. Decoded buffers and rig
@@ -688,12 +689,6 @@ export function useMotion(appContext) {
 		if (!ikMode || ikEditTool !== "trail") setTrailTrackFocus(TRAIL_TRACKS.some(track => track.id === ikFocus) ? ikFocus : "hips");
 	}, [ikMode, ikEditTool, ikFocus]);
 
-	function ensureRangePinState(state) {
-		if (!state) return state;
-		if (!(state.pins instanceof Map)) state.pins = new Map();
-		if (!(state.pinResiduals instanceof Map)) state.pinResiduals = new Map();
-		return state;
-	}
 	function rangePinObjectWorldMatrix(objectId, frame) {
 		const object = appContext.shared.sceneObjects.find((entry) => entry.id === objectId);
 		if (!object) return null;
@@ -707,20 +702,6 @@ export function useMotion(appContext) {
 	function rangePinApplyFrame(frame, state = appContext.shared.ikStateRef.current) {
 		appContext.shared.poseMemberAtFrame(appContext.shared.activeRig, motion, null, frame);
 		if (ikChains && state.keys.size > 0) ikEvaluate(ikChains, state, frame, ikFkJoints, IK_CORRECTION_BLEND_FRAMES);
-	}
-	function rangePinConflictFrames(draft, state = appContext.shared.ikStateRef.current) {
-		if (!Number.isInteger(draft?.startFrame) || !Number.isInteger(draft?.endFrame) || draft.endFrame < draft.startFrame) return [];
-		const tracks = rangePinTracks(draft), conflicts = [];
-		for (let frame = draft.startFrame; frame <= draft.endFrame; frame += 1) {
-			if (tracks.some((track) => { const key = state.keys.get(frame)?.get(track); return key && key.pin !== draft.id; })) conflicts.push(frame);
-		}
-		return conflicts;
-	}
-	function overlappingRangePin(draft, state = appContext.shared.ikStateRef.current) {
-		return [...ensureRangePinState(state).pins.values()].find((pin) => pin.id !== draft.id && rangePinTracks(pin).some((track) => rangePinTracks(draft).includes(track)) && Math.max(pin.startFrame, draft.startFrame) <= Math.min(pin.endFrame, draft.endFrame));
-	}
-	function rangePinOverlapMessage(pin) {
-		return pin ? ko(`A required body or limb track already has an overlapping pin (${pin.startFrame}–${pin.endFrame}).`, `필요한 몸통 또는 팔다리 파츠에 겹치는 고정이 있어요 (${pin.startFrame}–${pin.endFrame}).`) : "";
 	}
 	function captureRangePinTargetForDraft(draft) {
 		if (!motion || !appContext.shared.activeRig || !ikChains) return null;
