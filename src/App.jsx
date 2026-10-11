@@ -60,6 +60,7 @@ import { useFirstSuccessPrompt } from "./use-first-success-prompt.js";
 import { useCameraTutorial } from "./use-camera-tutorial.js";
 import { useEmbedBridge } from "./use-embed-bridge.js";
 import { useAssetShelf } from "./use-asset-shelf.js";
+import { useI2vCaptureModal } from "./use-i2v-capture-modal.js";
 import { StudioProtocolError } from "./studio-agent-protocol.js";
 import { elementByPath } from "./studio-elements.js";
 import {
@@ -1185,9 +1186,14 @@ export default function App() {
 	// not the one its closure captured.
 	appContext.publishCharacters(characters);
 
-	const [i2vMotionEnabled, setI2vMotionEnabled] = useState(false);
-	const [i2vMotionMode, setI2vMotionMode] = useState("interpolate");
-	const [i2vMotionCameraUnlocked, setI2vMotionCameraUnlocked] = useState(false);
+	const {
+		i2vMotionEnabled,
+		setI2vMotionEnabled,
+		i2vMotionMode,
+		setI2vMotionMode,
+		i2vMotionCameraUnlocked,
+		setI2vMotionCameraUnlocked,
+	} = useI2vCaptureModal();
 
 	useEffect(() => {
 		let cancelled = false;
