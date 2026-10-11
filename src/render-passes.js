@@ -69,7 +69,6 @@ void main() {
 
 const BACKGROUND_FAR = new THREE.Color(0x000000);
 
-/** Build the override material for a pass. */
 function passMaterial(kind, camera, depthRange = null) {
 	if (kind === "depth") {
 		return new THREE.ShaderMaterial({

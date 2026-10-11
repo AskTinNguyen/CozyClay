@@ -310,8 +310,6 @@ export function cutoutFootprint(height, aspect, stretch = 1) {
 	};
 }
 
-/* ----------------------------------------------------- attachment ---- */
-
 /**
  * The frames a prop can be pinned to on a character. These are the APP's IK
  * track ids — the same names the rig panel and the animation tracks speak —
@@ -1077,8 +1075,6 @@ export function groupUnderNewEmpty(objects, id) {
 	const next = objects.flatMap((object) => (object.id === id ? [empty, { ...object, parent: empty.id }] : [object]));
 	return { objects: next, emptyId: empty.id };
 }
-/* -------------------------------------------------- persistence ---- */
-
 /**
  * Repair one stored record into a live record, or return null to drop it.
  * Storage is never trusted: `footprint`/`height` are rebuilt from the
@@ -1249,8 +1245,6 @@ export function loadScene(raw) {
 	return { status: "valid", objects, dropped };
 }
 
-/* ------------------------------------------------------------- gizmo ---- */
-
 /** The three world axes the gizmo drags along, and the record field each one
  * rotates / scales. */
 const WORLD_AXES = ["x", "y", "z"];
@@ -1329,8 +1323,6 @@ export function objectSize(object) {
 		depth: (object.footprint?.depth ?? 1) * (object.scaleZ ?? 1),
 	};
 }
-/* -------------------------------------------------- drop-to-surface ---- */
-
 /** The tolerance that keeps an edge-abutting footprint from counting as
  * overlap: a strict `<` against `max - EPS` makes a 0.5 - 0.5 touch false. */
 const OVERLAP_EPS = 1e-4;

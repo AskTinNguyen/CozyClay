@@ -1054,7 +1054,6 @@ const CLICK_PX = 4;
 			{MID_TRACKS.map((track) => (chains.has(track.chain) ? sphereFor(track, "mid", sideColor(track.id), JOINT_R) : null))}
 			{[...(fkJoints ?? [])].map(([id, joint]) => sphereFor(joint.track, id === "hips" ? "body" : "fk", sideColor(id), id === "hips" ? HANDLE_R : JOINT_R))}
 
-			{/* Mini move-gizmo on the focused position handle: world-axis arrows. */}
 			{gizmoTrack && (
 				<group ref={gizmoRef} renderOrder={999}>
 					{AXIS_DEFS.map(({ axis, dir, color }) => {
@@ -1109,11 +1108,6 @@ const CLICK_PX = 4;
 				</group>
 			)}
 
-			{/* Axis rotation rings on the focused rotatable joint (hand/foot, or an
-			    FK joint): each ring turns the bone about one world axis, and the
-			    label reads the drag delta plus the angle away from the bind pose.
-			    Thin visible tubes ride fat invisible ones: a 3 px tube raycasts
-			    terribly, so the pick target is generous. */}
 			{rotateTrack && (
 				<group ref={(g) => { ringRef.current = g; }} renderOrder={999}>
 					{ROTATION_AXES.map(({ axis, dir, color }) => {

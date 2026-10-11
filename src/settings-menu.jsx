@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { LOCALE, ko, localeChosen, setLocale } from "./locale.js";
+import { ko, localeChosen } from "./locale.js";
 import PreferencesDialog from "./shell/PreferencesDialog.jsx";
 
 // App settings — language and analytics — behind one labelled topbar trigger

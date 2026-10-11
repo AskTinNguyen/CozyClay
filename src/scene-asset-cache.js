@@ -128,7 +128,7 @@ export function createAssetTextureCache({
 		entry.promise = null;
 		// A GLB in this function would always hit createImageBitmap. Mesh import
 		// stores bytes with putAsset and leaves textures alone.
-		if (isMeshRecord(stored) || isMeshAssetId(stored.id)) return stored;
+		if (isMeshRecord(stored)) return stored;
 		const texture = await textureFromAsset(stored);
 		if (!texture || entry.generation !== generation) {
 			dispose(texture);
@@ -183,4 +183,3 @@ export const assetRecord = cache.assetRecord;
 export const rememberAsset = cache.rememberAsset;
 export const evictAssetTexture = cache.evictAssetTexture;
 export const subscribeToAssetTexture = cache.subscribeToAssetTexture;
-const clearAssetTextures = cache.clearAssetTextures;
