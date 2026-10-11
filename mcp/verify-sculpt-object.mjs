@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 /** sculpt_object (#730): a recipe in, a clay prop out — in memory without an editor, admitted as object.sculpt with one. */
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { decodePng, encodePng, readImageFromPath } from "./image-file.mjs";
 
 import { mcpToolCategory } from "../src/execution-telemetry.js";
 import { createToolHandlers, setLiveHub } from "./tool-handlers.mjs";
@@ -15,7 +18,7 @@ const sculpt = tools.find((tool) => tool.name === "sculpt_object");
 assert.ok(sculpt, "sculpt_object is registered");
 assert.equal(sculpt.live, true);
 assert.equal(sculpt.annotations.openWorldHint, false, "a recipe never reaches outside the scene");
-assert.match(sculpt.description, /^Unlike place_object and import_mesh, sculpt_object /);
+assert.match(sculpt.description, /^Unlike place_object, import_mesh and compare_sculpt, sculpt_object /);
 const describe = tools.find((tool) => tool.name === "describe_scene");
 
 /* ------------------------------------------------ memory-only MCP ---- */
@@ -42,6 +45,53 @@ assert.match(orphan.content[0].text, /No object "ghost" to attach to/);
 const child = await sculpt.handler({ recipe: pillar, parent: "sculpt" });
 assert.match(child.content[0].text, /as sculpt-2: .* under sculpt\./);
 
+// Part-level edits, and the argument rules around them.
+const patched = await sculpt.handler({ id: "sculpt-2", edits: [{ set: "body", size: [0.4, 1.6, 0.4], position: [0, 0.8, 0] }] });
+assert.match(patched.content[0].text, /^Patched body on Sculpt as sculpt-2: 0\.4 x 0\.4 m, 1\.6 m tall\./);
+assert.match((await sculpt.handler({ edits: [{ remove: "body" }] })).content[0].text, /give its id/);
+assert.match((await sculpt.handler({ id: "sculpt-2" })).content[0].text, /exactly one of recipe/);
+assert.match((await sculpt.handler({ id: "sculpt-2", edits: [{ set: "ghost", color: "#000" }] })).content[0].text, /no part named "ghost"/);
+const offline = await sculpt.handler({ recipe: pillar, capture: true });
+assert.equal(offline.isError, true);
+assert.match(offline.content[0].text, /capture: true needs a connected CozyClay editor/);
+
+/* -------------------------------------------- compare_sculpt + images ---- */
+
+const compare = tools.find((tool) => tool.name === "compare_sculpt");
+assert.equal(compare.annotations.readOnlyHint, true);
+assert.equal(mcpToolCategory("compare_sculpt"), "read");
+// A 120x200 PNG: a 0.4 x 1.2 slab on a flat backdrop -- the pillar's shape exactly.
+const w = 120, h = 200, rgba = new Uint8Array(w * h * 4);
+for (let y = 0; y < h; y += 1) for (let x = 0; x < w; x += 1) {
+	const inside = x >= 40 && x < 80 && y >= 40 && y < 160, i = (y * w + x) * 4;
+	rgba.set(inside ? [60, 120, 140, 255] : [154, 220, 254, 255], i);
+}
+const png = encodePng(w, h, rgba);
+const back = decodePng(png);
+assert.deepEqual([back.width, back.height], [w, h]);
+assert.deepEqual(Buffer.from(back.data), Buffer.from(rgba), "PNG encode/decode round-trips");
+const refPath = join(tmpdir(), `cozyclay-sculpt-ref-${process.pid}.png`);
+writeFileSync(refPath, png);
+assert.equal((await readImageFromPath(refPath)).width, w);
+await sculpt.handler({ id: "sculpt-2", recipe: { parts: [{ id: "slab", shape: "box", roundness: 0, size: [0.4, 1.2, 0.2], position: [0, 0.6, 0] }] } });
+const scored = await compare.handler({ id: "sculpt-2", reference: refPath, yaw: 0 });
+assert.equal(scored.isError, undefined, scored.content[0].text);
+const report = JSON.parse(scored.content[0].text);
+assert.ok(report.iou > 0.95, JSON.stringify(report));
+assert.equal(scored.content[1].type, "image");
+const sheet = decodePng(Buffer.from(scored.content[1].data, "base64"));
+assert.deepEqual([sheet.width, sheet.height], [240, 200], "reference | overlay, side by side");
+assert.match((await compare.handler({ id: "sculpt-2", reference: "/no/such/ref.png" })).content[0].text, /Could not read the reference image/);
+assert.match((await compare.handler({ id: "ghost", reference: refPath })).content[0].text, /No object "ghost"/);
+const notPng = join(tmpdir(), `cozyclay-sculpt-ref-${process.pid}.txt`);
+writeFileSync(notPng, "hello");
+assert.match((await compare.handler({ id: "sculpt-2", reference: notPng })).content[0].text, /PNG or a JPEG/);
+const jpegPath = join(tmpdir(), `cozyclay-sculpt-ref-${process.pid}.jpg`);
+writeFileSync(jpegPath, (await import("jpeg-js")).default.encode({ width: w, height: h, data: rgba }, 90).data);
+const viaJpeg = JSON.parse((await compare.handler({ id: "sculpt-2", reference: jpegPath, yaw: 0 })).content[0].text);
+assert.ok(viaJpeg.iou > 0.9, `a JPEG reference scores too (${viaJpeg.iou})`);
+assert.ok((await readImageFromPath(new URL("../docs/images/cozyclay-logo.png", import.meta.url).pathname)).width > 0, "a real PNG from the repo decodes");
+
 /* ---------------------------------------------------- live editor ---- */
 
 const commands = [];
@@ -65,6 +115,9 @@ assert.equal(live.isError, undefined, live.content[0].text);
 const run = commands.find((entry) => entry.name === "run_action");
 assert.ok(run, "the live path admits a command");
 assert.deepEqual(run.args.args.args, { recipe: pillar, placement: { x: 2, rot: 15 }, parent: "chair" }, "the recipe goes to the editor untouched; it validates there");
+commands.length = 0;
+await sculpt.handler({ id: "sculpt", edits: [{ remove: "tooth" }] });
+assert.deepEqual(commands.find((entry) => entry.name === "run_action").args.args.args, { edits: [{ remove: "tooth" }], id: "sculpt" });
 
 setLiveHub(null);
-console.log("PASS verify-sculpt-object (MCP): memory create/refuse/re-sculpt/parent, live admission as object.sculpt");
+console.log("PASS verify-sculpt-object (MCP): memory create/refuse/re-sculpt/patch/parent, compare_sculpt on PNG and JPEG, live admission as object.sculpt");

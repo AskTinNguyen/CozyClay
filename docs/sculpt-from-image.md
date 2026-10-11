@@ -12,8 +12,8 @@ flowchart LR
   A --> R[Recipe JSON]
   R --> T[sculpt_object / object.sculpt]
   T --> S[sculpt object in the scene]
-  S --> C[capture_frame]
-  C -->|compare, patch parts| R
+  S --> C[compare_sculpt<br/>IoU + overlay sheet]
+  C -->|edits on the parts that miss| T
 ```
 
 ## Why a recipe and not a baked GLB
@@ -60,12 +60,25 @@ Limits: at most 48 parts after mirroring, each extent between 0.005 and 20 m, an
 
 The record stores the normalized recipe, plus `footprint` and `height` measured from the parts' bounds, so the plan board, the drop logic and the selection cage work without building geometry.
 
+## Editing and comparing
+
+- **Patch, don't resend.** `sculpt_object { id, edits }` (Studio: `object.sculpt`) applies `{ set: partId, ...fields }`, `{ add: part }` and `{ remove: partId }` in order. `parent: null` and `mirror: false` clear those fields, and `remove` also takes the part's children. Changing `shape` drops the old shape's options. The patched recipe is validated as a whole, and the receipt names the parts that changed.
+- **Compare against the reference.** `compare_sculpt { id, reference: "<png|jpg path>", yaw?, elevation? }` runs on this machine without an editor. It turns the reference's subject into a mask: alpha when the image has transparency, otherwise everything that differs from the border colour. It draws the sculpt's silhouette orthographically from the view, fits it to the subject's height, top and best horizontal offset, and returns:
+  - `iou`, `missingFraction`, `extraFraction`
+  - `widthToHeight` (reference vs sculpt)
+  - `missingByBand` (top, middle, bottom thirds: where to add)
+  - `extraByPart` (which parts stick out)
+  - a sheet: the reference beside an overlay (grey = both, red = missing, blue = extra)
+
+  Leaving out `yaw` tries −45° to 45° and keeps the best. Only shape is scored, not colour.
+- **One round, one call.** `sculpt_object { …, capture: true }` returns the editor frame with the receipt when an editor is connected.
+
 ## Agent workflow (image → sculpt)
 
 1. **Read the image before writing anything.** Name the subject, the parts and their contact relationships. List the 3–5 features that make the subject recognizable (for the turtle: oversized glasses, bulging eyes, the buck tooth, the belly plate). Say which sides the image hides.
 2. **Block out in 4–8 parts.** Get the silhouette and the proportions right first. Measure in head units from the image and do not guess from a stock figure.
-3. **Place it, then look.** Call `sculpt_object`, then `capture_frame` from roughly the reference's angle.
-4. **Patch, don't rewrite.** Fix the biggest mismatch first: proportion, then placement, then colour. Allow three rounds at most, then report what still differs.
+3. **Place it, then measure.** Call `sculpt_object`, then `compare_sculpt` with the reference path. Read `missingByBand` and `extraByPart` before you look at the sheet.
+4. **Patch, don't rewrite.** Send `edits` that fix the biggest mismatch first: proportion, then placement, then colour. Allow three rounds at most, or stop once IoU stops rising, then report what still differs.
 5. **Identity details last.** Add eyes, rims and plates as small parts on a parent once the body reads.
 
 Ask, infer and omit follow `agent-prompt-to-scene.md`. Infer the hidden back and say so. Never ask for more views unless the user wants a likeness.
@@ -80,5 +93,6 @@ Ask, infer and omit follow `agent-prompt-to-scene.md`. Infer the hidden back and
 | 4 | Studio action `object.sculpt` and MCP `sculpt_object`, in live and memory mode. |
 | 5 | Agent rules (this page) in the MCP tool description and the Studio prompt. |
 | 6 | QA: the turtle recipe through MCP into a live editor, with a screenshot in the PR. |
+| 7 | Part-level `edits`, `compare_sculpt` (reference mask, silhouette IoU, overlay sheet), `capture: true`. |
 
 Out of scope, for follow-ups: saving a sculpt to the asset shelf, per-part editing gizmos, and textures.

@@ -20,6 +20,7 @@ const EXPECTED_ANNOTATIONS = Object.freeze({
 	place_object: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
 	import_mesh: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
 	sculpt_object: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+	compare_sculpt: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
 	group_objects: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
 	set_prompt_blocks: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
 	load_motion: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
@@ -42,6 +43,7 @@ const SIBLING_PAIRS = [
 	["place_object", "update_object"],
 	["import_mesh", "place_object"],
 	["sculpt_object", "place_object"],
+	["compare_sculpt", "sculpt_object"],
 	["frame_shot", "set_camera"],
 ];
 
