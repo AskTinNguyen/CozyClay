@@ -165,7 +165,7 @@ await runCase("a continuation carries the harness score, the exact reference and
 }, ({ run, texts, efforts }) => {
 	assert.equal(texts.length, 2);
 	assert.match(texts[1], /IoU 0\.5/);
-	assert.deepEqual(efforts, [undefined, undefined], "turns use the default effort unless draftEffort is set");
+	assert.deepEqual(efforts, [undefined, undefined], "turns use the sidecar's default effort unless one is chosen");
 	assert.match(texts[1], /"reference": \{"assetId":"asset-snorlax"\}/);
 	assert.match(texts[1], /"candidates"/);
 	assert.match(texts[1], /missingByBand/);
@@ -255,6 +255,39 @@ await runCase("a score repeated with no edit in between adds no log line or trai
 }, (state) => {
 	assert.deepEqual(state.history.map(row => row.iou), [0.72]);
 	assert.equal(state.activity.filter(row => /^Scored IoU/.test(row.text)).length, 1, state.activity.map(row => row.text).join(" | "));
+});
+
+await runCase("every turn runs on the chosen model and effort, and the run names that model", async () => {
+	const f = fixture({ turns: [[sculpt()], [sculpt()]] });
+	const requests = [];
+	const inner = f.agent.sendTurn;
+	f.agent.sendTurn = function (request) { requests.push({ model: request.model, effort: request.effort }); return inner.call(this, request); };
+	const scores = [0.5, 0.6];
+	const seen = [];
+	const run = createSculptRun({ ...f, maxRounds: 2, model: "openai-codex/gpt-6-astra", effort: "low", modelLabel: "GPT-6 Astra", score: async () => ({ iou: scores.shift() }) });
+	run.subscribe(state => seen.push(state));
+	await run.start();
+	return { run, requests, seen };
+}, ({ run, requests, seen }) => {
+	assert.deepEqual(requests, [{ model: "openai-codex/gpt-6-astra", effort: "low" }, { model: "openai-codex/gpt-6-astra", effort: "low" }]);
+	assert.deepEqual(run.getState().model, { key: "openai-codex/gpt-6-astra", label: "GPT-6 Astra", effort: "low" });
+	const lines = run.getState().activity.map(row => row.text);
+	assert.ok(lines.includes("Asked GPT-6 Astra (effort low) for a first draft"), lines.join(" | "));
+	assert.ok(lines.includes("Round 2: asked GPT-6 Astra for 3-6 candidate fixes"), lines.join(" | "));
+	assert.ok(seen.some(row => row.waiting?.label === "GPT-6 Astra is writing the recipe"));
+});
+
+await runCase("the agent port sends the model and effort on the Studio envelope", async () => {
+	const requests = [];
+	const port = createAgentPort({ turn: async (request) => { requests.push(request); } });
+	for await (const _event of port.sendTurn({ text: "one", signal: new AbortController().signal, model: "cliproxy/gpt-6.1-sol", effort: "medium" })) { /* drain */ }
+	for await (const _event of port.sendTurn({ text: "two", signal: new AbortController().signal })) { /* drain */ }
+	return requests;
+}, (requests) => {
+	assert.equal(requests[0].model, "cliproxy/gpt-6.1-sol");
+	assert.equal(requests[0].effort, "medium");
+	assert.equal("model" in requests[1], false, "no model is sent when none was chosen");
+	assert.equal("effort" in requests[1], false);
 });
 
 if (process.exitCode) process.exit(1);

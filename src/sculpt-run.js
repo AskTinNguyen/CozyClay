@@ -24,11 +24,11 @@ const ACTIVITY_LIMIT = 40;
 // How long each wait usually takes, from the live runs in docs/sculpt-from-image.md.
 export const EXPECTED_WAIT_MS = Object.freeze({ measure: 1500, draft: 60000, refine: 35000, agent: 20000, tool: 3000, score: 1500 });
 
-function toolLabel(action, args = {}) {
-	if (action === "object.sculpt") return args.edits ? "Agent is applying the winning edits" : "Agent is building the recipe";
-	if (action === "sculpt.compare") return Array.isArray(args.candidates) ? `Agent is test-fitting ${args.candidates.length} candidate fixes` : "Agent is scoring the sculpt";
-	if (action === "inspect_studio" || action === "inspect") return "Agent is reading the editor";
-	return `Agent is running ${action}`;
+function toolLabel(action, args = {}, who = "Agent") {
+	if (action === "object.sculpt") return args.edits ? `${who} is applying the winning edits` : `${who} is building the recipe`;
+	if (action === "sculpt.compare") return Array.isArray(args.candidates) ? `${who} is test-fitting ${args.candidates.length} candidate fixes` : `${who} is scoring the sculpt`;
+	if (action === "inspect_studio" || action === "inspect") return `${who} is reading the editor`;
+	return `${who} is running ${action}`;
 }
 
 const shortError = error => String(error ?? "").replace(/\s*\(inspect, do not retry\)\s*$/, "").slice(0, 140);
@@ -99,7 +99,7 @@ function makeTurnText(reference, sculptId, continuation, outline = null) {
 // The sidecar's Studio envelope requires UUIDs for both the session and the turn.
 export function createAgentPort(client, { sessionId = crypto.randomUUID() } = {}) {
 	return {
-		async *sendTurn({ text, attachments = [], signal, effort }) {
+		async *sendTurn({ text, attachments = [], signal, model, effort }) {
 			const events = [];
 			let wake;
 			let ended = false;
@@ -109,6 +109,7 @@ export function createAgentPort(client, { sessionId = crypto.randomUUID() } = {}
 				sessionId,
 				turnId: crypto.randomUUID(),
 				text,
+				...(model ? { model } : {}),
 				...(effort ? { effort } : {}),
 				...(attachments.length ? { attachments } : {}),
 				context: null,
@@ -135,13 +136,18 @@ export function createSculptRun({
 	score = null,
 	// Optional (reference) -> measureReferenceOutline result, put into the first turn's text.
 	measure = null,
-	// Measured: "high" made the first turn twice as slow for no better draft, so the default effort stays.
-	draftEffort = undefined,
+	// The model every turn runs on (a /agent/models key) and its effort; omitted = the sidecar's defaults.
+	// Measured on the Snorlax reference: effort "high" made the draft twice as slow for no better score.
+	model = undefined,
+	effort = undefined,
+	// How the model is named to the operator ("GPT-6 Astra"); the key when unset.
+	modelLabel = undefined,
 } = {}) {
 	if (!agent?.sendTurn) throw new TypeError("sculpt run requires an agent port");
+	const who = modelLabel || model || "Agent";
 	const listeners = new Set();
 	const controller = new AbortController();
-	let state = initialState({ targetIou, maxRounds });
+	let state = { ...initialState({ targetIou, maxRounds }), model: { key: model ?? null, label: who, effort: effort ?? null } };
 	let running = false;
 	let settled = false;
 	let startedAt = 0;
@@ -218,7 +224,7 @@ export function createSculptRun({
 	};
 	const unsubscribeBus = bus?.subscribe?.(onBus) ?? (() => {});
 
-	const consumeTurn = async (text, effort) => {
+	const consumeTurn = async text => {
 		turnSculpted = false;
 		turnScored = false;
 		const events = [];
@@ -229,27 +235,27 @@ export function createSculptRun({
 			if (event?.type === "tool.start") {
 				const action = event.args?.action ?? event.name;
 				toolCalls.set(event.callId, action);
-				publish({ waiting: waitFor("tool", toolLabel(action, event.args?.args ?? {})) });
+				publish({ waiting: waitFor("tool", toolLabel(action, event.args?.args ?? {}, who)) });
 			}
 			if (event?.type === "tool.done") {
 				const action = toolCalls.get(event.callId);
 				toolCalls.delete(event.callId);
 				// Successes reach the log through the editor's receipts; a refusal only shows up here.
-				const patch = { waiting: turnWait ?? waitFor("agent", "Agent is deciding the next step") };
+				const patch = { waiting: turnWait ?? waitFor("agent", `${who} is deciding the next step`) };
 				if (event.ok === false) note("warn", `${action === "object.sculpt" ? "Recipe refused" : `${action ?? "A tool"} failed`}: ${shortError(event.error)}. The agent is fixing it.`, patch);
 				else publish(patch);
 			}
 			// A refused or failed turn is the run's failure, not a turn that forgot to sculpt.
 			if (event?.type === "error") turnError ??= new Error(event.message || event.code || "The agent turn failed.");
 		};
-		const returned = agent.sendTurn({ text, attachments: reference?.dataUrl ? [{ dataUrl: reference.dataUrl, name: reference.name }] : [], signal: controller.signal, ...(effort ? { effort } : {}) }, callback);
+		const returned = agent.sendTurn({ text, attachments: reference?.dataUrl ? [{ dataUrl: reference.dataUrl, name: reference.name }] : [], signal: controller.signal, ...(model ? { model } : {}), ...(effort ? { effort } : {}) }, callback);
 		if (isAsyncIterable(returned)) {
 			for await (const event of returned) callback(event);
 		} else await returned;
 		if (turnError) throw turnError;
 		// The agent's own closing words, first line only: what it did or what the image hides.
 		const said = events.filter(event => event?.type === "text.delta").map(event => event.text ?? "").join("").replace(/[*_`#]/g, "").split(/\n+/).map(line => line.trim()).find(Boolean);
-		if (said) note("agent", `Agent: ${said.length > 160 ? `${said.slice(0, 157)}…` : said}`);
+		if (said) note("agent", `${who}: ${said.length > 160 ? `${said.slice(0, 157)}…` : said}`);
 	};
 
 	const loop = async () => {
@@ -268,13 +274,12 @@ export function createSculptRun({
 		while (!controller.signal.aborted) {
 			if (elapsed() >= timeBudgetMs) break;
 			const roundBefore = state.round;
-			// The first draft decides most of the score, so it gets the deeper reasoning.
-			turnWait = roundBefore === 0 ? waitFor("draft", "Agent is writing the recipe") : waitFor("refine", "Agent is weighing fixes");
+			turnWait = roundBefore === 0 ? waitFor("draft", `${who} is writing the recipe`) : waitFor("refine", `${who} is weighing fixes`);
 			// Measuring is over once the first turn goes out: the stepper moves on to Draft.
-			note("agent", roundBefore === 0 ? "Asked the agent for a first draft" : `Round ${state.round}: asked the agent for 3-6 candidate fixes`, {
+			note("agent", roundBefore === 0 ? `Asked ${who}${effort ? ` (effort ${effort})` : ""} for a first draft` : `Round ${state.round}: asked ${who} for 3-6 candidate fixes`, {
 				waiting: turnWait, ...(roundBefore === 0 ? { stage: "draft" } : {}),
 			});
-			turnPromise = consumeTurn(text, roundBefore === 0 ? draftEffort : undefined);
+			turnPromise = consumeTurn(text);
 			try { await turnPromise; } catch (error) {
 				if (controller.signal.aborted) break;
 				note("error", `Run failed: ${shortError(error?.message || error)}`, { stage: "failed", error: String(error?.message || error), message: "Sculpt run failed.", waiting: null });
