@@ -4,7 +4,7 @@ import * as THREE from "three";
 
 // Exercise the CaptureRig effect through its public ref, with real cameras and
 // render targets. Only the GPU calls are substituted at the readback boundary.
-const source = readFileSync(new URL("../src/app-stage.jsx", import.meta.url), "utf8");
+const source = readFileSync(new URL("../src/stage-capture.jsx", import.meta.url), "utf8");
 const component = source.slice(source.indexOf("export function CaptureRig("), source.indexOf("export async function captureMcpFrame("));
 const targets = [];
 class RenderTarget extends THREE.WebGLRenderTarget {
