@@ -1,6 +1,5 @@
 import { memo, useEffect, useMemo } from "react";
 import * as THREE from "three";
-import { proxyFacingMark } from "./facing-marks.js";
 import { defaultCharacterTint } from "./app-stage.jsx";
 
 const BODY_RADIUS = 0.22;
@@ -29,7 +28,6 @@ export const ProxyFigure = memo(function ProxyFigure({
 			metalness: 0,
 			envMapIntensity: 0.35,
 		});
-		const markMaterial = new THREE.MeshStandardMaterial({ color: "#1C1C1C", roughness: 0.7, metalness: 0 });
 		const group = new THREE.Group();
 		const body = new THREE.Mesh(new THREE.CapsuleGeometry(BODY_RADIUS, bodyHeight - BODY_RADIUS * 2, 12, 20), bodyMaterial);
 		body.position.y = bodyHeight / 2;
@@ -42,9 +40,6 @@ export const ProxyFigure = memo(function ProxyFigure({
 		head.castShadow = true;
 		head.receiveShadow = true;
 		head.frustumCulled = false;
-		const mark = proxyFacingMark(markMaterial);
-		mark.position.y += headY;
-		group.add(mark);
 		group.add(head);
 		return group;
 	}, [bodyHeight, headY, tint]);
