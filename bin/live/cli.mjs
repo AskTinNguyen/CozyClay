@@ -247,7 +247,6 @@ function patchArguments(flags, verb) {
 	const target = colon < 0 ? { kind: raw } : { kind: raw.slice(0, colon), id: raw.slice(colon + 1) };
 	required(flags, "--set", verb);
 	const set = jsonFlag(flags, "--set");
-	if (set === null || typeof set !== "object" || Array.isArray(set)) throw new UsageError(`${verb} expects --set '{"path": value}'`);
 	return { ops: [{ target, set }] };
 }
 

@@ -46,7 +46,6 @@ export function sceneInputSpecs(characters = [], { includeLegacyMotion = true } 
 	return specs;
 }
 
-/** Build the Scene input state represented by ReactFlow edges. */
 /** Restrict Scene inputs to values the Scene can actually consume. */
 export function sceneConnectionAllowed(source, targetHandle, sourceData = {}) {
 	const type = typeof source === "string" ? source : source?.type;
@@ -56,6 +55,7 @@ export function sceneConnectionAllowed(source, targetHandle, sourceData = {}) {
 	return false;
 }
 
+/** Build the Scene input state represented by ReactFlow edges. */
 export function sceneInputsFromEdges(edges, sceneNodeId) {
 	const assetInputs = [];
 	const motionInputs = [];

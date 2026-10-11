@@ -67,7 +67,6 @@ const agentToolCategory = (name) => {
 	// Studio families are authored edits or reads; the analytics vocabulary has
 	// no Studio-specific category, so a write says so and everything else does not.
 	if (["arrange_objects", "arrange_characters", "patch_elements", "frame_shot", "undo_edit"].includes(name)) return "scene_write";
-	if (["inspect_studio", "operate_studio", "verify_result", "generate_motion"].includes(name)) return "other";
 	if (name === "run_workflow") return "workflow_run";
 	if (name === "describe_workflow" || name === "focus_workflow_node") return "workflow_read";
 	if (["add_workflow_node", "update_workflow_node", "remove_workflow_node", "connect_workflow_nodes", "disconnect_workflow_nodes", "set_workflow_node_output"].includes(name)) return "workflow_write";
@@ -234,7 +233,7 @@ function quotaEvent(codex, headers) {
 // one line — without it neither the log nor the panel can say why a turn died.
 const UPSTREAM_DETAIL_MAX = 200;
 export function sanitizeUpstreamDetail(body) {
-	let message = null;
+	let message;
 	try {
 		const parsed = JSON.parse(body);
 		const candidate = parsed?.error?.message ?? parsed?.error ?? parsed?.message ?? parsed?.detail;
@@ -443,7 +442,7 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 	});
 
 	const studioIdentity = host => Object.fromEntries(["workspaceId", "documentEpoch", "sceneId", "sceneEpoch"].map(key => [key, host[key]]));
-	const writeStudioStream = (res, record, after = 0, req = null) => {
+	const writeStudioStream = (res, record, after = 0) => {
 		res.writeHead(200, { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-cache", connection: "keep-alive" }); res.flushHeaders?.();
 		let cursor = after; const send = event => {
 			if (res.destroyed || res.writableEnded) return;
@@ -503,7 +502,7 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 		const suppliedOwner = parseCookies(req).studio_owner;
 		if (session && suppliedOwner && session.owner !== suppliedOwner) throw new StudioProtocolError("AUTH_REQUIRED", "Studio session owner mismatch.");
 		const existing = session?.turns.get(value.turnId);
-		if (existing) { session.updatedAt = clock(); writeStudioStream(res, existing, 0, req); return true; }
+		if (existing) { session.updatedAt = clock(); writeStudioStream(res, existing, 0); return true; }
 		let current;
 		try { current = studioRuntime?.readContext ? await studioRuntime.readContext(value.context.host) : await authoritativeStudioContext(value, hub); }
 		catch (error) { if (error instanceof StudioProtocolError) throw error; if (error?.code) throw new StudioProtocolError(error.code, error.message); throw new StudioProtocolError("CAPABILITY_MISSING", "The connected editor does not expose authoritative Studio context."); }
@@ -516,7 +515,7 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 		if (!session) {
 			studioOwner(req, value.sessionId, true);
 			let persisted = null;
-			try { persisted = sessionStore.read(value.sessionId); } catch { persisted = null; }
+			try { persisted = sessionStore.read(value.sessionId); } catch { /* an unreadable history starts the session fresh */ }
 			session = { owner: studioOwnerTokens.get(value.sessionId), history: persisted?.history ?? [], persistedItems: persisted?.history?.length ?? 0, meta: persisted?.meta ?? null, turns: new Map(), controller: null, activeJobId: null, activeJobTurnId: null, motionJobIds: new Set(Array.isArray(persisted?.meta?.motionJobIds) ? persisted.meta.motionJobIds.filter(id => typeof id === "string") : []), host: null, updatedAt: clock() };
 			studioSessions.set(value.sessionId, session);
 		}
@@ -524,7 +523,7 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 		if (studioRuntime?.handleTurn) { await studioRuntime.handleTurn(value, req, res); return true; }
 		const record = { next: 0, events: [], listeners: new Set(), terminal: false }; studioEvents.set(value.turnId, record); session.turns.set(value.turnId, record); session.host = studioIdentity(value.context.host);
 		res.setHeader("set-cookie", `studio_owner=${encodeURIComponent(session.owner)}; Path=/agent; HttpOnly; SameSite=Strict`);
-		const close = writeStudioStream(res, record, 0, req);
+		const close = writeStudioStream(res, record, 0);
 		// What the supervisor reviews once the turn is over: every frame but text
 		// and telemetry, and the last stretch of text the model wrote.
 		const turnFrames = [];
@@ -738,7 +737,7 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 			if (!record || !session || parseCookies(req).studio_owner !== session.owner) { json(res, 403, { error: { code: "AUTH_REQUIRED", message: "Studio event stream is not owned by this session." } }); return true; }
 			const after = Number(new URL(req.url, "http://127.0.0.1").searchParams.get("after") || 0);
 			if (!Number.isSafeInteger(after) || after < 0) { json(res, 400, { error: "invalid cursor" }); return true; }
-			writeStudioStream(res, record, after, req); return true;
+			writeStudioStream(res, record, after); return true;
 		}
 		// The supervisor note for one Studio turn (#728): 200 with the note once it
 		// exists, held up to SUPERVISOR_WAIT_MS while it is pending, 204 when the

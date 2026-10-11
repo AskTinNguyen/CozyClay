@@ -130,7 +130,7 @@ export function createSessionStore(dir = agentSessionsDir()) {
 			const now = new Date().toISOString();
 			let previous = null;
 			try { previous = JSON.parse(readFileSync(metaFile, "utf8")); } catch (error) { if (error?.code !== "ENOENT") throw error; }
-			const next = { ...previous, sessionId: validSessionId(sessionId), surface: meta.surface ?? previous?.surface ?? "studio", createdAt: previous?.createdAt ?? now, updatedAt: now };
+			const next = { ...previous, sessionId, surface: meta.surface ?? previous?.surface ?? "studio", createdAt: previous?.createdAt ?? now, updatedAt: now };
 			writeFileSync(metaFile, `${JSON.stringify(next, null, "\t")}\n`, { mode: 0o600 });
 			return next;
 		},
@@ -151,7 +151,7 @@ export function createSessionStore(dir = agentSessionsDir()) {
 				...(Array.isArray(meta.motionJobIds) ? meta.motionJobIds : []),
 			].filter((id) => typeof id === "string"))];
 			const next = {
-				sessionId: validSessionId(sessionId),
+				sessionId,
 				surface: meta.surface ?? previous?.surface ?? "studio",
 				createdAt: previous?.createdAt ?? meta.createdAt ?? now,
 				updatedAt: now,

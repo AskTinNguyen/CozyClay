@@ -83,7 +83,7 @@ export function compareH3FrameStability(reference, frame, width, height, { borde
 	return { meanRgb, p95Rgb, globalP80Rgb, cameraDriftPx: camera.distancePx, cameraShift: { x: camera.x, y: camera.y }, cameraErrorRgb: camera.errorRgb, cameraImprovementRgb: camera.improvementRgb, samples: edge.length, globalSamples: global.length };
 }
 
-function run(command, args, input = null) {
+function run(command, args) {
 	return new Promise((resolve, reject) => {
 		const child = spawn(command, args, { stdio: ["pipe", "pipe", "pipe"] });
 		const out = []; const err = [];
@@ -94,14 +94,12 @@ function run(command, args, input = null) {
 			if (code === 0) resolve({ stdout: Buffer.concat(out), stderr: Buffer.concat(err).toString("utf8") });
 			else reject(new Error(`${command} exited ${code}: ${Buffer.concat(err).toString("utf8").trim()}`));
 		});
-		if (input) child.stdin.end(input); else child.stdin.end();
+		child.stdin.end();
 	});
 }
 
-async function decode(path, width, height, seek = null, inputFormat = null) {
-	const args = ["-hide_banner", "-loglevel", "error"];
-	if (inputFormat) args.push("-f", inputFormat);
-	args.push("-i", path);
+async function decode(path, width, height, seek = null) {
+	const args = ["-hide_banner", "-loglevel", "error", "-i", path];
 	// Place -ss after the input so ffmpeg decodes through the preceding GOP and
 	// returns the requested frame. Fast input seeking would repeatedly return
 	// the first keyframe on long-GOP H3 clips, making temporal camera drift look
