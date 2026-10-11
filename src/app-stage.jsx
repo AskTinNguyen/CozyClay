@@ -14,7 +14,6 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Line, Text, useFBX } from "@react-three/drei";
 import * as THREE from "three";
 import { SkeletonUtils } from "three/examples/jsm/Addons.js";
-import { addFacingMarks } from "./facing-marks.js";
 import { ProxyFigure } from "./proxy-figure.jsx";
 import { isProxyFigure } from "./scenes.js";
 import { retimeMotion } from "./ardy/retime.js";
@@ -848,7 +847,6 @@ const RiggedCharacter = memo(function RiggedCharacter({ url, position, rot, tint
 			}
 		});
 		if (partColoursEnabled) applyPartColours(clone, partColoursMode);
-		addFacingMarks(clone);
 		// Stamp the bind pose while the rig is still untouched: the pose effect
 		// below runs immediately after and would otherwise be baked into "rest".
 		primeBindPose(clone);
