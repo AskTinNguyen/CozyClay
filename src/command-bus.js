@@ -208,7 +208,9 @@ export function createCommandBus({ registry, ports }) {
   };
   function receipt(entry, request, before, result, historyEntryId, toasts = [], turn = null) {
     const after = ports.read(), changed = after.revision !== before.revision;
-    const retainedHistoryEntryId = historyEntryId ?? turn?.txId ?? null;
+    // A turn's transaction is the undo entry only for a command that changed the scene: a read-only
+    // job inside an agent turn (sculpt.compare) has nothing to undo.
+    const retainedHistoryEntryId = historyEntryId ?? (changed ? turn?.txId : null) ?? null;
     if (entry.kind === 'mutation' && changed && !historyEntryId && !turn) fail('UNCERTAIN_APPLY', `${entry.id} changed the scene without one undoable entry.`);
     const completed = entry.kind === 'job' || entry.kind === 'document' || (entry.kind === 'mutation' && changed && (turn || after.revision > before.revision + 1));
     const ids = completed || changed ? result.affectedIds : entry.kind === 'transient' ? [before.host.sceneId] : [];

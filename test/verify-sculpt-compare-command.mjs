@@ -121,6 +121,20 @@ try {
 		assert.equal(receipt.undo, null);
 	});
 
+	await check("inside an open agent turn the score completes with no undo entry", async () => {
+		const turnId = crypto.randomUUID();
+		ok(f.run("agent.turn.begin", { turnId }, "agent", { turnId }));
+		try {
+			const receipt = ok(await f.run("sculpt.compare", { id: sculptId, reference: { assetId: ASSET_ID } }, "agent", { turnId }));
+			assert.equal(receipt.status, "completed");
+			assert.equal(receipt.authored, false);
+			assert.equal(receipt.undo, null);
+			assert.ok(Math.abs(receipt.output.iou - mcp.iou) <= 0.001, `${receipt.output.iou} vs ${mcp.iou}`);
+		} finally {
+			f.run("agent.turn.cancel", { turnId }, "agent", { turnId });
+		}
+	});
+
 	await check("a non-sculpt id is refused and nothing changes", async () => {
 		const before = structuredClone(f.objects.read());
 		const refused = await f.run("sculpt.compare", { id: "cube", reference: { dataUrl } }, "agent");
