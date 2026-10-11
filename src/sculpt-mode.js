@@ -65,10 +65,15 @@ export function createCommandTap() {
 		if (receipt.receiptId) {
 			if (seen.has(receipt.receiptId)) return;
 			seen.add(receipt.receiptId);
+			// Duplicates arrive back to back; the recent ids are enough to drop them.
+			if (seen.size > 200) seen.delete(seen.values().next().value);
 		}
 		const args = request?.args?.action === receipt.action ? request.args.args ?? {} : request?.args ?? {};
 		const event = { action: receipt.action, args, result: { ...receipt, ...(receipt.output ?? {}) } };
-		for (const listener of [...listeners]) listener(event);
+		// An observer must never turn an applied command into a failed one.
+		for (const listener of [...listeners]) {
+			try { listener(event); } catch (error) { console.error("sculpt command tap listener failed", error); }
+		}
 	};
 	return {
 		report,

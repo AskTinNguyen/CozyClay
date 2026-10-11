@@ -93,6 +93,17 @@ check("Place in scene stands the sculpt on the ground where + Add would put it",
 	assert.equal(straight.y, 0);
 });
 
+check("a throwing tap listener never changes what the wrapped handler returns", () => {
+	const tap = createCommandTap();
+	tap.subscribe(() => { throw new Error("listener bug"); });
+	const receipt = { ok: true, action: "object.sculpt", status: "applied", receiptId: "t1", affectedIds: ["sculpt"] };
+	const handlers = tap.wrap({ run_action: () => receipt });
+	const quiet = console.error;
+	console.error = () => {};
+	try { assert.equal(handlers.run_action({ args: { action: "object.sculpt", args: {} } }), receipt); }
+	finally { console.error = quiet; }
+});
+
 check("the command tap reports finished receipts once, with job output and inner args", () => {
 	const tap = createCommandTap();
 	const busListeners = new Set();
