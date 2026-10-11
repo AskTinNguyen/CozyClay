@@ -56,12 +56,20 @@ const PENDING = new Set(["started", "queued", "running", "pending"]);
  * The command feed a sculpt run listens to. The editor bus only announces
  * finished jobs, so the agent's live command handlers are wrapped to report
  * every receipt too; a receipt seen twice (a job reported by both) is fed once.
- * Events are `{ action, args, result }`, with a job's output merged into result.
+ * Events are `{ action, args, result, turnId }`, with a job's output merged into
+ * result. turnId is the agent turn that ran the command (null for UI and MCP
+ * commands), so a run hears only its own turns; a job that went to the
+ * background keeps the turnId of the request that started it.
  */
 export function createCommandTap() {
 	const listeners = new Set();
 	const seen = new Set();
+	const jobTurns = new Map();
 	const report = (request, receipt) => {
+		if (receipt?.ok && receipt.jobId && request?.turnId && PENDING.has(receipt.status)) {
+			jobTurns.set(receipt.jobId, request.turnId);
+			if (jobTurns.size > 200) jobTurns.delete(jobTurns.keys().next().value);
+		}
 		if (!receipt?.ok || !receipt.action || PENDING.has(receipt.status)) return;
 		if (receipt.receiptId) {
 			if (seen.has(receipt.receiptId)) return;
@@ -70,7 +78,8 @@ export function createCommandTap() {
 			if (seen.size > 200) seen.delete(seen.values().next().value);
 		}
 		const args = request?.args?.action === receipt.action ? request.args.args ?? {} : request?.args ?? {};
-		const event = { action: receipt.action, args, result: { ...receipt, ...(receipt.output ?? {}) } };
+		const turnId = request?.turnId ?? jobTurns.get(receipt.jobId) ?? null;
+		const event = { action: receipt.action, args, result: { ...receipt, ...(receipt.output ?? {}) }, turnId };
 		// An observer must never turn an applied command into a failed one.
 		for (const listener of [...listeners]) {
 			try { listener(event); } catch (error) { console.error("sculpt command tap listener failed", error); }

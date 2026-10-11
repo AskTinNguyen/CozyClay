@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
 import { createAgentPort, createSculptRun } from "../src/sculpt-run.js";
+import { STUDIO_SYSTEM_PROMPT } from "../bin/agent/studio-prompt.mjs";
 
 const reference = { dataUrl: "data:image/png;base64,AA==", name: "reference.png" };
 function fixture({ turns, clockStep = 1 } = {}) {
@@ -11,17 +12,18 @@ function fixture({ turns, clockStep = 1 } = {}) {
 	let aborted = 0;
 	const bus = { subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); } };
 	const agent = {
-		async *sendTurn({ signal }) {
+		async *sendTurn({ signal, turnId }) {
 			const script = turns[Math.min(sent++, turns.length - 1)] ?? [];
 			for (const event of script) {
 				if (signal.aborted) { aborted += 1; return; }
-				if (event.bus) for (const listener of listeners) listener(event.bus);
+				// A command the turn ran carries its turnId, as the command tap reports it; `foreign` keeps its own.
+				if (event.bus) for (const listener of listeners) listener(event.foreign ? event.bus : { ...event.bus, turnId });
 				yield event.stream ?? event;
 			}
 			time += clockStep;
 		},
 	};
-	return { bus, agent, now: () => time, sent: () => sent, aborted: () => aborted, events, listening: () => listeners.size };
+	return { bus, agent, now: () => time, sent: () => sent, aborted: () => aborted, events, listeners, listening: () => listeners.size };
 }
 const sculpt = (id = "sculpt-1") => ({ bus: { action: "object.sculpt", args: { id }, result: { affectedIds: [id] } } });
 const compare = (iou, sheetDataUrl = `data:image/png;base64,sheet-${iou}`) => ({ bus: { action: "sculpt.compare", args: { id: "sculpt-1" }, result: { report: { iou }, sheetDataUrl } } });
@@ -105,6 +107,83 @@ await runCase("a turn without sculpt retries once then fails", async () => {
 	assert.equal(listening(), 0, "a failed run leaves no bus listener");
 	assert.equal(run.getState().stage, "failed");
 	assert.match(run.getState().error, /object\.sculpt/);
+});
+
+await runCase("commands from another turn, MCP or the UI are never claimed", async () => {
+	const other = (bus, turnId) => ({ foreign: true, bus: { ...bus, ...(turnId === undefined ? {} : { turnId }) } });
+	const f = fixture({ turns: [[
+		other(sculpt("chat-sculpt").bus, crypto.randomUUID()),
+		other(sculpt("mcp-sculpt").bus),
+		other(compare(0.99).bus, null),
+		sculpt(), compare(0.5),
+	]] });
+	const run = createSculptRun({ ...f, maxRounds: 1, targetIou: 0.95 });
+	await run.start();
+	return run.getState();
+}, state => {
+	assert.equal(state.sculptId, "sculpt-1");
+	assert.equal(state.iou, 0.5);
+	assert.deepEqual(state.history.map(row => row.iou), [0.5]);
+});
+
+await runCase("a turn whose only sculpt came from elsewhere has not sculpted", async () => {
+	const elsewhere = { foreign: true, bus: sculpt("chat-sculpt").bus };
+	const f = fixture({ turns: [[elsewhere], [elsewhere]] });
+	const run = createSculptRun({ ...f });
+	await run.start();
+	return run.getState();
+}, state => {
+	assert.equal(state.stage, "failed");
+	assert.equal(state.sculptId, null);
+});
+
+await runCase("a throwing state listener never stops the run", async () => {
+	const f = fixture({ turns: [[sculpt(), compare(0.95)]] });
+	const run = createSculptRun({ ...f, targetIou: 0.9 });
+	run.subscribe(() => { throw new Error("listener bug"); });
+	const quiet = console.error;
+	console.error = () => {};
+	try { await run.start(); } finally { console.error = quiet; }
+	return run.getState();
+}, state => {
+	assert.equal(state.stage, "done");
+	assert.equal(state.iou, 0.95);
+});
+
+await runCase("a raw RGBA sheet is never shown as an image", async () => {
+	const raw = { bus: { action: "sculpt.compare", args: { id: "sculpt-1" }, result: { report: { iou: 0.95 }, sheet: { width: 2, height: 1, data: new Uint8Array(8) } } } };
+	const f = fixture({ turns: [[sculpt(), raw]] });
+	const run = createSculptRun({ ...f, targetIou: 0.9 });
+	await run.start();
+	return run.getState();
+}, state => {
+	assert.equal(state.iou, 0.95);
+	assert.equal(state.sheetDataUrl, null);
+});
+
+await runCase("a cancelled run ignores its turn's late receipts", async () => {
+	const f = fixture({ turns: [[]] });
+	let late;
+	f.agent.sendTurn = async function* ({ signal, turnId }) {
+		late = () => { for (const listener of f.listeners) listener({ ...sculpt("late").bus, turnId }); };
+		await new Promise(resolve => signal.addEventListener("abort", resolve, { once: true }));
+	};
+	const run = createSculptRun({ ...f });
+	const pending = run.start();
+	await Promise.resolve();
+	run.cancel();
+	late();
+	await pending;
+	return run.getState();
+}, state => {
+	assert.equal(state.stage, "cancelled");
+	assert.equal(state.sculptId, null);
+});
+
+await runCase("the Studio system prompt carries no sculpt-run procedure", async () => STUDIO_SYSTEM_PROMPT, prompt => {
+	// The harness's turn text owns the procedure: a system-wide copy reached every Studio turn and told
+	// the draft to call sculpt.compare while the draft turn says not to, and pointed at docs the model cannot read.
+	assert.doesNotMatch(prompt, /sculpt-run|sculpt\.compare|docs\//);
 });
 
 await runCase("the agent port sends UUID session and turn ids the Studio envelope accepts", async () => {

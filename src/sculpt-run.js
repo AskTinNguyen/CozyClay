@@ -41,13 +41,8 @@ const affectedIds = value => Array.isArray(value?.affectedIds) ? value.affectedI
 
 function dataUrlFromSheet(sheet) {
 	if (typeof sheet === "string") return sheet;
-	if (!sheet || !Number.isFinite(sheet.width) || !Number.isFinite(sheet.height) || !sheet.data) return null;
-	// The compare command normally supplies sheetDataUrl. Keeping this fallback
-	// here makes the controller useful with a bus that only forwards raw sheet RGBA.
-	if (typeof globalThis.btoa !== "function") return null;
-	let binary = "";
-	for (const byte of sheet.data) binary += String.fromCharCode(byte);
-	return `data:image/raw;base64,${globalThis.btoa(binary)}`;
+	// Raw RGBA is no image a browser can show: only sheetDataUrl (a PNG) is displayed.
+	return null;
 }
 
 // The reference as sculpt.compare takes it: the stored asset when there is one.
@@ -99,7 +94,7 @@ function makeTurnText(reference, sculptId, continuation, outline = null) {
 // The sidecar's Studio envelope requires UUIDs for both the session and the turn.
 export function createAgentPort(client, { sessionId = crypto.randomUUID() } = {}) {
 	return {
-		async *sendTurn({ text, attachments = [], signal, model, effort }) {
+		async *sendTurn({ text, attachments = [], signal, model, effort, turnId = crypto.randomUUID() }) {
 			const events = [];
 			let wake;
 			let ended = false;
@@ -107,7 +102,7 @@ export function createAgentPort(client, { sessionId = crypto.randomUUID() } = {}
 			const result = client.turn({
 				surface: "studio",
 				sessionId,
-				turnId: crypto.randomUUID(),
+				turnId,
 				text,
 				...(model ? { model } : {}),
 				...(effort ? { effort } : {}),
@@ -162,7 +157,10 @@ export function createSculptRun({
 	const elapsed = () => Math.max(0, now() - startedAt);
 	const publish = patch => {
 		state = { ...state, ...patch, elapsedMs: elapsed() };
-		for (const listener of [...listeners]) listener(state);
+		// An observer must never stop the run it watches.
+		for (const listener of [...listeners]) {
+			try { listener(state); } catch (error) { console.error("sculpt run listener failed", error); }
+		}
 	};
 	let activitySeq = 0;
 	const entry = (kind, text) => ({ id: ++activitySeq, atMs: elapsed(), kind, text });
@@ -172,7 +170,11 @@ export function createSculptRun({
 	const toolCalls = new Map();
 	// The turn's own wait ("writing the recipe", since the turn went out): a tool call interrupts it, never resets it.
 	let turnWait = null;
-	const onBus = event => {
+	// The turns this run sent: only their commands are the run's. Another turn,
+	// MCP or a UI edit on any sculpt is never claimed.
+	const ownTurns = new Set();
+	const onBus = event => { if (!controller.signal.aborted && ownTurns.has(event?.turnId)) onCommand(event); };
+	const onCommand = event => {
 		const name = commandName(event);
 		const args = commandArgs(event);
 		const result = commandResult(event);
@@ -248,7 +250,9 @@ export function createSculptRun({
 			// A refused or failed turn is the run's failure, not a turn that forgot to sculpt.
 			if (event?.type === "error") turnError ??= new Error(event.message || event.code || "The agent turn failed.");
 		};
-		const returned = agent.sendTurn({ text, attachments: reference?.dataUrl ? [{ dataUrl: reference.dataUrl, name: reference.name }] : [], signal: controller.signal, ...(model ? { model } : {}), ...(effort ? { effort } : {}) }, callback);
+		const turnId = crypto.randomUUID();
+		ownTurns.add(turnId);
+		const returned = agent.sendTurn({ turnId, text, attachments: reference?.dataUrl ? [{ dataUrl: reference.dataUrl, name: reference.name }] : [], signal: controller.signal, ...(model ? { model } : {}), ...(effort ? { effort } : {}) }, callback);
 		if (isAsyncIterable(returned)) {
 			for await (const event of returned) callback(event);
 		} else await returned;
@@ -304,7 +308,7 @@ export function createSculptRun({
 				publish({ waiting: waitFor("score", "Scoring the silhouette against the reference") });
 				try {
 					const value = await score(args);
-					onBus({ action: "sculpt.compare", args, result: value?.output ?? value });
+					onCommand({ action: "sculpt.compare", args, result: value?.output ?? value });
 				} catch (error) {
 					note("warn", `Scoring failed: ${shortError(error?.message || error)}`, { message: `Scoring failed: ${String(error?.message || error)}` });
 				}

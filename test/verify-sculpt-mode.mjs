@@ -146,6 +146,30 @@ check("the command tap reports finished receipts once, with job output and inner
 	check("an async live handler is reported when it settles", () => assert.equal(events.length, 1));
 }
 
+{
+	const tap = createCommandTap();
+	const busListeners = new Set();
+	const bus = { subscribe(listener) { busListeners.add(listener); return () => busListeners.delete(listener); } };
+	const events = [];
+	tap.subscribe((event) => events.push(event), bus);
+	const turnId = crypto.randomUUID();
+	const handlers = tap.wrap({ run_action: (request) => ({ ok: true, action: request.args.action, status: request.args.action === "sculpt.compare" ? "started" : "applied", receiptId: crypto.randomUUID(), jobId: "job-1" }) });
+	handlers.run_action({ turnId, args: { action: "object.sculpt", args: {} } });
+	handlers.run_action({ args: { action: "object.sculpt", args: {} } });
+	handlers.run_action({ turnId, args: { action: "sculpt.compare", args: {} } });
+	for (const listener of busListeners) listener({ type: "job.completed", receipt: { ok: true, action: "sculpt.compare", status: "completed", receiptId: "done-1", jobId: "job-1" } });
+	for (const listener of busListeners) listener({ type: "job.completed", receipt: { ok: true, action: "sculpt.compare", status: "completed", receiptId: "done-2", jobId: "job-other" } });
+	check("the command tap names the agent turn behind each receipt, a background job included", () => {
+		assert.deepEqual(events.map((event) => event.turnId), [turnId, null, turnId, null]);
+	});
+}
+
+check("leaving Sculpt mode or the scene cancels the run", () => {
+	const app = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
+	assert.match(app, /useEffect\(\(\) => \{\s*if \(!sculptMode\) sculptRunRef\.current\?\.cancel\(\);\s*\}, \[sculptMode\]\);/);
+	assert.match(app, /useEffect\(\(\) => \(\) => sculptRunRef\.current\?\.cancel\(\), \[activeSceneId\]\);/);
+});
+
 check("Start follows the Agent panel's readiness rule", () => {
 	assert.equal(agentSessionReady({ signedIn: true }), true);
 	assert.equal(agentSessionReady({ signedIn: false, providersConfigured: 2 }), true);

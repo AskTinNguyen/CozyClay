@@ -1782,6 +1782,12 @@ export default function App() {
 		renameSceneDocumentFromUi, deleteSceneDocumentFromUi, switchSceneDocument, addSceneDocument,
 		duplicateSceneDocument, renameSceneDocument, deleteSceneDocument,
 	} = scenesDomain;
+	// A sculpt run belongs to Sculpt mode and the scene it started in: leaving
+	// either cancels it, so no paid turn runs unseen and nothing reselects.
+	useEffect(() => {
+		if (!sculptMode) sculptRunRef.current?.cancel();
+	}, [sculptMode]);
+	useEffect(() => () => sculptRunRef.current?.cancel(), [activeSceneId]);
 	// A storyboard project has no Motion department: a project opened while
 	// Motion was up lands on Stage instead.
 	const storyboardProject = scenesDomain.previsMode === "storyboard";

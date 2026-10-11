@@ -18,6 +18,10 @@ for (const [start, length] of mask.runs) for (let i = start; i < start + length;
 const png = encodePng(mask.width, mask.height, rgba);
 const dataUrl = `data:image/png;base64,${png.toString("base64")}`;
 const ASSET_ID = `img-${"a".repeat(64)}`;
+// A tiny reference: its reference | overlay sheet is under 64 px wide.
+const SMALL_ID = `img-${"c".repeat(64)}`;
+const small = { width: 24, height: 30, data: new Uint8Array(24 * 30 * 4).fill(255) };
+for (let y = 0; y < 30; y += 1) for (let x = 0; x < 24; x += 1) if (((x - 11.5) / 9) ** 2 + ((y - 15) / 13) ** 2 <= 1) small.data.set([63, 95, 90, 255], (y * 24 + x) * 4);
 const candidates = [
 	{ label: "fat-body", edits: [{ set: "body", size: [1.9, 1.39, 0.95] }] },
 	{ label: "tall-head", edits: [{ set: "head", size: [0.79, 0.9, 0.7] }] },
@@ -48,6 +52,7 @@ const f = objectsFixture();
 // The Node stand-in for the browser image port: a PNG data URL or the one stored asset, decoded to RGBA.
 f.actionHandlers.current.sculptImages = {
 	async decode(reference) {
+		if (reference.assetId === SMALL_ID) return small;
 		if (reference.assetId !== undefined) {
 			if (reference.assetId !== ASSET_ID) throw new Error(`no image asset ${reference.assetId} in this project`);
 			return { width: mask.width, height: mask.height, data: rgba };
@@ -133,6 +138,14 @@ try {
 		} finally {
 			f.run("agent.turn.cancel", { turnId }, "agent", { turnId });
 		}
+	});
+
+	await check("a sheet narrower than 64 px is still sent when it fits", async () => {
+		const out = ok(await f.run("sculpt.compare", { id: sculptId, reference: { assetId: SMALL_ID } }, "agent")).output;
+		assert.equal(out.sheetOmitted, undefined, out.sheetOmitted);
+		const sheet = decodePng(Buffer.from(out.sheetDataUrl.split(",")[1], "base64"));
+		assert.ok(sheet.width < 64, `sheet ${sheet.width} px wide`);
+		assert.equal(out.sheetScale, undefined, "sent at full size");
 	});
 
 	await check("a non-sculpt id is refused and nothing changes", async () => {

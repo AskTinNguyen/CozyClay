@@ -243,7 +243,8 @@ export function register(registry, ports) {
 			sheetLabel: ranked[0].label, note: `Nothing was applied. Apply the winner with object.sculpt { id: "${objectId}", edits }.` });
 		const sheet = (ranked ? ranked[0].result : result).sheet;
 		const room = SCULPT_COMPARE_OUTPUT_BYTES - JSON.stringify(output).length;
-		for (let factor = 1; sheet.width / factor >= 64; factor *= 2) {
+		// The full-size sheet is always tried, however narrow; shrinking stops at 64 px.
+		for (let factor = 1; factor === 1 || sheet.width / factor >= 64; factor *= 2) {
 			const dataUrl = await images.encodePng(factor === 1 ? sheet : shrinkRgba(sheet, factor));
 			if (dataUrl.length + 40 <= room) { Object.assign(output, { sheetDataUrl: dataUrl, ...(factor > 1 ? { sheetScale: 1 / factor } : {}) }); break; }
 		}
