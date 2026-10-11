@@ -41,7 +41,7 @@ const domains = {
 // Existing source-driven integration fixtures follow the moved implementation,
 // not a copy of it. Keep source text intact except for the extra default exports.
 export function readStudioSource() {
-  const paths = ['src/App.jsx', 'src/use-camera-tutorial.js', ...['domains', 'panels', 'shell'].flatMap(directory =>
+  const paths = ['src/App.jsx', 'src/use-camera-tutorial.js', 'src/use-export-pipeline.js', ...['domains', 'panels', 'shell'].flatMap(directory =>
     readdirSync(new URL(`src/${directory}/`, root)).filter(name => /\.(js|jsx)$/.test(name)).map(name => `src/${directory}/${name}`))];
   return paths.map(path => read(path).replace(/export default /g, '')).join('\n');
 }
