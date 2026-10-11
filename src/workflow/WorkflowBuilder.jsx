@@ -14,7 +14,7 @@ import { Toaster, toast } from "react-hot-toast";
 import { loadWorkflowGraph, normalizeWorkflowGraph, storeWorkflowGraph, WORKFLOW_STORAGE_KEY } from "../project.js";
 import AgentPanel from "./AgentPanel.jsx";
 import CozySceneNode from "./CozySceneNode.jsx";
-import { applyCozyScenePatch, normalizeCozySceneData, sceneConnectionAllowed, toCozySceneRunRequest } from "./cozy-scene-node.js";
+import { applyCozyScenePatch, normalizeCozySceneData, sceneConnectionAllowed } from "./cozy-scene-node.js";
 import { activeSceneCharacters, characterHandleId, characterIdFromHandle, normalizeMotionInputData, motionInputOutput } from "./motion-input.js";
 import { DEFAULT_NODE_SCHEMAS, defaultFormValues, schemaCategoryForType, schemaModelEntries, schemaProperties } from "./node-schema.js";
 import { executeLocalWorkflowGraph } from "./local-workflow.js";

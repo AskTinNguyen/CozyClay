@@ -113,7 +113,6 @@ export const MotionTrails = memo(function MotionTrails({ motion, rig = null, bas
 	const callbacksRef = useRef({ onDragStart, onDragPreview, onDragEnd });
 	callbacksRef.current = { onDragStart, onDragPreview, onDragEnd };
 	const toTriples = (flat) => {
-		if (!flat) return null;
 		const out = [];
 		for (let index = 0; index + 2 < flat.length; index += 3) out.push([flat[index], flat[index + 1], flat[index + 2]]);
 		return out;

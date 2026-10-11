@@ -33,7 +33,7 @@ export function readKeys() {
 		return {};
 	}
 	for (const [key, entry] of Object.entries(value)) {
-		if (typeof key !== "string" || key.length === 0 || typeof entry !== "string" || entry.length === 0) {
+		if (key.length === 0 || typeof entry !== "string" || entry.length === 0) {
 			console.warn(`[agent] providers.json has an invalid entry; ignoring it: ${path}`);
 			return {};
 		}

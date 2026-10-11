@@ -21,7 +21,7 @@ function publish(next) {
  * newest entry updates that entry in place instead of adding a row, so an
  * encoding counter reads as one line that ticks.
  */
-export function push({ kind = "info", text, key = null, at = Date.now() }) {
+function push({ kind = "info", text, key = null, at = Date.now() }) {
 	const message = typeof text === "string" ? text.trim() : "";
 	if (!message) return null;
 	const last = entries[entries.length - 1];
@@ -36,16 +36,16 @@ export function push({ kind = "info", text, key = null, at = Date.now() }) {
 	return entry;
 }
 
-export function getEntries() {
+function getEntries() {
 	return entries;
 }
 
-export function subscribe(listener) {
+function subscribe(listener) {
 	listeners.add(listener);
 	return () => listeners.delete(listener);
 }
 
-export function clear() {
+function clear() {
 	if (entries.length) publish([]);
 }
 

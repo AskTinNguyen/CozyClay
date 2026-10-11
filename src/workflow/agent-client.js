@@ -407,8 +407,6 @@ export const ERROR_COPY = {
 	overloaded: "The model service is overloaded right now. Try again in a moment.",
 };
 
-// --- activity line ---------------------------------------------------------
-//
 // Silence is the failure mode this replaces: a live turn says what it is doing
 // and a finished turn says how it ended, in the same line, so "nothing on
 // screen" can never mean "nobody knows".
@@ -503,9 +501,6 @@ export function parseSseChunk(buffer) {
 	}
 	return { events, tail };
 }
-
-// --- real transport (loopback sidecar) ------------------------------------
-
 
 const validTelemetryId = (value) => typeof value === "string" && /^[a-f0-9]{32}$/.test(value);
 const AGENT_FAILURE_CODES = new Set(["aborted", "auth", "rate_limited", "tool_failed", "upstream", "unknown"]);
@@ -846,8 +841,7 @@ export function createHttpTransport({ fetchImpl = globalThis.fetch?.bind(globalT
 	};
 }
 
-// --- mock transport (QA) ---------------------------------------------------
-
+// --- mock transport (QA) ---
 /** ?agent=mock turns the panel onto a scripted transport so every state in the
  * issue can be reached and screenshotted before the sidecar exists. */
 export function mockConfigFromSearch(search = globalThis.location?.search || "") {
@@ -1155,8 +1149,6 @@ export function createAgentTransport(options = {}) {
 	return config ? createMockTransport({ surface: options.surface, ...config }) : createHttpTransport(options);
 }
 
-// --- chat store (framework-free) -------------------------------------------
-//
 // One conversation: session identity, transcript, motion jobs, receipts and
 // acknowledged image actions. It lives here rather than inside the component so
 // the dock, an embedded Studio host and the test runner drive the SAME state

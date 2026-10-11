@@ -16,13 +16,13 @@ export function executeLocalWorkflowGraph(graph, { runId = `local-${Date.now()}`
 	const updates = new Map();
 	const order = [];
 	while (remaining.size) {
-		const ready = [...remaining].filter((id) => (incoming.get(id) || []).every((edge) => !remaining.has(edge.source)));
+		const ready = [...remaining].filter((id) => incoming.get(id).every((edge) => !remaining.has(edge.source)));
 		const batch = ready.length ? ready : [...remaining];
 		for (const id of batch) { remaining.delete(id); order.push(id); }
 	}
 	for (const id of order) {
 		const node = nodeById.get(id);
-		const inputs = (incoming.get(id) || []).map((edge) => values.get(edge.source)).filter((value) => value !== undefined);
+		const inputs = incoming.get(id).map((edge) => values.get(edge.source)).filter((value) => value !== undefined);
 		const output = localNodeOutput(node, inputs);
 		values.set(id, output);
 		const run = { id: runId, status: "complete", result: { outputs: [{ value: output }] } };

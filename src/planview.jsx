@@ -333,11 +333,6 @@ function SubjectMovementGuide({ track }) {
 }
 
 /**
- * The drawn camera rail (and the live stroke while drawing): a flat violet
- * line on the deck. Display only — authoring happens through the pointer
- * handlers, exactly like the pucks.
- */
-/**
  * A scene object's travel path on the plan board. The camera's rail owns
  * RAIL_COLOR; a prop's route gets its own green so the two never read as the
  * same instruction at a glance.
@@ -665,8 +660,6 @@ export function PlanBoard({ hostRef, planCamRef, shotCamRef, look, fovDeg, chara
 
 		const onDown = (event) => {
 			if (event.button !== 0) return;
-			// Rail drawing owns the pointer: a stroke starts anywhere on the
-			// deck, so puck picking would fight every stroke that crosses one.
 			// Rail drawing and object-path drawing share one stroke gesture:
 			// a stroke starts anywhere on the deck, so puck picking would
 			// fight every stroke that crosses one.

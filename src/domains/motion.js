@@ -12,7 +12,6 @@ import {
 	lineTrackLabel,
 	ARDY_DURATION_MIN,
 	buildPromptSchedule,
-	toArdyFrameEntries,
 	posePlacementFrame,
 	toArdySegments,
 	ARDY_FPS,
@@ -500,7 +499,6 @@ export function useMotion(appContext) {
 		return () => { window.removeEventListener('pointerdown', start, true); domain.finishGesture(true); };
 	}, [domain, appContext.shared.activeChar.id]);
 	const [i2vMotion, setI2vMotion] = useState({ a: null, b: null, job: null, status: "idle", error: "", instruction: "", dailyRemaining: null });
-	/* ------------------------------ IK layer ------------------------------ */
 	// IK posing for Subject 1: dragging a wrist/ankle handle FOCUSES that
 	// joint and solves its chain backward (two-bone analytic IK) on top of
 	// the current pose; joints never dragged stay purely on the FK pose.
@@ -562,8 +560,7 @@ export function useMotion(appContext) {
 	const setCommittedIkEdits = update => domain.writeLayer(appContext.shared.activeChar.id, { committedIkEdits: typeof update === 'function' ? update(domain.layer(appContext.shared.activeChar.id).committedIkEdits) : update });
 	domain.onProject = () => setIkTick(value => value + 1);
 
-	/* --------------------- IK-mode motion trail editing ---------------------
-	 * Grabbing the viewport trajectory line deforms the loaded take with a
+	/* Grabbing the viewport trajectory line deforms the loaded take with a
 	 * smoothstep falloff around the grab frame (pure local preview). The last
 	 * finished drag stays pending so "Regenerate from trail edit" can send the
 	 * auto-derived window through the existing motionEdit pipeline. */
@@ -820,11 +817,6 @@ export function useMotion(appContext) {
 		return count;
 	}
 
-	/** A baked key entry in the JSON form character.setIkKey takes. */
-	function ikKeyJson(entry) {
-		return ikKeyJson(entry);
-	}
-
 	const [bridge, setBridge] = useState(null);
 
 	const [bridgeChecking, setBridgeChecking] = useState(false);
@@ -859,8 +851,7 @@ export function useMotion(appContext) {
 	// operator scrubbed to — the box takes any destination frame.
 	const [ardyPosePlacement, setArdyPosePlacement] = useState("start");
 
-	/* ------------------- take recipes and versions (C9/C12) -------------------
-	 * The recipe of the take that is loaded RIGHT NOW: seed + prompt blocks +
+	/* The recipe of the take that is loaded RIGHT NOW: seed + prompt blocks +
 	 * the line edits pulled on top of it. It is written in exactly one place
 	 * (commitTakeRecipe, on a successful run) and read in two: the request
 	 * assembly, which attaches it as C10 `replay`, and the version strip, which
@@ -898,9 +889,6 @@ export function useMotion(appContext) {
 	const [ardyReport, setArdyReport] = useState(null);
 
 	const [ardyOutcome, setArdyOutcome] = useState(null);
-
-	// Timeline frames for the configured duration: [0, duration*TIMELINE_FPS-1].
-	const maxDst = Math.max(0, Math.round(ardyDuration) * TIMELINE_FPS - 1);
 
 	// Wave-2 gate: the bridge only routes lineEdit once M4's routing lands.
 	// Until the /ardy/health payload says so, the request is never sent —
@@ -957,7 +945,6 @@ export function useMotion(appContext) {
 
 	const [motionError, setMotionError] = useState("");
 
-	/* ------------------------- video capture (ingest) ---------------------- */
 	const [multiModelUrl, setMultiModelUrl] = useState("");
 
 	const [multiModelSource, setMultiModelSource] = useState(null);
@@ -998,7 +985,6 @@ export function useMotion(appContext) {
 		appContext.shared.setTlFrame((f) => Math.max(0, Math.min(f + delta, appContext.shared.frameCountRef.current - 1)));
 	}
 
-	/* --------------------------- motion playback ---------------------------- */
 	function leaveIkMode() {
 		cancelPendingIkEdit();
 		const poserCam = appContext.shared.poserCamRef?.current;
@@ -1779,35 +1765,6 @@ export function useMotion(appContext) {
 		return true;
 	}
 
-	function downloadArdyPose() {
-		const rig = appContext.shared.posedRig();
-		if (!rig) {
-			appContext.notify(ko("Character not loaded yet", "캐릭터가 아직 로드되지 않았어요"));
-			return;
-		}
-		trackFeature("export_pose");
-		const pose = buildArdyPose({
-			rig,
-			camRef: appContext.shared.shotCamRef,
-			look: appContext.shared.look,
-			fovDeg: appContext.shared.fovDeg,
-			slate: slateLine(appContext.shared.shot),
-			// rigName follows the posed character's actual model below
-			rigName: appContext.shared.posingChar?.model ?? appContext.shared.charA.model,
-			root: captureArdyRoot(rig),
-		});
-		const blob = new Blob([JSON.stringify(pose, null, 2)], { type: "application/json" });
-		const url = URL.createObjectURL(blob);
-		const a = document.createElement("a");
-		a.href = url;
-		a.download = "cozyclay-pose.json";
-		document.body.appendChild(a);
-		a.click();
-		a.remove();
-		URL.revokeObjectURL(url);
-		appContext.notify(ko("Pose exported", "포즈 내보내기 완료"));
-	}
-
 	function recheckMotionHealth() {
 		setBridgeChecking(true);
 		return appContext.shared.bridgeRefreshRef.current().finally(() => setBridgeChecking(false));
@@ -1995,7 +1952,6 @@ export function useMotion(appContext) {
 		});
 	}
 
-	/* --------------------- trail drag -> preview -> regen -------------------- */
 	function onTrailDragStart({ track, grabFrame } = {}) {
 		if (!motion) return;
 		if (track) {
@@ -2165,8 +2121,7 @@ export function useMotion(appContext) {
 		setTrailEdit(null);
 	}
 
-	/* ------------------------- motion job queue ---------------------------
-	 * One box, one job at a time: explicit entry points suppress duplicate
+	/* One box, one job at a time: explicit entry points suppress duplicate
 	 * requests through queueing and execution. The
 	 * payload is frozen at enqueue time; completion delivers the clip to the
 	 * REQUESTING character's layer, not whoever happens to be selected then. */
@@ -2279,8 +2234,7 @@ export function useMotion(appContext) {
 		}
 	}
 
-	/* ------------------- recipe + version bookkeeping (C9/C12) ----------------
-	 * ONE writer for both. Every take that reaches the app came out of a job,
+	/* ONE writer for both. Every take that reaches the app came out of a job,
 	 * so a job's completion is the only place where "what is this take made of"
 	 * can be answered honestly, and the answer is checkpointed next to the
 	 * motionUrl in the same breath. Nothing else may write takeRecipeRef except
@@ -2398,8 +2352,7 @@ export function useMotion(appContext) {
 		}
 	}
 
-	/* ---------------------- the two edit entries (C12) ------------------------
-	 * Scene blocks the shot with Kimodo; Refine pulls one joint's path with
+	/* Scene blocks the shot with Kimodo; Refine pulls one joint's path with
 	 * ProjFlow. Everything else the pipeline can do is one of those two said
 	 * more precisely, and both are reachable from the take itself instead of
 	 * from a foldout the artist has to remember to open.

@@ -3,8 +3,6 @@ import { SCENE_ATTACH_BONES } from "./scene-objects.js";
 import { TRAIL_EFFECTOR_JOINTS } from "./motion-trail.js";
 import { normalizeBoneName } from "./poses.js";
 
-/* ----------------------------------------- carried props (attachment) --- */
-
 /** The rig rows that ARE an attach frame: `rig.<track id>`, the same camel
  * spellings SCENE_ATTACH_BONES uses. The group rows above them (rig.torso,
  * rig.leftArm …) name a limb, not a frame, so they are deliberately absent. */

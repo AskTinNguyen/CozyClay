@@ -1,11 +1,10 @@
 import Foldout from "./Foldout.jsx";
 import { ko } from "../locale.js";
-import { CHARACTER_MODEL_IDS } from "../scenes.js";
+import { CHARACTER_MODEL_IDS, isProxyFigure } from "../scenes.js";
 import { PoseThumbPreview } from "../posestudio.jsx";
 import { DEFAULT_POSE } from "../poses.js";
 import { CHARACTER_MODEL_LABELS } from "../app-stage.jsx";
 import { useBus } from '../app-context.js';
-import { isProxyFigure } from "../scenes.js";
 
 export default function RigPanel({ isCharacterSelection, activeChar }) {
 	const { run } = useBus();

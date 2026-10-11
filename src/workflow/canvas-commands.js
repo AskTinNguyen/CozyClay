@@ -49,10 +49,10 @@ export function createCanvasCommands({ store, makeNode, nodeSchemas }) {
 	const handlers = {
 		get_graph: () => { const graph = clone(current()); return { ...graph, nodes: graph.nodes.map((node) => ({ id: node.id, type: node.type, model: node.data?.model || null, data: node.data, position: node.position })), outputs: Object.fromEntries(graph.nodes.map((node) => [node.id, node.data?.outputs || []])) }; },
 		add_node: ({ type, model, data = {}, position } = {}) => { const next = mutate((graph) => {
-			if (typeof type !== "string" || !type || !["text", "image", "video", "audio", "api", "video-combiner", "scene", "upload", "concat", "motion-input", "shot-prompt"].includes(type)) throw new Error("Unknown node type");
+			if (!["text", "image", "video", "audio", "api", "video-combiner", "scene", "upload", "concat", "motion-input", "shot-prompt"].includes(type)) throw new Error("Unknown node type");
 			if (position && (!Number.isFinite(position.x) || !Number.isFinite(position.y))) throw new Error("position must contain finite x and y");
 			const id = `${type}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-			const modelValue = typeof model === "string" ? model : model;
+			const modelValue = model;
 			const node = makeNode(type, id, position || nextFreePosition(graph), modelValue || null, nodeSchemas);
 			if (modelValue && typeof modelValue === "string") {
 				const models = nodeSchemas?.categories?.[schemaCategoryForType(type)]?.models || {};
@@ -71,5 +71,5 @@ export function createCanvasCommands({ store, makeNode, nodeSchemas }) {
 		undo: () => { const previous = history.pop(); if (!previous) return { undone: false }; publish(previous); return { undone: true, graph: clone(previous) }; },
 		history,
 	};
-	return { ...handlers, handlers, undo: handlers.undo, history };
+	return { ...handlers, handlers };
 }

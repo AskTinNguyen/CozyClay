@@ -154,13 +154,6 @@ function preferredVideoOutputNodes(workflow) {
 const isH3Node = (node) => /minimax.?h3|h3.*video/i.test(String(node?.class_type || ""));
 const isLoadImageNode = (node) => /loadimage/i.test(String(node?.class_type || ""));
 const isCompositeNode = (node) => /imagecomposite|compositeimage|imagemattecomposite/i.test(String(node?.class_type || ""));
-const isMaskNode = (node) => {
-	if (isCompositeNode(node)) return false;
-	// A generic/static mask can hide a broken tracker and would not preserve a
-	// moving performer across frames. Only accept a temporal SAM3/tracked-mask
-	// node on the compositor path.
-	return /sam3[_-]?(videotrack|tracktomask)|tracktomask|videomask/i.test(String(node?.class_type || ""));
-};
 
 function h3GuardError(message, reason) {
 	return Object.assign(new Error(message), {
