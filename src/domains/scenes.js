@@ -194,8 +194,7 @@ export function useScenes(appContext) {
 		}
 	}
 
-	/* ============================ project files ============================
-	 * Game-engine workflow: the authoring state (scenes + cast + layers,
+	/* Game-engine workflow: the authoring state (scenes + cast + layers,
 	 * workspace layout, custom poses) round-trips through a real
 	 * `.cclayproject` file. localStorage stays as the always-on session
 	 * cache; the file is the portable, user-owned document. */
