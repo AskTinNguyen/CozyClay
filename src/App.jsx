@@ -61,6 +61,7 @@ import { AppContext, createAppContext } from "./app-context.js";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
 
 import { PlanBoard } from "./planview.jsx";
+import { drawPlanDiagram } from "./plan-diagram.js";
 import { placementAt } from "./root-path.js";
 import { proxyYaw } from "./proxy-figure.jsx";
 import { autoColorHex, loadAutoColor } from "./auto-color.js";
@@ -3017,8 +3018,8 @@ export default function App() {
 					references: live.captureShotReferences(),
 				};
 			},
-			// The Top View as the agent's plan picture: names on the floor and the
-			// shot camera's wedge over the orthographic plan render.
+			// The Top View as the agent's plan picture: a 2D diagram of the cast,
+			// footprints and every shot camera drawn from state (src/plan-diagram.js).
 			capture_plan_png: (args = {}) => appContext.live.state.capturePlanPng(requestedCaptureOutput(args) ?? undefined),
 	};
 
@@ -4866,64 +4867,17 @@ export default function App() {
 			: null;
 	}
 
-	/** The Top View as a PNG: the plan camera's orthographic view, at the inset's
-	    vertical extent widened to the output aspect, then each visible subject's and
-	    object's name at its floor position and the shot camera as a wedge toward
-	    where it looks. The capture rig renders whichever camera its ref holds, so the
-	    plan camera stands in for the shot camera for this one synchronous draw
-	    (as captureFramingPng parks the shot camera) and both are put back before
-	    the next paint. */
+	/** The Top View as a PNG: a 2D data diagram drawn from editor state by
+	    src/plan-diagram.js (grid, footprints, cast, every shot camera, the current
+	    shot's action line and blocked sight lines). No render is involved. */
 	function capturePlanPng(output = { width: 1280, height: 720 }) {
-		const plan = planCamRef.current, shotCam = shotCamRef.current;
-		if (!plan?.isOrthographicCamera || !shotCam || typeof captureRef.current?.createExportCapture !== "function") throw new Error("The plan renderer is not ready");
-		const live = appContext.live.state;
-		const prev = { left: plan.left, right: plan.right };
-		const extent = plan.top, aspect = output.width / output.height;
-		plan.left = -extent * aspect;
-		plan.right = extent * aspect;
-		plan.updateProjectionMatrix();
-		plan.updateMatrixWorld();
-		const capture = captureRef.current.createExportCapture(output);
-		try {
-			shotCamRef.current = plan;
-			let buffer;
-			try { buffer = capture.render(); } finally { shotCamRef.current = shotCam; }
-			if (!buffer) throw new Error("The plan renderer is not ready");
-			const toPixel = (x, z) => {
-				const p = new THREE.Vector3(x, 0, z).project(plan);
-				return [((p.x + 1) / 2) * output.width, ((1 - p.y) / 2) * output.height];
-			};
-			const label = (ctx, text, x, z, colour) => {
-				const [px, py] = toPixel(x, z), shown = text.length > 28 ? `${text.slice(0, 27)}\u2026` : text;
-				ctx.fillStyle = colour;
-				ctx.beginPath(); ctx.arc(px, py, 4, 0, Math.PI * 2); ctx.fill();
-				ctx.strokeText(shown, px + 7, py - 7);
-				ctx.fillText(shown, px + 7, py - 7);
-			};
-			const dataUrl = bufferToPng(buffer, output, (ctx) => {
-				ctx.font = "600 15px system-ui, sans-serif";
-				ctx.lineWidth = 3;
-				ctx.strokeStyle = "rgba(20, 18, 16, 0.85)";
-				for (const o of live.objects) if (!isEffectivelyHidden(o, live.objects, live.characters)) label(ctx, o.name || o.id, o.x, o.z, "#e8d9b0");
-				for (const c of live.characters) if (!c.hidden) label(ctx, c.subject || c.id, c.x, c.z, "#9fd3ff");
-				// The shot camera: a wedge as wide as its horizontal field of view.
-				const yaw = look.current.yaw, half = Math.atan(Math.tan((shotCam.fov * Math.PI) / 360) * shotCam.aspect), reach = 2;
-				const edge = (angle) => toPixel(shotCam.position.x - Math.sin(angle) * reach, shotCam.position.z - Math.cos(angle) * reach);
-				const [cx, cz] = toPixel(shotCam.position.x, shotCam.position.z), [lx, lz] = edge(yaw + half), [rx, rz] = edge(yaw - half);
-				ctx.fillStyle = "rgba(255, 92, 72, 0.28)";
-				ctx.strokeStyle = "#ff5c48";
-				ctx.lineWidth = 2;
-				ctx.beginPath(); ctx.moveTo(cx, cz); ctx.lineTo(lx, lz); ctx.lineTo(rx, rz); ctx.closePath(); ctx.fill(); ctx.stroke();
-				ctx.fillStyle = "#ff5c48";
-				ctx.beginPath(); ctx.arc(cx, cz, 5, 0, Math.PI * 2); ctx.fill();
-			});
-			return { dataUrl, width: output.width, height: output.height, frame: live.timeline.currentFrame, shotId: live.activeShotId };
-		} finally {
-			capture.dispose?.();
-			plan.left = prev.left;
-			plan.right = prev.right;
-			plan.updateProjectionMatrix();
-		}
+		const live = appContext.live.state, s = readStudioState();
+		const canvas = document.createElement("canvas");
+		canvas.width = output.width;
+		canvas.height = output.height;
+		drawPlanDiagram(canvas.getContext("2d"), { frame: s.view.frame, frameCount: s.frameCount, objects: s.objects, characters: s.characters, shotDocument: { shots: s.shots }, camera: s.camera },
+			{ width: output.width, height: output.height, ports: { bounds: studioBounds }, currentShotId: live.activeShotId, aspect: shotOutput.width / shotOutput.height });
+		return { dataUrl: canvas.toDataURL("image/png"), width: output.width, height: output.height, frame: live.timeline.currentFrame, shotId: live.activeShotId };
 	}
 
 	/** The canvas runs under the floating panels, so "what I see" is only the uncovered middle.

@@ -146,10 +146,22 @@ cclay live capture --framing --out /tmp/329-doc/shots/f-a-wide-hip.png
 
 To check the blocking from above instead, ask `verify` for the plan:
 `cclay live verify --receipt receipt-mu3uybub-4 --checks framing --visual plan --out /tmp/plan.png`
-writes the Top View (the inset's orthographic plan at 1280×720) with every
-visible character's and object's name at its floor position and the shot
-camera drawn as a red wedge toward where it looks; its `visualRefs` entry
-carries `kind: "plan"`. A `framing` check also returns `geometry`: per shot
+writes the Top View at 1280×720: a 2D diagram drawn from the scene state
+(`src/plan-diagram.js`), not a render. It shows a 1 m grid labelled every 2 m
+with the origin marked, `+X` to the right and `+Z` down the image; object
+footprints as rotated tan rectangles (a group's parts share one hue);
+characters as blue circles with a facing arrow; every shot of the cut as
+`S1…Sn` with a 3 m wedge as wide as its horizontal field of view and a line to
+where it looks (the current shot filled red and labelled with its side of the
+action line, `L`/`R`); the current shot's action line dashed with the
+distance between its two subjects; and any prop blocking a camera's sight line
+to a subject outlined red with the blocked segment. The framing fits all of it
+with a 1.5 m margin, capped at 30 m. Its `visualRefs` entry carries
+`kind: "plan"`. A Studio Agent turn gets the same picture automatically, as a
+"Studio plan observation (top view)", when the scene has two or more
+characters, at least one shot, or the request talks about shots, cameras,
+coverage or framing (never alongside an attached frame; a failed capture just
+leaves it out). A `framing` check also returns `geometry`: per shot
 the two leading characters, the camera's side of the line between them
 (`cameraSide`: `left`, `right` or `on-axis` within 5 cm), the props crossing
 the sight line (`occluders`), and `axisConsistent` across the cut (false when

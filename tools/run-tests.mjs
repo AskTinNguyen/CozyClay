@@ -240,6 +240,8 @@ const NODE_FILES = [
 	"test/verify-scene-objects.mjs",
 	"test/verify-studio-agent-geometry.mjs",
 	"test/verify-studio-geometry-facts.mjs",
+	"test/verify-plan-diagram.mjs",
+	"test/verify-agent-plan-attach.mjs",
 	"test/verify-local-placement.mjs",
 	"test/verify-studio-agent-motion.mjs",
 	"test/verify-studio-agent-binding.mjs",
