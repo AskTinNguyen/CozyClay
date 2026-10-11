@@ -1863,7 +1863,7 @@ export default function Timeline({
 									{ko("+ Block", "+ 블록")}
 								</button>}
 							</>) : workflowMode === "pose" || ikMode ? (
-								<button
+								selectedMotionSegment ? <button
 									type="button"
 									className="tl-seq-action cut"
 									data-testid="sequencer-cut"
@@ -1871,9 +1871,9 @@ export default function Timeline({
 									onClick={() => handlers.current.onMotionCut?.()}
 								>
 									{ko("Cut", "컷")}
-								</button>
+								</button> : null
 							) : (<>
-								<button
+								{shots.length > 0 && <button
 									type="button"
 									className="tl-seq-action cut"
 									data-testid="sequencer-cut"
@@ -1882,8 +1882,8 @@ export default function Timeline({
 									onClick={() => activeShotForCut && handlers.current.onShotSplit?.(activeShotForCut.id)}
 								>
 									{ko("Cut", "컷")}
-								</button>
-								<button
+								</button>}
+								{cameraBlockIdx != null && <button
 									type="button"
 									className="tl-seq-action rail"
 									data-testid="sequencer-draw-rail"
@@ -1894,8 +1894,8 @@ export default function Timeline({
 									onClick={() => handlers.current.onCameraRailDrawToggle?.()}
 								>
 									{ko("Draw rail", "레일 그리기")}
-								</button>
-								<button
+								</button>}
+								{!shotCutDisabled && <button
 									type="button"
 									className="tl-seq-action"
 									data-testid="sequencer-add-track"
@@ -1904,7 +1904,7 @@ export default function Timeline({
 									onClick={() => handlers.current.onShotCut?.()}
 								>
 									{ko("+ Track", "+ 트랙")}
-								</button>
+								</button>}
 							</>) }
 						</div>
 						<div className="tl-head-group tl-view-tools" role="group" aria-label={ko("Timeline view tools", "타임라인 보기 도구")}>

@@ -275,9 +275,7 @@ import { exportOffscreenVideo } from "./offscreen-export.js";
 import { parseRigNodeId } from "./hierarchy-model.js";
 import { timelineContentExtent } from "./timeline-extent.js";
 import {
-	GUIDE_LABELS,
 	guideGeometry,
-	nextGuideMode,
 	readStoredGuideMode,
 	writeStoredGuideMode,
 } from "./shot-guides.js";
@@ -4219,7 +4217,7 @@ export default function App() {
 		generate: (kind) => void generateI2vMotion(kind),
 		enableShaded: () => runStudioAction("view.setPartColours", { mode: "shaded" }),
 	};
-	const viewLooksActive = gridView || autoColor || partColoursEnabled;
+	const viewLooksActive = gridView || autoColor || partColoursEnabled || guideMode !== "off";
 	const rigSelection = parseRigNodeId(selectedHierarchyId);
 	const isRigSelection = rigSelection !== null;
 	const inspectorHasContent = isSceneSelection || isCameraSelection || isCharacterSelection || isRigSelection
@@ -7165,6 +7163,7 @@ export default function App() {
 		fovDeg, shotsDomain, shot, setNonce, workspaceLayout,
 		viewMenuTriggerRef, viewMenuOpen, setViewMenuAnchor, setViewMenuOpen, viewLooksActive,
 		viewMenuAnchor, gridView, setGridView, autoColor, setAutoColor,
+		guideMode,
 		isCharacterSelection, partColoursChoice, embedMode, agentCollapsed, sceneSaveError,
 		studioAgentError, studioAgentMode, setStudioAgentMode, AgentPanel, setAgentCollapsed,
 		buildStudioAgentContext, highlightAgentTargets, generateI2vMotionFromUi, selectedSceneObject, rigSelection,
@@ -7907,18 +7906,6 @@ export default function App() {
 							<span className="vp-inset-tag vp-shot-preview-tag">
 								<span className="vp-rec-dot" aria-hidden="true" />
 								{ko("Shot", "샷")}
-								<button
-									type="button"
-									className={"vp-guide-cycle" + (guideMode === "off" ? "" : " on")}
-									aria-label={ko("Cycle composition guides", "구도 가이드 전환")}
-									title={ko(GUIDE_LABELS[guideMode].en, GUIDE_LABELS[guideMode].ko) + ko(" · click to cycle", " · 클릭으로 전환")}
-									onClick={() => runStudioAction("view.setGuideMode", { mode: nextGuideMode(guideMode) })}
-								>
-									<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-										<path d="M3 3h18v18H3z" />
-										<path d="M9 3v18M15 3v18M3 9h18M3 15h18" />
-									</svg>
-								</button>
 								<button
 									type="button"
 									className="vp-look-through"

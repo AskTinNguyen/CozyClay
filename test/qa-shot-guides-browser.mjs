@@ -48,7 +48,11 @@ expect("app becomes ready", await waitFor("!!document.querySelector('.v2-outline
 // --- guide cycle over the real DOM ----------------------------------------
 const cycle = "document.querySelector('.vp-guide-cycle')";
 const overlay = "document.querySelector('.vp-shot-preview .shot-guides')";
-expect("the shot preview offers the guide button", await evaluate(`!!${cycle}`));
+const openShowMenu = async () => {
+	await evaluate("document.querySelector('.view-menu-trigger')?.click()");
+	return waitFor(`!!${cycle}`, 3000);
+};
+expect("the Show menu offers the guide button", await openShowMenu());
 expect("guides start off (no overlay drawn)", await evaluate(`!${overlay}`));
 
 await evaluate(`${cycle}.click()`);
@@ -77,7 +81,8 @@ expect("guides are pointer-transparent", await evaluate(`(() => {
 await send("Page.enable");
 await send("Page.reload", { ignoreCache: false });
 await sleep(1000);
-expect("app returns after reload", await waitFor(`!!${cycle}`, 30000));
+expect("app returns after reload", await waitFor("!!document.querySelector('.v2-outliner .v2-outliner-search')", 30000));
+expect("the Show menu returns after reload", await openShowMenu());
 expect("the guide mode survives the reload", await waitFor(`${overlay}?.dataset.guideMode === "safe"`, 8000));
 
 // --- look-through carries the same overlay --------------------------------
@@ -90,13 +95,14 @@ await sleep(300);
 expect("Esc leaves look-through and drops its overlay", await evaluate("!document.querySelector('.shot-guides.lookthrough')"));
 
 // back to off for a clean slate
+await openShowMenu();
 await evaluate(`${cycle}.click()`);
 expect("fifth click wraps back to off", await waitFor(`!${overlay}`, 8000));
 
 // --- export wiring pin ----------------------------------------------------
 const fs = await import("node:fs");
 const appSource = fs.readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
-expect("the exporter sends clean renders without the frame stamp", !appSource.includes("burnInCapture") && appSource.includes("capture: applyExportFrame"));
+expect("the exporter sends clean renders without the frame stamp", !appSource.includes("burnInCapture") && appSource.includes("capture: (frame, kind) => withExportFrame"));
 
 if (failures > 0) { console.error(`${failures} FAILURES`); process.exit(1); }
 console.log("qa-shot-guides-browser: all checks passed");
