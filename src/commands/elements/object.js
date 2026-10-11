@@ -14,7 +14,7 @@ const elements = STUDIO_ELEMENTS.filter(row => row.path.startsWith('object.')).m
   return { ...element, ...(components[field] ? { documentPath: components[field] } : {}),
     ...(field === 'remove' ? { readback: item => ({ flag: item === undefined }) } : {}) };
 });
-export function normalizeObjectSet(record) {
+function normalizeObjectSet(record) {
   const item = normalizeSceneObject(record);
   // The owning collection consumes this lifecycle intent before persistence.
   return record.remove === true ? { ...item, remove: true } : item;

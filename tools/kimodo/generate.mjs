@@ -50,7 +50,7 @@ const SSH_OPTS = [
 	"-o", "ServerAliveCountMax=240",
 ];
 
-export const DEFAULT_MODEL = "Kimodo-SOMA-RP-v1.1";
+const DEFAULT_MODEL = "Kimodo-SOMA-RP-v1.1";
 export const KIMODO_BACKENDS = {
   "nvidia-cuda": { repo: "$HOME/.cozyclay/kimodo", entry: ".venv/bin/kimodo_gen", mode: "cuda", promptFlag: null, durationFlag: "--duration", stepsFlag: "--diffusion_steps", outputFlag: "--output" },
   "kimodo-mlx": { repo: "$HOME/.cozyclay/kimodo-mlx", entry: "$HOME/.cozyclay/kimodo-mlx-venv/bin/python", motion: "$HOME/.cozyclay/kimodo-mlx/models/nvidia-soma-rp-v1.1", text: "$HOME/.cozyclay/kimodo-mlx/models/llm2vec-text-bundle", mode: "mlx", promptFlag: "--prompt", framesFlag: "--frames", stepsFlag: "--steps", outputFlag: null },

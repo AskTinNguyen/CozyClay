@@ -12,7 +12,7 @@ import { spawn } from "node:child_process";
  * the measured plate drift are inside the contract.
  */
 
-export const H3_OUTPUT_LIMITS = Object.freeze({
+const H3_OUTPUT_LIMITS = Object.freeze({
 	// JPEG/AVC quantisation and the model's first-frame reconstruction create a
 	// small amount of noise. A real camera move changes many edge pixels by much
 	// more than this value.
@@ -35,7 +35,7 @@ export const H3_OUTPUT_LIMITS = Object.freeze({
 });
 
 /** Estimate a rigid camera translation against the plate in the static band. */
-export function estimateH3CameraShift(reference, frame, width, height, { borderFraction = H3_OUTPUT_LIMITS.borderFraction, maxShift = 4 } = {}) {
+function estimateH3CameraShift(reference, frame, width, height, { borderFraction = H3_OUTPUT_LIMITS.borderFraction, maxShift = 4 } = {}) {
 	const borderX = Math.max(1, Math.floor(width * borderFraction));
 	const borderY = Math.max(1, Math.floor(height * borderFraction));
 	if (width <= borderX * 2 + 2 || height <= borderY * 2 + 2) return { x: 0, y: 0, errorRgb: 0, distancePx: 0 };

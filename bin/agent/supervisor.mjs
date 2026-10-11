@@ -6,12 +6,12 @@
 
 export const SUPERVISOR_RUBRIC = "You are the previs supervisor reviewing one agent turn in CozyClay Studio. Judge ONLY from the evidence given (receipts, refusal codes, geometry facts, pictures). Evaluate exactly these seven items: 1 request coverage - every deliverable the user literally asked for exists (blocker when missing); 2 impossible items - anything refused with TARGET_NOT_READY / CAPABILITY_MISSING / CONFIRMATION_REQUIRED is 'refused', not 'missing'; it is a blocker only when the reply hid the refusal from the user; 3 spatial sanity - floating or sunken objects, unintended interpenetration, subjects occluded by set pieces (concern); 4 framing - requested size vs derivedSize, clipped subjects, subject out of frame (concern); 5 continuity across shots - 180-degree line (axisConsistent, cameraSide), eyeline, OTS over the correct shoulder, screen direction (concern); 6 undo integrity - the turn is one history entry / receipts are undoable (blocker when broken); 7 report honesty - the reply claims nothing the receipts do not show and claims no verification that did not run (blocker). Capsule figures (characterKind proxy) cannot pose, sit or animate: a refused pose on one is 'refused'. Reply with JSON only: { \"items\": [{ \"text\": string, \"status\": \"done\"|\"partial\"|\"refused\"|\"missing\", \"evidence\": string }], \"issues\": [{ \"severity\": \"blocker\"|\"concern\"|\"note\", \"kind\": \"coverage\"|\"disclosure\"|\"spatial\"|\"framing\"|\"continuity\"|\"undo\"|\"honesty\", \"text\": string, \"evidence\": string }], \"summary\": string }. Write text fields in the user's language. Be concrete and short; cite ids, metres and shot names. An issue MAY carry \"fix\": { \"action\": \"<action id from the ACTIONS list>\", \"args\": { ... } } - ONE run_action call the next turn executes verbatim, with real ids and values taken from the receipts and geometry and args shaped by ACTION SCHEMAS. Examples: {\"action\":\"character.setPose\",\"args\":{\"characterId\":\"char-b\",\"posture\":\"sit\"}}, {\"action\":\"shot.frame\",\"args\":{\"shotId\":\"shot-1\",\"subjectIds\":[\"char-a\",\"char-b\"],\"framing\":{\"intent\":{\"size\":\"wide shot\",\"view\":\"front\",\"level\":\"eye\",\"side\":\"left\"}}}}, {\"action\":\"object.update\",\"args\":{\"id\":\"table-1\",\"position\":{\"x\":0,\"y\":0,\"z\":1.2}}}. Use only actions present in ACTIONS; never invent ids; never propose a pose or motion fix for a capsule figure; omit fix when no safe single action exists.";
 
-export const REFUSAL_CODES = Object.freeze(["TARGET_NOT_READY", "CAPABILITY_MISSING", "CONFIRMATION_REQUIRED"]);
-export const SUPERVISOR_LIMITS = Object.freeze({ delta: 8, warnings: 12, reply: 4000, images: 5, createdShots: 3, imageWidth: 1280, args: 600, timeoutMs: 120_000, schemaBytes: 6000 });
+const REFUSAL_CODES = Object.freeze(["TARGET_NOT_READY", "CAPABILITY_MISSING", "CONFIRMATION_REQUIRED"]);
+const SUPERVISOR_LIMITS = Object.freeze({ delta: 8, warnings: 12, reply: 4000, images: 5, createdShots: 3, imageWidth: 1280, args: 600, timeoutMs: 120_000, schemaBytes: 6000 });
 /** The actions whose input schemas the reviewer gets, so a fix it writes has
  * the right shape (#743). Only those present in the turn's action index are
  * asked for. */
-export const SUPERVISOR_FIX_ACTIONS = Object.freeze(["character.setPose", "character.move", "character.update", "shot.frame", "shot.set", "shot.setRange", "object.update", "object.remove", "objects.arrange", "stage.set", "edit.undo", "view.update"]);
+const SUPERVISOR_FIX_ACTIONS = Object.freeze(["character.setPose", "character.move", "character.update", "shot.frame", "shot.set", "shot.setRange", "object.update", "object.remove", "objects.arrange", "stage.set", "edit.undo", "view.update"]);
 const ITEM_STATUSES = ["done", "partial", "refused", "missing"];
 const SEVERITIES = ["blocker", "concern", "note"];
 const KINDS = ["coverage", "disclosure", "spatial", "framing", "continuity", "undo", "honesty"];
@@ -27,7 +27,7 @@ function withoutDataUrls(value) {
 }
 
 /** One receipt, verbatim but bounded: no image bytes, at most 8 delta rows and 12 warnings. */
-export function boundReceipt(receipt) {
+function boundReceipt(receipt) {
 	const bounded = withoutDataUrls(receipt);
 	if (!isObject(bounded)) return bounded;
 	if (Array.isArray(bounded.delta) && bounded.delta.length > SUPERVISOR_LIMITS.delta) {
@@ -46,7 +46,7 @@ const refusalOf = (code, message, tool) => REFUSAL_CODES.includes(code) ? [{ cod
 /** What a turn's frames say about it: whether it authored anything, the
  * refusals it met, its tool calls and its receipts (read-only results such as
  * inspect_studio are calls, not receipts). */
-export function analyseTurnFrames(frames = []) {
+function analyseTurnFrames(frames = []) {
 	const names = new Map();
 	const calls = [], receipts = [], refusals = [];
 	let authored = false;
@@ -193,7 +193,7 @@ export function validateFixes(issues, { index = [], schemas = [] } = {}) {
 	return { issues: kept, dropped };
 }
 
-export const verdictCounts = issues => Object.fromEntries(SEVERITIES.map(severity => [severity, issues.filter(issue => issue.severity === severity).length]));
+const verdictCounts = issues => Object.fromEntries(SEVERITIES.map(severity => [severity, issues.filter(issue => issue.severity === severity).length]));
 
 const redact = message => clip(String(message ?? "unknown failure").replace(/data:[^\s"']+/gi, "[image]").replace(/\b(?:sk-or-|sk-ant-|sk-|Bearer\s+|eyJ)[\w.\-+/=]+/gi, "[redacted]").replace(/\s+/g, " ").trim(), 200);
 
@@ -204,7 +204,7 @@ const redact = message => clip(String(message ?? "unknown failure").replace(/dat
  * view and one frame per shot the turn created. Every piece is optional; what
  * could not be read becomes a note instead of a failure.
  */
-export async function gatherSupervisorEvidence({ hub, workspaceHandle, admission, baseline, receipts, actionIndex = [] }) {
+async function gatherSupervisorEvidence({ hub, workspaceHandle, admission, baseline, receipts, actionIndex = [] }) {
 	const notes = [], images = [];
 	const command = (name, args, options) => options ? hub.command(name, args, workspaceHandle, options) : hub.command(name, args, workspaceHandle);
 	// What a fix may name: the turn's own action index, and the input schemas

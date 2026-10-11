@@ -38,7 +38,7 @@ export function schemaModelEntries(nodeSchemas, category) {
 	return Object.entries(models).map(([id, model]) => ({ ...model, id, name: model.name || id.replace(/-/g, " ") }));
 }
 
-export function schemaForModel(nodeSchemas, category, modelId) {
+function schemaForModel(nodeSchemas, category, modelId) {
 	const model = nodeSchemas?.categories?.[category]?.models?.[modelId];
 	const input = model?.input_schema || {};
 	return input?.schemas?.input_data || input;

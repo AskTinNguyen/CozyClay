@@ -6,7 +6,7 @@ import * as THREE from "three";
  * positions as {x,y,z}. Optional fields are written only when the key has
  * them, so a key without a stored `blend` stays one without it.
  */
-export function ikTrackKeyJson(key) {
+function ikTrackKeyJson(key) {
 	const quaternion = (q) => ({ x: q.x, y: q.y, z: q.z, w: q.w });
 	const vector = (p) => ({ x: p.x, y: p.y, z: p.z });
 	return {

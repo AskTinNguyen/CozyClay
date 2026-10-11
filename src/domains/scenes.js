@@ -60,7 +60,7 @@ import { createIkState } from "../ardy/ik.js";
 // the saved checkpoint, not an authored edit, and has its own non-history slice.
 // previsMode is project identity too: it is set only by a document boundary
 // (blank creation, starter/file open, session restore), never by an edit.
-export function createScenesDomain(appContext, initial, name, previsMode = DEFAULT_PREVIS_MODE) {
+function createScenesDomain(appContext, initial, name, previsMode = DEFAULT_PREVIS_MODE) {
 	const ordered = rows => rows.map((scene, order) => ({ ...scene, order }));
 	let native = createDocumentStore({ owned: { scenes: ordered(initial.scenes), project: { name, activeSceneId: initial.activeSceneId, previsMode: normalizePrevisMode(previsMode) } } });
 	const listeners = new Set();

@@ -30,7 +30,7 @@ import * as THREE from "three";
  * these cannot split segmentation. The COCO nose keypoint is the one the
  * estimator keys facing on; the wedge centres the face below the eyes.
  */
-export const EYE_SEPARATION = 6;
+const EYE_SEPARATION = 6;
 
 export function facingMarkSpecs() {
 	const eye = (x) => ({

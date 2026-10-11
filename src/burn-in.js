@@ -51,7 +51,7 @@ export function compositeStamp(pixels, width, height, stamp, { marginX = 0, marg
 }
 
 /** Rasterize one stamp line into RGBA bytes (browser-only: Canvas 2D). */
-export function renderStampBitmap(text, { fontPx = 18, padX = 10, padY = 6, maxWidth = Infinity } = {}) {
+function renderStampBitmap(text, { fontPx = 18, padX = 10, padY = 6, maxWidth = Infinity } = {}) {
 	const probe = new OffscreenCanvas(1, 1).getContext("2d");
 	probe.font = `600 ${fontPx}px ui-monospace, Menlo, monospace`;
 	const textW = Math.ceil(probe.measureText(text).width);

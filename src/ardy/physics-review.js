@@ -41,7 +41,7 @@ export function physicsKeyStamp(keys) {
 /** Measured skin, shared exact transforms; never a cached bind-pose sole. */
 export function createSupportSampler(rig) { return createSurfaceSampler(rig, SUPPORT_SITES); }
 
-export function sitePoint(row, site) {
+function sitePoint(row, site) {
 	return site.kind === "foot" ? (row.toes?.[site.id] ?? row.support[site.id]?.position) : row.support[site.id]?.position;
 }
 

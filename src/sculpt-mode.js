@@ -125,7 +125,7 @@ export function assetDataUrl(asset) {
 }
 
 /** Sculpt remembers its own model and effort, apart from the Agent panel's chat model. */
-export const SCULPT_MODEL_KEY = "cozyclay.sculpt.model";
+const SCULPT_MODEL_KEY = "cozyclay.sculpt.model";
 
 export function readSculptModel(storage = globalThis.localStorage) {
 	try {

@@ -319,7 +319,7 @@ export function measureContactRadii(rig) {
  * Bone points and vertices are read in the same pose, for the same reason
  * measureContactRadii does: this is cached forever off whichever frame called
  * first, so it must not be able to depend on that frame. */
-export function measureContactHeights(rig) {
+function measureContactHeights(rig) {
 	if (!rig) return {};
 	const cached = contactHeightCache.get(rig);
 	if (cached) return cached;

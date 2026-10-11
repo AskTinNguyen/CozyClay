@@ -20,7 +20,7 @@
 const IDENTITY = ["workspaceId", "documentEpoch", "sceneId", "sceneEpoch"];
 /** Tools whose targets are entities with tokens. Shot/stage patches, framing,
  * actions, undo and view changes carry no per-entity fingerprint: never retried. */
-export const REBASE_TOOLS = new Set(["arrange_objects", "arrange_characters", "patch_elements"]);
+const REBASE_TOOLS = new Set(["arrange_objects", "arrange_characters", "patch_elements"]);
 const DISPLAY_SKIP = new Set(["token", "detailsOmitted"]);
 const MAX_LINES = 8, MAX_FIELDS = 6, MESSAGE_CAP = 900;
 
@@ -34,11 +34,11 @@ const show = value => {
   const text = JSON.stringify(n);
   return text === undefined ? "absent" : text.length > 48 ? `${text.slice(0, 47)}…` : text;
 };
-export const sameHost = (a, b) => Boolean(a && b) && IDENTITY.every(key => a[key] === b[key]);
+const sameHost = (a, b) => Boolean(a && b) && IDENTITY.every(key => a[key] === b[key]);
 const nameKey = value => typeof value === "string" ? value.normalize("NFC").trim().toLowerCase() : null;
 
 /** The agent's record of what it last saw per entity id. */
-export function createSeen(baseline) {
+function createSeen(baseline) {
   const rows = new Map();   // id -> detailed row carrying a token
   const known = new Set();  // every id the agent has been shown, detailed or indexed
   const index = new Map();  // id -> last compact row (name/position) the agent saw
@@ -85,7 +85,7 @@ export function createSeen(baseline) {
 
 /** Every id-shaped string an argument tree mentions. Over-approximate on purpose:
  * a string that merely equals an entity id makes that entity a target. */
-export function referencedStrings(value, out = new Set()) {
+function referencedStrings(value, out = new Set()) {
   if (typeof value === "string") out.add(value);
   else if (Array.isArray(value)) for (const item of value) referencedStrings(item, out);
   else if (value && typeof value === "object") for (const item of Object.values(value)) referencedStrings(item, out);
@@ -109,7 +109,7 @@ function diffRow(base, current) {
 const rowsById = rows => new Map((Array.isArray(rows) ? rows : []).filter(row => typeof row?.id === "string").map(row => [row.id, row]));
 
 /** Compare the agent's baseline with the fresh authoritative context. */
-export function surveyChanges(seen, fresh, extraRows = new Map()) {
+function surveyChanges(seen, fresh, extraRows = new Map()) {
   const detailed = rowsById(fresh?.entities);
   for (const [id, row] of extraRows) detailed.set(id, row);
   const indexed = rowsById(fresh?.entityIndex);
@@ -145,7 +145,7 @@ const describeChanges = (survey, only = null) => {
  *     name the agent last saw (a token the agent never saw counts as changed);
  *  5. for create ops, no entity the agent has not seen carries the same name.
  */
-export async function decideRebase({ name, args, seen, fresh, host, refusedRevision, fetchRows }) {
+async function decideRebase({ name, args, seen, fresh, host, refusedRevision, fetchRows }) {
   const survey = () => surveyChanges(seen, fresh, extra);
   const extra = new Map();
   const result = (retry, reason, targets = [], only = null) => ({ retry, reason, targets, survey: survey(), lines: describeChanges(survey(), only) });
@@ -192,14 +192,14 @@ export async function decideRebase({ name, args, seen, fresh, host, refusedRevis
 const trim = text => text.length > MESSAGE_CAP ? `${text.slice(0, MESSAGE_CAP - 1)}…` : text;
 
 /** The teaching text appended to a STALE_SCENE the agent must handle itself. */
-export function staleTeaching({ original, verdict, refusedRevision, freshRevision, name }) {
+function staleTeaching({ original, verdict, refusedRevision, freshRevision, name }) {
   const detail = verdict.lines.length ? ` What changed since you last looked: ${verdict.lines.join(" | ")}.` : "";
   const why = verdict.reason === "no fresh context" ? "" : ` Not retried automatically: ${verdict.reason}.`;
   return trim(`${original}${why}${detail} Your admission is already refreshed to revision ${freshRevision}${refusedRevision !== undefined ? ` (was ${refusedRevision})` : ""}: adapt ${name} to the state above and resubmit it; inspect again only for ids not listed.`);
 }
 
 /** The teaching text for a TARGET_BUSY that outlived the wait. */
-export function busyTeaching({ original, waitedMs, ids }) {
+function busyTeaching({ original, waitedMs, ids }) {
   const gesture = /gesture/i.test(original);
   const target = ids.length ? ` (it targets ${ids.slice(0, 6).join(", ")})` : "";
   return trim(gesture
@@ -208,7 +208,7 @@ export function busyTeaching({ original, waitedMs, ids }) {
 }
 
 /** Mark a result that only succeeded because the sidecar re-sent it. */
-export function annotateRebased(result, info) {
+function annotateRebased(result, info) {
   const message = trim(info.reason === "target_busy"
     ? `Editor was mid-gesture; waited ${info.waitedMs} ms and re-sent the command once.`
     : `Scene revision moved ${info.fromRevision} -> ${info.toRevision} by edits that left the targets unchanged; command re-sent once.`).slice(0, 120);

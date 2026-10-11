@@ -341,4 +341,3 @@ export function RangePinPanel({
 	);
 }
 
-export { PARTS as RANGE_PIN_PARTS, partFor as rangePinPartFor, freshDraft as createRangePinDraft };

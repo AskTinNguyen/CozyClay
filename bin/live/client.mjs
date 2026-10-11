@@ -11,7 +11,7 @@ import { randomUUID } from "node:crypto";
 
 import { readLiveEndpoint } from "../live-endpoint.mjs";
 
-export const DEFAULT_LIVE_PORT = 5184;
+const DEFAULT_LIVE_PORT = 5184;
 /** The hub caps one command at 300 s; give up a little past that, so a hub
  * that answers nothing at all can never hang a terminal forever. */
 const REQUEST_CEILING_MS = 330_000;

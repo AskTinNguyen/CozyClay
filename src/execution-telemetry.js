@@ -31,7 +31,7 @@ function readNow(now) {
 	}
 }
 
-export function executionFailureCode(error, channel, fallbackCode = "unknown") {
+function executionFailureCode(error, channel, fallbackCode = "unknown") {
 	const allowed = channel === "agent" ? AGENT_FAILURE_CODES : WORKFLOW_FAILURE_CODES;
 	try {
 		if (error?.name === "AbortError") return "aborted";

@@ -30,7 +30,7 @@ import { AGENT_TOOL_CATEGORIES, EXECUTION_TELEMETRY_VALUES } from "../execution-
 import { STUDIO_VARIANTS, validateReceipt } from "../studio-agent-protocol.js";
 import { requestAgentImage, sidecarRequest, sidecarUrl } from "../agent-image-client.js";
 
-export const AGENT_PANEL_WIDTH_KEY = "cozyclay.workflow.agentPanel.width";
+const AGENT_PANEL_WIDTH_KEY = "cozyclay.workflow.agentPanel.width";
 export const AGENT_PANEL_WIDTH_DEFAULT = 360;
 export const AGENT_PANEL_WIDTH_MIN = 300;
 export const AGENT_PANEL_WIDTH_MAX = 560;
@@ -127,7 +127,7 @@ export const SUGGESTION_CHIPS = [
 /** Previs asks, in the Studio's own words: short enough to read at a glance in
  * the Inspector column, and every one of them is something the Studio families
  * can actually do. */
-export const STUDIO_SUGGESTION_CHIPS = [
+const STUDIO_SUGGESTION_CHIPS = [
 	ko("Block a two-shot", "\uD22C\uC0F7 \uBE14\uB85C\uD0B9"),
 	ko("Frame the selected character", "\uC120\uD0DD\uD55C \uCE90\uB9AD\uD130 \uAD6C\uB3C4 \uC7A1\uAE30"),
 	ko("Light the set warmer", "\uC138\uD2B8 \uC870\uBA85 \uB354 \uB530\uB73B\uD558\uAC8C"),
@@ -268,7 +268,7 @@ export function storeModel(key, storage = globalThis.localStorage) {
 /** The supervisor switch (#728): on unless the author turned it off. It rides
  * on every Studio turn as `supervisor: false` so the sidecar skips the review
  * for that turn; the sidecar's own COZYCLAY_SUPERVISOR=off still wins. */
-export const AGENT_SUPERVISOR_KEY = "cozyclay.agent.supervisor";
+const AGENT_SUPERVISOR_KEY = "cozyclay.agent.supervisor";
 
 export function readStoredSupervisor(storage = globalThis.localStorage) {
 	try {
@@ -628,7 +628,7 @@ const RESUME_ATTEMPTS = 3;
  * — it only needs the variable's NAME, so an env-backed provider can say which
  * variable is already holding one instead of offering an input that would be
  * ignored. */
-export const PROVIDER_ENV_VARS = {
+const PROVIDER_ENV_VARS = {
 	anthropic: ["ANTHROPIC_API_KEY"],
 	openai: ["OPENAI_API_KEY"],
 	google: ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
@@ -950,7 +950,7 @@ const MOCK_PROVIDER_MODELS = {
 const MOCK_LIVE_ONLY_CODEX_MODEL = { id: "gpt-6-live-preview", label: "gpt-6 live preview", efforts: ["none", "low", "medium", "high"], defaultEffort: "high" };
 /** The shortest key the scripted sidecar will store, so QA can drive the
  * refusal path (PUT → 400) without a real provider. */
-export const MOCK_PROVIDER_KEY_MIN = 8;
+const MOCK_PROVIDER_KEY_MIN = 8;
 /** How many times the scripted sidecar answered /oauth/status. The panel reads
  * the session once per credential write and never on a timer (#379), and this
  * is how browser QA proves it without reaching inside the component. */
@@ -1167,7 +1167,7 @@ export function createAgentTransport(options = {}) {
  * already committed belongs to its receipt, not here; anything short of an
  * explicit not-applied answer stays unknown, because the alternative is telling
  * an author the scene is clean when nobody checked. */
-export function stopOutcome(result) {
+function stopOutcome(result) {
 	const outcome = result?.outcome;
 	if (outcome?.status === "already_applied") return null;
 	if (outcome && outcome.mutated === false) return { status: "not_applied", code: outcome.code ?? "CANCELLED", mutated: false };

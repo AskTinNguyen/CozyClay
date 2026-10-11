@@ -8,10 +8,10 @@ import { writeSecureJson } from "./agent/secure-file.mjs";
 import { readKeys } from "./agent/provider-keys.mjs";
 import { PROVIDERS } from "./agent/providers.mjs";
 
-export const AUTHORIZE_ENDPOINT = "https://auth.openai.com/oauth/authorize";
-export const TOKEN_ENDPOINT = "https://auth.openai.com/oauth/token";
-export const CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
-export const SCOPE = "openid profile email offline_access";
+const AUTHORIZE_ENDPOINT = "https://auth.openai.com/oauth/authorize";
+const TOKEN_ENDPOINT = "https://auth.openai.com/oauth/token";
+const CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
+const SCOPE = "openid profile email offline_access";
 const DEFAULT_FILE = join(process.env.XDG_CONFIG_HOME || join(homedir(), ".config"), "cozyclay", "codex-auth.json");
 const tokenFile = process.env.COZYCLAY_CODEX_AUTH_FILE || DEFAULT_FILE;
 let tokens = null;

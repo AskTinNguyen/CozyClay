@@ -20,7 +20,7 @@ const json = (res, status, value) => {
 	res.end(JSON.stringify(value));
 };
 
-export function allowAgentOrigin(req, port) {
+function allowAgentOrigin(req, port) {
 	return [`http://127.0.0.1:${port}`, `http://${"local" + "host"}:${port}`].includes(req.headers.origin)
 		|| (req.headers.origin === undefined && req.method === "GET"
 			&& [`127.0.0.1:${port}`, `localhost:${port}`].includes(req.headers.host));

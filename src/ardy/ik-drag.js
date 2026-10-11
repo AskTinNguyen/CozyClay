@@ -44,7 +44,7 @@ export function chainsChangedBy(chains, write) {
  * alone (no correction layer), read chain b0..b2 quaternions and FK joint
  * quaternion + position, then put every node back.
  */
-export function captureRawBase(rig, chains, fkJoints, ids, applyRaw, frame = null) {
+function captureRawBase(rig, chains, fkJoints, ids, applyRaw, frame = null) {
 	const saved = [];
 	rig.traverse((node) => saved.push([node, node.position.clone(), node.quaternion.clone(), node.scale.clone()]));
 	const baseQuats = new Map();
@@ -104,7 +104,7 @@ export function bakeIkDragKey(chains, fkJoints, frame, ids, applyRaw = null) {
 
 /** Apply one drag's correction delta to a raw pose. The source key is captured
  * at the drag frame, while `base` belongs to a different raw frame. */
-export function applyIkDragCorrection(chains, fkJoints, sourceEntry, base) {
+function applyIkDragCorrection(chains, fkJoints, sourceEntry, base) {
 	if (!sourceEntry || !base) return;
 	for (const [id, key] of sourceEntry) {
 		const chain = chains?.get(id);

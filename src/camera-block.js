@@ -5,7 +5,7 @@ import { createTiming, timingIsFlat } from "./speed-envelope.js";
 
 export const CAMERA_MODES = Object.freeze(["keys", "follow", "rail"]);
 
-export const CAMERA_FOLLOW_DEFAULTS = Object.freeze({
+const CAMERA_FOLLOW_DEFAULTS = Object.freeze({
 	distance: 3,
 	height: 1.6,
 	response: 0.7,

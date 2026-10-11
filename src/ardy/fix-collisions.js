@@ -1075,11 +1075,11 @@ export const MIN_ALIGN = 0.35;
  * biases only choose the side. Weighted like HOME_BIAS, because it is the same
  * kind of hint and answers the same question — where does this limb belong.
  */
-export const CONTINUITY_BIAS = 0.6;
+const CONTINUITY_BIAS = 0.6;
 
 /** The weight the STEP CAP's retry uses when the plain one produced a jump: the
  * previous frame's direction outvotes the rest pose rather than tying with it. */
-export const CONTINUITY_BIAS_STRONG = 1.6;
+const CONTINUITY_BIAS_STRONG = 1.6;
 
 /**
  * THE STEP CAP, as a multiple of the clip's own worst adjacent step for the
@@ -1089,18 +1089,18 @@ export const CONTINUITY_BIAS_STRONG = 1.6;
  * to lead or lag the clip's own motion by a good margin while a 20× jump — the
  * flail QA measured — cannot fit inside it.
  */
-export const STEP_CAP_FACTOR = 2.5;
+const STEP_CAP_FACTOR = 2.5;
 
 /** Ceiling on that cap, in metres. A clip whose hand already crosses the frame
  * in one step must not thereby license a half-metre correction jump; ~24 frames
  * a second, so 0.25 m is 6 m/s of hand — past any human hand speed a viewer
  * would read as continuous. */
-export const STEP_CAP_ABS = 0.25;
+const STEP_CAP_ABS = 0.25;
 
 /** Floor on that cap, in metres. A perfectly static clip has a zero worst step,
  * and a cap of zero would refuse every frame that follows a corrected one. 5 mm
  * is the millimetre noise of the proxies themselves. */
-export const STEP_CAP_FLOOR = 0.005;
+const STEP_CAP_FLOOR = 0.005;
 
 /** The bone a capsule's push actually drives: mid joint (elbow/knee) for an
  * upper segment, effector (wrist/ankle) for a lower segment or an end sphere. */

@@ -221,14 +221,14 @@ export function frameAirborne(rig, planted, lift = AIRBORNE_LIFT) {
  * The final run gate below is stricter still: an ankle that wanders more than
  * three centimetres was walking, not planted, and is never snapped backward. */
 export const GROUND_CONTACT_LIFT = 0.06;
-export const GROUND_CONTACT_VERTICAL_SPEED = 0.6;
+const GROUND_CONTACT_VERTICAL_SPEED = 0.6;
 export const GROUND_CONTACT_HORIZONTAL_SPEED = 0.12;
-export const GROUND_CONTACT_MIN_SECONDS = 0.10;
+const GROUND_CONTACT_MIN_SECONDS = 0.10;
 export const GROUND_LOCK_MAX_PULL = 0.03;
 export const GROUND_LOCK_EPSILON = 0.005;
 export const GROUND_LOCK_REACH_LIFT = 0.005;
-export const GROUND_FLOOR_MAX_LIFT = 0.15;
-export const GROUND_FLOOR_EPSILON = 0.005;
+const GROUND_FLOOR_MAX_LIFT = 0.15;
+const GROUND_FLOOR_EPSILON = 0.005;
 
 const FOOT_SIDES = [
 	{ side: "left", chainId: "leftFoot", ankle: "mixamorigLeftFoot", toe: "mixamorigLeftToeBase", height: "LeftFoot" },
@@ -628,7 +628,7 @@ export function fitBallistic(samples, fps, g = GRAVITY, { fitFrom = 0, fitTo = n
  * `residual` is the RMS distance of the samples from that curve — how
  * un-ballistic the arc was to begin with.
  */
-export function fitBallisticArc(samples, fps, g = GRAVITY) {
+function fitBallisticArc(samples, fps, g = GRAVITY) {
 	const list = samples ?? [];
 	const rate = Number.isFinite(fps) && fps > 0 ? fps : 30;
 	const times = list.map((_, index) => index / rate);
@@ -666,7 +666,7 @@ export const MAX_CORRECTION = 0.5;
 /** Worst RMS a fit may have and still be believed. A real flight phase fits a
  * parabola to a couple of centimetres; a mis-detected span (a whole walk
  * misread as one jump) fits to a metre or more. */
-export const MAX_FIT_RESIDUAL = 0.25;
+const MAX_FIT_RESIDUAL = 0.25;
 
 /** Clearance kept between the lowest foot marker and the floor when a
  * downward correction is applied. */

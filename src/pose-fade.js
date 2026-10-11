@@ -22,7 +22,7 @@ function materialsOf(mesh) {
 
 // Image captures in Pose mode want the set as authored: the working fade is lifted while this is set.
 let fadeSuspended = false;
-export function suspendPoseFade(suspended) {
+function suspendPoseFade(suspended) {
 	fadeSuspended = suspended;
 }
 

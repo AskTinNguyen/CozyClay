@@ -1,7 +1,7 @@
 import { SCENES_STORAGE_KEY, readSceneDocument } from "../scenes.js";
 
-export const MOTION_INPUT_NODE_TYPE = "motion-input";
-export const MOTION_INPUT_NODE_VERSION = 1;
+const MOTION_INPUT_NODE_TYPE = "motion-input";
+const MOTION_INPUT_NODE_VERSION = 1;
 
 function text(value, fallback = "") {
 	return typeof value === "string" ? value : fallback;

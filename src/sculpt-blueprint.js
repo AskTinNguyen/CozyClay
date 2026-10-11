@@ -16,7 +16,7 @@ export const BLUEPRINT_LAYOUT = Object.freeze([
 /** Landscape, so each quarter is wide enough for a wide subject. */
 export const BLUEPRINT_SIZE = "1536x1024";
 
-export const BLUEPRINT_POSES = Object.freeze(["keep", "neutral"]);
+const BLUEPRINT_POSES = Object.freeze(["keep", "neutral"]);
 
 const POSE_RULES = {
 	keep: "Pose: exactly the pose in the reference, the same in all four views.",

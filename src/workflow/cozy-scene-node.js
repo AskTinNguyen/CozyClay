@@ -8,14 +8,14 @@
  */
 
 export const COZY_SCENE_NODE_TYPE = "cozyclay-scene";
-export const COZY_SCENE_NODE_VERSION = 1;
+const COZY_SCENE_NODE_VERSION = 1;
 
 export const COZY_SCENE_INPUTS = Object.freeze([
 	{ id: "asset", label: "Asset", kind: "asset" },
 	{ id: "motion", label: "Motion", kind: "motion", legacy: true },
 ]);
 
-export const COZY_SCENE_CHARACTER_HANDLE_PREFIX = "character:";
+const COZY_SCENE_CHARACTER_HANDLE_PREFIX = "character:";
 
 /** Return the stable Scene target handle for a cast member. */
 export function sceneCharacterHandle(characterId) {

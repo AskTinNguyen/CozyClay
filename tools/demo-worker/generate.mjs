@@ -16,7 +16,7 @@ import { createLocalRunner } from "../ardy/runners/local.mjs";
 import { killGroup, track } from "../ardy/runners/proc.mjs";
 import { POLICY } from "../../workers/api/src/policy.js";
 
-export const JOB_HARD_TIMEOUT_MS = POLICY.JOB_HARD_TIMEOUT_MS;
+const JOB_HARD_TIMEOUT_MS = POLICY.JOB_HARD_TIMEOUT_MS;
 const DEFAULT_TIMEOUT_ENV = ["CC_JOB_HARD_TIMEOUT_MS", "JOB_HARD_TIMEOUT_MS"];
 let sharedRunner = null;
 
@@ -122,7 +122,7 @@ function waitForChild(child) {
  * installing ARDY. Production callers leave it unset and get
  * createLocalRunner().
  */
-export async function generate(prompt, durationS, options = {}) {
+async function generate(prompt, durationS, options = {}) {
 	// Accept both generate(prompt, duration, options) and generate({prompt,
 	// duration}, options). The latter is convenient for queue adapters and does
 	// not change the public positional contract.
@@ -298,6 +298,4 @@ export function createGenerator({ runner = null, workerReady = localWorkerReady,
 	};
 }
 
-export const generateJob = generate;
-export default generate;
 

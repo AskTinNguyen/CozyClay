@@ -183,4 +183,4 @@ export const assetRecord = cache.assetRecord;
 export const rememberAsset = cache.rememberAsset;
 export const evictAssetTexture = cache.evictAssetTexture;
 export const subscribeToAssetTexture = cache.subscribeToAssetTexture;
-export const clearAssetTextures = cache.clearAssetTextures;
+const clearAssetTextures = cache.clearAssetTextures;

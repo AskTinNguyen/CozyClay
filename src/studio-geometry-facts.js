@@ -8,7 +8,7 @@ import { shotAtFrame } from './cuts.js';
 
 export const GEOMETRY_FACTS_LIMITS = Object.freeze({ shots: 8, subjects: 24, pairs: 24, occluders: 8 });
 /** Closer to the action line than this (m) is "on-axis", neither side. */
-export const ON_AXIS_M = 0.05;
+const ON_AXIS_M = 0.05;
 const EPS = 1e-9;
 const round = v => Math.round(v * 1000) / 1000 + 0;
 const point = p => ({ x: round(p.x), y: round(p.y ?? 0), z: round(p.z) });
@@ -80,7 +80,7 @@ export function shotCamera(shot, state) {
 /** The 180-degree rule over shots read against the same pair: false when any
  * pair has cameras on both sides, true when some pair has two sided shots and
  * none crosses, null when no pair has two sided shots to compare. */
-export function axisConsistency(shots) {
+function axisConsistency(shots) {
   const byPair = new Map();
   for (const shot of shots) {
     if (shot.cameraSide !== 'left' && shot.cameraSide !== 'right') continue;

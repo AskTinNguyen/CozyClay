@@ -8,7 +8,7 @@
 
 import { bodyBytes, randomNonce, signedHeaders } from "./sign-core.mjs";
 
-export class DemoApiError extends Error {
+class DemoApiError extends Error {
 	constructor(status, code, body = null) {
 		super(`demo API ${status}${code ? ` ${code}` : ""}`);
 		this.name = "DemoApiError";
@@ -77,7 +77,7 @@ function asJob(body) {
  * `fetchImpl`, `now`, and `nonceFactory` are injectable to make protocol tests
  * deterministic without changing production behavior.
  */
-export class DemoApiClient {
+class DemoApiClient {
 	constructor({
 		baseUrl = process.env.CC_DEMO_API_BASE,
 		base,
@@ -198,13 +198,9 @@ export class DemoApiClient {
 	}
 }
 
-export const ApiClient = DemoApiClient;
-
 export function createApiClient(options = {}) {
 	return new DemoApiClient(options);
 }
-
-export const createDemoApiClient = createApiClient;
 
 let defaultClient = null;
 function envClient() {
@@ -212,28 +208,26 @@ function envClient() {
 	return defaultClient;
 }
 
-export function next(options) {
+function next(options) {
 	return envClient().next(options);
 }
 
-export function complete(jobId, leaseToken, npzBuffer, options) {
+function complete(jobId, leaseToken, npzBuffer, options) {
 	return envClient().complete(jobId, leaseToken, npzBuffer, options);
 }
 
-export function fail(jobId, leaseToken, reason, options) {
+function fail(jobId, leaseToken, reason, options) {
 	return envClient().fail(jobId, leaseToken, reason, options);
 }
 
-export function heartbeat(jobId, leaseToken, options) {
+function heartbeat(jobId, leaseToken, options) {
 	return envClient().heartbeat(jobId, leaseToken, options);
 }
 
-export function signRequest(secretOrOptions, maybeOptions) {
+function signRequest(secretOrOptions, maybeOptions) {
 	if (typeof secretOrOptions === "string") {
 		return signedHeaders({ ...(maybeOptions || {}), secret: secretOrOptions });
 	}
 	return signedHeaders(secretOrOptions);
 }
-
-export default createApiClient;
 

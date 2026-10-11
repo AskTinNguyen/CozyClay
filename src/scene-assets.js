@@ -29,9 +29,9 @@ export const MESH_ID_PREFIX = "mesh-";
  * pictures, and short enough to read in a scene file. */
 const ASSET_ID_HEX = 32;
 
-export const ASSET_DB_NAME = "cozyclay.assets";
-export const ASSET_DB_VERSION = 1;
-export const ASSET_STORE_NAME = "images";
+const ASSET_DB_NAME = "cozyclay.assets";
+const ASSET_DB_VERSION = 1;
+const ASSET_STORE_NAME = "images";
 
 /** What an import will accept. SVG is excluded on purpose: it is a document
  * that can carry script, and a set piece is not worth that. */

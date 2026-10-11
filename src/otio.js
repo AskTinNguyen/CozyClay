@@ -7,8 +7,8 @@ import { TIMELINE_FRAME_FPS } from "./scenes.js";
 import { usedSensorHeightMm } from "./shot.js";
 import { shotHold } from "./shot-authoring.js";
 
-export const OTIO_TIMELINE_FPS = TIMELINE_FRAME_FPS;
-export const OTIO_START_TIMECODE = "00:00:00:00";
+const OTIO_TIMELINE_FPS = TIMELINE_FRAME_FPS;
+const OTIO_START_TIMECODE = "00:00:00:00";
 
 const finiteOr = (value, fallback = 0) => Number.isFinite(value) ? value : fallback;
 
