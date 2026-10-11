@@ -85,13 +85,53 @@ const sheet = "data:image/png;base64,BBBB";
 	assert.ok(tag(html, "sculpt-iou-target"), "target marker renders");
 	assert.match(html, /data-testid="sculpt-elapsed">1:14</);
 	assert.match(html, /Scoring 4 candidates/);
-	assert.match(tag(html, "sculpt-sheet-toggle"), /aria-pressed="false"/, "sheet toggle shows when a sheet exists");
+	assert.match(tag(html, "sculpt-sheet-toggle"), /aria-pressed="true"/, "the sheet shows, open, as soon as one exists");
+	assert.ok(tag(html, "sculpt-sheet"), "the open sheet renders the image");
 	assert.match(tag(html, "sculpt-place"), /disabled/, "no placing while running");
 	assert.match(tag(html, "sculpt-reference-replace"), /disabled/, "reference is locked while running");
 	console.log("PASS sculpt panel: running (stepper, round, IoU bar + target, Cancel)");
 }
 
-/* ---------------------------------------------------------------- done --- */
+/* ---------------------------------------------------- live narration --- */
+{
+	const since = Date.now() - 42_000;
+	const run = {
+		...baseRun, stage: "refine", round: 2, iou: 0.742, elapsedMs: 95_000, message: "streamed agent text",
+		waiting: { what: "refine", label: "Agent is weighing fixes", since, expectMs: 35_000 },
+		history: [{ round: 1, iou: 0.7 }, { round: 1, iou: 0.742 }],
+		candidates: [{ label: "limb-spread", iou: 0.77, delta: 0.028 }, { label: "taller-body", iou: 0.75, delta: 0.008 }, { label: "bad", iou: null, delta: null, refused: true }],
+		activity: [{ id: 1, atMs: 1000, kind: "step", text: "Measuring the reference outline" }, { id: 2, atMs: 61000, kind: "warn", text: "Recipe refused: parts[ear].roundness. The agent is fixing it." }, { id: 3, atMs: 95000, kind: "score", text: "Scored IoU 0.742 (+0.042)" }],
+		outline: { widthToHeight: 0.93, rows: [{ y: 0.1, spans: [[-0.2, -0.05], [0.1, 0.25]] }], box: { left: 0.05, top: 0.02, width: 0.9, height: 0.96, aspect: 1.07 } },
+	};
+	const html = render({ reference, run });
+	const now = tag(html, "sculpt-now");
+	assert.match(now, /data-what="refine"/);
+	assert.doesNotMatch(now, /data-over/, "42 s against a usual 35 s is still within 1.5x");
+	assert.match(html, /Agent is weighing fixes/);
+	assert.match(html, /data-testid="sculpt-now-time">4[12]s</, "the wait counts from waiting.since");
+	assert.match(html, /usually ~35s/);
+	const slow = render({ reference, run: { ...run, waiting: { ...run.waiting, since: Date.now() - 90_000 } } });
+	assert.match(tag(slow, "sculpt-now"), /data-over="true"/);
+	assert.match(slow, /taking longer than usual/);
+	assert.match(html, /aria-label="IoU by round: 0\.700, 0\.742"/);
+	assert.match(html, /data-testid="sculpt-delta" data-sign="up">\+0\.042</);
+	const race = [...html.matchAll(/<li class="sculpt-race-row"([^>]*)>/g)].map((m) => m[1]);
+	assert.equal(race.length, 3);
+	assert.match(race[0], /data-leader="true"/, "the best candidate leads");
+	assert.match(race[2], /data-refused="true"/);
+	assert.match(html, /\+0\.028/);
+	assert.equal([...html.matchAll(/class="sculpt-log-row" data-kind="(\w+)"/g)].map((m) => m[1]).join(","), "step,warn,score");
+	assert.match(html, /<span class="sculpt-log-time">1:35<\/span>/);
+	assert.doesNotMatch(html, /streamed agent text/, "the log replaces the raw message line");
+	assert.equal([...html.matchAll(/class="sculpt-scan-span"/g)].length, 2, "each measured span is drawn over the reference");
+	assert.equal(tag(html, "sculpt-scanline"), null, "no scan line once the outline is in");
+	const measuring = render({ reference, run: { ...baseRun, stage: "measure", waiting: { what: "measure", label: "Measuring the reference outline", since: Date.now(), expectMs: 1500 } } });
+	assert.ok(tag(measuring, "sculpt-scanline"), "a scan line sweeps the reference while measuring");
+	const done = render({ reference, run: { ...run, stage: "done", waiting: null } });
+	assert.equal(tag(done, "sculpt-now"), null, "nothing is awaited once done");
+	console.log("PASS sculpt panel: live narration (wait line, trail, race, log, scan)");
+}
+
 {
 	const html = render({ reference, sculptName: "Hero sculpt", run: { ...baseRun, stage: "done", round: 1, iou: 0.945, elapsedMs: 41_000, sheetDataUrl: sheet } });
 	assert.ok(tag(html, "sculpt-start"), "Start returns when done");

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Foldout from "./Foldout.jsx";
 import { ko, isKo } from "../locale.js";
 import "./sculpt.css";
@@ -29,10 +29,133 @@ function formatIou(iou) {
 	return Number.isFinite(iou) ? iou.toFixed(3) : "—";
 }
 
+
+function formatClock(ms) {
+	const seconds = Math.max(0, Math.floor((ms || 0) / 1000));
+	return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
+/** Re-render every half second while something is awaited, so the wait counts up live. */
+function useTicking(active) {
+	const [, setTick] = useState(0);
+	useEffect(() => {
+		if (!active) return undefined;
+		const timer = setInterval(() => setTick((value) => value + 1), 500);
+		return () => clearInterval(timer);
+	}, [active]);
+}
+
+/** What the run is waiting on right now, how long it has waited and how long that usually takes. */
+function NowLine({ waiting, now = Date.now() }) {
+	if (!waiting) return null;
+	const waited = Math.max(0, now - (waiting.since ?? now));
+	const expect = Number.isFinite(waiting.expectMs) && waiting.expectMs > 0 ? waiting.expectMs : null;
+	const over = expect !== null && waited > expect * 1.5;
+	return (
+		<div className="sculpt-now" data-testid="sculpt-now" data-what={waiting.what} data-over={over ? "true" : undefined} role="status" aria-live="polite">
+			<span className="sculpt-clay" aria-hidden="true" />
+			<span className="sculpt-now-label">{waiting.label}</span>
+			<span className="sculpt-now-time" data-testid="sculpt-now-time">{Math.floor(waited / 1000)}s</span>
+			{expect !== null && (
+				<span className="sculpt-now-expect">
+					{over ? ko("taking longer than usual", "평소보다 오래 걸려요") : isKo ? `보통 ~${Math.round(expect / 1000)}초` : `usually ~${Math.round(expect / 1000)}s`}
+				</span>
+			)}
+			{expect !== null && <span className="sculpt-now-bar" aria-hidden="true"><span style={{ "--sculpt-wait": Math.min(1, waited / expect) }} /></span>}
+		</div>
+	);
+}
+
+/** IoU after each scored round, against the target line; the newest point pulses. */
+function IouTrail({ history, target }) {
+	if (!history?.length) return null;
+	const values = history.map((row) => row.iou);
+	const low = Math.max(0, Math.min(...values, target ?? 1) - 0.05);
+	const y = (iou) => 30 - ((iou - low) / Math.max(0.01, 1 - low)) * 26;
+	const x = (index) => (history.length === 1 ? 50 : 6 + (index / (history.length - 1)) * 88);
+	const last = history.at(-1).iou;
+	const delta = history.length > 1 ? last - history.at(-2).iou : null;
+	return (
+		<div className="sculpt-trail" data-testid="sculpt-trail">
+			<svg viewBox="0 0 100 34" preserveAspectRatio="none" aria-label={isKo ? `라운드별 IoU: ${values.map((v) => v.toFixed(3)).join(", ")}` : `IoU by round: ${values.map((v) => v.toFixed(3)).join(", ")}`} role="img">
+				{target !== null && <line className="sculpt-trail-target" x1="0" x2="100" y1={y(target)} y2={y(target)} />}
+				{history.length > 1 && <polyline className="sculpt-trail-line" points={history.map((row, index) => `${x(index)},${y(row.iou)}`).join(" ")} />}
+				{history.map((row, index) => <circle key={index} className="sculpt-trail-dot" data-last={index === history.length - 1 ? "true" : undefined} cx={x(index)} cy={y(row.iou)} r="2.2" />)}
+			</svg>
+			{delta !== null && <span className="sculpt-delta" key={history.length} data-testid="sculpt-delta" data-sign={delta >= 0 ? "up" : "down"}>{delta >= 0 ? "+" : ""}{delta.toFixed(3)}</span>}
+		</div>
+	);
+}
+
+/** The latest candidate ranking as a race: each fix's IoU as a bar that grows in, the leader marked. */
+function CandidateRace({ candidates }) {
+	if (!candidates?.length) return null;
+	const scored = candidates.filter((row) => Number.isFinite(row.iou));
+	const lo = scored.length ? Math.min(...scored.map((row) => row.iou)) - 0.02 : 0;
+	const hi = scored.length ? Math.max(...scored.map((row) => row.iou)) + 0.01 : 1;
+	const leader = candidates.find((row) => !row.refused && Number.isFinite(row.iou));
+	return (
+		<ol className="sculpt-race" data-testid="sculpt-race" aria-label={ko("Candidate fixes, best first", "후보 수정안 (좋은 순)")}>
+			{candidates.map((row, index) => (
+				<li key={`${row.label}-${index}`} className="sculpt-race-row" data-leader={row === leader ? "true" : undefined} data-refused={row.refused ? "true" : undefined}
+					style={{ "--sculpt-race": Number.isFinite(row.iou) ? Math.max(0.04, (row.iou - lo) / Math.max(0.001, hi - lo)) : 0, "--sculpt-race-delay": `${index * 90}ms` }}>
+					<span className="sculpt-race-label" title={row.label}>{row.label}</span>
+					<span className="sculpt-race-bar" aria-hidden="true"><span /></span>
+					<span className="sculpt-race-score">{row.refused ? ko("refused", "거부") : Number.isFinite(row.delta) ? `${row.delta >= 0 ? "+" : ""}${row.delta.toFixed(3)}` : formatIou(row.iou)}</span>
+				</li>
+			))}
+		</ol>
+	);
+}
+
+/** The run's own account of itself, newest at the bottom and kept in view. */
+function ActivityLog({ activity }) {
+	const logRef = useRef(null);
+	useEffect(() => {
+		const logList = logRef.current;
+		if (logList) logList.scrollTop = logList.scrollHeight;
+	}, [activity?.length]);
+	if (!activity?.length) return null;
+	return (
+		<ol className="sculpt-log" data-testid="sculpt-log" ref={logRef} aria-label={ko("Sculpt activity", "조형 진행 기록")}>
+			{activity.map((row) => (
+				<li key={row.id} className="sculpt-log-row" data-kind={row.kind}>
+					<span className="sculpt-log-time">{formatClock(row.atMs)}</span>
+					<span className="sculpt-log-dot" aria-hidden="true" />
+					<span className="sculpt-log-text">{row.text}</span>
+				</li>
+			))}
+		</ol>
+	);
+}
+
+/** The measured slices drawn over the reference: a scan line while measuring, then each slice's spans. */
+function OutlineScan({ outline, scanning }) {
+	const box = outline?.box;
+	return (
+		<>
+			{scanning && <span className="sculpt-scanline" data-testid="sculpt-scanline" aria-hidden="true" />}
+			{box && (
+				<svg className="sculpt-scan" data-testid="sculpt-scan" viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden="true">
+					{outline.rows.flatMap((row, index) => row.spans.map(([from, to], spanIndex) => {
+						const centre = box.left + box.width / 2;
+						const scale = box.height * (box.aspect ?? 1);
+						return (
+							<rect key={`${index}-${spanIndex}`} className="sculpt-scan-span" style={{ animationDelay: `${index * 70}ms` }}
+								x={centre + from * scale} width={Math.max(0.004, (to - from) * scale)} y={box.top + row.y * box.height - 0.006} height="0.012" />
+						);
+					}))}
+				</svg>
+			)}
+		</>
+	);
+}
+
 export default function SculptPanel({ run, reference, onReference, onStart, onCancel, onPlaceInScene, canStart, startRefusal, sculptName, hidden }) {
 	const fileRef = useRef(null);
 	const [dragging, setDragging] = useState(false);
-	const [showSheet, setShowSheet] = useState(false);
+	// The sheet is the clearest picture of what is off, so it starts open.
+	const [showSheet, setShowSheet] = useState(true);
 
 	const stage = run?.stage ?? "idle";
 	const running = RUNNING.has(stage);
@@ -41,6 +164,8 @@ export default function SculptPanel({ run, reference, onReference, onStart, onCa
 	const target = Number.isFinite(run?.targetIou) ? run.targetIou : null;
 	const showProgress = stage !== "idle";
 	const startDisabled = !canStart || Boolean(startRefusal);
+	const hasLog = Boolean(run?.activity?.length);
+	useTicking(running && Boolean(run?.waiting));
 
 	const take = (files) => {
 		const file = pickImage(files);
@@ -63,7 +188,10 @@ export default function SculptPanel({ run, reference, onReference, onStart, onCa
 					<div className="sculpt-well sculpt-well-filled" data-testid="sculpt-reference"
 						onDragOver={(event) => { if (event.dataTransfer?.types?.includes("Files")) event.preventDefault(); }}
 						onDrop={(event) => { event.preventDefault(); take(event.dataTransfer?.files); }}>
-						<img src={reference.dataUrl} alt={isKo ? `참조 이미지: ${reference.name}` : `Reference: ${reference.name}`} />
+						<div className="sculpt-ref-frame">
+							<img src={reference.dataUrl} alt={isKo ? `참조 이미지: ${reference.name}` : `Reference: ${reference.name}`} />
+							<OutlineScan outline={run?.outline} scanning={stage === "measure" && !run?.outline} />
+						</div>
 						<button type="button" className="btn ghost small sculpt-well-replace" data-testid="sculpt-reference-replace"
 							disabled={running} aria-label={ko("Replace reference image", "참조 이미지 바꾸기")} onClick={openPicker}>
 							{ko("Replace", "바꾸기")}
@@ -112,6 +240,8 @@ export default function SculptPanel({ run, reference, onReference, onStart, onCa
 							})}
 						</ol>
 
+						{running && <NowLine waiting={run.waiting} />}
+
 						<div className="sculpt-stats">
 							<span data-testid="sculpt-round">{isKo ? `라운드 ${run.round} / ${run.maxRounds}` : `Round ${run.round} / ${run.maxRounds}`}</span>
 							<span data-testid="sculpt-elapsed">{formatElapsed(run.elapsedMs)}</span>
@@ -129,9 +259,13 @@ export default function SculptPanel({ run, reference, onReference, onStart, onCa
 								<span className="sculpt-iou-fill" />
 								{target !== null && <span className="sculpt-iou-marker" data-testid="sculpt-iou-target" title={isKo ? `목표 ${formatIou(target)}` : `Target ${formatIou(target)}`} />}
 							</div>
+							<IouTrail history={run.history} target={target} />
 						</div>
 
-						{run.message && <p className="inspector-hint sculpt-message" role="status">{run.message}</p>}
+						<CandidateRace candidates={run.candidates} />
+						<ActivityLog activity={run.activity} />
+
+						{run.message && !hasLog && <p className="inspector-hint sculpt-message" role="status">{run.message}</p>}
 						{stage === "done" && <p className="inspector-hint sculpt-done" role="status" data-testid="sculpt-done">{isKo ? `완료 — IoU ${formatIou(iou)}` : `Done — IoU ${formatIou(iou)}`}</p>}
 						{stage === "cancelled" && <p className="inspector-hint" role="status" data-testid="sculpt-cancelled">{ko("Cancelled.", "취소했어요.")}</p>}
 						{stage === "failed" && <p className="inspector-hint sculpt-error" role="alert" data-testid="sculpt-error">{run.error || ko("The sculpt run failed.", "조형에 실패했어요.")}</p>}
