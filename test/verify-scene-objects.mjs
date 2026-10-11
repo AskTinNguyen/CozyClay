@@ -796,7 +796,8 @@ expect("a mesh can wear a travel path like a cube", Array.isArray(meshedPath.pat
 // It sat on screen forever because nothing ever cleared it: only pressing Undo
 // or a later restore did. An undo offer has a window, and when the window
 // closes the toast has to go with it.
-const appSource = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
+const appSource = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8")
+	+ readFileSync(new URL("../src/use-asset-shelf.js", import.meta.url), "utf8");
 
 expect(
 	"the object delete-undo offer expires on its own",
