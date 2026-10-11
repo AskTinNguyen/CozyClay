@@ -150,7 +150,8 @@ function verifyG010(sources) {
 		["mcp/tool-handlers.mjs", 'liveHub.command("run_action",'],
 		["mcp/live-hub.mjs", 'type: "cmd"'],
 		["src/live-control.js", "dispatchLiveFrame"],
-		["src/App.jsx", "handlers: { ...liveQueries, ...studioBindingRef.current.handlers }"],
+		// Sculpt mode taps finished results on the way out; the handlers themselves are unchanged.
+		["src/App.jsx", "handlers: sculptTap.wrap({ ...liveQueries, ...studioBindingRef.current.handlers })"],
 		["src/studio-app-binding.js", "commandBus().run("],
 	];
 	for (const [path, token] of requiredPath) {

@@ -22,7 +22,8 @@ expect("the PiP expand enters shot-look", app.includes("onClick={enterShotLook}"
 expect("the PiP no longer opens the player", !app.includes("onClick={enterPreview}"));
 expect(
 	"FlyControls stay enabled outside preview and bind to the shot camera while looking through",
-	app.includes("enabled={!posing && !playMode}") &&
+	// Sculpt mode orbits its own turntable camera, so fly is off there too.
+	app.includes("enabled={!posing && !playMode && !sculptMode}") &&
 	app.includes("camRef={ikMode ? poserCamRef : lookThroughShot ? shotCamRef : editorCamRef}") &&
 	controls.includes("right-drag") &&
 	controls.includes("WASD"),
