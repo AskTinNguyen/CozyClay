@@ -1,8 +1,9 @@
 // Viewer preferences: transient, like the View menu they mirror.
 import { studioActionDeclaration, studioActionRefusal } from "../studio-actions.js";
-import { StudioProtocolError, STUDIO_TOOL_SCHEMAS } from '../studio-agent-protocol.js';
+import { STUDIO_TOOL_SCHEMAS } from '../studio-agent-protocol.js';
 import { ko } from '../locale.js';
 import { shotAtFrame } from '../cuts.js';
+import { fail } from './shared.js';
 
 const fields = STUDIO_TOOL_SCHEMAS.operate_studio.properties;
 const groups = { 'view.select': ['selection', 'shotId'], 'timeline.seek': ['frame'], 'timeline.play': ['playing'], 'view.setMode': ['mode', 'view'] };
@@ -18,7 +19,6 @@ export const viewCommand = args => Object.entries(groups).find(([, keys]) => Obj
 export function register(registry, ports) {
 	registry.registerToolAlias('operate_studio', viewCommand);
 	for (const declaration of operations) registry.register({ ...declaration, available: () => true, run(args) {
-		const fail = (code, message) => { throw new StudioProtocolError(code, message); };
 		if (!Object.keys(args).length || (args.view && !Object.keys(args.view).length)) fail('INVALID_ARGUMENT', 'Specify a view operation.');
 		const state = ports.readView();
 		// Pose mode is IK editing: without a rig to solve there is nothing to pose.

@@ -34,7 +34,6 @@ import { requestBridgeExtract } from "../multimodel-ingest.js";
 import { loadMotionFromUrl } from "../ardy/npz.js";
 import { snapshotPlaybackBones, applyMotionFrame, restorePlaybackBones } from "../ardy/playback.js";
 
-import { HISTORY_LIMIT } from "../history.js";
 import { shotAtFrame } from "../cuts.js";
 
 const sameCastValue = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -45,7 +44,7 @@ export function createCastDomain(appContext, initial, customPoses = []) {
 	let native = createDocumentStore({ owned: { cast: normalize(initial) } });
 	const listeners = new Set(), motions = new Map();
 	const notify = () => { for (const listener of listeners) listener(); };
-	let release = native.subscribe(notify), loading = false;
+	let release = native.subscribe(notify);
 	const documentStore = { ...Object.fromEntries(Object.keys(native).map(key => [key, (...args) => native[key](...args)])),
 		subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); } };
 	const state = () => documentStore.read('cast'), read = () => state().characters;
@@ -142,13 +141,11 @@ export function createCastDomain(appContext, initial, customPoses = []) {
 			write(plan.draft); return plan;
 		},
 		load(value) {
-			finishGesture(true); loading = true;
-			try {
-				release(); native.dispose(); motions.clear();
-				const next = normalize(Array.isArray(value) ? { characters: value, customPoses: state().customPoses } : value);
-				native = createDocumentStore({ owned: { cast: next } }); release = native.subscribe(notify);
-				domain.activeId = read()[0]?.id ?? null; domain.loadView?.(); notify();
-			} finally { loading = false; }
+			finishGesture(true);
+			release(); native.dispose(); motions.clear();
+			const next = normalize(Array.isArray(value) ? { characters: value, customPoses: state().customPoses } : value);
+			native = createDocumentStore({ owned: { cast: next } }); release = native.subscribe(notify);
+			domain.activeId = read()[0]?.id ?? null; domain.loadView?.(); notify();
 		},
 		dispose() { finishGesture(true); unregister(); unsubscribe(); release(); native.dispose(); listeners.clear(); },
 	};
@@ -185,7 +182,6 @@ export function useCast(appContext) {
 
 	const [poseRevision, setPoseTick] = useState(0);
 
-	/* --------------------- derived cast view + shims ---------------------- */
 	// Fallback second slot mirrors the old charB defaults so preset math and
 	// the two-subject inspector never see a hole before B exists.
 	const charA = characters[0] ?? createCharacterEntry(null, 0);
@@ -202,29 +198,11 @@ export function useCast(appContext) {
 
 	const subject2 = charB.subject ?? DEFAULT_SUBJECT2;
 
-	const rigA = rigs[charA.id] ?? null;
-
-	const rigB = (characters[1] ? rigs[charB.id] : null) ?? null;
-
 	function updateCharacterAt(index, next) {
 		const base = domain.read()[index], raw = appContext.ports.read();
 		const entry = base && { ...base, ...shotAtFrame(raw.shots, raw.view.frame)?.cast[base.id] };
 		if (entry) return domain.edit('character.update', { characterId: entry.id, patch: typeof next === 'function' ? next(entry) : next });
 	}
-
-	// The shims keep the legacy call sites (inspector sliders, presets, pose
-	// studio, prompts) untouched while the list stays the source of truth.
-	const setCharA = (next) => updateCharacterAt(0, next);
-
-	const setCharB = (next) => updateCharacterAt(1, next);
-
-	const setPoseA = (pose) => updateCharacterAt(0, (entry) => ({ pose: typeof pose === "function" ? pose(entry.pose ?? DEFAULT_POSE) : pose }));
-
-	const setPoseB = (pose) => updateCharacterAt(1, (entry) => ({ pose: typeof pose === "function" ? pose(entry.pose ?? DEFAULT_POSE) : pose }));
-
-	const setSubject = (value) => updateCharacterAt(0, (entry) => ({ subject: typeof value === "function" ? value(entry.subject) : value }));
-
-	const setSubject2 = (value) => updateCharacterAt(1, (entry) => ({ subject: typeof value === "function" ? value(entry.subject) : value }));
 
 	function setShowB(next) {
 		return domain.run('cast.showExtras', { show: typeof next === 'function' ? next(domain.read().some((entry, i) => i > 0 && !entry.hidden)) : next });
@@ -294,7 +272,6 @@ export function useCast(appContext) {
 		return `character:${key.startsWith("char:") ? key.slice(5) : key}`;
 	};
 
-	/* ------------------- active character (motion layer) ------------------- */
 	// Every character owns an animation layer (root path, prompt blocks,
 	// generated clip, IK keys). The studio's motion machinery edits ONE layer
 	// at a time — the ACTIVE character's — and selection decides who that is.
@@ -356,9 +333,6 @@ export function useCast(appContext) {
 		waypointFrames: (entry.layer?.waypoints ?? []).map((waypoint) => waypoint.frame),
 	}]), [characters, activeChar.id]);
 
-	// Undo/redo (plan §6.5). The store settles any open drag first, so a
-	// mid-drag press commits that drag as one entry and then steps past it.
-	// After a step the selection can point at a deleted object — drop it to
 	/* Cast authoring uses the registered store. The native compatibility
 	 * snapshot remains for motion/IK until its owner migrates; it must not
 	 * restore the owned cast over newer character edits. */
@@ -451,7 +425,6 @@ export function useCast(appContext) {
 		if (posingIndex >= 0) updateCharacterAt(posingIndex, entry => ({ pose: typeof pose === "function" ? pose(entry.pose ?? DEFAULT_POSE) : pose }));
 	};
 
-	/* ------------------------- waypoint workspace --------------------------- */
 	// A walking pace turns clicked distance into clip time, so pins land at
 	// frames the character can actually reach without ice-skating.
 	const WALK_SPEED_MPS = 1.4;
@@ -992,7 +965,6 @@ export function useCast(appContext) {
 				if (typeof block.text !== "string" || !block.text.trim()) throw new Error(`Block ${i + 1} needs text`);
 				return { id: `prompt-${stamp}-${i}`, startFrame, endFrame, text: block.text.trim() };
 			});
-			const live = appContext.live.state;
 			domain.run('character.setPromptBlocks', { characterId: domain.activeId, blocks: clips });
 			return { blocks: clips.length };
 		}
