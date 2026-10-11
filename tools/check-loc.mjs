@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 const root = join(fileURLToPath(new URL('.', import.meta.url)), '..');
 const baselinePath = join(root, 'tools', 'loc-baseline.json');
 const extensions = new Set(['.js', '.jsx', '.mjs']);
-const roots = ['src', 'bin', 'mcp', 'tools'];
+const roots = ['src', 'bin', 'mcp', 'tools', 'workers'];
 
 function filesUnder(directory) {
 	const files = [];

@@ -120,5 +120,7 @@
 	"tools/run-tests.mjs": 563,
 	"tools/track/gate.mjs": 325,
 	"tools/track/masks.mjs": 297,
-	"tools/track/study-2d.mjs": 663
+	"tools/track/study-2d.mjs": 663,
+	"workers/api/src/index.js": 426,
+	"workers/api/src/queue.js": 441
 }
