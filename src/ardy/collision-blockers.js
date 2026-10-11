@@ -58,8 +58,6 @@ export function blockerCharacterId(blockerId) {
 	return cut > 0 ? rest.slice(0, cut) : null;
 }
 
-/* --- scene objects ---------------------------------------------------------- */
-
 /**
  * Resolve an object's world size. `objectSize` (scene-objects.js) is the ONE
  * owner of footprint × scale, so it is reused rather than re-derived here — a
@@ -156,8 +154,6 @@ export function sceneObjectBlockers(sceneObjects, { library = null, frame = null
 	}
 	return out;
 }
-
-/* --- other cast members ----------------------------------------------------- */
 
 /** rigs may arrive as the App's plain `{ [characterId]: rig }` map or as a Map;
  * both are read through one iterator so a caller never has to convert. */
@@ -264,7 +260,7 @@ export function characterBlockers(rigs, activeId = null, { radii = null, charact
 export function collisionBlockers({ rigs = null, activeId = null, characterIds = null, sceneObjects = null, library = null, frame = null, take = null, skipIds = null, radii = null } = {}) {
 	return [
 		...characterBlockers(rigs, activeId, { radii, characterIds }),
-		...sceneObjectBlockers(sceneObjects ?? [], { library, frame, take, skipIds, characters: characterIds }),
+		...sceneObjectBlockers(sceneObjects, { library, frame, take, skipIds, characters: characterIds }),
 	];
 }
 

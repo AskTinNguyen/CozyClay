@@ -64,8 +64,7 @@ function pointSegmentDistance(point, start, end) {
 	return point.distanceTo(start.clone().addScaledVector(segment, t));
 }
 
-/* --- bind-pose geometry ------------------------------------------------------
- *
+/*
  * `rig.userData.poseBind` (primed by primeBindPose at clone time) is the only
  * record of the UNTOUCHED skeleton once a clip is playing: ARDY playback writes
  * per-bone translations AND rotations every frame, so "where is this bone"
@@ -100,8 +99,7 @@ function bindLocalMatrix(rig, node, out, delta = null) {
 	return out.compose(bindPosition, bindQuaternion, node.scale);
 }
 
-/* --- the REST pose -----------------------------------------------------------
- *
+/*
  * The bind pose is a T-pose; the pose a character actually STANDS in is
  * DEFAULT_POSE — "arms hanging naturally at their sides" — which poses.js
  * applies as Euler deltas PRE-multiplied onto each bind local rotation. The two
@@ -792,8 +790,6 @@ export function solveHipsTranslate(joint, worldDelta, startLocalPos) {
 	bone.updateMatrixWorld(true);
 }
 
-/* --- state ----------------------------------------------------------------- */
-
 /** Mutable per-rig IK layer state. `targets` are the live handle positions
  * (world space) the handles render at and the solver reaches for. `keys`
  * maps frame → Map(trackId → {q, p}) — FK LOCAL rotations of the solved
@@ -958,8 +954,6 @@ export function ikBakeKeyframe(rig, ikState, frame, fkJoints, onlyIds = null, ba
 export function ikRemoveKeyframe(ikState, frame) {
 	ikState.keys.delete(frame);
 }
-
-/* --- foot planting (ground snap) -------------------------------------------- */
 
 /** The two leg chains that get planted. */
 const LEG_IDS = ["leftFoot", "rightFoot"];

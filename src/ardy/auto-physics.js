@@ -50,8 +50,6 @@ import { findBone, ikTouch, ikBakeKeyframe, solveHipsTranslate, solveIk } from "
  * into the clip outside its keyed range by ikEvaluate's blend window.
  */
 
-/* --- body segments ---------------------------------------------------------- */
-
 /**
  * Segment mass fractions of total body mass, from Dempster's cadaver study
  * (Dempster, W.T., "Space Requirements of the Seated Operator", WADC TR
@@ -112,8 +110,6 @@ export function computeCenterOfMass(rig) {
 	if (total <= 0) return null;
 	return com.divideScalar(total);
 }
-
-/* --- airborne detection ----------------------------------------------------- */
 
 /** Shortest run of airborne frames worth correcting. Anything briefer is a
  * one- or two-frame detection blip from a foot skimming the floor, not a
@@ -214,8 +210,6 @@ export function heightsAirborne(heights, planted, lift = AIRBORNE_LIFT) {
 export function frameAirborne(rig, planted, lift = AIRBORNE_LIFT) {
 	return heightsAirborne(markerHeights(rig), planted, lift);
 }
-
-/* --- grounded contact ------------------------------------------------------ */
 
 /** Contact must stay close to its clip-relative low and vertically settled.
  * The final run gate below is stricter still: an ankle that wanders more than
@@ -494,8 +488,6 @@ export function edgeTaperWeight(index, length, taper = EDGE_TAPER) {
 	return x * x * (3 - 2 * x);
 }
 
-/* --- ballistic fit ---------------------------------------------------------- */
-
 /** Standard gravity (m/s²). */
 export const GRAVITY = 9.81;
 
@@ -649,8 +641,6 @@ function fitBallisticArc(samples, fps, g = GRAVITY) {
 	}
 	return { positions, y0, v0, g, residual: Math.sqrt(sumSq / list.length) };
 }
-
-/* --- the driver ------------------------------------------------------------- */
 
 /** Deviation from the fitted parabola a span must reach before it is worth
  * correcting. 5 mm is well under the eye's threshold on a character-sized
