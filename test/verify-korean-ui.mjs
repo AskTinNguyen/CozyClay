@@ -122,7 +122,7 @@ assert.equal(koLocale.isKo, true);
 assert.equal(koLocale.ko("Frame", "프레임"), "프레임");
 assert.equal(koLocale.ko("Collapse timeline", "타임라인 접기"), "타임라인 접기");
 
-const i2vMotionDomain = source("src/domains/motion.js");
+const i2vMotionDomain = source("src/domains/motion/motion-video-capture.js");
 const i2vMotionDomainStart = i2vMotionDomain.indexOf("function captureI2vStill()");
 assert.notEqual(i2vMotionDomainStart, -1, "AI motion capture domain is present");
 const i2vMotionDomainSource = i2vMotionDomain.slice(i2vMotionDomainStart);
@@ -138,8 +138,8 @@ assertKoPairsHaveBothSides("src/i2v-motion-studio.jsx");
 assertKoEnglishDefaults("src/i2v-motion-studio.jsx");
 assertKoPairsHaveBothSides("src/panels/VideoCapturePanel.jsx");
 assertKoEnglishDefaults("src/panels/VideoCapturePanel.jsx");
-assertKoPairsHaveBothSides("src/domains/motion.js", i2vMotionDomainSource);
-assertKoEnglishDefaults("src/domains/motion.js", i2vMotionDomainSource);
+assertKoPairsHaveBothSides("src/domains/motion/motion-video-capture.js", i2vMotionDomainSource);
+assertKoEnglishDefaults("src/domains/motion/motion-video-capture.js", i2vMotionDomainSource);
 
 // Files converted to the English-default + Korean-option pattern.
 for (const path of ["src/result-modal.jsx", "src/hierarchy-panel.jsx", "src/object-catalog.jsx", "src/error-boundary.jsx"]) {

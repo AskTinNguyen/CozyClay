@@ -42,7 +42,7 @@ const domains = {
 // not a copy of it. Keep source text intact except for the extra default exports.
 export function readStudioSource() {
   const paths = ['src/App.jsx', ...['domains', 'panels', 'shell'].flatMap(directory =>
-    readdirSync(new URL(`src/${directory}/`, root)).filter(name => /\.(js|jsx)$/.test(name)).map(name => `src/${directory}/${name}`))];
+    readdirSync(new URL(`src/${directory}/`, root)).filter(name => /\.(js|jsx)$/.test(name)).map(name => `src/${directory}/${name}`)), 'src/domains/motion/motion-video-capture.js'];
   return paths.map(path => read(path).replace(/export default /g, '')).join('\n');
 }
 
