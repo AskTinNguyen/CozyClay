@@ -45,3 +45,12 @@
 - 컴퓨터 사용 QA: 에디터를 실제로 열고 클릭해서 확인. 스크린샷을 PR 본문에 첨부.
 - PR 열기: `gh pr create --base main --title "<type>: <요약> (#n)"`.
 - main/dev로 push·commit·checkout은 훅이 막는다. 막히면 브랜치를 확인하라.
+
+## CI 린트 래칫
+
+- CI는 `npm run lint`를 실행한다.
+- 기준선은 `tools/*-baseline.json`에 둔다.
+- PR은 미사용 export, 순수 250줄 초과 파일, 린트 오류를 늘리면 안 된다.
+- 발견 사항을 의도적으로 줄이면 `npm run lint:update`를 실행한다.
+- 기준선 파일은 같은 PR에 함께 커밋한다.
+- PR을 통과시키려고 기준선을 올리지 않는다.
