@@ -67,8 +67,8 @@ const ref = current => ({ current });
 // The carried-prop maths App.jsx imports from app-stage.jsx (a React module
 // Node cannot load), evaluated from its own source.
 const carried = (() => {
- const source = readFileSync(new URL('../src/app-stage.jsx', import.meta.url), 'utf8');
- const start = source.indexOf('export const ATTACH_BONE_ROWS'), end = source.indexOf('export const CAMERA_MOVE_LABELS_KO');
+ const source = readFileSync(new URL('../src/stage-attach-frames.js', import.meta.url), 'utf8');
+ const start = source.indexOf('export const ATTACH_BONE_ROWS'), end = source.length;
  assert(start > 0 && end > start, 'app-stage.jsx attachment block');
  return new Function('THREE', 'SCENE_ATTACH_BONES', 'TRAIL_EFFECTOR_JOINTS', 'normalizeBoneName', `${source.slice(start, end).replace(/^export /gm, '')}\nreturn { attachFrameMatrix, sceneObjectMatrix, attachPlacementPatch, placeSceneObject, attachWorldMatrix };`)(THREE, objects.SCENE_ATTACH_BONES, TRAIL_EFFECTOR_JOINTS, normalizeBoneName);
 })();

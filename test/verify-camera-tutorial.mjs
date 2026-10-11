@@ -187,7 +187,7 @@ expect(
 expect("the take the tutorial seeds is the landing page's", app.includes("DEMO_MOTION_URL,") && app.includes("DEMO_MOTION_PROMPT,"));
 expect(
 	"the walk clip still ships with the build",
-	readFileSync(new URL("../src/app-stage.jsx", import.meta.url), "utf8").includes('export const DEMO_MOTION_URL = "/demo/walk-then-stop.npz"'),
+	readFileSync(new URL("../src/stage-startup-defaults.js", import.meta.url), "utf8").includes('export const DEMO_MOTION_URL = "/demo/walk-then-stop.npz"'),
 );
 expect(
 	"the starter it opens is a real bundled scene named City Block",

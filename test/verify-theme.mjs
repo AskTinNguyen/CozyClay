@@ -11,7 +11,8 @@ function expect(name, condition, detail = "") {
 // #523: the 2a top bar has a project swatch, not a wordmark; the brand is
 // named in Help › About (src/shell/MenuBar.jsx).
 const app = ["../src/App.jsx", "../src/shell/TopBar.jsx", "../src/shell/MenuBar.jsx"].map(path => readFileSync(new URL(path, import.meta.url), "utf8")).join("\n")
-	+ readFileSync(new URL("../src/app-stage.jsx", import.meta.url), "utf8");
+	+ readFileSync(new URL("../src/app-stage.jsx", import.meta.url), "utf8")
+	+ readFileSync(new URL("../src/stage-startup-defaults.js", import.meta.url), "utf8");
 const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
 const room = readFileSync(new URL("../src/room.jsx", import.meta.url), "utf8");

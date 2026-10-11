@@ -66,7 +66,8 @@ const queueSource = readFileSync(new URL("../../workers/api/src/queue.js", impor
 // The studio-side bridge caps live in src/app-stage.jsx (module-level
 // constants extracted from App.jsx); this guard keeps them equal to the
 // shared prompt-limit contract.
-const appSource = readFileSync(new URL("../../src/app-stage.jsx", import.meta.url), "utf8");
+const appSource = readFileSync(new URL("../../src/app-stage.jsx", import.meta.url), "utf8")
+	+ readFileSync(new URL("../../src/ardy-bridge-contract.js", import.meta.url), "utf8");
 const promptLimitsSource = readFileSync(new URL("../../tools/ardy/prompt-limits.mjs", import.meta.url), "utf8");
 
 // The hosted v1 queue has one FIFO order and one account-wide daily cap.

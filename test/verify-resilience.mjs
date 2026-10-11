@@ -21,7 +21,7 @@ assert.match(boundary, /role="alert"/, "the crash screen announces itself to ass
 
 // --- a lost GL context is handled, not ignored -----------------------------
 // The studio source spans App.jsx and app-stage.jsx (module-level extraction); pin against both.
-const app = (await read("App.jsx")) + (await read("app-stage.jsx"));
+const app = (await read("App.jsx")) + (await read("app-stage.jsx")) + (await read("stage-canvas-rigs.jsx"));
 assert.match(app, /addEventListener\("webglcontextlost", onLost\)/, "the stage must listen for context loss");
 assert.match(app, /addEventListener\("webglcontextrestored", onRestored\)/, "…and for its restoration");
 assert.match(

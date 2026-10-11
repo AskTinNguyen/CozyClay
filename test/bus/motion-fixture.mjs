@@ -13,7 +13,9 @@ import { CSKEL27_NEUTRAL } from '../../src/ardy/cskel27-neutral.js';
 
 // Follow only the shipped constants/pure helpers used by motion. The renderer
 // components co-located in app-stage are not needed to mount the real hook.
-const stage = readFileSync(new URL('../../src/app-stage.jsx', import.meta.url), 'utf8');
+const stage = readFileSync(new URL('../../src/app-stage.jsx', import.meta.url), 'utf8')
+  + readFileSync(new URL('../../src/ardy-bridge-contract.js', import.meta.url), 'utf8')
+  + readFileSync(new URL('../../src/stage-startup-defaults.js', import.meta.url), 'utf8');
 const motionSource = readFileSync(new URL('../../src/domains/motion.js', import.meta.url), 'utf8');
 const ast = parseSync('stage.jsx', stage).program, definitions = new Map(), imports = new Map();
 for (const node of ast.body) {
@@ -28,7 +30,7 @@ function include(name) {
   selected.add(node);
   if (node.type !== 'ImportDeclaration') for (const ref of freeReferences({ type: 'Program', body: [node] })) include(ref.node.name);
 }
-for (const node of parseSync('motion.js', motionSource).program.body) if (node.type === 'ImportDeclaration' && node.source.value.endsWith('/app-stage.jsx')) for (const spec of node.specifiers) include(spec.imported.name);
+for (const node of [motionSource, readFileSync(new URL('../../src/domains/motion/motion-video-capture.js', import.meta.url), 'utf8')].flatMap(text => parseSync('motion.js', text).program.body)) if (node.type === 'ImportDeclaration' && node.source.value.endsWith('/app-stage.jsx')) for (const spec of node.specifiers) include(spec.imported.name);
 const stageSubset = ast.body.filter(node => selected.has(node)).map(node => stage.slice(node.start, node.end)).join('\n');
 const server = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false }, optimizeDeps: { noDiscovery: true, include: [] }, appType: 'custom',
   plugins: [{ name: 'motion-without-renderer', enforce: 'pre', load(id) {

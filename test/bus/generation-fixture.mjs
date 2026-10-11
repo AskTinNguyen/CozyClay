@@ -10,7 +10,9 @@ import { freeReferences } from './verify-domain-modules.mjs';
 import { motionArraysToNpzMembers, writeNpz } from '../../tools/ardy/npz.mjs';
 import { createStudioTools } from '../../bin/agent/studio-tools.mjs';
 
-const stage = readFileSync(new URL('../../src/app-stage.jsx', import.meta.url), 'utf8');
+const stage = readFileSync(new URL('../../src/app-stage.jsx', import.meta.url), 'utf8')
+  + readFileSync(new URL('../../src/ardy-bridge-contract.js', import.meta.url), 'utf8')
+  + readFileSync(new URL('../../src/stage-startup-defaults.js', import.meta.url), 'utf8');
 const source = readFileSync(new URL('../../src/domains/motion.js', import.meta.url), 'utf8');
 const ast = parseSync('stage.jsx', stage).program, names = new Map(), selected = new Set();
 for (const node of ast.body) {
@@ -24,7 +26,7 @@ function include(name) {
   selected.add(node);
   if (node.type !== 'ImportDeclaration') for (const ref of freeReferences({ type: 'Program', body: [node] })) include(ref.node.name);
 }
-for (const node of parseSync('motion.js', source).program.body) if (node.type === 'ImportDeclaration' && node.source.value.endsWith('/app-stage.jsx')) for (const spec of node.specifiers) include(spec.imported.name);
+for (const node of [source, readFileSync(new URL('../../src/domains/motion/motion-video-capture.js', import.meta.url), 'utf8')].flatMap(text => parseSync('motion.js', text).program.body)) if (node.type === 'ImportDeclaration' && node.source.value.endsWith('/app-stage.jsx')) for (const spec of node.specifiers) include(spec.imported.name);
 const server = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false }, optimizeDeps: { noDiscovery: true, include: [] }, appType: 'custom',
   plugins: [{ name: 'generation-ssr-state', enforce: 'pre', load(id) {
     if (id.endsWith('/src/app-stage.jsx')) return ast.body.filter(node => selected.has(node)).map(node => stage.slice(node.start, node.end)).join('\n');

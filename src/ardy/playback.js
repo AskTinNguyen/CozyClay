@@ -314,9 +314,6 @@ export function motionBones(rig) {
 	return prepOf(rig).bones;
 }
 
-/** QA introspection: expose the cached per-rig prep (scale, offsets, chain
- * parents) so headless checks can compare app-side prep against node-side
- * expectations. Not used by the app itself. */
 /** Recover the current ARDY-space root from the live retargeted rig.
  *
  * Positional skinning writes each mapped bone as
@@ -326,7 +323,6 @@ export function motionBones(rig) {
  * unrelated reference clip. */
 export function captureArdyRoot(rig) {
 	const prep = prepOf(rig);
-	if (!prep) throw new Error("captureArdyRoot: rig is not prepared for ARDY playback");
 	const rootIndex = CSKEL27_JOINTS.indexOf("Hips");
 	const bone = prep.bones[rootIndex];
 	if (!bone) throw new Error("captureArdyRoot: mapped Hips bone is unavailable");

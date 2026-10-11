@@ -56,6 +56,21 @@ jobs:
               ])
               .write();
 
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.19
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            mcp/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+
   # Keep the historical `test` check name stable for branch protection while
   # the actual suite runs on four deterministic shards below.
   test:
@@ -291,13 +306,14 @@ jobs:
   # expensive jobs remain conditionally skipped for docs/metrics-only PRs.
   gate:
     if: always()
-    needs: [changes, test, mcp-live, browser]
+    needs: [changes, lint, test, mcp-live, browser]
     runs-on: ubuntu-latest
     steps:
       - name: Check CI results
         env:
           CHANGES_RESULT: ${{ needs.changes.result }}
           SOURCE_SCOPE: ${{ needs.changes.outputs.source }}
+          LINT_RESULT: ${{ needs.lint.result }}
           TEST_RESULT: ${{ needs.test.result }}
           MCP_RESULT: ${{ needs.mcp-live.result }}
           BROWSER_RESULT: ${{ needs.browser.result }}
@@ -314,7 +330,7 @@ jobs:
             echo "missing or invalid CI scope: $SOURCE_SCOPE"
             exit 1
           fi
-          for result in "$TEST_RESULT" "$MCP_RESULT" "$BROWSER_RESULT"; do
+          for result in "$LINT_RESULT" "$TEST_RESULT" "$MCP_RESULT" "$BROWSER_RESULT"; do
             if [ "$result" != "success" ]; then
               echo "required CI job result: $result"
               exit 1

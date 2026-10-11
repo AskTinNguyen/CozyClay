@@ -1,0 +1,23 @@
+{
+	"no-async-promise-executor": 1,
+	"no-case-declarations": 1,
+	"no-constant-binary-expression": 2,
+	"no-control-regex": 5,
+	"no-dupe-keys": 1,
+	"no-loss-of-precision": 1,
+	"no-regex-spaces": 2,
+	"no-undef": 25,
+	"no-unsafe-finally": 5,
+	"no-unused-vars": 223,
+	"no-useless-assignment": 23,
+	"no-useless-catch": 2,
+	"no-useless-escape": 7,
+	"preserve-caught-error": 16,
+	"react-hooks/immutability": 66,
+	"react-hooks/purity": 5,
+	"react-hooks/refs": 87,
+	"react-hooks/rules-of-hooks": 3,
+	"react-hooks/set-state-in-effect": 31,
+	"react-hooks/use-memo": 1,
+	"require-yield": 2
+}
