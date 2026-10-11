@@ -10268,4 +10268,36 @@ input[type=range] {
 	margin: 8px 0 0;
 	color: var(--muted);
 }
+
+/* Sculpt mode (#739): the turntable owns the main pane and the shot preview
+   shows the scene, so the Top-View inset has nothing to add. */
+.app[data-workflow-mode="sculpt"] .vp-inset { display: none !important; }
+
+/* The empty turntable says what the mode is waiting for, under the mode pill
+   (the dock floats over the pane's foot). Overlay chrome, like the viewport
+   pills: it never takes the pointer from the orbit. */
+.vp-sculpt-hint {
+	position: absolute;
+	left: 50%;
+	top: calc(2 * var(--sp-2, 12px) + var(--h-control, 28px));
+	z-index: 7;
+	display: grid;
+	gap: var(--sp-1, 4px);
+	max-width: min(420px, calc(100% - 2 * var(--sp-3, 16px)));
+	padding: var(--sp-2, 8px) var(--sp-3, 16px);
+	border-radius: var(--r-2, 6px);
+	background: var(--overlay);
+	color: var(--text-2);
+	font-size: 11px;
+	line-height: 1.45;
+	text-align: center;
+	transform: translateX(-50%);
+	pointer-events: none;
+}
+
+.vp-sculpt-hint strong {
+	color: var(--text-1);
+	font-size: 12px;
+	font-weight: 600;
+}
 }

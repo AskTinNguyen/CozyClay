@@ -229,6 +229,8 @@ jobs:
             tier: observation
           - suite: qa-previs-start-browser
             tier: observation
+          - suite: qa-sculpt-mode-browser
+            tier: observation
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

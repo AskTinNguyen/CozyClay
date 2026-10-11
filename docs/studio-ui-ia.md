@@ -66,6 +66,7 @@ Pose Details 패널만 세면 13개다(#545의 `qa-shell-pose-browser` 지표, �
 | View ▾ (Reference grid, Auto Color, Body part colours) | 뷰포트 **Show** 필 (+ Trails) |
 | 카메라 선택 / 셰이딩 | 뷰포트 **Perspective** 필 / **Clay Lit** 필 |
 | 모드 탭 Scene/Camera/Motion | 뷰포트 모드 툴바 **1 Stage / 2 Pose / 3 Camera / 4 Motion**, 모드별 도구 W/E/R |
+| Sculpt (이미지로 조형, #739) | 뷰포트 모드 툴바 **5 Sculpt**: 선택한 sculpt 하나만 턴테이블에 격리(W/E/R = 정면/측면/뒷면), Details 맨 위 **Sculpt from image** 패널(참조 이미지 → Start → Measure/Draft/Score/Refine → Place in scene). UI 전용 모드라 바깥에는 Stage로 보인다 |
 | IK on/off | **Pose 모드(2)** 진입이 IK를 켜고, 나가면 끈다 |
 | Foot snap / Body contact | Pose 모드 동안 시퀀서 헤더 |
 | 자동 수정(Pose fix, Path fix, Pin, Fit to platforms) | **Pose Details** (W Pose fix / E Path fix / R Pin), 미리보기 → Apply/Cancel |

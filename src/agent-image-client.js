@@ -39,7 +39,7 @@ export async function sidecarRequest(fetchImpl, path, init) {
 /** The /agent/image body. `references` are the scene's identity / environment
  * slots (#167), passed through untouched so the sidecar decides how they are
  * described to the model. */
-export function agentImageBody({ prompt, imageDataUrl, referenceDataUrl, references, composition, quality = "auto" }) {
+export function agentImageBody({ prompt, imageDataUrl, referenceDataUrl, references, composition, quality = "auto", size }) {
 	return {
 		prompt,
 		imageDataUrl,
@@ -47,6 +47,7 @@ export function agentImageBody({ prompt, imageDataUrl, referenceDataUrl, referen
 		...(Array.isArray(references) && references.length ? { references } : {}),
 		...(composition ? { composition } : {}),
 		quality,
+		...(size ? { size } : {}),
 	};
 }
 

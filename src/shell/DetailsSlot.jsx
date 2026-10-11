@@ -57,7 +57,7 @@ function detailsSelection({ selectedHierarchyId: id, selectedSceneObject, rigSel
 
 export default function DetailsSlot() {
 	const {
-		selectedHierarchyId, sceneSaveError, studioAgentError, embedMode, studioAgentMode,
+		sculptPanel, selectedHierarchyId, sceneSaveError, studioAgentError, embedMode, studioAgentMode,
 		setStudioAgentMode, AgentPanel, setAgentCollapsed, scenes, activeSceneId,
 		buildStudioAgentContext, highlightAgentTargets, generateI2vMotionFromUi, selectedSceneObject, rigSelection,
 		inspectorActionsOpen, setInspectorActionsOpen, runStudioAction, deleteSelectedSceneObject, inspectorHasContent,
@@ -157,6 +157,8 @@ export default function DetailsSlot() {
 				)}
 			</div>
 			<div className="inspector-scroll">
+		{/* Sculpt mode owns the column: its panel replaces the selection's settings. */}
+		{sculptPanel ?? (<>
 		{/* Nothing is selected that owns settings — say so rather than
 		    showing an empty column the user has to interpret. */}
 		{!inspectorHasContent && (
@@ -417,6 +419,7 @@ export default function DetailsSlot() {
 			objectColorDraft={objectColorDraft}
 			setObjectColorDraft={setObjectColorDraft}
 		/>
+		</>)}
 			</div>
 			{selectedSceneObject && (
 				<div className="inspector-footer">

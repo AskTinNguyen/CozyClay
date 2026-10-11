@@ -35,7 +35,9 @@ export function register(registry, ports) {
 		const frame = args.frame ?? shot?.startFrame ?? state.view.frame;
 		if (frame >= Math.max(1, state.frameCount)) fail('INVALID_RANGE', 'Frame is outside the timeline.');
 		const view = { ...state.view, ...args.view, frame, mode: args.mode ?? state.view.mode, playing: args.playing ?? state.view.playing };
-		ports.publishView({ selection, view, shotId: args.shotId ?? shotAtFrame(state.shots, frame)?.id ?? null });
+		// modeSet: only a command that names a mode moves the editor out of a
+		// UI-only mode (Sculpt, #739), which the published view reads as Stage.
+		ports.publishView({ selection, view, shotId: args.shotId ?? shotAtFrame(state.shots, frame)?.id ?? null, modeSet: args.mode !== undefined });
 		return { affectedIds: [state.host.sceneId], summary: 'Updated editor view.' };
 	} });
 	const viewAction = (id, run) => registry.register({ ...studioActionDeclaration(id), available: () => true,

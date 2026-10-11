@@ -85,6 +85,91 @@ The record stores the normalized recipe, plus `footprint` and `height` measured 
 
 Ask, infer and omit follow `agent-prompt-to-scene.md`. Infer the hidden back and say so. Never ask for more views unless the user wants a likeness.
 
+## Sculpt mode (#739)
+
+Sculpt mode is the Studio's fifth viewport mode. It runs the workflow above for you on one sculpt, on an isolated turntable.
+
+**Running it**
+
+1. Press **5**, or pick Sculpt in the viewport mode toolbar. If a sculpt is selected, the mode opens on that sculpt and a run re-sculpts it in place. Otherwise the first run creates a new sculpt. The main view shows only that sculpt on a turntable; W, E and R swing it to front, side and back. The shot preview still shows the whole scene.
+2. Drop, paste or choose a reference image (PNG, JPEG or WebP) in the **Sculpt from image** panel.
+3. Pick the **model** and its **effort**. The list is the Agent panel's: models are grouped by provider, and a provider without a credential lists its models disabled. Sculpt remembers its own pick, apart from the chat model. The first time, it starts from the Agent panel's model. Both pickers are locked during a run, and the panel names the running model ("Claude Fable 5.1 is writing the recipe").
+4. Press **Start**. Start needs the Agent: sign in (⌘B) or configure a provider key, and the live editor must be connected. Without them the button stays disabled and the panel says why.
+5. Watch the stages: **Measure → Draft → Score → Refine**. The panel shows the round, the elapsed time, the IoU against the 0.9 target and, once scored, the overlay sheet. **Cancel** stops the run at any point.
+6. Fix details by chatting with the Agent (⌘B) while the sculpt is selected. These are ordinary `object.sculpt` edits, one undo each.
+7. Press **Place in scene**. The sculpt stands on the ground in front of the scene camera, stays selected, and the editor returns to Stage. One undo puts it back where it was.
+
+| Mode 5, nothing selected | A sculpt on the isolated turntable | After Place in scene |
+|---|---|---|
+| ![Sculpt mode empty state](images/sculpt-mode-empty.png) | ![Sculpt on the isolated turntable](images/sculpt-mode-turntable.png) | ![Sculpt placed in the scene, back in Stage](images/sculpt-mode-placed.png) |
+
+![A real run on the Snorlax reference: done after 2 rounds at IoU 0.771](images/sculpt-mode-run.png)
+
+**Blueprint (model sheet)**
+
+Once a reference is in, **Generate blueprint** makes one image request (gpt-image-2, ChatGPT sign-in) that turns the reference into a four-view orthographic model sheet: FRONT and LEFT SIDE on the top row, sharing their head and foot lines, then BACK and TOP. The request is a fixed, subject-agnostic template (`src/sculpt-blueprint.js`). It asks for:
+
+- true orthographic panels at one scale, with no perspective
+- the same identity, colours and pose as the reference (or a neutral rest pose)
+- nothing that is not part of the subject (motion lines, shadows, fabric texture)
+- a plain white background and no text
+
+The operator adds only optional notes. The exact request can be read in the panel. The sidecar sends it as written (`composition: "sheet"`, 1536×1024, quality high). Well-known characters are often refused by the image model's safety system, and the panel says so.
+
+![A blueprint from an original sunflower patch design: front, left side, back, top](images/sculpt-blueprint-sunflower.png)
+
+*Generated in 23 s from a flat embroidered-patch design. The side and top views supply the depth the front cannot. The sheet is not yet used by the sculpt run.*
+
+**While it runs**
+
+The run says what it is doing at every moment, so a long model call never looks like a hang:
+
+- **The wait line** names what the run is waiting on, counts the seconds and shows the usual length of that wait. Examples are "Agent is writing the recipe … 29s, usually ~60s" and "Agent is test-fitting 4 candidate fixes". A lump of clay kneads beside it. If a wait runs past 1.5× its usual length, the line says so. A tool call inside a turn never resets the turn's own count.
+- **The activity log** has one timed line per event: the outline measured, a recipe refused and why, the draft landing with its part count, each score with its change, the candidate ranking, the agent's closing words.
+- **On the reference** a scan line sweeps while the outline is measured. The measured slices then stay drawn over the picture.
+- **The IoU trail** plots the score after each round against the target line, with a floating +/− chip. **The candidate race** grows each fix's bar in and stars the leader. The overlay sheet opens by itself.
+- **The turntable** shows a kneading lump of clay until the first draft lands. It turns slowly while the run works, and it stops for good once you grab it. The parts an edit just changed glow warm for a moment.
+
+| Writing the draft (30 s) | Round 2, ranking fixes (105 s) |
+|---|---|
+| ![Drafting: clay lump, scan slices, wait line](images/sculpt-mode-drafting.png) | ![Round 2: candidate race, IoU, log](images/sculpt-mode-live.png) |
+
+**What the run does**
+
+```mermaid
+flowchart LR
+  M[Measure landmarks] --> D[Draft: object.sculpt]
+  D --> S[Score: sculpt.compare]
+  S -->|IoU >= 0.9, round 3, or 3 min| E[Done]
+  S -->|otherwise| C[Rank 3-6 candidate edit sets]
+  C --> A[Apply the winner: object.sculpt edits]
+  A --> S
+```
+
+- Each round is one agent turn. The first turn measures the reference outline (limb tips, head top and feet as fractions of height) before it places any parts, then drafts and scores. Each later turn ranks 3–6 candidate edit sets with `sculpt.compare { candidates }`, applies the winner and scores again.
+- The harness owns the score. Each turn's text gives the exact `sculpt.compare` arguments, including the stored reference's `assetId`. If a turn ends without a successful score, the harness runs `sculpt.compare` itself, so the stop decision and the next round's text always use a real IoU.
+- The run stops at the first of: IoU ≥ 0.9, 3 rounds, or a 3-minute budget. The budget is checked between turns, so the turn in flight finishes first. A turn that ends without an `object.sculpt` is retried once with a firm reminder; a second miss fails the run. A turn the sidecar refuses fails the run at once with the refusal.
+- Each run sends one `sculpt_run` analytics event when it ends. It carries the outcome (`done`, `cancelled` or `failed`), the rounds, the final IoU rounded to 0.01, the duration in ms, and whether the run re-sculpted an existing sculpt. It never includes the image, the recipe or any names.
+
+**Measured in a live editor (Snorlax reference, Studio agent gpt-6-astra, 2026-10-11)**
+
+Every row is one real run, from pressing Start to Done, in a real editor tab. Each row lists the fix that went in before that run.
+
+| Run | Change before the run | Wall time | Rounds | IoU |
+|---|---|---|---|---|
+| 1 | — | 2 s | 0 | — (the sidecar refused the turn: the session id was not a UUID) |
+| 2 | UUID session; refused turns fail the run | 198 s | 3 | — (every agent `sculpt.compare` named the file, not the asset) |
+| 3 | Exact `reference` in the text; the harness scores unscored turns | 209 s | 1 | 0.742 |
+| 4 | Read-only jobs in an agent turn get no undo entry; recipe rules in the text | 230 s | 2 | 0.778 |
+| 5 | The harness measures the outline in pixels; a candidate score taken before an edit is not reused | 181 s | 3 | 0.734 |
+| 6 | First turn at effort "high" (reverted afterwards) | 253 s | 1 | 0.773 |
+| 7 | Final settings: default effort; the text says which shapes take roundness and taper | 206 s | 2 | **0.771**, no refused recipe |
+| 8 | Same harness, model switched in the new picker to **Claude Fable 5.1** (cliproxy) | **116 s** | 2 | **0.911**: target reached |
+
+![Run 8 on Claude Fable 5.1: IoU 0.911 in 116 s](images/sculpt-mode-fable.png)
+
+The loop is now reliable: no refused turns, no stale scores, and three rounds fit in about three minutes. **The model decides the result.** On gpt-6-astra the first draft lands at 0.73–0.78 and candidate rounds add little. The same harness on Claude Fable 5.1 reached **0.911 in 116 s** (run 8). The drafts that reached 0.945 (see below) came from a stronger model that measured the image and spent minutes on a 31-part recipe. Raising the draft's quality is follow-up work (#740: generated views, parallel drafts).
+
 ## Measured: one loop vs parallel (Snorlax, 2026-10-11)
 
 Same reference, a front view with both arms raised. Scores come from `compare_sculpt` at yaw 0 and were re-run independently afterward.

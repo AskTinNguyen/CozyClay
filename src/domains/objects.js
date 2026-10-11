@@ -47,6 +47,7 @@ import { importMeshFile, compressedGlbReason, meshBoundsFromAsset, fitMeshBounds
 import { cutOutBackground, maskAsset } from "../matte.js";
 import { parseRigNodeId } from "../hierarchy-model.js";
 import { StudioProtocolError } from "../studio-agent-protocol.js";
+import { assetDataUrl, sculptPlacement } from "../sculpt-mode.js";
 
 // A stable owner across scene loads. App's remaining native history readers use
 // the small store facade below; authored writes are owned by the document store.
@@ -432,6 +433,25 @@ export function useObjects(appContext) {
 		} finally {
 			db.close?.();
 		}
+	}
+
+	/** Sculpt mode's Place in scene (#739): the sculpt stands on the ground in
+	 * front of the scene camera, where + Add puts a new object, and ends up
+	 * selected. One object.update, so one undo. */
+	function placeSculptInScene(id) {
+		const camera = (appContext.shared.lookThroughShot ? appContext.shared.shotCamRef : appContext.shared.editorCamRef).current;
+		const yaw = (appContext.shared.lookThroughShot ? appContext.shared.look : appContext.shared.editorLook).current.yaw;
+		const receipt = run("object.update", { id, patch: camera ? sculptPlacement(camera.position, yaw) : { y: 0 } });
+		appContext.shared.setSelectedHierarchyId(`object:${id}`);
+		return receipt;
+	}
+
+	/** A sculpt reference goes into the asset store like a cutout's picture;
+	 * the run reads it back as a data URL of the stored bytes. */
+	async function storeSculptReference(file) {
+		const prepared = await importImageFile(file);
+		const stored = await rememberAsset(prepared);
+		return { dataUrl: assetDataUrl(prepared), name: prepared.name || file.name || "reference", assetId: stored.id };
 	}
 
 	function placementInFrontOfShot() {
@@ -1008,5 +1028,6 @@ export function useObjects(appContext) {
 		addSceneObject, importCutout, importCutouts, spawnCutoutAt, persistMeshAsset, importMesh, importMeshes,
 		spawnMeshAt, applyMatte, duplicateSelectedSceneObject, frameSelection, groupObjectUnderNewEmpty, renameRequest, renameSceneObject,
 		sceneObjectWorldMatrix, attachTargetForRow, attachTargetLabel, attachSceneObject,
+		placeSculptInScene, storeSculptReference,
 	};
 }

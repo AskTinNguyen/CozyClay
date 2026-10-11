@@ -34,6 +34,14 @@ function client(fetch, sleep) {
 	return createCodexClient({ getAccessToken: async () => "tok-123", getAccountId: async () => "acct-9", fetch, sleep });
 }
 
+// A requested size (the Sculpt blueprint's landscape sheet) reaches the backend; none is sent otherwise.
+{
+	const fetch = mockFetch([() => jsonResponse({ data: [{ b64_json: PNG_1X1_BASE64 }] })]);
+	await client(fetch).editImage({ prompt: "sheet", imageDataUrl: `data:image/png;base64,${PNG_1X1_BASE64}`, quality: "high", size: "1536x1024" });
+	assert.equal(fetch.calls[0].body.size, "1536x1024");
+	pass("editImage forwards a requested size");
+}
+
 // Image editing keeps the frame first, followed by the optional reference images.
 {
 	const fetch = mockFetch([() => jsonResponse({ data: [{ b64_json: PNG_1X1_BASE64 }] }, { "x-codex-plan-type": "plus" })]);

@@ -550,6 +550,29 @@ for (const export_kind of ["contact_sheet", "panel_pack", "animatic", "animation
 }
 assert.deepEqual(sanitizeProps("export:attempt_started", { export_kind: "panel pack" }), {});
 
+// Sculpt mode (#739): one sculpt_run per ended run; closed outcome, bounded numbers.
+const sculptRunContracts = {
+	outcome: { good: ["done", "cancelled", "failed"], bad: ["score", "idle", "private", true, 1, null] },
+	rounds: { good: [0, 1, 3], bad: [-1, 1.5, 11, "2", true, null] },
+	final_iou: { good: [0, 0.5, 0.95, 1], bad: [-0.1, 1.2, NaN, "0.9", true, null] },
+	duration_ms: { good: [0, 1200, 180000], bad: [-1, Infinity, "100", true, null] },
+	had_target: { good: [true, false], bad: ["true", 1, null] },
+};
+for (const [key, { good, bad }] of Object.entries(sculptRunContracts)) {
+	for (const value of good) assert.deepEqual(sanitizeProps("sculpt_run", { [key]: value }), { [key]: value }, `sculpt_run keeps ${key}=${value}`);
+	for (const value of bad) assert.deepEqual(sanitizeProps("sculpt_run", { [key]: value }), {}, `sculpt_run rejects ${key}=${String(value)}`);
+}
+assert.deepEqual(sanitizeProps("sculpt_run", { final_iou: 0.9449, duration_ms: 1234.6, recipe: {}, sculpt_id: "obj-1", name: "Snorlax" }), { final_iou: 0.94, duration_ms: 1235 });
+assert.equal(analytics.sculptRunTelemetry({ stage: "score", round: 1, iou: 0.8, elapsedMs: 10 }), null);
+assert.deepEqual(
+	analytics.sculptRunTelemetry({ stage: "done", round: 2, iou: 0.9449, elapsedMs: 61234.4 }, { hadTarget: true }),
+	{ outcome: "done", rounds: 2, final_iou: 0.94, duration_ms: 61234, had_target: true },
+);
+assert.deepEqual(
+	analytics.sculptRunTelemetry({ stage: "failed", round: 0, iou: null, elapsedMs: 900 }),
+	{ outcome: "failed", rounds: 0, duration_ms: 900, had_target: false },
+);
+
 const privacyHtml = readFileSync(new URL("../tools/dev/pages/privacy.html", import.meta.url), "utf8");
 const motionDisclosure = new Map();
 for (const row of privacyHtml.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/g)) {

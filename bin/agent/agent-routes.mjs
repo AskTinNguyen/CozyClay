@@ -28,6 +28,8 @@ export function allowAgentOrigin(req, port) {
 
 // Two 1920x1080 PNG data URLs (frame + reference) fit comfortably in this.
 const IMAGE_BODY_LIMIT = 24 * 1024 * 1024;
+// The sizes gpt-image-2 accepts; omitted means the backend's own choice.
+const IMAGE_SIZES = ["auto", "1024x1024", "1536x1024", "1024x1536"];
 
 // Attached scene references (#167): identity sheets and the environment
 // reference. Capped because every one of them is another full image the
@@ -843,7 +845,7 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 			let value;
 			try {
 				value = await readBody(req, IMAGE_BODY_LIMIT);
-				if (typeof value.prompt !== "string" || !value.prompt.trim() || typeof value.imageDataUrl !== "string" || !value.imageDataUrl.startsWith("data:image/") || (value.referenceDataUrl !== undefined && (typeof value.referenceDataUrl !== "string" || !value.referenceDataUrl.startsWith("data:image/"))) || !validReferences(value.references) || (value.composition !== undefined && value.composition !== "frame") || (value.quality !== undefined && !["auto", "low", "medium", "high"].includes(value.quality))) throw new Error("Invalid request.");
+				if (typeof value.prompt !== "string" || !value.prompt.trim() || typeof value.imageDataUrl !== "string" || !value.imageDataUrl.startsWith("data:image/") || (value.referenceDataUrl !== undefined && (typeof value.referenceDataUrl !== "string" || !value.referenceDataUrl.startsWith("data:image/"))) || !validReferences(value.references) || (value.composition !== undefined && !["frame", "sheet"].includes(value.composition)) || (value.quality !== undefined && !["auto", "low", "medium", "high"].includes(value.quality)) || (value.size !== undefined && !IMAGE_SIZES.includes(value.size))) throw new Error("Invalid request.");
 			} catch { json(res, 400, { error: "invalid request" }); return true; }
 			if (!await auth.getAccessToken()) { json(res, 401, { error: { code: "auth", message: "Sign in with ChatGPT in the Agent panel." } }); return true; }
 			try {
@@ -854,9 +856,13 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 				const references = Array.isArray(value.references) ? value.references : [];
 				// composition "frame": the attached frame was framed by hand (Pose mode), so the shot
 				// camera's description would contradict it; the frame alone owns camera and pose.
-				const prompt = value.composition === "frame"
-					? `${FRAME_COMPOSITION_GUIDANCE}\n${value.prompt}${referenceGuidance(references)}`
-					: `${value.prompt}${await renderGuidance(value.prompt)}${referenceGuidance(references)}`;
+				// composition "sheet" (Sculpt blueprint): a model sheet, not a shot, so no scene or
+				// camera guidance is added; the prompt is sent as written.
+				const prompt = value.composition === "sheet"
+					? value.prompt
+					: value.composition === "frame"
+						? `${FRAME_COMPOSITION_GUIDANCE}\n${value.prompt}${referenceGuidance(references)}`
+						: `${value.prompt}${await renderGuidance(value.prompt)}${referenceGuidance(references)}`;
 				const { composition: _composition, ...request } = value;
 				const result = await codex.editImage({ ...request, prompt, extraImages: references.map((entry) => entry.dataUrl) });
 				json(res, 200, { dataUrl: `data:image/png;base64,${result.pngBase64}`, width: result.width, height: result.height });

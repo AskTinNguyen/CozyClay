@@ -67,7 +67,7 @@ expect(
 expect(
 	"look-through keeps fly controls on the shot camera outside preview",
 	app.includes("camRef={ikMode ? poserCamRef : lookThroughShot ? shotCamRef : editorCamRef}") &&
-	app.includes("enabled={!posing && !playMode}") &&
+	app.includes("enabled={!posing && !playMode && !sculptMode}") &&
 	app.includes("onCameraChange={lookThroughShot && !ikMode ? commitManualCameraFraming : undefined}"),
 );
 expect("preview always rides the camera move", app.includes("preview || (moveFollow && !ikMode && !waypointMode && !posing)"));

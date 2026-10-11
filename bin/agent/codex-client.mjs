@@ -92,7 +92,7 @@ export function createCodexClient({
 			}));
 	}
 
-	async function editImage({ prompt, imageDataUrl, referenceDataUrl, extraImages = [], quality = "auto", signal }) {
+	async function editImage({ prompt, imageDataUrl, referenceDataUrl, extraImages = [], quality = "auto", size, signal }) {
 		const images = [imageDataUrl, referenceDataUrl, ...(Array.isArray(extraImages) ? extraImages : [])]
 			.filter((value) => typeof value === "string" && value);
 		const response = await postJson("/images/edits", {
@@ -100,6 +100,7 @@ export function createCodexClient({
 			prompt,
 			images: images.map((image_url) => ({ image_url })),
 			quality,
+			...(size ? { size } : {}),
 		}, signal);
 		const payload = await response.json();
 		const pngBase64 = payload.data[0].b64_json;

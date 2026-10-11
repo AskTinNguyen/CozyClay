@@ -75,6 +75,14 @@ assert.ok(seen.at(-1).prompt.includes("knight"));
 assert.equal(seen.at(-1).composition, undefined, "the flag is not forwarded to the image backend");
 assert.equal((await post({ prompt: "x", imageDataUrl: png, composition: "loose" })).status, 400, "an unknown composition is rejected");
 
+// composition "sheet" (Sculpt blueprint): a model sheet, so the prompt goes out exactly as written.
+const sheet = await post({ prompt: "Make an orthographic model sheet.", imageDataUrl: png, composition: "sheet", quality: "high", size: "1536x1024" });
+assert.equal(sheet.status, 200);
+assert.equal(seen.at(-1).prompt, "Make an orthographic model sheet.", "no scene or camera guidance is added to a sheet");
+assert.equal(seen.at(-1).size, "1536x1024", "the sheet's size reaches the image backend");
+assert.equal(seen.at(-1).composition, undefined);
+assert.equal((await post({ prompt: "x", imageDataUrl: png, size: "999x999" })).status, 400, "an unsupported size is rejected");
+
 // Without a referenceDataUrl the count drops by exactly one.
 await post({ prompt: "golden hour", imageDataUrl: png, references: [references[0]] });
 const bare = seen.at(-1);

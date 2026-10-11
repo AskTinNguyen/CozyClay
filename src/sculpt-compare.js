@@ -15,7 +15,7 @@
  *
  * Pure: image buffers in, numbers and RGBA out. The MCP tool owns the files.
  */
-import { expandSculptParts } from "./sculpt-recipe.js";
+import { expandSculptParts, patchSculptRecipe } from "./sculpt-recipe.js";
 
 const COMPARE_SIZE = 256;
 
@@ -316,4 +316,69 @@ export function bestViewForReference(recipe, image, { yaws = [-45, -30, -15, 0, 
 		if (!best || result.report.iou > best.report.iou) best = result;
 	}
 	return best;
+}
+
+/**
+ * The one scoring path behind MCP compare_sculpt and the editor's sculpt.compare:
+ * score the recipe (at `yaw`, or the best of -45..45 when it is undefined), and
+ * when `candidates` are given, score each patched recipe from that same view and
+ * rank them with the current sculpt. Nothing is applied.
+ * Returns { result, ranked?: [{ label, result }] best first, refused?: [{ label, error }] }.
+ */
+export function scoreSculptAgainstReference(recipe, image, { yaw, elevation = 0, candidates } = {}) {
+	const score = (next, view) => (view === undefined ? bestViewForReference(next, image, { elevation }) : compareSculptToReference(next, image, { yaw: view, elevation }));
+	const result = score(recipe, yaw);
+	if (!candidates) return { result };
+	// Every candidate is scored from the same view as the current sculpt, so the ranking compares shapes, not angles.
+	const view = result.report.view.yaw;
+	const ranked = [{ label: "current", result }];
+	const refused = [];
+	for (const candidate of candidates) {
+		const patched = patchSculptRecipe(recipe, candidate.edits);
+		if (!patched.ok) refused.push({ label: candidate.label, error: patched.error });
+		else ranked.push({ label: candidate.label, result: score(patched.recipe, view) });
+	}
+	ranked.sort((a, b) => b.result.report.iou - a.result.report.iou);
+	return { result, ranked, refused };
+}
+
+/** One ranking row: the candidate's score against the current sculpt's. */
+export function rankingRow({ label, result }, current) {
+	const { report } = result;
+	return { label, iou: report.iou, delta: Number((report.iou - current.report.iou).toFixed(3)), missingByBand: report.missingByBand, extraByPart: report.extraByPart.slice(0, 3) };
+}
+
+/**
+ * The reference outline measured in pixels, for the agent's first draft: the subject's
+ * width:height and, for `rows` horizontal slices from the head top down, the filled
+ * spans across that slice. x is a fraction of the subject's height from its horizontal
+ * centre, positive toward image right (the subject's own left in a front view); y is a
+ * fraction of height from the top. Measuring beats eyeballing: a measured draft scored
+ * IoU 0.945 where an eyeballed one scored about 0.75.
+ */
+export function measureReferenceOutline(image, { rows = 12 } = {}) {
+	const { width, height, mask } = referenceMask(image);
+	let top = height, bottom = -1, left = width, right = -1;
+	for (let y = 0; y < height; y += 1) for (let x = 0; x < width; x += 1) {
+		if (!mask[y * width + x]) continue;
+		if (y < top) top = y; if (y > bottom) bottom = y; if (x < left) left = x; if (x > right) right = x;
+	}
+	if (bottom < 0) throw new Error("no subject found in the reference image");
+	const h = bottom - top + 1, centre = (left + right + 1) / 2;
+	const round = value => Math.round(value * 100) / 100;
+	const slices = [];
+	for (let i = 0; i < rows; i += 1) {
+		const y = Math.min(bottom, Math.round(top + ((i + 0.5) / rows) * h));
+		const spans = [];
+		let start = -1;
+		for (let x = 0; x <= width; x += 1) {
+			const on = x < width && mask[y * width + x];
+			if (on && start < 0) start = x;
+			if (!on && start >= 0) { if (x - start >= 2) spans.push([round((start - centre) / h), round((x - centre) / h)]); start = -1; }
+		}
+		slices.push({ y: round((y - top) / h), spans });
+	}
+	// Where the subject sits in the image (fractions of the image), so a view can draw the slices over it.
+	const box = { left: (left) / width, top: top / height, width: (right - left + 1) / width, height: h / height, aspect: height / width };
+	return { widthToHeight: round((right - left + 1) / h), rows: slices, box };
 }

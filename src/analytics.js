@@ -141,6 +141,7 @@ const EVENT_PROPERTIES = Object.freeze({
 	"tutorial:step_completed": ["surface", "tutorial_version", "step_kind", "elapsed_bucket"],
 	"tutorial:completed": ["surface", "tutorial_version", "elapsed_bucket"],
 	"tutorial:dismissed": ["surface", "tutorial_version", "step_kind"],
+	"sculpt_run": ["outcome", "rounds", "final_iou", "duration_ms", "had_target"],
 	...EXECUTION_TELEMETRY_PROPERTY_KEYS,
 });
 const FEATURE_NAMES = new Set([
@@ -182,6 +183,11 @@ const TUTORIAL_PROPERTY_VALUES = Object.freeze({
 	step_kind: new Set(["fly", "walk", "dolly", "orbit", "shot", "rail", "play"]),
 	elapsed_bucket: new Set(["lt1s", "1-3s", "3-10s", "10-30s", "gte30s"]),
 });
+// Sculpt mode (#739): one sculpt_run per finished run. Numbers only: no
+// reference image, recipe, part name or sculpt id ever rides along.
+export const SCULPT_RUN_OUTCOMES = Object.freeze(["done", "cancelled", "failed"]);
+const SCULPT_RUN_MAX_ROUNDS = 10;
+const SCULPT_RUN_MAX_DURATION_MS = 86_400_000;
 const EXECUTION_FAILURE_CODES = Object.freeze({
 	workflow: new Set(["aborted", "capture_failed", "generation_failed", "unknown"]),
 	agent: new Set(["aborted", "auth", "rate_limited", "tool_failed", "upstream", "unknown"]),
@@ -346,6 +352,15 @@ export function sanitizeProps(event, props) {
 			if (!ERROR_PROPERTY_VALUES[key]?.has(props[key])) continue;
 		}
 		if (event === "device:profile" && !DEVICE_PROPERTY_VALUES[key]?.has(props[key])) continue;
+		if (event === "sculpt_run") {
+			const value = props[key];
+			if (key === "outcome" && SCULPT_RUN_OUTCOMES.includes(value)) sanitized[key] = value;
+			else if (key === "rounds" && Number.isInteger(value) && value >= 0 && value <= SCULPT_RUN_MAX_ROUNDS) sanitized[key] = value;
+			else if (key === "final_iou" && typeof value === "number" && value >= 0 && value <= 1) sanitized[key] = Math.round(value * 100) / 100;
+			else if (key === "duration_ms" && typeof value === "number" && value >= 0 && value <= SCULPT_RUN_MAX_DURATION_MS) sanitized[key] = Math.round(value);
+			else if (key === "had_target" && typeof value === "boolean") sanitized[key] = value;
+			continue;
+		}
 		if (key === "previs_mode" && !PREVIS_MODE_VALUES.has(props[key])) continue;
 		if ((event.startsWith("storyboard:") || event.startsWith("cast:")) && !PREVIS_PROPERTY_VALUES[key]?.has(props[key])) continue;
 		if (event === "survey:use_case") {
@@ -1079,6 +1094,20 @@ export function track(event, props = {}) {
 	} catch {
 		// Analytics must never affect app behavior.
 	}
+}
+
+/** The sculpt_run payload for a sculpt-run state (src/sculpt-run.js), or null
+ * while the run has not ended. `hadTarget`: the run re-sculpted an existing
+ * sculpt rather than creating one. An unscored run omits final_iou. */
+export function sculptRunTelemetry(state, { hadTarget = false } = {}) {
+	if (!SCULPT_RUN_OUTCOMES.includes(state?.stage)) return null;
+	return {
+		outcome: state.stage,
+		rounds: state.round,
+		...(Number.isFinite(state.iou) ? { final_iou: Math.round(state.iou * 100) / 100 } : {}),
+		duration_ms: Math.round(state.elapsedMs),
+		had_target: Boolean(hadTarget),
+	};
 }
 
 export function trackFeature(name) {
