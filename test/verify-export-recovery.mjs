@@ -17,21 +17,16 @@ const shotFixtures = [];
 import { readStudioFunction } from "./bus/verify-domain-modules.mjs";
 
 const source = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
-const pipeline = readFileSync(new URL("../src/use-export-pipeline.js", import.meta.url), "utf8");
 const parsed = parseSync("App.jsx", source, { lang: "jsx" });
 assert.deepEqual(parsed.errors, []);
-const pipelineParsed = parseSync("use-studio-exports.js", pipeline, { lang: "jsx" });
-assert.deepEqual(pipelineParsed.errors, []);
-const app = pipelineParsed.program.body.find((node) => node.type === "ExportNamedDeclaration").declaration;
-const appOriginal = parsed.program.body.find((node) => node.type === "ExportDefaultDeclaration").declaration;
+const app = parsed.program.body.find((node) => node.type === "ExportDefaultDeclaration").declaration;
 const names = ["saveDownload", "dataUrlToBytes", "captureShotFramePng", "shotFramingAtFrame", "packMetaForShot", "buildShotKeyframePack", "shotIndexForPack", "exportKeyframePacks", "download"];
 const functions = names.map((name) => {
-	const node = app.body.body.find((node) => node.type === "FunctionDeclaration" && node.id.name === name)
-		?? appOriginal.body.body.find((node) => node.type === "FunctionDeclaration" && node.id.name === name);
+	const node = app.body.body.find((node) => node.type === "FunctionDeclaration" && node.id.name === name);
 	assert.ok(node, `production function ${name} exists`);
-	return (app.body.body.includes(node) ? pipeline : source).slice(node.start, node.end);
+	return source.slice(node.start, node.end);
 }).join("\n");
-const region = pipeline.slice(pipeline.indexOf('\tconst [recState, setRecState]'), pipeline.indexOf('\tfunction exportPhaseLabel('));
+const region = source.slice(source.indexOf('\tconst [recState, setRecState]'), source.indexOf('\tfunction exportPhaseLabel('));
 const load = new Function("deps", "createAppContext", `with (deps) { ${region}\n${functions}
 const appContext = createAppContext().forRender({
   get recRef() { return recRef; }, get captureCurrentFraming() { return captureCurrentFraming; },
