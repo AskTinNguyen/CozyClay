@@ -23,7 +23,7 @@ const MODES = [
 	{ id: "sculpt", key: "5", label: ko("Sculpt", "조각") },
 ];
 // A storyboard project has no Motion department: its pill reads 1 2 3 5.
-export const modesFor = (previsMode) => (previsMode === "storyboard" ? MODES.filter((mode) => mode.id !== "motion") : MODES);
+const modesFor = (previsMode) => (previsMode === "storyboard" ? MODES.filter((mode) => mode.id !== "motion") : MODES);
 
 // #570 line icons (16px, 1.3 stroke) for the floating rails.
 const ICON = {

@@ -69,7 +69,7 @@ export function characterMotionPatch(characterId, input = {}) {
 	return {
 		characterId: data.characterId || null,
 		motionRef: {
-			...(data.motionRef && typeof data.motionRef === "object" ? clone(data.motionRef) : {}),
+			...(data.motionRef ? clone(data.motionRef) : {}),
 			url: data.url || data.objectUrl || null,
 			fileName: data.fileName || null,
 			mimeType: data.mimeType,

@@ -200,7 +200,7 @@ export function normalizePhases(phases, max = 8) {
 	const expanded = [];
 	const sources = [];
 	for (const [index, phase] of phases.entries()) {
-		expanded.push(String(phase ?? ""));
+		expanded.push(phase);
 		// Which input each output came from, so a caller that attached a duration
 		// to a beat can still line its beats up with the prompts they produced.
 		sources.push(index);

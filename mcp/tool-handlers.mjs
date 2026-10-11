@@ -74,8 +74,6 @@ import { classifyMove, captureFraming, moveSlate } from "../src/camera-move.js";
 import { DEFAULT_PREVIS_MODE, PREVIS_MODES, createProjectDocument, readProjectDocument } from "../src/project.js";
 import { kindRefusal } from "../src/character-kind.js";
 
-/* ------------------------------- state ---------------------------------- */
-
 /** The authoring state. One scene document, one camera, one project name. */
 export const state = {
 	doc: createSceneDocument(),
@@ -477,8 +475,6 @@ const captureFrameResult = async (maxInlineBytes) => {
 };
 
 
-/* ------------------------------ formatting ------------------------------- */
-
 const round = (n, places = 2) => Number(n.toFixed(places));
 const metres = (n) => `${round(n)}m`;
 
@@ -589,8 +585,6 @@ function shotReport() {
 		`texture guidance: ${shot.sizeContext}`,
 	].join("\n");
 }
-
-/* --------------------------------- tools --------------------------------- */
 
 const studioAliasTools = new Set([
 	"set_camera", "frame_shot", "place_object", "update_object", "remove_object",

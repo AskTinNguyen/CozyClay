@@ -475,7 +475,6 @@ export default function AgentPanel({
 		try { globalThis.localStorage?.setItem(STUDIO_SESSION_STORAGE_KEY, chat.sessionId); } catch { /* storage may be unavailable */ }
 	}, [chat.sessionId, restoreReady, surface]);
 
-	// --- activity line -----------------------------------------------------
 	// One line that always states what the panel is doing, ticking while a turn
 	// is live and holding the turn's outcome for a few seconds after it ends.
 	const [activityNow, setActivityNow] = useState(() => Date.now());
@@ -490,7 +489,6 @@ export default function AgentPanel({
 		return () => clearInterval(timer);
 	}, [activity.ticking]);
 
-	// --- session bootstrap -------------------------------------------------
 	// Two ways in (#379): the ChatGPT sign-in, or a provider key the sidecar
 	// already holds. `providersConfigured` counts the second, so a session that
 	// never signed in to ChatGPT still gets a composer instead of a sign-in wall
@@ -594,7 +592,6 @@ export default function AgentPanel({
 		store.send("Give me a wide two-shot of this scene", { attachFrame: false, model });
 	}, [authState, items.length, mockState, model, store]);
 
-	// --- layout ------------------------------------------------------------
 	useEffect(() => {
 		if (embedded) return;
 		const onResize = () => setOverlay((globalThis.innerWidth || 1440) < AGENT_PANEL_OVERLAY_BREAKPOINT);
@@ -678,7 +675,6 @@ export default function AgentPanel({
 		});
 	}, []);
 
-	// --- pasted and dropped pictures ---------------------------------------
 	// A screenshot is the fastest thing an author can show the agent, so the
 	// composer takes one from the clipboard or the desktop. Only a transfer that
 	// actually carries a picture is intercepted: a text paste still lands in the
@@ -695,7 +691,6 @@ export default function AgentPanel({
 		const rejected = prepared.length ? store.addAttachments(prepared).rejected : 0;
 		setAttachNotice(rejected ? ATTACHMENT_LIMIT_NOTICE : failed ? ATTACHMENT_FAILED_NOTICE : null);
 	}, [store]);
-	/** Whether this transfer belongs to the composer. */
 	const takeTransfer = useCallback((transfer) => {
 		const { images, unsupported } = attachmentFilesFromTransfer(transfer);
 		if (!images.length) {
@@ -726,7 +721,6 @@ export default function AgentPanel({
 		if (takeTransfer(event.dataTransfer)) event.preventDefault();
 	}, [takeTransfer]);
 
-	// --- turn --------------------------------------------------------------
 	const runTurn = useCallback((text) => {
 		setAttachNotice(null);
 		setSteerNotice("");
@@ -800,7 +794,6 @@ export default function AgentPanel({
 		}
 	}, [store, transport]);
 
-	// --- provider keys -----------------------------------------------------
 	// The section is read when it opens; every write goes back through the
 	// refresh above, because a key changes the session, not just a row.
 	const toggleProviderKeys = useCallback(() => {
@@ -1025,8 +1018,6 @@ export default function AgentPanel({
 				</li>)}
 			</ul>}
 			{attachNotice && <p className="agent-attachment-notice" role="status">{attachNotice}</p>}
-			{/* One field: the message, and under it on the same surface the
-			    frame toggle, the model and effort picks, and Send. */}
 			<div className="agent-field">
 				<textarea
 					ref={composerRef}

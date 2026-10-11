@@ -111,7 +111,7 @@ export function takeRuntimeTelemetryConfig(
 ) {
 	const existing = readTelemetryState(stateFile);
 	const telemetryEnabled = officialPackage && effectiveTelemetryEnabled(existing, env);
-	const internalQa = telemetryEnabled && existing.internalQa === true;
+	const internalQa = telemetryEnabled && existing.internalQa;
 	let installationId = existing.installationId;
 	const firstLaunch = telemetryEnabled && !existing.firstLaunchedAt;
 	const patch = {};

@@ -59,8 +59,6 @@ import {
 	sweepCaptureArtifacts,
 } from "./tool-handlers.mjs";
 
-/* ------------------------------ process ---------------------------------- */
-
 sweepCaptureArtifacts();
 process.once("exit", cleanupCaptureArtifacts);
 for (const signal of ["SIGINT", "SIGTERM"]) process.once(signal, () => { cleanupCaptureArtifacts(); process.exit(128 + (signal === "SIGINT" ? 2 : 15)); });
@@ -69,8 +67,6 @@ const projectRootPromise = realpath(configuredProjectRoot).then((root) => {
 	process.chdir(root);
 	return root;
 });
-
-/* ------------------------------- server ---------------------------------- */
 
 /** Tool registrations are counted as they happen so the HTTP status page can
  * report the real number without reaching into SDK internals. */
@@ -148,8 +144,6 @@ const serveRegistryTool = (name, args, workspaceHandle) => {
 // them without an MCP server; registration order is the registry's order, which
 // is the order tools/list reports.
 for (const handler of createToolHandlers({ projectRootPromise })) registerTool(handler);
-
-/* -------------------------------- start ---------------------------------- */
 
 /** Counted as the tools are registered, so the status page cannot drift. */
 const TOOL_COUNT = registeredTools;

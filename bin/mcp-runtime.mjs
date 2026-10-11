@@ -83,7 +83,7 @@ function installMcpRuntime() {
 				} catch {
 					try {
 						renameSync(staging, MCP_RUNTIME);
-					} catch (error) {
+					} catch {
 						// Another first run can publish its complete staging
 						// directory first. Accept that winner only after the
 						// same full probe; never execute a partial cache.
