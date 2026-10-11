@@ -5,8 +5,8 @@ import { createServer } from 'vite';
 import { createStudioAppActions } from '../../src/commands/index.js';
 import { createSceneObject } from '../../src/scene-objects.js';
 import { stageFixture } from './stage-fixture.mjs';
-const source = readFileSync(new URL('../../src/app-stage.jsx', import.meta.url), 'utf8');
-const carried = source.slice(source.indexOf('export const ATTACH_BONE_ROWS'), source.indexOf('export const CAMERA_MOVE_LABELS_KO'));
+const source = readFileSync(new URL('../../src/stage-attach-frames.js', import.meta.url), 'utf8');
+const carried = source.slice(source.indexOf('export const ATTACH_BONE_ROWS'));
 const server = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false }, optimizeDeps: { noDiscovery: true, include: [] }, appType: 'custom', plugins: [{
   name: 'objects-without-renderer', enforce: 'pre', load(id) {
     if (id.endsWith('/src/scene-assets.js')) return `export * from './scene-assets.js?real';
