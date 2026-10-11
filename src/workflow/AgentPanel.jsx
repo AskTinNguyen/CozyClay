@@ -37,11 +37,14 @@ import {
 	formatElapsed,
 	formatResetIn,
 	readStoredPanelWidth,
+	readStoredSupervisor,
 	storeModel,
 	storePanelWidth,
+	storeSupervisor,
 	STUDIO_SESSION_STORAGE_KEY,
 	selectedModelRoles,
 	shortModelId,
+	supervisorFollowUp,
 } from "./agent-client.js";
 import "./agent-panel.css";
 
@@ -199,6 +202,47 @@ function ReceiptCard({ item }) {
 	</div>;
 }
 
+const SUPERVISOR_SEVERITY_COPY = { blocker: ko("blocker", "차단"), concern: ko("concern", "우려"), note: ko("note", "참고") };
+const SUPERVISOR_STATUS_COPY = { done: ko("done", "완료"), partial: ko("partial", "일부"), refused: ko("refused", "거부됨"), missing: ko("missing", "누락") };
+
+// The supervisor's note on a finished Studio turn (#728): muted, collapsed to
+// its summary and counts, and never acted on by itself. Its one action puts
+// the blockers and concerns into the composer as the author's next turn.
+function SupervisorCard({ note, onSend, defaultOpen = false }) {
+	const [open, setOpen] = useState(defaultOpen);
+	if (note.verdict !== "reviewed") return <div className="agent-card agent-supervisor-card" data-supervisor-verdict="unavailable">
+		<p className="agent-supervisor-summary">{ko("Supervisor review unavailable", "감독 검토를 할 수 없었어요")}{note.reason ? ` — ${note.reason}` : ""}</p>
+	</div>;
+	const followUp = supervisorFollowUp(note);
+	// Validated run_action drafts (#743), shown under the issue each one fixes.
+	const fixes = Array.isArray(note.fixes) ? note.fixes : [];
+	return <div className="agent-card agent-supervisor-card" data-supervisor-verdict="reviewed" data-open={open ? "true" : "false"}>
+		<div className="agent-supervisor-head">
+			<span className="agent-job-label">{ko("Supervisor", "감독")}</span>
+			{["blocker", "concern", "note"].filter((severity) => note.counts?.[severity] > 0).map((severity) => <span key={severity} className={`agent-job-badge agent-supervisor-badge ${severity}`} data-severity={severity}>{note.counts[severity]} {SUPERVISOR_SEVERITY_COPY[severity]}</span>)}
+			<button type="button" className="agent-ghost-button agent-supervisor-toggle" aria-expanded={open} onClick={() => setOpen((value) => !value)}>{open ? ko("Less", "접기") : ko("Details", "자세히")}</button>
+		</div>
+		<p className="agent-supervisor-summary">{note.summary}</p>
+		{open && note.items?.length > 0 && <ul className="agent-receipt-notes agent-supervisor-items">
+			{note.items.map((item, index) => <li key={index} data-status={item.status}>{SUPERVISOR_STATUS_COPY[item.status] ?? item.status} · {item.text}{item.evidence ? ` — ${item.evidence}` : ""}</li>)}
+		</ul>}
+		{open && note.issues?.length > 0 && <ul className="agent-receipt-notes agent-supervisor-issues">
+			{note.issues.map((issue, index) => {
+				const fix = fixes.find((entry) => entry.issueIndex === index);
+				return <li key={index} data-severity={issue.severity}>{SUPERVISOR_SEVERITY_COPY[issue.severity] ?? issue.severity} · {issue.text}{issue.evidence ? ` — ${issue.evidence}` : ""}
+					{fix && <code className="agent-supervisor-fix" data-fix-action={fix.action}>{`run_action ${JSON.stringify({ action: fix.action, args: fix.args })}`}</code>}
+				</li>;
+			})}
+		</ul>}
+		{followUp && <div className="agent-job-actions">
+			<button type="button" className="agent-ghost-button agent-supervisor-send" onClick={() => onSend(followUp)}
+				title={note.autofix?.eligible ? ko("Autofix is on: the blocker fixes would be applied as written", "자동 수정 켜짐: 차단 수정안을 적힌 그대로 적용합니다") : undefined}>
+				{fixes.length ? ko("Apply fixes as next prompt", "수정안 다음 턴으로 보내기") : ko("Send as next prompt", "다음 턴으로 보내기")}
+			</button>
+		</div>}
+	</div>;
+}
+
 const RECOVERY_COPY = {
 	none: "No recovery is available for this command.",
 	inspect: "Ask the agent to inspect the target before trying again.",
@@ -333,6 +377,10 @@ export default function AgentPanel({
 	// remembered so a reload does not quietly move the next turn to another
 	// provider's model.
 	const chooseModel = useCallback((id) => { setModel(id); setEffort(null); storeModel(id); }, []);
+	// The supervisor switch (#728): a preference like the model pick. Off skips
+	// the post-turn review for every turn sent from this panel.
+	const [supervisorOn, setSupervisorOn] = useState(() => readStoredSupervisor());
+	const toggleSupervisor = useCallback(() => setSupervisorOn((current) => { storeSupervisor(!current); return !current; }), []);
 	// One place takes `{ providers, models }` from the sidecar: the grouped list
 	// the dropdown draws, the flat key-addressed list every lookup uses, and the
 	// model to open with. Returns false when nothing was advertised.
@@ -682,8 +730,8 @@ export default function AgentPanel({
 	const runTurn = useCallback((text) => {
 		setAttachNotice(null);
 		setSteerNotice("");
-		return store.send(text, { attachFrame, model, effort: effort ?? undefined });
-	}, [attachFrame, effort, model, store]);
+		return store.send(text, { attachFrame, model, effort: effort ?? undefined, supervisor: supervisorOn });
+	}, [attachFrame, effort, model, store, supervisorOn]);
 	const stopTurn = useCallback(() => store.stop(), [store]);
 	// Steering the turn that is already running: the composer's text joins THAT
 	// turn instead of starting a second one. A refusal (the turn ended while the
@@ -948,6 +996,7 @@ export default function AgentPanel({
 				if (item.kind === "job") return <div className="agent-row" key={item.id}><JobCard job={item} onStop={stopTurn} onAccept={(job) => store.acceptJob(job.jobId)} /></div>;
 				if (item.kind === "receipt") return <div className="agent-row" key={item.id}><ReceiptCard item={item} /></div>;
 				if (item.kind === "failure") return <div className="agent-row" key={item.id}><FailureCard failure={item.failure} onRetry={() => runTurn(chat.lastPrompt)} /></div>;
+				if (item.kind === "supervisor") return <div className="agent-row" key={item.id}><SupervisorCard note={item} onSend={(text) => { store.setDraft(text); runTurn(text); }} /></div>;
 				return <div className="agent-row" key={item.id}><ImageResultCard image={item} onUse={(image) => store.applyImage(image.id)} onUndo={(image) => store.undoImage(image.id)} onRegenerate={() => runTurn(chat.lastPrompt)} onOpen={setLightbox} /></div>;
 			})}
 
@@ -1015,6 +1064,11 @@ export default function AgentPanel({
 							    option's tooltip so the composer row stays one line. */}
 							{efforts.map((value, index) => <option key={value} value={value} title={index === 0 ? "Default for this model" : undefined}>{value}</option>)}
 						</select>
+					)}
+					{surface === "studio" && (
+						<button type="button" className={`agent-supervisor-toggle${supervisorOn ? " is-on" : ""}`} role="switch" aria-checked={supervisorOn} aria-label={ko("Supervisor review", "감독 검토")} title={ko(supervisorOn ? "Supervisor review is on: a note arrives after each editing turn" : "Supervisor review is off", supervisorOn ? "감독 검토 켜짐: 편집 턴이 끝나면 메모가 옵니다" : "감독 검토 꺼짐")} onClick={toggleSupervisor}>
+							{ko("Supervisor", "감독")} {supervisorOn ? "ON" : "OFF"}
+						</button>
 					)}
 					<span className="agent-composer-spacer" aria-hidden="true" />
 					{surface === "studio" && i2vActionRef.current && <button

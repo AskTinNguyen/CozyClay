@@ -228,7 +228,7 @@ function studioObservationMessage(observation) {
 	return {
 		role: "user",
 		content: [
-			{ type: "text", text: `Studio frame observation revision ${JSON.stringify(observation?.revision ?? null)} receipt ${observation?.receiptId ?? "unavailable"}` },
+			{ type: "text", text: `Studio ${observation?.kind === "plan" ? "plan observation (top view)" : "frame observation"} revision ${JSON.stringify(observation?.revision ?? null)} receipt ${observation?.receiptId ?? "unavailable"}` },
 			{ type: "image", data: observation.data, mimeType: observation.mimeType },
 		],
 	};

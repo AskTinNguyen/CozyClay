@@ -214,6 +214,15 @@ function registerTests() {
 			/coplanar overlapping faces: offset them by at least 3 mm or put one fully inside/]) assert.match(prompt, rule);
 		assert.doesNotMatch(prompt, /Grouping carries position only/);
 	});
+	test("#742 the Studio prompt carries the previs procedure and keeps the protocol rules", async () => {
+		const { STUDIO_SYSTEM_PROMPT: prompt, STUDIO_SYSTEM_PROMPT_STORYBOARD: storyboard } = await import("../bin/agent/studio-prompt.mjs");
+		assert.match(prompt, /Previs procedure/);
+		assert.match(prompt, /180/);
+		assert.match(prompt, /axisConsistent/);
+		assert.ok(prompt.includes("On STALE_SCENE, inspect_studio once to read the fresh revision and re-issue the exact same operation with that revision as the new admission"));
+		assert.ok(prompt.indexOf("Previs procedure") > prompt.indexOf("Ask concise questions only when"), "appended after the existing rules");
+		assert.doesNotMatch(storyboard, /Previs procedure/);
+	});
 	test("D3 patch_elements schema is derived from the element declaration table", () => {
 		assert.equal(protocol.STUDIO_TOOL_FAMILIES.length, 3);
 		assert.ok(protocol.STUDIO_TOOL_ALIASES.includes("patch_elements"));
