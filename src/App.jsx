@@ -58,6 +58,7 @@ import { sculptAgentClient, sculptModelLabel } from "./sculpt-mode.js";
 import { useSculptMode } from "./use-sculpt-mode.js";
 import { useFirstSuccessPrompt } from "./use-first-success-prompt.js";
 import { useCameraTutorial } from "./use-camera-tutorial.js";
+import { useEmbedBridge } from "./use-embed-bridge.js";
 import { StudioProtocolError } from "./studio-agent-protocol.js";
 import { elementByPath } from "./studio-elements.js";
 import {
@@ -219,9 +220,6 @@ import {
 } from "./analytics.js";
 import { ko, isKo } from "./locale.js";
 import { characterCapabilities, kindRefusal, proxyFigureBounds } from "./character-kind.js";
-import {
-	isPlaygroundEmbed,
-} from "./playground.js";
 import { STARTER_SCENES } from "./starter-scenes.js";
 import { PART_COLOURS } from "./part-colours.js";
 import {
@@ -507,12 +505,7 @@ export default function App() {
 		getBus: () => studioBindingRef.current.bus,
 		notify: (...args) => setToast(...args),
 	}));
-	const embedMode = ["scene", "playview"].includes(new URLSearchParams(globalThis.location?.search || "").get("embed"));
-	// The landing page's try-it iframe: full studio interaction on a preset
-	// scene with the project chrome hidden and saving off (see playground.js).
-	const playgroundMode = isPlaygroundEmbed(globalThis.location?.search);
-	const [playgroundHint, setPlaygroundHint] = useState(null);
-	const playgroundExportRef = useRef(null);
+	const { embedMode, playgroundMode, playgroundHint, setPlaygroundHint, playgroundExportRef } = useEmbedBridge();
 	const { cameraTutorialEntry, cameraTutorialQuery, cameraTutorial, setCameraTutorial, cameraTutorialAnalytics, cameraTutorialAttempt, setCameraTutorialAttempt, cameraTutorialHandoff, setCameraTutorialHandoff, cameraTutorialCompletedRef, exportMenuTriggerRef, exportShotIdRef, cameraTutorialStep, setCameraTutorialStep, startCameraTutorialRef, cameraTutorialStarted, tutorialStarterRef, tutorialLoadingRef, tutorialProjectEpochRef, tutorialSeedEpochRef, tutorialSeedPending, setTutorialSeedPending } = useCameraTutorial({ embedMode, playgroundMode });
 	useEffect(() => {
 		if (!cameraTutorialQuery || cameraTutorialStarted.current) return;
