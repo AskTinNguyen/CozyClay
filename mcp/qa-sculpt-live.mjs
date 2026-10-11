@@ -4,8 +4,9 @@
  *
  * Starts the MCP server over stdio with its own live port, waits for the
  * editor tab (opened by the caller, or by QA_OPEN=1 through the system Chrome
- * at QA_URL) to connect, sculpts the turtle fixture, re-sculpts it, frames it,
- * and saves capture_frame PNGs. The editor must render a sculpt and report it.
+ * at QA_URL) to connect, sculpts the turtle fixture, frames it,
+ * patches one part with capture in the same call, scores the sculpt against
+ * QA_REFERENCE when given, and saves the PNGs. The editor must render a sculpt and report it.
  *
  * Run: `COZYCLAY_LIVE_PORT=6030 npm run dev:ui -- --port 5910`, open
  * http://127.0.0.1:5910/app/ in a browser, then
@@ -70,10 +71,20 @@ try {
 	await call("set_camera", { x: -0.6, y: 0.85, z: 3.3, look_at_x: -1.3, look_at_y: 0.45, look_at_z: 1.4, focal_mm: 40 });
 	console.log("saved:", saveCapture(await call("capture_frame", { max_inline_bytes: 1_000_000 }), "sculpt-turtle.png"));
 
-	const wider = { ...turtle, parts: turtle.parts.map((part) => (part.id === "head" ? { ...part, size: [part.size[0] * 1.15, part.size[1], part.size[2]] } : part)) };
-	const again = await call("sculpt_object", { id, recipe: wider });
-	console.log("re-sculpt:", again.content.find((part) => part.type === "text").text.split("\n")[0]);
-	console.log("saved:", saveCapture(await call("capture_frame", { max_inline_bytes: 1_000_000 }), "sculpt-turtle-resculpt.png"));
+	const reference = process.env.QA_REFERENCE;
+	if (reference) {
+		const scored = await call("compare_sculpt", { id, reference });
+		console.log("compare_sculpt:", scored.content[0].text);
+		writeFileSync(join(out, "compare-sheet.png"), Buffer.from(scored.content.find((part) => part.type === "image").data, "base64"));
+	}
+	// One round = one call: patch a part and get the frame back.
+	const head = turtle.parts.find((part) => part.id === "head");
+	const patched = await call("sculpt_object", { id, edits: [{ set: "head", size: [head.size[0] * 1.15, head.size[1], head.size[2]] }], capture: true });
+	const patchedReceipt = JSON.parse(patched.content.find((part) => part.type === "text").text);
+	assert.equal(patchedReceipt.ok, true);
+	assert.match(patchedReceipt.summary, /^Patched head on/);
+	console.log("patch+capture:", patchedReceipt.summary);
+	console.log("saved:", saveCapture(patched, "sculpt-turtle-patched.png"));
 
 	const refused = await client.callTool({ name: "sculpt_object", arguments: { recipe: { parts: [{ id: "head", shape: "teapot", size: [1, 1, 1] }] } } });
 	assert.equal(refused.isError, true);
