@@ -201,7 +201,7 @@ export function buildFollowTrack(subject, fps, params = {}) {
 	const p = { ...FOLLOW_DEFAULTS, ...params };
 	if (!subject || subject.length === 0) return [];
 	const dt = followFixedTimestep(fps);
-	const dirs = travelDirections(subject, fps, p.initialDir ?? null, p.dirBlend);
+	const dirs = travelDirections(subject, fps, p.initialDir, p.dirBlend);
 	const offsets = dirs.map((dir) => rotateDirection({ x: -dir.x, z: -dir.z }, p.orbitOffsetDeg));
 	const vels = smoothedVelocities(subject, fps);
 	const omega = omegaFor(p.response);
@@ -270,8 +270,6 @@ export function buildFollowTrack(subject, fps, params = {}) {
 	return track;
 }
 
-/* ----------------------------------------------------------- the crane --- */
-
 /** Accepts the canonical { points } crane or the legacy { start, end } pair. */
 function cranePoints(value) {
 	if (!value || typeof value !== "object") return null;
@@ -293,8 +291,6 @@ export function craneHeightAt(craneHeight, progress) {
 	if (!points) return NaN;
 	return monotoneCubicAt(points, Math.max(0, Math.min(1, progress)), (point) => point.height);
 }
-
-/* ------------------------------------------------------------ the rail --- */
 
 /**
  * Ramer–Douglas–Peucker: an authored stroke is hundreds of jittery pointer
@@ -441,7 +437,7 @@ export function buildRailFollowTrack(subject, fps, rail, params = {}) {
 	const crane = cranePoints(p.craneHeight) ? p.craneHeight : null;
 	const craneTargetAt = (arc) => {
 		if (!crane) return p.height;
-		return craneHeightAt(crane, rail.length < 1e-9 ? 1 : arc / rail.length);
+		return craneHeightAt(crane, arc / rail.length);
 	};
 
 	const distanceErrorAt = (s, subj) => {
@@ -490,13 +486,13 @@ export function buildRailFollowTrack(subject, fps, rail, params = {}) {
 			// area is the rail length, and a cut pins "at this frame, be at
 			// this point of the rail". Null timing is the identity — the
 			// constant-speed schedule this line always was.
-			const authoredS = rail.length * timingProgress(p.dollyTiming ?? null, progress);
+			const authoredS = rail.length * timingProgress(p.dollyTiming, progress);
 			const distanceS = bestSNear(authoredS, subject[f], p.searchWindow, 0);
 			// Distance influence fades to zero at both authored endpoints, so
 			// it refines the middle of the move without shifting its marks.
 			const correctionEnvelope = Math.sin(Math.PI * progress) ** 2;
 			const correction = (distanceS - authoredS) * clamp(p.distanceInfluence, 0, 1) * correctionEnvelope;
-			const ledS = rail.length * timingProgress(p.dollyTiming ?? null, Math.min(1, progress + leadFraction));
+			const ledS = rail.length * timingProgress(p.dollyTiming, Math.min(1, progress + leadFraction));
 			const sTarget = Math.max(s, Math.min(rail.length, ledS + correction));
 			[s, sVel] = cappedSpringStep(s, sVel, sTarget, omega, dt, p.maxDollySpeed);
 			s = Math.max(0, Math.min(s, rail.length));

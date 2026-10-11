@@ -7,34 +7,9 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { Canvas } from "@react-three/fiber";
-import { retimeMotion } from "./ardy/retime.js";
-import {
-	TRAIL_EFFECTOR_JOINTS,
-} from "./motion-trail.js";
-import Timeline from "./ardy/timeline.jsx";
-import { FlyControls } from "./controls.jsx";
-import {
-	CURVE_GRAB_RADIUS_PX,
-	curveToPoints2d,
-	validateLineEdit,
-} from "./line-edit.js";
-import { DEFAULT_SCENE_OBJECTS, SCENE_ATTACH_BONES, updateSceneObject } from "./scene-objects.js";
 import { imageFilesFrom } from "./scene-assets.js";
 import { splitDroppedFiles } from "./scene-mesh.js";
-import {
-	SCENES_QUARANTINE_KEY,
-	createSceneDocument,
-	DEFAULT_SUBJECT_ONE,
-	DEFAULT_SUBJECT_TWO,
-	loadSceneDocumentFromStorage,
-} from "./scenes.js";
-import ObjectGizmo from "./object-gizmo.jsx";
-import { track } from "./analytics.js";
-import { ko, isKo } from "./locale.js";
-import { isPlaygroundEmbed, takePlaygroundProject } from "./playground.js";
-import { POSE_BONES, normalizeBoneName } from "./poses.js";
-import { SHOT_ASPECT_RATIOS } from "./shot.js";
+import { ko } from "./locale.js";
 
 import {
 	PRESETS,

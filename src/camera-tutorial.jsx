@@ -98,8 +98,6 @@ export const CAMERA_TUTORIAL_STEPS = [
 const NAV_KINDS = new Set(["fly", "walk", "dolly", "orbit"]);
 const SIGNAL_KINDS = new Set(["shot", "rail"]);
 
-/* ------------------------------------------------------------- beacons --- */
-
 // Where each of the last three steps actually happens (#211). The card names
 // the gesture; these pin a numbered circle and a caption onto the control
 // itself, so "click + Add shot" stops being a treasure hunt across two panes.
@@ -248,8 +246,6 @@ export function TutorialBeacon({ kind, step, role, selector, label, requires = n
 		document.body,
 	);
 }
-
-/* -------------------------------------------------------- gesture cues --- */
 
 // Steps 1–4 have no control to point at: the gesture IS the interface. The cue
 // draws the mouse and the keys the step wants, animated the way the hand is
@@ -513,8 +509,8 @@ export function CameraTutorial({ previsMode, previewing = false, shotCount = 0, 
 				role={beacon.role}
 				selector={beacon.selector}
 				label={beacon.label}
-				requires={beacon.requires ?? null}
-				absent={beacon.absent ?? null}
+				requires={beacon.requires}
+				absent={beacon.absent}
 			/>
 		))}
 	</>

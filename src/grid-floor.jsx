@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import * as THREE from "three";
 import { STAGE_SIZE } from "./room.jsx";
-import { GRID_BACKGROUND, GRID_COLORS } from "./grid-view.js";
+import { GRID_COLORS } from "./grid-view.js";
 
 /**
  * The Blender-style reference grid: one shader plane instead of a floor.
@@ -92,6 +92,3 @@ export function GridFloor({ layer = null }) {
 		</mesh>
 	);
 }
-
-/** the void color the mode pairs with; re-exported for the App's background swap */
-export { GRID_BACKGROUND };

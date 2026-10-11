@@ -664,7 +664,6 @@ export default function AssetPane({
 						</button>
 					</nav>
 					<div className="content-main">
-						{/* Only a project that carries resources has totals worth a line. */}
 						{resourceManifest?.items?.length ? <ResourceStatus manifest={resourceManifest} compact /> : null}
 						{manageStorage ? (
 							<StorageManager unusedAssetIds={unusedAssetIds} usedAssetIds={usedAssetIds} usageCounts={usageCounts} graphSignature={graphSignature} trashCount={trashCount} onDelete={onDeleteUnusedAsset} onUndo={onUndoDelete} deletingAssetId={deletingAssetId} />

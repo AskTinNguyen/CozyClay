@@ -61,7 +61,6 @@ export function looksLikeObj(bytes) {
 		const line = raw.trim();
 		if (!/^v\s+/.test(line)) continue;
 		const parts = line.split(/\s+/);
-		if (parts[0] !== "v") continue;
 		if ([parts[1], parts[2], parts[3]].every((part) => Number.isFinite(Number(part)))) return true;
 	}
 	return false;

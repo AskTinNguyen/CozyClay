@@ -296,13 +296,6 @@ const matVec = (m, v) => [
 	m[3] * v[0] + m[4] * v[1] + m[5] * v[2],
 	m[6] * v[0] + m[7] * v[1] + m[8] * v[2],
 ];
-/** Inverse of a row-major 3x3 (callers keep it well conditioned). */
-function inverse3(m) {
-	const [a, b, c, d, e, f, g, h, i] = m;
-	const A = e * i - f * h, B = f * g - d * i, C = d * h - e * g;
-	const det = a * A + b * B + c * C;
-	return [A, c * h - b * i, b * f - c * e, B, a * i - c * g, c * d - a * f, C, b * g - a * h, a * e - b * d].map((v) => v / det);
-}
 /** Shortest-arc rotation taking unit `a` onto unit `b` (Rodrigues). */
 function arcRotation(a, b) {
 	const c = dot(a, b);
