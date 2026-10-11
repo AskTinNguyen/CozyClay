@@ -15,7 +15,8 @@ export const proxyCast = () => [createCharacterEntry({ id: 'actor-a', model: 'y-
 // Keep the shipped constants and cast hook; exclude only renderer components
 // imported by app-stage, which cannot mount in this Node integration fixture.
 const source = readFileSync(new URL('../../src/app-stage.jsx', import.meta.url), 'utf8')
-  + readFileSync(new URL('../../src/ardy-bridge-contract.js', import.meta.url), 'utf8');
+  + readFileSync(new URL('../../src/ardy-bridge-contract.js', import.meta.url), 'utf8')
+  + readFileSync(new URL('../../src/stage-startup-defaults.js', import.meta.url), 'utf8');
 const names = new Set(['DEFAULT_SUBJECT', 'DEFAULT_SUBJECT2', 'nextCharacterId', 'DEFAULT_PROMPT_CLIPS',
   'MAX_WAYPOINTS', 'MULTIMODEL_REASONS', 'ARDY_PROMPT_HORIZON_FRAMES', 'ARDY_DURATION_MIN', 'TIMELINE_FPS']);
 const constants = parseSync('stage.jsx', source).program.body.filter(node => node.type === 'ExportNamedDeclaration' &&

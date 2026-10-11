@@ -21,7 +21,8 @@ const studioSource = readFileSync(new URL("../src/posestudio.jsx", import.meta.u
 // The studio source spans App.jsx and app-stage.jsx (module-level extraction); pin against both.
 import { readStudioSource } from "./bus/verify-domain-modules.mjs";
 const appSource = readStudioSource()
-	+ readFileSync(new URL("../src/app-stage.jsx", import.meta.url), "utf8");
+	+ readFileSync(new URL("../src/app-stage.jsx", import.meta.url), "utf8")
+	+ readFileSync(new URL("../src/stage-startup-defaults.js", import.meta.url), "utf8");
 const stylesSource = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
 
 /* --- no presets ship ------------------------------------------------------- */
