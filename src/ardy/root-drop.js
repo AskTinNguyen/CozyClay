@@ -119,7 +119,6 @@ export function applySupportRise(
 			const rise = (motion.rootPos[evidenceFrame * 3 + 1] - motion.rootPos[from * 3 + 1]) * scale;
 			const slope = rise / ((evidenceFrame - from) / motion.fps);
 			if (rise < Number(minRise) || slope < Number(minSlope)) continue;
-			const feet = SUPPORT_FEET.filter((joint) => joint < joints);
 			if (!feet.length) continue;
 			const supportRect = {
 				x: Number(support.x) || 0, z: Number(support.z) || 0,

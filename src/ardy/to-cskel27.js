@@ -140,7 +140,6 @@ export function poseToCskel27({ pose, rest, reference }) {
 		}
 	}
 
-	// Every joint CozyClay authors must be present and a unit quaternion.
 	for (const bone of COZYCLAY_BONES) {
 		if (!(bone in pose.bones)) {
 			throw new Error(`poseToCskel27: pose.bones is missing "${bone}"`);
@@ -198,7 +197,6 @@ export function poseToCskel27({ pose, rest, reference }) {
 		}
 	}
 
-	// Every emitted matrix must be a real rotation.
 	for (let index = 0; index < CSKEL27_JOINTS.length; index += 1) {
 		requireRotationMatrix(
 			local_rot_mats[index],

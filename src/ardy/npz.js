@@ -54,8 +54,6 @@ export class NpzError extends Error {
 	}
 }
 
-/* --- CRC-32 (IEEE 802.3, reflected) -------------------------------------- */
-
 const CRC_TABLE = (() => {
 	const table = new Uint32Array(256);
 	for (let n = 0; n < 256; n += 1) {
@@ -71,8 +69,6 @@ function crc32(bytes) {
 	for (let i = 0; i < bytes.length; i += 1) c = CRC_TABLE[(c ^ bytes[i]) & 0xff] ^ (c >>> 8);
 	return (c ^ 0xffffffff) >>> 0;
 }
-
-/* --- zip container -------------------------------------------------------- */
 
 /** Locate the End of Central Directory record, scanning back from EOF. */
 function findEocd(view) {
@@ -218,8 +214,6 @@ async function inflateRaw(bytes, cap) {
 	}
 	return out;
 }
-
-/* --- npy member ----------------------------------------------------------- */
 
 const DTYPE_RE = /^([<>=|])([A-Za-z?])([0-9]{1,4})$/;
 
@@ -402,8 +396,6 @@ function checkRotationMatrix(rows, frame, joint) {
 		throw new NpzError(`motion npz frame ${frame} joint ${joint}: determinant ${determinant} is not +1`);
 	}
 }
-
-/* --- archive decode ------------------------------------------------------- */
 
 /**
  * Decode an ARDY motion npz from raw bytes.

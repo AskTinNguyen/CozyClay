@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { SUPPORT_SITES } from "./physics-review.js";
 import { useMotionCommands } from '../domains/motion.js';
 import "./physics-panel.css";
