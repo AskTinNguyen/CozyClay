@@ -21,6 +21,7 @@
 //   GET  /agent/turn/<turnId>/events?after=N -> replay after a dropped stream
 //   POST /agent/stop                        -> { surface, sessionId, turnId, jobId? }
 //   POST /agent/jobs/<jobId>/accept          -> explicit "Apply with warnings"
+//   GET  /agent/turn/<turnId>/supervisor     -> 200 supervisor note | 204 none (#728)
 
 import { bucketMs, track } from "../analytics.js";
 import { appendAttachments, ATTACHMENT_MAX_COUNT } from "./attachment-image.js";
@@ -264,6 +265,27 @@ export function storeModel(key, storage = globalThis.localStorage) {
 	}
 }
 
+/** The supervisor switch (#728): on unless the author turned it off. It rides
+ * on every Studio turn as `supervisor: false` so the sidecar skips the review
+ * for that turn; the sidecar's own COZYCLAY_SUPERVISOR=off still wins. */
+export const AGENT_SUPERVISOR_KEY = "cozyclay.agent.supervisor";
+
+export function readStoredSupervisor(storage = globalThis.localStorage) {
+	try {
+		return storage?.getItem(AGENT_SUPERVISOR_KEY) !== "off";
+	} catch {
+		return true;
+	}
+}
+
+export function storeSupervisor(enabled, storage = globalThis.localStorage) {
+	try {
+		storage?.setItem(AGENT_SUPERVISOR_KEY, enabled ? "on" : "off");
+	} catch {
+		// Private-mode storage denial must never break the toggle.
+	}
+}
+
 /** The model to open with: the remembered key when it is still advertised,
  * otherwise the first model the sidecar listed. */
 export function preferredModel(models, stored = readStoredModel()) {
@@ -354,6 +376,28 @@ export const STEER_ERROR_COPY = {
 	STEER_UNSUPPORTED: "This surface cannot steer a running turn.",
 	NO_ACTIVE_TURN: "That turn already ended — send it as a new message.",
 };
+
+/** Codes a Studio refusal carries: a turn that met one is reviewed by the
+ * supervisor even when it authored nothing (#728). */
+const SUPERVISOR_REFUSAL = /^(TARGET_NOT_READY|CAPABILITY_MISSING|CONFIRMATION_REQUIRED):/;
+
+/** The next prompt a supervisor note suggests: its blocker and concern issues,
+ * or null when it raised none. A note with validated fixes (#743) asks for
+ * exactly those run_action calls, in order, in one script; the blockers and
+ * concerns without a fix follow under their own header. */
+export function supervisorFollowUp(note) {
+	const all = Array.isArray(note?.issues) ? note.issues : [];
+	const fixes = (Array.isArray(note?.fixes) ? note.fixes : []).filter((fix) => typeof fix?.action === "string" && fix.args && typeof fix.args === "object");
+	const fixed = new Set(fixes.map((fix) => fix.issueIndex));
+	const issues = all.filter((issue, index) => (issue?.severity === "blocker" || issue?.severity === "concern") && !fixed.has(index));
+	const line = (issue) => `- [${issue.severity}] ${issue.text}${issue.evidence ? ` (${issue.evidence})` : ""}`;
+	if (!fixes.length) return issues.length ? [ko("Supervisor review — please address:", "감독 검토 — 다음을 고쳐 주세요:"), ...issues.map(line)].join("\n") : null;
+	return [
+		ko("Supervisor review — apply these fixes exactly, in order, in ONE script call, then verify_result; do not re-derive them:", "감독 검토 — 아래 수정을 유추 없이 순서대로 script 1회로 실행하고 verify_result로 확인해 주세요:"),
+		...fixes.map((fix) => `- [${fix.severity}] ${all[fix.issueIndex]?.text ?? ""} -> run_action ${JSON.stringify({ action: fix.action, args: fix.args })}`),
+		...(issues.length ? [ko("Also check:", "추가 확인:"), ...issues.map(line)] : []),
+	].join("\n");
+}
 
 export const ERROR_COPY = {
 	auth: "Your session expired. Sign in again to continue.",
@@ -686,9 +730,18 @@ export function createHttpTransport({ fetchImpl = globalThis.fetch?.bind(globalT
 		async videoProviders() {
 			return request("/agent/video/providers");
 		},
+		/** The supervisor note for a finished Studio turn (#728): one long-poll
+		 * the sidecar holds while the review runs. A 200 is the note; a 204, a
+		 * failure or anything unreadable is no note. */
+		async supervisor(turnId, signal) {
+			const response = await fetchImpl(sidecarUrl(`/agent/turn/${encodeURIComponent(turnId)}/supervisor`), { headers: { accept: "application/json" }, credentials: "same-origin", signal });
+			if (response?.status !== 200) return null;
+			const note = await response.json();
+			return note?.type === "supervisor" && ["reviewed", "unavailable"].includes(note.verdict) ? note : null;
+		},
 		/** Streams sidecar events to `onEvent`. Resolves when the turn ends. */
 		async turn(turnRequest, onEvent, signal) {
-			const { sessionId, text, attachFrame, model, effort, attachments } = turnRequest;
+			const { sessionId, text, attachFrame, model, effort, attachments, supervisor } = turnRequest;
 			const attached = Array.isArray(attachments) && attachments.length ? { attachments } : {};
 			const studio = turnRequest.surface === "studio";
 			const turnId = studio ? turnRequest.turnId : null;
@@ -743,7 +796,7 @@ export function createHttpTransport({ fetchImpl = globalThis.fetch?.bind(globalT
 			const body = studio
 				? JSON.stringify({
 					surface: "studio", sessionId, turnId, text, context: turnRequest.context,
-					...(model ? { model } : {}), ...(effort ? { effort } : {}), ...(attachFrame === undefined ? {} : { attachFrame: Boolean(attachFrame) }), ...attached,
+					...(model ? { model } : {}), ...(effort ? { effort } : {}), ...(attachFrame === undefined ? {} : { attachFrame: Boolean(attachFrame) }), ...(supervisor === false ? { supervisor: false } : {}), ...attached,
 				})
 				: JSON.stringify({ sessionId, text, attachFrame, model, ...(effort ? { effort } : {}), ...attached, ...(telemetry.turnId ? { turn_id: telemetry.turnId } : {}) });
 			try {
@@ -1166,6 +1219,9 @@ export function createAgentChatStore({
 	// turnId, or the hex id the dock's transport mints. It is what the steer
 	// route is keyed by, and only the transport can tell us which it is.
 	let wireTurnId = null;
+	// Supervisor note requests still waiting on the sidecar; a cleared or
+	// replaced conversation abandons them.
+	const supervisorRequests = new Set();
 	let state = {
 		sessionId: newId(),
 		turnId: null,
@@ -1257,8 +1313,29 @@ export function createAgentChatStore({
 		try { onReceipt?.(receipt); } catch { /* host presentation is advisory */ }
 	}
 
+	// One request per reviewable Studio turn, after its stream ended: the note
+	// joins the transcript whenever it arrives, and nothing waits for it.
+	function requestSupervisorNote(turnId) {
+		if (typeof transport.supervisor !== "function") return;
+		const request = new AbortController();
+		supervisorRequests.add(request);
+		Promise.resolve()
+			.then(() => transport.supervisor(turnId, request.signal))
+			.then((note) => {
+				if (!note || request.signal.aborted) return;
+				setItems((items) => [...items, { ...note, kind: "supervisor", id: `supervisor:${turnId}` }]);
+			})
+			.catch(() => { /* a missing note is no note */ })
+			.finally(() => supervisorRequests.delete(request));
+	}
+	const abandonSupervisorNotes = () => { for (const request of supervisorRequests) request.abort(); supervisorRequests.clear(); };
+
 	function applyEvent(event) {
 		if (activeTurn && ["text.delta", "tool.start", "tool.done", "image", "job.state", "job.progress", "receipt", "error"].includes(event?.type)) activeTurn.produced = true;
+		// The supervisor's own trigger, read from the same frames: an authored
+		// result or a refusal makes the turn reviewable.
+		if (activeTurn && ((event?.type === "tool.done" && (event.ok ? event.result?.authored === true : SUPERVISOR_REFUSAL.test(String(event.error ?? ""))))
+			|| (event?.type === "receipt" && event.receipt?.authored === true))) activeTurn.reviewable = true;
 		if (event?.type === "text.delta") {
 			setItems((items) => {
 				const last = items[items.length - 1];
@@ -1336,6 +1413,7 @@ export function createAgentChatStore({
 	}
 
 	const resetSession = () => {
+		abandonSupervisorNotes();
 		seenReceipts.clear();
 		settledActions.clear();
 		// Clearing the transcript also retires the server session: a cleared chat
@@ -1343,6 +1421,7 @@ export function createAgentChatStore({
 		set({ sessionId: newId(), turnId: null, items: [], pendingAttachments: [], rateLimit: null, lastPrompt: "", turnStartedAt: null, lastTurn: null });
 	};
 	const restore = (transcript, sessionId = state.sessionId) => {
+		abandonSupervisorNotes();
 		seenReceipts.clear();
 		settledActions.clear();
 		const restoredReceiptIds = new Set();
@@ -1399,7 +1478,7 @@ export function createAgentChatStore({
 				return;
 			}
 			const startedAt = clock();
-			const turn = { produced: false, failure: null };
+			const turn = { produced: false, failure: null, reviewable: false };
 			activeTurn = turn;
 			// What the author attached to THIS message: an explicit list wins, the
 			// composer's pending pictures otherwise. Either way the composer is
@@ -1430,6 +1509,7 @@ export function createAgentChatStore({
 					attachFrame: Boolean(options.attachFrame),
 					model: options.model,
 					effort: options.effort ?? undefined,
+					...(options.supervisor === false ? { supervisor: false } : {}),
 				}, applyEvent, signal);
 			} catch (error) {
 				if (!signal.aborted) applyEvent({ type: "error", code: "upstream", message: String(error?.message || error) });
@@ -1455,6 +1535,7 @@ export function createAgentChatStore({
 							failure: turn.failure,
 						},
 					});
+					if (studio && turn.reviewable && options.supervisor !== false && !signal.aborted) requestSupervisorNote(turnId);
 				}
 			}
 		},

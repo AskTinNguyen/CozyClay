@@ -392,18 +392,23 @@ export function useShots(appContext) {
     setTlFrameCount(span); if (extent > 0) setTlFrame(frame => Math.min(frame, span - 1));
   }
   function finishCameraMove(finalFov) { setMovePlaying(false); setFovDeg(Math.round(finalFov * 10) / 10); }
-  async function exportShotVideo({ download = true, shotId = null } = {}, commandContext = null) {
+  // scope "timeline" records every frame of the timeline, shot boxes and all;
+  // "shot" records one shot (shotId, or the one under the playhead). Without a
+  // scope the old rule stands: a named shot, or the playhead's shot when there
+  // is no motion, else the whole record.
+  async function exportShotVideo({ download = true, shotId = null, scope = null } = {}, commandContext = null) {
     if (appContext.shared.recRef.current) return null;
     const atPlayhead = shotIndexAtFrame(shots, tlFrame);
     const target = shotId ? shots.find(entry => entry.id === shotId) : shots[atPlayhead >= 0 ? atPlayhead : 0] ?? null;
     if (shotId && !target) return null;
     let exportShots = shots;
-    if (target && target.cameraKeys.length === 0 && !shotId) {
+    if (target && target.cameraKeys.length === 0 && !shotId && scope !== 'timeline') {
       appContext.bus.run('shot.addKey', { shotId: target.id, frame: target.startFrame });
       exportShots = appContext.storeDomain('shot').read();
     }
-    const range = target && (shotId || !appContext.shared.motion) ? { startFrame: target.startFrame, endFrame: target.endFrame }
-      : { startFrame: 0, endFrame: Math.max(0, appContext.shared.currentRecordFrameCount() - 1) };
+    const oneShot = scope === 'shot' ? Boolean(target) : scope === 'timeline' ? false : Boolean(target && (shotId || !appContext.shared.motion));
+    const range = oneShot ? { startFrame: target.startFrame, endFrame: target.endFrame }
+      : { startFrame: 0, endFrame: Math.max(0, appContext.shared.currentRecordFrameCount() - 1, ...(scope === 'timeline' ? shots.map(entry => entry.endFrame) : [])) };
     return appContext.shared.executeExportRequest(appContext.shared.exportRequest('video', async job => {
       const abort = () => job.controller.abort(commandContext.signal.reason);
       commandContext?.signal.addEventListener('abort', abort, { once: true });

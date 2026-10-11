@@ -322,8 +322,8 @@ function disposeOwnedMaterials(root) {
  *
  * Skinned graphs go through `cloneMeshGraph` so a Mixamo-as-statue keeps
  * its bind pose. Clay replaces materials on THIS clone only, so a second
- * instance of the same file can keep the textures from the disk. Auto-color
- * also clones: the cached graph is shared, and a viewport tint must not leak.
+ * instance of the same file can keep the textures from the disk. Every clone
+ * owns its materials, so auto-color tints and opacity fades never leak.
  */
 function instantiateMesh(source, object) {
 	const root = cloneMeshGraph(source);
@@ -349,18 +349,16 @@ function instantiateMesh(source, object) {
 		node.receiveShadow = true;
 		if (clay) {
 			const make = () => new THREE.MeshStandardMaterial({ color: clayColor, roughness: 0.9, metalness: 0 });
+			for (const material of Array.isArray(node.material) ? node.material : [node.material]) material?.dispose?.();
 			node.material = Array.isArray(node.material) ? node.material.map(() => make()) : make();
 			node.userData.clayOwned = true;
 			return;
 		}
 		if (!object.autoColor || !node.material) return;
-		const tint = (material) => {
-			const next = material.clone();
-			if (next.color) next.color.set(object.autoColor);
-			return next;
-		};
-		node.material = Array.isArray(node.material) ? node.material.map(tint) : tint(node.material);
-		node.userData.instanceOwned = true;
+		// cloneMeshGraph already gave this instance its own materials.
+		for (const material of Array.isArray(node.material) ? node.material : [node.material]) {
+			if (material.color) material.color.set(object.autoColor);
+		}
 	});
 	return root;
 }

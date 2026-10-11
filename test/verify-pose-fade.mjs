@@ -88,3 +88,19 @@ test("a capture lifts the fade for the draw and puts it back without another fra
 	assert.throws(() => withPoseFadeLifted(sync, () => { throw new Error("draw failed"); }));
 	assert.equal(hits(root), 0, "a failed capture also restores the fade");
 });
+
+test("two instances of one imported graph keep their own opacity (#659)", async () => {
+	const { cloneMeshGraph } = await import("../src/mesh-graph-clone.js");
+	const { root: source, shared } = prop();
+	const a = cloneMeshGraph(source);
+	const b = cloneMeshGraph(source);
+	applyPoseFade(a, null, 0.3);
+	applyPoseFade(b, null, 1);
+	const opacityOf = (root) => root.children[0].material.opacity;
+	assert.equal(opacityOf(a), 0.3);
+	assert.equal(opacityOf(b), 1, "the second instance stays solid");
+	assert.equal(shared.opacity, 1, "the cached source graph is untouched");
+	assert.notEqual(a.children[0].material, b.children[0].material);
+	assert.equal(a.children[0].material, a.children[1].material, "materials shared inside one instance stay shared");
+	assert.ok(a.children[0].userData.instanceOwned, "instance materials are disposed with the instance");
+});

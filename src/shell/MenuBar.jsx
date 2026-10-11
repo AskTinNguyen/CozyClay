@@ -413,14 +413,30 @@ export default function MenuBar({ preferences }) {
 									className="menubar-item"
 									data-testid="export-video"
 									disabled={recording}
-									title={ko("Render the shot to an MP4 — camera move and character motion, no editor chrome", "샷을 MP4로 렌더링합니다 — 카메라 움직임과 캐릭터 모션만, 편집 UI는 제외")}
+									title={ko("Render the whole timeline to one MP4 — every shot back to back, camera and motion, no editor chrome", "타임라인 전체를 MP4 하나로 — 모든 샷을 이어서, 카메라·모션만, 편집 UI 제외")}
+									onClick={() => {
+										closeMenus(false);
+										void runStudioAction("export.shotVideo", { scope: "timeline" });
+									}}
+								>
+									<span className="menubar-item-label">{ko("Video — whole timeline (mp4)", "영상 — 타임라인 전체 (mp4)")}</span>
+								</button>
+							)}
+							{shots.length > 0 && (
+								<button
+									type="button"
+									role="menuitem"
+									className="menubar-item"
+									data-testid="export-video-shot"
+									disabled={recording}
+									title={ko("Render one shot to its own MP4 — the shot you opened the menu from, or the one under the playhead", "샷 하나만 MP4로 — 메뉴를 연 샷, 아니면 재생 위치의 샷")}
 									onClick={() => {
 										const shotId = exportShotIdRef.current;
 										closeMenus(false);
-										void runStudioAction("export.shotVideo", shotId ? { shotId } : {});
+										void runStudioAction("export.shotVideo", shotId ? { shotId, scope: "shot" } : { scope: "shot" });
 									}}
 								>
-									<span className="menubar-item-label">{ko("Video (mp4)", "영상 (mp4)")}</span>
+									<span className="menubar-item-label">{ko("Video — this shot only (mp4)", "영상 — 이 샷만 (mp4)")}</span>
 								</button>
 							)}
 							<button
