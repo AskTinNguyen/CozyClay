@@ -170,8 +170,8 @@ async function fixture({ readOnly = false, supervisorReply = JSON.stringify(VERD
 	server.listen(0, "127.0.0.1");
 	await once(server, "listening");
 	const origin = `http://127.0.0.1:${server.address().port}`;
-	const turn = async (text = "선택된 캐릭터 왼쪽 1.4m에 의자 하나 놔줘") => {
-		const body = { ...envelopeFixture(), sessionId: randomUUID(), turnId: randomUUID(), text, model: "faux/scripted" };
+	const turn = async (text = "선택된 캐릭터 왼쪽 1.4m에 의자 하나 놔줘", extra = {}) => {
+		const body = { ...envelopeFixture(), sessionId: randomUUID(), turnId: randomUUID(), text, model: "faux/scripted", ...extra };
 		const response = await fetch(`${origin}/agent/turn`, { method: "POST", headers: { "content-type": "application/json", origin }, body: JSON.stringify(body) });
 		const stream = await bounded(response.text(), "turn stream");
 		log.push("stream-ended");
@@ -251,6 +251,21 @@ let authoredTypes;
 	delete process.env.COZYCLAY_SUPERVISOR;
 	await f.close();
 	console.log("PASS COZYCLAY_SUPERVISOR=off answers 204 and spends no provider call");
+}
+
+// The author's own switch: a turn sent with supervisor:false is accepted and
+// skips the review exactly like the env switch, while the next turn without
+// the flag is reviewed again.
+{
+	const f = await fixture();
+	f.gate.resolve();
+	const { turnId, cookie, frames } = await f.turn(undefined, { supervisor: false });
+	assert.deepEqual(frameTypes(frames), authoredTypes, "the turn stream is identical with the per-turn switch off");
+	assert.equal((await f.get(`/agent/turn/${encodeURIComponent(turnId)}/supervisor`, cookie)).status, 204);
+	assert.equal(f.modelCalls.length, 2, "no extra provider call for a turn that opted out");
+	assert.ok(!f.commands.some(command => ["verify_result", "capture_framing_png", "capture_plan_png"].includes(command.name)), "no editor reads for a review");
+	await f.close();
+	console.log("PASS a turn sent with supervisor:false answers 204 and spends no provider call");
 }
 
 // A read-only turn is not reviewed.

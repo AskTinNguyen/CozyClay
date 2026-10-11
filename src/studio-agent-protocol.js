@@ -256,7 +256,7 @@ const efforts = ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ul
 // and the three inline types are the ones the model actually reads. Four, and
 // six megabytes of base64 each, is what one turn may carry.
 const attachment = object({ dataUrl: { ...text(6_000_000), pattern: "^data:image/(png|jpeg|webp);base64," } }, { name: text(120) });
-const turnSchema = object({ surface: literal("studio"), sessionId: uuidSchema, turnId: uuidSchema, text: text(16000), context: contextSchema }, { model: text(120), effort: choices(efforts), attachFrame: bool, attachments: array(attachment, 4, 1) });
+const turnSchema = object({ surface: literal("studio"), sessionId: uuidSchema, turnId: uuidSchema, text: text(16000), context: contextSchema }, { model: text(120), effort: choices(efforts), attachFrame: bool, attachments: array(attachment, 4, 1), supervisor: bool });
 const stopSchema = object({ surface: literal("studio"), sessionId: uuidSchema, turnId: uuidSchema }, { jobId: id });
 const revisions = object({ before: integer(), after: integer() });
 const undo = object({ historyEntryId: id, entries: literal(1), canUndoDirect: bool });

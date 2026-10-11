@@ -265,6 +265,27 @@ export function storeModel(key, storage = globalThis.localStorage) {
 	}
 }
 
+/** The supervisor switch (#728): on unless the author turned it off. It rides
+ * on every Studio turn as `supervisor: false` so the sidecar skips the review
+ * for that turn; the sidecar's own COZYCLAY_SUPERVISOR=off still wins. */
+export const AGENT_SUPERVISOR_KEY = "cozyclay.agent.supervisor";
+
+export function readStoredSupervisor(storage = globalThis.localStorage) {
+	try {
+		return storage?.getItem(AGENT_SUPERVISOR_KEY) !== "off";
+	} catch {
+		return true;
+	}
+}
+
+export function storeSupervisor(enabled, storage = globalThis.localStorage) {
+	try {
+		storage?.setItem(AGENT_SUPERVISOR_KEY, enabled ? "on" : "off");
+	} catch {
+		// Private-mode storage denial must never break the toggle.
+	}
+}
+
 /** The model to open with: the remembered key when it is still advertised,
  * otherwise the first model the sidecar listed. */
 export function preferredModel(models, stored = readStoredModel()) {
@@ -720,7 +741,7 @@ export function createHttpTransport({ fetchImpl = globalThis.fetch?.bind(globalT
 		},
 		/** Streams sidecar events to `onEvent`. Resolves when the turn ends. */
 		async turn(turnRequest, onEvent, signal) {
-			const { sessionId, text, attachFrame, model, effort, attachments } = turnRequest;
+			const { sessionId, text, attachFrame, model, effort, attachments, supervisor } = turnRequest;
 			const attached = Array.isArray(attachments) && attachments.length ? { attachments } : {};
 			const studio = turnRequest.surface === "studio";
 			const turnId = studio ? turnRequest.turnId : null;
@@ -775,7 +796,7 @@ export function createHttpTransport({ fetchImpl = globalThis.fetch?.bind(globalT
 			const body = studio
 				? JSON.stringify({
 					surface: "studio", sessionId, turnId, text, context: turnRequest.context,
-					...(model ? { model } : {}), ...(effort ? { effort } : {}), ...(attachFrame === undefined ? {} : { attachFrame: Boolean(attachFrame) }), ...attached,
+					...(model ? { model } : {}), ...(effort ? { effort } : {}), ...(attachFrame === undefined ? {} : { attachFrame: Boolean(attachFrame) }), ...(supervisor === false ? { supervisor: false } : {}), ...attached,
 				})
 				: JSON.stringify({ sessionId, text, attachFrame, model, ...(effort ? { effort } : {}), ...attached, ...(telemetry.turnId ? { turn_id: telemetry.turnId } : {}) });
 			try {
@@ -1488,6 +1509,7 @@ export function createAgentChatStore({
 					attachFrame: Boolean(options.attachFrame),
 					model: options.model,
 					effort: options.effort ?? undefined,
+					...(options.supervisor === false ? { supervisor: false } : {}),
 				}, applyEvent, signal);
 			} catch (error) {
 				if (!signal.aborted) applyEvent({ type: "error", code: "upstream", message: String(error?.message || error) });
@@ -1513,7 +1535,7 @@ export function createAgentChatStore({
 							failure: turn.failure,
 						},
 					});
-					if (studio && turn.reviewable && !signal.aborted) requestSupervisorNote(turnId);
+					if (studio && turn.reviewable && options.supervisor !== false && !signal.aborted) requestSupervisorNote(turnId);
 				}
 			}
 		},

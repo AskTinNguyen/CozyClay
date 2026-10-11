@@ -1191,3 +1191,18 @@
 	.agent-resize { display: none; }
 }
 }
+
+/* The supervisor switch beside the model picks (#728). */
+.agent-supervisor-toggle {
+	flex: 0 0 auto;
+	font: inherit;
+	font-size: 12px;
+	padding: 4px 8px;
+	border-radius: 6px;
+	border: 1px solid var(--agent-border, #444);
+	background: transparent;
+	color: var(--agent-text-dim, #999);
+	cursor: pointer;
+}
+.agent-supervisor-toggle.is-on { color: var(--agent-text, #ddd); border-color: var(--agent-border-focus, #6a9); }
+.agent-supervisor-toggle:focus-visible { outline: 2px solid var(--agent-border-focus, #6a9); outline-offset: 1px; }

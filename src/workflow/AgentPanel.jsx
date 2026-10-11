@@ -37,8 +37,10 @@ import {
 	formatElapsed,
 	formatResetIn,
 	readStoredPanelWidth,
+	readStoredSupervisor,
 	storeModel,
 	storePanelWidth,
+	storeSupervisor,
 	STUDIO_SESSION_STORAGE_KEY,
 	selectedModelRoles,
 	shortModelId,
@@ -375,6 +377,10 @@ export default function AgentPanel({
 	// remembered so a reload does not quietly move the next turn to another
 	// provider's model.
 	const chooseModel = useCallback((id) => { setModel(id); setEffort(null); storeModel(id); }, []);
+	// The supervisor switch (#728): a preference like the model pick. Off skips
+	// the post-turn review for every turn sent from this panel.
+	const [supervisorOn, setSupervisorOn] = useState(() => readStoredSupervisor());
+	const toggleSupervisor = useCallback(() => setSupervisorOn((current) => { storeSupervisor(!current); return !current; }), []);
 	// One place takes `{ providers, models }` from the sidecar: the grouped list
 	// the dropdown draws, the flat key-addressed list every lookup uses, and the
 	// model to open with. Returns false when nothing was advertised.
@@ -724,8 +730,8 @@ export default function AgentPanel({
 	const runTurn = useCallback((text) => {
 		setAttachNotice(null);
 		setSteerNotice("");
-		return store.send(text, { attachFrame, model, effort: effort ?? undefined });
-	}, [attachFrame, effort, model, store]);
+		return store.send(text, { attachFrame, model, effort: effort ?? undefined, supervisor: supervisorOn });
+	}, [attachFrame, effort, model, store, supervisorOn]);
 	const stopTurn = useCallback(() => store.stop(), [store]);
 	// Steering the turn that is already running: the composer's text joins THAT
 	// turn instead of starting a second one. A refusal (the turn ended while the
@@ -1058,6 +1064,11 @@ export default function AgentPanel({
 							    option's tooltip so the composer row stays one line. */}
 							{efforts.map((value, index) => <option key={value} value={value} title={index === 0 ? "Default for this model" : undefined}>{value}</option>)}
 						</select>
+					)}
+					{surface === "studio" && (
+						<button type="button" className={`agent-supervisor-toggle${supervisorOn ? " is-on" : ""}`} role="switch" aria-checked={supervisorOn} aria-label={ko("Supervisor review", "감독 검토")} title={ko(supervisorOn ? "Supervisor review is on: a note arrives after each editing turn" : "Supervisor review is off", supervisorOn ? "감독 검토 켜짐: 편집 턴이 끝나면 메모가 옵니다" : "감독 검토 꺼짐")} onClick={toggleSupervisor}>
+							{ko("Supervisor", "감독")} {supervisorOn ? "ON" : "OFF"}
+						</button>
 					)}
 					<span className="agent-composer-spacer" aria-hidden="true" />
 					{surface === "studio" && i2vActionRef.current && <button
