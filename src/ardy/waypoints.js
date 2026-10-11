@@ -93,7 +93,6 @@ export function densifyArdyWaypoints(waypoints, actorRotationDeg = 0, maxPoints 
 		for (let i = 0; i < gaps.length; i += 1) gapSizes[i] = base[i];
 	}
 
-	// Sample frames: authored frames plus evenly spaced integer fillers.
 	const frames = [];
 	for (let i = 0; i < authored.length; i += 1) {
 		if (i > 0) {
@@ -242,8 +241,6 @@ export function poseConstraintFrame(requestedFrame, clipFrames, hasRootPath) {
 	if (hasRootPath) return 0;
 	return Math.max(0, Math.min(Math.round(requestedFrame) || 0, clipFrames - 1));
 }
-
-/* ---------------------------------------------------- path limits ------ */
 
 // What the generator can actually express, learned the hard way: waypoints
 // are inpainting observations ARDY cannot refuse, so a request outside the

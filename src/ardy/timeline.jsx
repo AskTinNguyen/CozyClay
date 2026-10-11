@@ -72,8 +72,6 @@ const framePct = (f, count) => (count > 1 ? f / (count - 1) : 0);
 // number of frames divided by its clock. Keeping this conversion local makes
 // the readout honest at any loaded fps (the final frame is just shy of the
 // displayed total duration, as it is in an actual frame sequence).
-const formatTimelineSeconds = (seconds) => `${Math.max(0, Number(seconds) || 0).toFixed(2)}s`;
-
 const CAMERA_BLOCK_DEFAULTS = {
 	distance: 3,
 	height: 1.6,
@@ -319,7 +317,6 @@ const GRAPH_MIN_SCALE = 2;
 const DRAG_TRAVEL_PX = 220;
 const FINE_DRAG_FACTOR = 0.25;
 
-/** Value under the pointer for a rate-based vertical drag. */
 function dragValue(start, event, unitsPerPx) {
 	const gain = unitsPerPx * (event.shiftKey ? FINE_DRAG_FACTOR : 1);
 	return start.value + (start.clientY - event.clientY) * gain;
@@ -549,7 +546,6 @@ function SpeedGraph({
 							<stop offset="100%" stopOpacity="0.05" />
 						</linearGradient>
 					</defs>
-					{/* axes: the floor is zero speed, the dashed line is the average */}
 					<line className="sg-axis" x1="0" y1="1" x2="1" y2="1" />
 					<line className="sg-average" x1={origin} y1={avgY} x2={origin + span} y2={avgY} />
 					{origin > 0.001 && <rect className="sg-outside" x="0" y="0" width={origin} height="1" />}
@@ -618,7 +614,6 @@ function SpeedGraph({
 	);
 }
 
-/** Frames the prop is actually travelling for, given its speed. */
 function travelSpan(path, metrics, frameCount, fps) {
 	if (!path || !metrics || metrics.length <= 0) return null;
 	const last = Math.max(1, frameCount - 1);
