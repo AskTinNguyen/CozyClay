@@ -1177,7 +1177,7 @@ export const createToolHandlers = ({ projectRootPromise } = {}) => {
 					"mirror: true adds a copy reflected across x = 0 of the parent frame, with its children; author the subject's left (+x) side once. color is #rrggbb. At most 48 parts after mirrors. " +
 					"To fix a sculpt, pass its id with edits instead of a whole recipe: [{ set: partId, ...fields }, { add: part }, { remove: partId }] (parent: null and mirror: false clear; remove takes the part's children). " +
 					"capture: true also returns the editor's frame (connected editor only), so one call is one round. " +
-					"Workflow: block the silhouette in 4-8 parts, compare_sculpt against the reference image, then patch the biggest mismatch with edits. Add small identity details (eyes, rims, plates) last as children of their parent part. " +
+					"Workflow: measure the reference's outline landmarks (limb tips, head top, feet as fractions of height) and place parts on them, compare_sculpt against the reference image, then rank 3-6 candidate edits with compare_sculpt { candidates } and apply the winner. Add small identity details (eyes, rims, plates) last as children of their parent part. " +
 					"A recipe or edit that cannot be drawn is refused with the path of the bad field.",
 				inputSchema: {
 					recipe: z.object({}).passthrough().optional().describe("{ version: 1, parts: [...] }; the whole recipe, for a new sculpt or a full rewrite"),

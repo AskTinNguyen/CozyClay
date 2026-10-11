@@ -106,6 +106,16 @@ await check("the turtle against its own reference: best view is the 3/4 left, Io
 	assert.equal(best.sheet.width, best.sheet.height * 2);
 });
 
+await check("the measured Snorlax draft keeps scoring above 0.9 from the front", () => {
+	const snorlax = normalizeSculptRecipe(JSON.parse(readFileSync(new URL("./fixtures/sculpt-snorlax.json", import.meta.url), "utf8")));
+	assert.equal(snorlax.ok, true, snorlax.error);
+	const ref = JSON.parse(readFileSync(new URL("./fixtures/sculpt-snorlax-mask.json", import.meta.url), "utf8"));
+	const data = new Uint8Array(ref.width * ref.height * 4).fill(255);
+	for (const [start, length] of ref.runs) for (let i = start; i < start + length; i += 1) data.set([63, 95, 90, 255], i * 4);
+	const { report } = compareSculptToReference(snorlax.recipe, { width: ref.width, height: ref.height, data }, { yaw: 0 });
+	assert.ok(report.iou > 0.9, JSON.stringify(report));
+});
+
 if (failures) {
 	console.log(`\n${failures} check(s) failed`);
 	process.exit(1);
