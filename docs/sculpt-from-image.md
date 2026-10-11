@@ -104,6 +104,20 @@ Sculpt mode is the Studio's fifth viewport mode. It runs the workflow above for 
 
 ![A real run on the Snorlax reference: done after 2 rounds at IoU 0.771](images/sculpt-mode-run.png)
 
+**While it runs**
+
+The run says what it is doing at every moment, so a long model call never looks like a hang:
+
+- **The wait line** names what the run is waiting on, counts the seconds and shows the usual length of that wait. Examples are "Agent is writing the recipe … 29s, usually ~60s" and "Agent is test-fitting 4 candidate fixes". A lump of clay kneads beside it. If a wait runs past 1.5× its usual length, the line says so. A tool call inside a turn never resets the turn's own count.
+- **The activity log** has one timed line per event: the outline measured, a recipe refused and why, the draft landing with its part count, each score with its change, the candidate ranking, the agent's closing words.
+- **On the reference** a scan line sweeps while the outline is measured. The measured slices then stay drawn over the picture.
+- **The IoU trail** plots the score after each round against the target line, with a floating +/− chip. **The candidate race** grows each fix's bar in and stars the leader. The overlay sheet opens by itself.
+- **The turntable** shows a kneading lump of clay until the first draft lands. It turns slowly while the run works, and it stops for good once you grab it. The parts an edit just changed glow warm for a moment.
+
+| Writing the draft (30 s) | Round 2, ranking fixes (105 s) |
+|---|---|
+| ![Drafting: clay lump, scan slices, wait line](images/sculpt-mode-drafting.png) | ![Round 2: candidate race, IoU, log](images/sculpt-mode-live.png) |
+
 **What the run does**
 
 ```mermaid
