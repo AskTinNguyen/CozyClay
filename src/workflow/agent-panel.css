@@ -751,6 +751,7 @@
 .agent-supervisor-summary { margin: 0; line-height: 1.5; word-break: break-word; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
 .agent-supervisor-card[data-open="true"] .agent-supervisor-summary { display: block; }
 .agent-supervisor-badge.blocker { border-color: var(--agent-alert-edge); background: var(--agent-alert-bg); color: var(--agent-alert); }
+.agent-supervisor-fix { display: block; margin-top: var(--agent-space-1); font: var(--agent-font-sm) ui-monospace, monospace; white-space: pre-wrap; word-break: break-all; color: var(--agent-text-dim); }
 .agent-supervisor-badge.note { border-color: var(--agent-border-strong); background: transparent; color: var(--agent-text-dim); }
 
 .agent-failure-card { border-color: #6d3a52; background: #2a1c26; }

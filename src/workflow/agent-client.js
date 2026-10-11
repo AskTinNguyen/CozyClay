@@ -361,11 +361,21 @@ export const STEER_ERROR_COPY = {
 const SUPERVISOR_REFUSAL = /^(TARGET_NOT_READY|CAPABILITY_MISSING|CONFIRMATION_REQUIRED):/;
 
 /** The next prompt a supervisor note suggests: its blocker and concern issues,
- * or null when it raised none. */
+ * or null when it raised none. A note with validated fixes (#743) asks for
+ * exactly those run_action calls, in order, in one script; the blockers and
+ * concerns without a fix follow under their own header. */
 export function supervisorFollowUp(note) {
-	const issues = (Array.isArray(note?.issues) ? note.issues : []).filter((issue) => issue?.severity === "blocker" || issue?.severity === "concern");
-	if (!issues.length) return null;
-	return [ko("Supervisor review — please address:", "감독 검토 — 다음을 고쳐 주세요:"), ...issues.map((issue) => `- [${issue.severity}] ${issue.text}${issue.evidence ? ` (${issue.evidence})` : ""}`)].join("\n");
+	const all = Array.isArray(note?.issues) ? note.issues : [];
+	const fixes = (Array.isArray(note?.fixes) ? note.fixes : []).filter((fix) => typeof fix?.action === "string" && fix.args && typeof fix.args === "object");
+	const fixed = new Set(fixes.map((fix) => fix.issueIndex));
+	const issues = all.filter((issue, index) => (issue?.severity === "blocker" || issue?.severity === "concern") && !fixed.has(index));
+	const line = (issue) => `- [${issue.severity}] ${issue.text}${issue.evidence ? ` (${issue.evidence})` : ""}`;
+	if (!fixes.length) return issues.length ? [ko("Supervisor review — please address:", "감독 검토 — 다음을 고쳐 주세요:"), ...issues.map(line)].join("\n") : null;
+	return [
+		ko("Supervisor review — apply these fixes exactly, in order, in ONE script call, then verify_result; do not re-derive them:", "감독 검토 — 아래 수정을 유추 없이 순서대로 script 1회로 실행하고 verify_result로 확인해 주세요:"),
+		...fixes.map((fix) => `- [${fix.severity}] ${all[fix.issueIndex]?.text ?? ""} -> run_action ${JSON.stringify({ action: fix.action, args: fix.args })}`),
+		...(issues.length ? [ko("Also check:", "추가 확인:"), ...issues.map(line)] : []),
+	].join("\n");
 }
 
 export const ERROR_COPY = {

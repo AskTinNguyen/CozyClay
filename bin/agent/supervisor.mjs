@@ -4,10 +4,14 @@
 // has ended and appends exactly one `supervisor` event to the turn record,
 // which the panel shows as a note card.
 
-export const SUPERVISOR_RUBRIC = "You are the previs supervisor reviewing one agent turn in CozyClay Studio. Judge ONLY from the evidence given (receipts, refusal codes, geometry facts, pictures). Evaluate exactly these seven items: 1 request coverage - every deliverable the user literally asked for exists (blocker when missing); 2 impossible items - anything refused with TARGET_NOT_READY / CAPABILITY_MISSING / CONFIRMATION_REQUIRED is 'refused', not 'missing'; it is a blocker only when the reply hid the refusal from the user; 3 spatial sanity - floating or sunken objects, unintended interpenetration, subjects occluded by set pieces (concern); 4 framing - requested size vs derivedSize, clipped subjects, subject out of frame (concern); 5 continuity across shots - 180-degree line (axisConsistent, cameraSide), eyeline, OTS over the correct shoulder, screen direction (concern); 6 undo integrity - the turn is one history entry / receipts are undoable (blocker when broken); 7 report honesty - the reply claims nothing the receipts do not show and claims no verification that did not run (blocker). Capsule figures (characterKind proxy) cannot pose, sit or animate: a refused pose on one is 'refused'. Reply with JSON only: { \"items\": [{ \"text\": string, \"status\": \"done\"|\"partial\"|\"refused\"|\"missing\", \"evidence\": string }], \"issues\": [{ \"severity\": \"blocker\"|\"concern\"|\"note\", \"kind\": \"coverage\"|\"disclosure\"|\"spatial\"|\"framing\"|\"continuity\"|\"undo\"|\"honesty\", \"text\": string, \"evidence\": string }], \"summary\": string }. Write text fields in the user's language. Be concrete and short; cite ids, metres and shot names.";
+export const SUPERVISOR_RUBRIC = "You are the previs supervisor reviewing one agent turn in CozyClay Studio. Judge ONLY from the evidence given (receipts, refusal codes, geometry facts, pictures). Evaluate exactly these seven items: 1 request coverage - every deliverable the user literally asked for exists (blocker when missing); 2 impossible items - anything refused with TARGET_NOT_READY / CAPABILITY_MISSING / CONFIRMATION_REQUIRED is 'refused', not 'missing'; it is a blocker only when the reply hid the refusal from the user; 3 spatial sanity - floating or sunken objects, unintended interpenetration, subjects occluded by set pieces (concern); 4 framing - requested size vs derivedSize, clipped subjects, subject out of frame (concern); 5 continuity across shots - 180-degree line (axisConsistent, cameraSide), eyeline, OTS over the correct shoulder, screen direction (concern); 6 undo integrity - the turn is one history entry / receipts are undoable (blocker when broken); 7 report honesty - the reply claims nothing the receipts do not show and claims no verification that did not run (blocker). Capsule figures (characterKind proxy) cannot pose, sit or animate: a refused pose on one is 'refused'. Reply with JSON only: { \"items\": [{ \"text\": string, \"status\": \"done\"|\"partial\"|\"refused\"|\"missing\", \"evidence\": string }], \"issues\": [{ \"severity\": \"blocker\"|\"concern\"|\"note\", \"kind\": \"coverage\"|\"disclosure\"|\"spatial\"|\"framing\"|\"continuity\"|\"undo\"|\"honesty\", \"text\": string, \"evidence\": string }], \"summary\": string }. Write text fields in the user's language. Be concrete and short; cite ids, metres and shot names. An issue MAY carry \"fix\": { \"action\": \"<action id from the ACTIONS list>\", \"args\": { ... } } - ONE run_action call the next turn executes verbatim, with real ids and values taken from the receipts and geometry and args shaped by ACTION SCHEMAS. Examples: {\"action\":\"character.setPose\",\"args\":{\"characterId\":\"char-b\",\"posture\":\"sit\"}}, {\"action\":\"shot.frame\",\"args\":{\"shotId\":\"shot-1\",\"subjectIds\":[\"char-a\",\"char-b\"],\"framing\":{\"intent\":{\"size\":\"wide shot\",\"view\":\"front\",\"level\":\"eye\",\"side\":\"left\"}}}}, {\"action\":\"object.update\",\"args\":{\"id\":\"table-1\",\"position\":{\"x\":0,\"y\":0,\"z\":1.2}}}. Use only actions present in ACTIONS; never invent ids; never propose a pose or motion fix for a capsule figure; omit fix when no safe single action exists.";
 
 export const REFUSAL_CODES = Object.freeze(["TARGET_NOT_READY", "CAPABILITY_MISSING", "CONFIRMATION_REQUIRED"]);
-export const SUPERVISOR_LIMITS = Object.freeze({ delta: 8, warnings: 12, reply: 4000, images: 5, createdShots: 3, imageWidth: 1280, args: 600, timeoutMs: 120_000 });
+export const SUPERVISOR_LIMITS = Object.freeze({ delta: 8, warnings: 12, reply: 4000, images: 5, createdShots: 3, imageWidth: 1280, args: 600, timeoutMs: 120_000, schemaBytes: 6000 });
+/** The actions whose input schemas the reviewer gets, so a fix it writes has
+ * the right shape (#743). Only those present in the turn's action index are
+ * asked for. */
+export const SUPERVISOR_FIX_ACTIONS = Object.freeze(["character.setPose", "character.move", "character.update", "shot.frame", "shot.set", "shot.setRange", "object.update", "object.remove", "objects.arrange", "stage.set", "edit.undo", "view.update"]);
 const ITEM_STATUSES = ["done", "partial", "refused", "missing"];
 const SEVERITIES = ["blocker", "concern", "note"];
 const KINDS = ["coverage", "disclosure", "spatial", "framing", "continuity", "undo", "honesty"];
@@ -87,9 +91,26 @@ function imagePart(image) {
 	return match ? { type: "image", data: match[2], mimeType: match[1] } : null;
 }
 
+/** The ACTION SCHEMAS block: whole schemas in the order given while they fit
+ * the byte budget; the ids that did not fit are named, never half-quoted. */
+function boundSchemas(schemas) {
+	const kept = {}, omitted = [];
+	let size = 2;
+	for (const entry of Array.isArray(schemas) ? schemas : []) {
+		if (typeof entry?.id !== "string" || !isObject(entry.input)) continue;
+		const cost = JSON.stringify({ [entry.id]: entry.input }).length;
+		if (size + cost > SUPERVISOR_LIMITS.schemaBytes) { omitted.push(entry.id); continue; }
+		kept[entry.id] = entry.input;
+		size += cost;
+	}
+	return omitted.length ? { ...kept, omitted } : kept;
+}
+
 /** The digest the reviewer reads: a compact JSON-ish text block plus at most
- * five pi ImageContent parts, in the order the text lists them. */
-export function buildSupervisorInput({ request = "", frames = [], reply = "", geometry = null, refusals, images = [], notes = [] } = {}) {
+ * five pi ImageContent parts, in the order the text lists them. `actions` is
+ * `{ index: [{ id, label }], schemas: [{ id, input }] }`: what a fix may name
+ * and the input shape of the pre-selected ones (#743). */
+export function buildSupervisorInput({ request = "", frames = [], reply = "", geometry = null, refusals, images = [], notes = [], actions = null } = {}) {
 	const turn = analyseTurnFrames(frames);
 	const pictures = (Array.isArray(images) ? images : []).map(image => ({ image, part: imagePart(image) })).filter(entry => entry.part).slice(0, SUPERVISOR_LIMITS.images);
 	const section = (name, value) => `${name}: ${JSON.stringify(value)}`;
@@ -103,6 +124,8 @@ export function buildSupervisorInput({ request = "", frames = [], reply = "", ge
 		section("geometry", geometry ?? { note: "no geometry facts were measured" }),
 		section("images", pictures.map((entry, index) => `${index + 1} ${entry.image.label ?? "image"}${entry.image.width ? ` (${entry.image.width}x${entry.image.height})` : ""}`)),
 		...(notes.length ? [section("evidenceNotes", notes)] : []),
+		section("ACTIONS", (Array.isArray(actions?.index) ? actions.index : []).filter(row => typeof row?.id === "string").map(row => typeof row.label === "string" && row.label ? `${row.id} (${row.label})` : row.id)),
+		section("ACTION SCHEMAS", boundSchemas(actions?.schemas)),
 		"</turn-review>",
 	].join("\n");
 	return { text, images: pictures.map(entry => entry.part) };
@@ -136,10 +159,38 @@ export function parseSupervisorVerdict(text) {
 	if (!isObject(value) || typeof value.summary !== "string" || !Array.isArray(value.items) || !Array.isArray(value.issues)) return null;
 	const items = value.items.map(item => isObject(item) && typeof item.text === "string" && ITEM_STATUSES.includes(item.status) && typeof item.evidence === "string"
 		? { text: item.text, status: item.status, evidence: item.evidence } : null);
+	// A fix rides along unvalidated here; validateFixes keeps or drops it.
 	const issues = value.issues.map(issue => isObject(issue) && SEVERITIES.includes(issue.severity) && KINDS.includes(issue.kind) && typeof issue.text === "string" && typeof issue.evidence === "string"
-		? { severity: issue.severity, kind: issue.kind, text: issue.text, evidence: issue.evidence } : null);
+		? { severity: issue.severity, kind: issue.kind, text: issue.text, evidence: issue.evidence, ...(issue.fix !== undefined && issue.fix !== null ? { fix: issue.fix } : {}) } : null);
 	if (items.includes(null) || issues.includes(null)) return null;
 	return { items, issues, summary: value.summary };
+}
+
+/**
+ * The fixes a note may hand the next turn (#743). A fix survives only when its
+ * action is in the turn's action index and its args are an object carrying
+ * every key the action's schema requires (when the schema was read). Every
+ * other fix is removed from its issue and reported with the reason.
+ */
+export function validateFixes(issues, { index = [], schemas = [] } = {}) {
+	const known = new Set((Array.isArray(index) ? index : []).map(row => typeof row === "string" ? row : row?.id).filter(id => typeof id === "string"));
+	const inputs = new Map((Array.isArray(schemas) ? schemas : []).filter(entry => typeof entry?.id === "string" && isObject(entry.input)).map(entry => [entry.id, entry.input]));
+	const dropped = [];
+	const kept = (Array.isArray(issues) ? issues : []).map((issue, issueIndex) => {
+		if (!isObject(issue) || issue.fix === undefined) return issue;
+		const { fix, ...rest } = issue;
+		const action = typeof fix?.action === "string" ? fix.action : null;
+		const required = Array.isArray(inputs.get(action)?.required) ? inputs.get(action).required : [];
+		const missing = isObject(fix?.args) ? required.filter(key => !Object.hasOwn(fix.args, key)) : [];
+		const reason = !isObject(fix) || !action ? "malformed fix"
+			: !known.has(action) ? "unknown action"
+				: !isObject(fix.args) ? "args is not an object"
+					: missing.length ? `missing required key ${missing.map(key => `"${key}"`).join(", ")}` : null;
+		if (!reason) return { ...rest, fix: { action, args: fix.args } };
+		dropped.push({ issueIndex, action, reason });
+		return rest;
+	});
+	return { issues: kept, dropped };
 }
 
 export const verdictCounts = issues => Object.fromEntries(SEVERITIES.map(severity => [severity, issues.filter(issue => issue.severity === severity).length]));
@@ -153,9 +204,20 @@ const redact = message => clip(String(message ?? "unknown failure").replace(/dat
  * view and one frame per shot the turn created. Every piece is optional; what
  * could not be read becomes a note instead of a failure.
  */
-export async function gatherSupervisorEvidence({ hub, workspaceHandle, admission, baseline, receipts }) {
+export async function gatherSupervisorEvidence({ hub, workspaceHandle, admission, baseline, receipts, actionIndex = [] }) {
 	const notes = [], images = [];
 	const command = (name, args, options) => options ? hub.command(name, args, workspaceHandle, options) : hub.command(name, args, workspaceHandle);
+	// What a fix may name: the turn's own action index, and the input schemas
+	// of the pre-selected actions it declares (#743).
+	const index = (Array.isArray(actionIndex) ? actionIndex : []).filter(row => typeof row?.id === "string").map(row => ({ id: row.id, ...(typeof row.label === "string" ? { label: row.label } : {}) }));
+	const wanted = SUPERVISOR_FIX_ACTIONS.filter(id => index.some(row => row.id === id));
+	let schemas = [];
+	if (wanted.length) {
+		try {
+			const result = await command("inspect_studio", { scope: "actions", ids: wanted });
+			schemas = (Array.isArray(result?.actions) ? result.actions : []).filter(row => wanted.includes(row?.id) && isObject(row.input)).map(row => ({ id: row.id, input: row.input }));
+		} catch (error) { notes.push(`action schemas unavailable: ${redact(error?.message)}`); }
+	}
 	const envelope = (name, args) => ({ name, args, commandId: admission.commandId(), host: admission.host, expectedRevision: admission.revision });
 	let context = null;
 	try { context = await admission.refresh(); } catch (error) { notes.push(`scene context unavailable: ${redact(error?.message)}`); }
@@ -210,18 +272,18 @@ export async function gatherSupervisorEvidence({ hub, workspaceHandle, admission
 			try { await operate(original); } catch (error) { notes.push(`playhead not restored to frame ${original}: ${redact(error?.message)}`); }
 		}
 	}
-	return { geometry, images: images.slice(0, SUPERVISOR_LIMITS.images), notes };
+	return { geometry, images: images.slice(0, SUPERVISOR_LIMITS.images), notes, actions: { index, schemas } };
 }
 
 /**
  * Review one finished turn. Never throws: any failure becomes a frame with
  * verdict "unavailable" and the reason.
  */
-export async function runSupervisor({ registry, modelKey, effort = "high", turnId, request, frames, reply, hub, workspaceHandle, admission, baseline, now = () => Date.now(), timeoutMs = SUPERVISOR_LIMITS.timeoutMs }) {
+export async function runSupervisor({ registry, modelKey, effort = "high", turnId, request, frames, reply, hub, workspaceHandle, admission, baseline, actions = [], now = () => Date.now(), timeoutMs = SUPERVISOR_LIMITS.timeoutMs }) {
 	const startedAt = now();
 	let thinking = null;
 	const frame = (fields) => ({ type: "supervisor", turnId, model: modelKey, effort: thinking, elapsedMs: Math.max(0, Math.round(now() - startedAt)), ...fields });
-	const unavailable = reason => frame({ verdict: "unavailable", summary: "", items: [], issues: [], counts: verdictCounts([]), reason: redact(reason) });
+	const unavailable = reason => frame({ verdict: "unavailable", summary: "", items: [], issues: [], fixes: [], droppedFixes: [], counts: { ...verdictCounts([]), fixes: 0 }, reason: redact(reason) });
 	try {
 		const { resolveModel, resolveEffort } = await import("./providers.mjs");
 		const slash = modelKey.indexOf("/");
@@ -230,8 +292,8 @@ export async function runSupervisor({ registry, modelKey, effort = "high", turnI
 		const level = await resolveEffort(model, effort);
 		thinking = level;
 		const turn = analyseTurnFrames(frames);
-		const evidence = await gatherSupervisorEvidence({ hub, workspaceHandle, admission, baseline, receipts: turn.receipts });
-		const input = buildSupervisorInput({ request, frames, reply, geometry: evidence.geometry, refusals: turn.refusals, images: evidence.images, notes: evidence.notes });
+		const evidence = await gatherSupervisorEvidence({ hub, workspaceHandle, admission, baseline, receipts: turn.receipts, actionIndex: actions });
+		const input = buildSupervisorInput({ request, frames, reply, geometry: evidence.geometry, refusals: turn.refusals, images: evidence.images, notes: evidence.notes, actions: evidence.actions });
 		const message = await registry.completeSimple(model, {
 			systemPrompt: SUPERVISOR_RUBRIC,
 			messages: [{ role: "user", content: [{ type: "text", text: input.text }, ...input.images], timestamp: Date.now() }],
@@ -240,7 +302,9 @@ export async function runSupervisor({ registry, modelKey, effort = "high", turnI
 		const text = (Array.isArray(message?.content) ? message.content : []).filter(part => part?.type === "text").map(part => part.text).join("");
 		const verdict = parseSupervisorVerdict(text);
 		if (!verdict) return unavailable("the reviewer did not answer with a valid verdict");
-		return frame({ verdict: "reviewed", summary: verdict.summary, items: verdict.items, issues: verdict.issues, counts: verdictCounts(verdict.issues) });
+		const { issues, dropped } = validateFixes(verdict.issues, evidence.actions);
+		const fixes = issues.flatMap((issue, issueIndex) => issue.fix ? [{ issueIndex, severity: issue.severity, action: issue.fix.action, args: issue.fix.args }] : []);
+		return frame({ verdict: "reviewed", summary: verdict.summary, items: verdict.items, issues, fixes, droppedFixes: dropped, counts: { ...verdictCounts(issues), fixes: fixes.length } });
 	} catch (error) {
 		return unavailable(error?.message);
 	}

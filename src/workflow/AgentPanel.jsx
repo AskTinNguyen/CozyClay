@@ -212,6 +212,8 @@ function SupervisorCard({ note, onSend, defaultOpen = false }) {
 		<p className="agent-supervisor-summary">{ko("Supervisor review unavailable", "감독 검토를 할 수 없었어요")}{note.reason ? ` — ${note.reason}` : ""}</p>
 	</div>;
 	const followUp = supervisorFollowUp(note);
+	// Validated run_action drafts (#743), shown under the issue each one fixes.
+	const fixes = Array.isArray(note.fixes) ? note.fixes : [];
 	return <div className="agent-card agent-supervisor-card" data-supervisor-verdict="reviewed" data-open={open ? "true" : "false"}>
 		<div className="agent-supervisor-head">
 			<span className="agent-job-label">{ko("Supervisor", "감독")}</span>
@@ -223,10 +225,18 @@ function SupervisorCard({ note, onSend, defaultOpen = false }) {
 			{note.items.map((item, index) => <li key={index} data-status={item.status}>{SUPERVISOR_STATUS_COPY[item.status] ?? item.status} · {item.text}{item.evidence ? ` — ${item.evidence}` : ""}</li>)}
 		</ul>}
 		{open && note.issues?.length > 0 && <ul className="agent-receipt-notes agent-supervisor-issues">
-			{note.issues.map((issue, index) => <li key={index} data-severity={issue.severity}>{SUPERVISOR_SEVERITY_COPY[issue.severity] ?? issue.severity} · {issue.text}{issue.evidence ? ` — ${issue.evidence}` : ""}</li>)}
+			{note.issues.map((issue, index) => {
+				const fix = fixes.find((entry) => entry.issueIndex === index);
+				return <li key={index} data-severity={issue.severity}>{SUPERVISOR_SEVERITY_COPY[issue.severity] ?? issue.severity} · {issue.text}{issue.evidence ? ` — ${issue.evidence}` : ""}
+					{fix && <code className="agent-supervisor-fix" data-fix-action={fix.action}>{`run_action ${JSON.stringify({ action: fix.action, args: fix.args })}`}</code>}
+				</li>;
+			})}
 		</ul>}
 		{followUp && <div className="agent-job-actions">
-			<button type="button" className="agent-ghost-button agent-supervisor-send" onClick={() => onSend(followUp)}>{ko("Send as next prompt", "다음 턴으로 보내기")}</button>
+			<button type="button" className="agent-ghost-button agent-supervisor-send" onClick={() => onSend(followUp)}
+				title={note.autofix?.eligible ? ko("Autofix is on: the blocker fixes would be applied as written", "자동 수정 켜짐: 차단 수정안을 적힌 그대로 적용합니다") : undefined}>
+				{fixes.length ? ko("Apply fixes as next prompt", "수정안 다음 턴으로 보내기") : ko("Send as next prompt", "다음 턴으로 보내기")}
+			</button>
 		</div>}
 	</div>;
 }
