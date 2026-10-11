@@ -378,5 +378,7 @@ export function measureReferenceOutline(image, { rows = 12 } = {}) {
 		}
 		slices.push({ y: round((y - top) / h), spans });
 	}
-	return { widthToHeight: round((right - left + 1) / h), rows: slices };
+	// Where the subject sits in the image (fractions of the image), so a view can draw the slices over it.
+	const box = { left: (left) / width, top: top / height, width: (right - left + 1) / width, height: h / height, aspect: height / width };
+	return { widthToHeight: round((right - left + 1) / h), rows: slices, box };
 }

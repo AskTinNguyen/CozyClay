@@ -210,4 +210,51 @@ await runCase("the harness measurement goes into the first turn", async () => {
 	assert.match(texts[0], /\[0\.15,0\.26\]/);
 });
 
+await runCase("the run narrates itself: log lines, what it waits on, score history, candidates and changed parts", async () => {
+	const f = fixture({ turns: [
+		[{ type: "text.delta", text: "**Built** a 17-part draft.\nThe back is inferred." }, { type: "tool.start", callId: "c1", args: { action: "object.sculpt", args: { recipe: {} } } }, { type: "tool.done", callId: "c1", ok: false, error: "INVALID_ARGUMENT: Recipe refused at parts[ear].roundness (inspect, do not retry)" }, sculpt()],
+		[{ bus: { action: "sculpt.compare", args: { id: "sculpt-1" }, result: { iou: 0.6, ranking: [{ label: "wider", iou: 0.66, delta: 0.06 }, { label: "taller", iou: 0.61, delta: 0.01 }] } } }, { bus: { action: "object.sculpt", args: { id: "sculpt-1", edits: [{ set: "body" }, { set: "arm" }] }, result: { affectedIds: ["sculpt-1"] } } }],
+	] });
+	const scores = [0.6, 0.66];
+	const seen = [];
+	const run = createSculptRun({ ...f, maxRounds: 2, targetIou: 0.95, score: async () => ({ iou: scores.shift() }), measure: async () => ({ widthToHeight: 0.9, rows: [{ y: 0.1, spans: [[-0.2, -0.1], [0.1, 0.2]] }], box: { left: 0.1, top: 0.1, width: 0.8, height: 0.8, aspect: 1 } }) });
+	run.subscribe(state => seen.push(state));
+	await run.start();
+	return { run, seen };
+}, ({ run, seen }) => {
+	const state = run.getState();
+	const lines = state.activity.map(row => row.text);
+	assert.match(lines[0], /Measuring the reference outline/);
+	assert.ok(lines.some(line => /Outline measured: width:height 0\.9, 1 slices, 1 with separate limbs/.test(line)), lines.join(" | "));
+	assert.ok(lines.some(line => /^Recipe refused: INVALID_ARGUMENT: Recipe refused at parts\[ear\]\.roundness\. The agent is fixing it\.$/.test(line)), lines.join(" | "));
+	assert.ok(lines.some(line => /Ranked 2 candidate fixes: "wider" leads \(\+0\.060\)/.test(line)), lines.join(" | "));
+	assert.ok(lines.some(line => /Applied 2 edits to body, arm/.test(line)), lines.join(" | "));
+	assert.match(lines.at(-1), /Finished at IoU 0\.660/);
+	assert.ok(lines.includes("Agent: Built a 17-part draft."), lines.join(" | "));
+	assert.deepEqual(state.history.map(row => row.iou), [0.6, 0.66], "a candidate ranking is not a score of the sculpt");
+	assert.deepEqual(state.candidates.map(row => row.label), ["wider", "taller"]);
+	assert.deepEqual(state.changedParts.ids, ["body", "arm"]);
+	assert.equal(state.outline.box.width, 0.8);
+	assert.equal(state.waiting, null, "nothing is awaited once the run ends");
+	const labels = seen.map(row => row.waiting?.label).filter(Boolean);
+	for (const label of ["Measuring the reference outline", "Agent is writing the recipe", "Agent is building the recipe", "Scoring the silhouette against the reference", "Agent is weighing fixes"]) assert.ok(labels.includes(label), `${label} in ${[...new Set(labels)].join(" | ")}`);
+	const writing = seen.filter(row => row.waiting?.label === "Agent is writing the recipe").map(row => row.waiting);
+	assert.ok(writing[0].expectMs > 0);
+	const afterTool = seen.findIndex(row => row.waiting?.label === "Agent is building the recipe");
+	assert.equal(seen[afterTool + 1].waiting.label, "Agent is writing the recipe", "a finished tool call hands back to the turn's own wait");
+	assert.equal(seen[afterTool + 1].waiting.since, writing[0].since, "the turn's wait keeps counting from when the turn went out");
+	assert.equal(seen.find(row => row.waiting?.label === "Agent is writing the recipe").stage, "draft", "the stepper is on Draft while the recipe is written");
+	assert.ok(state.activity.every((row, index, rows) => index === 0 || row.atMs >= rows[index - 1].atMs));
+});
+
+await runCase("a score repeated with no edit in between adds no log line or trail point", async () => {
+	const f = fixture({ turns: [[sculpt(), compare(0.72), compare(0.72)]] });
+	const run = createSculptRun({ ...f, maxRounds: 1, targetIou: 0.95 });
+	await run.start();
+	return run.getState();
+}, (state) => {
+	assert.deepEqual(state.history.map(row => row.iou), [0.72]);
+	assert.equal(state.activity.filter(row => /^Scored IoU/.test(row.text)).length, 1, state.activity.map(row => row.text).join(" | "));
+});
+
 if (process.exitCode) process.exit(1);
