@@ -281,7 +281,7 @@ import { DEPTH_RANGE_M, depthRangeFromFrames, passFileName, renderPass } from ".
 import { motionApiOrigin, I2V_MOTION_SHOT_ASPECT } from "./i2v-motion-client.js";
 import { serializeOtio } from "./otio.js";
 import "./shell/mode.css";
-import { readPoseFadeOpacity, suspendPoseFade, writePoseFadeOpacity } from "./pose-fade.js";
+import { readPoseFadeOpacity, withPoseFadeLifted, writePoseFadeOpacity } from "./pose-fade.js";
 import {
 	shotAtFrame,
 	shotIndexAtFrame,
@@ -4881,7 +4881,7 @@ export default function App() {
 
 	/** Pose mode's image generation: the shot camera's view of the pose as it stands, at the
 	    delivery size, plus the scene's identity/environment references. The pose-mode object
-	    fade is lifted for this draw only (the props' next frame puts it back), and editor
+	    fade is lifted for this draw only (props are re-synced right after, so a demand frame loop keeps it), and editor
 	    overlays such as motion trails are hidden around it. */
 	function capturePoseImage(source = "view") {
 		const viewCam = source === "view" ? poserCamRef.current : null;
@@ -4897,13 +4897,10 @@ export default function App() {
 		scene?.traverse((node) => {
 			if (node.userData.editorOverlay && node.visible) { node.visible = false; overlays.push(node); }
 		});
-		suspendPoseFade(true);
-		propSyncRef.current?.();
 		try {
-			const dataUrl = captureFramingPng(framing, shotOutput);
+			const dataUrl = withPoseFadeLifted(propSyncRef.current, () => captureFramingPng(framing, shotOutput));
 			return dataUrl ? { dataUrl, references: captureShotReferences() } : null;
 		} finally {
-			suspendPoseFade(false);
 			for (const node of overlays) node.visible = true;
 		}
 	}

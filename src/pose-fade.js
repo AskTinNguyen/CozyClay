@@ -26,6 +26,19 @@ export function suspendPoseFade(suspended) {
 	fadeSuspended = suspended;
 }
 
+/** Runs `draw` with the working fade lifted. `sync` re-applies the fade to every prop; it runs
+    again afterwards because a demand frame loop may not render another frame on its own. */
+export function withPoseFadeLifted(sync, draw) {
+	suspendPoseFade(true);
+	sync?.();
+	try {
+		return draw();
+	} finally {
+		suspendPoseFade(false);
+		sync?.();
+	}
+}
+
 /** `fade` is Pose mode's working fade (null = off; a faded prop also stops catching clicks);
     `own` is the object's authored opacity (1 = solid). */
 export function applyPoseFade(root, fade, own = 1) {
