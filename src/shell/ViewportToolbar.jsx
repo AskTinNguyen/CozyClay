@@ -12,15 +12,17 @@ import { saveAutoColor } from "../auto-color.js";
 import { trackFeature } from "../analytics.js";
 import "./viewport.css";
 
-// G1: the single mode+tool pill. Keys 1-4 and W/E/R are bound in App's
+// G1: the single mode+tool pill. Keys 1-5 and W/E/R are bound in App's
 // keydown handler; these buttons are the same doors for the pointer.
 const MODES = [
 	{ id: "scene", key: "1", label: ko("Stage", "배치") },
 	{ id: "pose", key: "2", label: ko("Pose", "포즈") },
 	{ id: "camera", key: "3", label: ko("Camera", "카메라") },
 	{ id: "motion", key: "4", label: ko("Motion", "모션") },
+	// #739: an isolated turntable for one sculpt. Every previs mode has it.
+	{ id: "sculpt", key: "5", label: ko("Sculpt", "조각") },
 ];
-// A storyboard project has no Motion department: its pill reads 1 2 3.
+// A storyboard project has no Motion department: its pill reads 1 2 3 5.
 export const modesFor = (previsMode) => (previsMode === "storyboard" ? MODES.filter((mode) => mode.id !== "motion") : MODES);
 
 // #570 line icons (16px, 1.3 stroke) for the floating rails.
@@ -29,6 +31,10 @@ const ICON = {
 	pose: "M8 2.25a1.5 1.5 0 1 1 0 3 1.5 1.5 0 1 1 0-3z M5 7.25h6 M8 7.25v3.5 M6.25 13.75 8 10.75l1.75 3",
 	camera: "M2 5.75A1.5 1.5 0 0 1 3.5 4.25h6A1.5 1.5 0 0 1 11 5.75v4.5a1.5 1.5 0 0 1-1.5 1.5h-6A1.5 1.5 0 0 1 2 10.25z M11 7l3-1.5v5L11 9",
 	motion: "M1.75 9.5c1.5 0 2-4 3.25-4s1.75 5 3 5 1.75-5 3-5 1.75 4 3.25 4",
+	sculpt: "M3.75 11.75c0-3.25 1.9-5.5 4.25-5.5s4.25 2.25 4.25 5.5z M2 11.75h12 M5.25 14h5.5 M10 2.25 8.5 5.25",
+	front: "M8 2.5a1.75 1.75 0 1 1 0 3.5 1.75 1.75 0 1 1 0-3.5z M4.5 13.5v-2.75a3.5 3.5 0 0 1 7 0v2.75",
+	side: "M7.25 2.5a1.75 1.75 0 1 1 0 3.5 1.75 1.75 0 1 1 0-3.5z M9 4.25h1.5 M6 13.5v-2.75a2.5 2.5 0 0 1 4.5-1.5",
+	back: "M8 2.5a1.75 1.75 0 1 1 0 3.5 1.75 1.75 0 1 1 0-3.5z M4.5 13.5v-2.75a3.5 3.5 0 0 1 7 0v2.75 M8 9v4.5",
 	move: "M8 2v12 M2 8h12 M6.25 3.75 8 2l1.75 1.75 M6.25 12.25 8 14l1.75-1.75 M3.75 6.25 2 8l1.75 1.75 M12.25 6.25 14 8l-1.75 1.75",
 	rotate: "M13.25 8A5.25 5.25 0 1 1 11.7 4.3 M13.25 2.5v2.75H10.5",
 	scale: "M2.5 8.5v4a1 1 0 0 0 1 1h4 M8.5 2.5h5v5 M13.5 2.5 7.5 8.5",
@@ -135,7 +141,7 @@ export default function ViewportToolbar() {
 		agentCollapsed, addSceneObject, spawnCharacter, characters, flySpeed,
 		ikEditTool, setIkEditTool, showTrails, setShowTrails, motion, setRangePinPartPick,
 		trailFalloffS, setTrailFalloffS, lineEditMode, exitLineEditMode, enterRefineMode,
-		refineDisabledReason, previsMode,
+		refineDisabledReason, previsMode, sculptView, requestSculptView,
 	} = useStudioShell();
 	const menu = useOverlayMenu();
 
@@ -179,6 +185,12 @@ export default function ViewportToolbar() {
 				key: "E", id: "refine", name: ko("Refine (edit the path line)", "다듬기 (경로선 편집)"), active: lineEditMode,
 				refused: refineReason, pick: () => { if (!lineEditMode) enterRefineMode(); },
 			},
+		],
+		// Sculpt mode's W/E/R swing the turntable camera to a reference view.
+		sculpt: [
+			{ key: "W", id: "front", name: ko("Front view", "정면 보기"), active: sculptView?.view === "front", pick: () => requestSculptView("front") },
+			{ key: "E", id: "side", name: ko("Side view", "측면 보기"), active: sculptView?.view === "side", pick: () => requestSculptView("side") },
+			{ key: "R", id: "back", name: ko("Back view", "뒷면 보기"), active: sculptView?.view === "back", pick: () => requestSculptView("back") },
 		],
 	}[workflowMode] ?? [];
 

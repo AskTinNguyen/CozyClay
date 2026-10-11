@@ -1,0 +1,155 @@
+#!/usr/bin/env node
+/**
+ * verify-sculpt-mode (#739): the pure parts of Sculpt mode — the fifth mode on
+ * key 5 in both previs modes, the isolation helper, turntable framing, the
+ * Place in scene placement, and the command tap a sculpt run listens to.
+ */
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+
+// The toolbar's import graph is the whole studio, so its MODES table is read
+// from source: every `{ id, key }` row of `const MODES = [...]`.
+const toolbar = readFileSync(new URL("../src/shell/ViewportToolbar.jsx", import.meta.url), "utf8");
+const modesBlock = toolbar.match(/const MODES = \[([\s\S]*?)\n\];/)?.[1] ?? "";
+const WORKFLOW_MODES = [...modesBlock.matchAll(/\{ id: "(\w+)", key: "(\d)"/g)].map(([, id, key]) => ({ id, key }));
+// The storyboard rule, as the toolbar states it (verify-layout pins the text).
+assert.ok(toolbar.includes('previsMode === "storyboard" ? MODES.filter((mode) => mode.id !== "motion") : MODES'));
+const modesFor = (previsMode) => (previsMode === "storyboard" ? WORKFLOW_MODES.filter((mode) => mode.id !== "motion") : WORKFLOW_MODES);
+const {
+	SCULPT_LAYER, SCULPT_VIEWS, agentSessionReady, createCommandTap, isolatedObjectIds,
+	sculptAgentClient, sculptFraming, sculptPlacement, sculptTargetFromSelection,
+} = await import("../src/sculpt-mode.js");
+const { placementInFront, SCULPT_KIND } = await import("../src/scene-objects.js");
+
+let failures = 0;
+const check = (name, fn) => {
+	try { fn(); console.log(`PASS ${name}`); }
+	catch (error) { failures += 1; console.log(`FAIL ${name} - ${error.message}`); }
+};
+const close = (actual, expected, label) => assert.ok(Math.abs(actual - expected) < 1e-9, `${label}: ${actual} != ${expected}`);
+
+check("the mode list ends with Sculpt on key 5", () => {
+	assert.deepEqual(WORKFLOW_MODES.map((mode) => [mode.id, mode.key]), [["scene", "1"], ["pose", "2"], ["camera", "3"], ["motion", "4"], ["sculpt", "5"]]);
+});
+
+check("a storyboard keeps Sculpt and drops only Motion", () => {
+	assert.deepEqual(modesFor("storyboard").map((mode) => mode.id), ["scene", "pose", "camera", "sculpt"]);
+	assert.deepEqual(modesFor("animation").map((mode) => mode.id), ["scene", "pose", "camera", "motion", "sculpt"]);
+});
+
+check("App binds Digit5 to sculpt", () => {
+	const app = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
+	assert.ok(app.includes('Digit4: "motion", Digit5: "sculpt" }[event.code]'));
+});
+
+const objects = [
+	{ id: "box", renderer: "box" },
+	{ id: "sculpt", renderer: SCULPT_KIND },
+	{ id: "sculpt-2", renderer: SCULPT_KIND },
+];
+
+check("isolation keeps the target id and nothing else", () => {
+	assert.deepEqual(isolatedObjectIds(objects, "sculpt-2"), ["sculpt-2"]);
+	assert.deepEqual(isolatedObjectIds(objects, "gone"), []);
+	assert.deepEqual(isolatedObjectIds(objects, null), []);
+});
+
+check("the selected sculpt is the target; anything else means a new sculpt", () => {
+	assert.equal(sculptTargetFromSelection(objects, "sculpt"), "sculpt");
+	assert.equal(sculptTargetFromSelection(objects, "box"), null);
+	assert.equal(sculptTargetFromSelection(objects, null), null);
+});
+
+check("the turntable layer is not one dualview owns", () => {
+	assert.ok(![2, 3, 4, 5].includes(SCULPT_LAYER));
+});
+
+check("front, side and back frame the sculpt from its own front, left and back", () => {
+	const object = { x: 1, y: 0, z: -2, rot: 0 };
+	const size = { width: 1, height: 2, depth: 1 };
+	const front = sculptFraming(object, size, "front");
+	assert.deepEqual(front.target, [1, 1, -2]);
+	assert.ok(front.position[2] > front.target[2] && Math.abs(front.position[0] - 1) < 1e-9, "front looks from +Z");
+	const side = sculptFraming(object, size, "side");
+	assert.ok(side.position[0] > 1 && Math.abs(side.position[2] + 2) < 1e-9, "side looks from the subject's left (+X)");
+	const back = sculptFraming(object, size, "back");
+	assert.ok(back.position[2] < -2, "back looks from -Z");
+	const turned = sculptFraming({ ...object, rot: 90 }, size, "front");
+	assert.ok(turned.position[0] > 1, "a sculpt turned 90° is framed from its turned front");
+	assert.deepEqual(Object.keys(SCULPT_VIEWS), ["front", "side", "back"]);
+	// The whole sculpt fits the lens: distance clears the bounding radius.
+	const distance = Math.hypot(front.position[0] - 1, front.position[1] - 1, front.position[2] + 2);
+	assert.ok(distance > front.radius / Math.sin((17.5 * Math.PI) / 180));
+});
+
+check("Place in scene stands the sculpt on the ground where + Add would put it", () => {
+	const camera = { x: 3, y: 2, z: 4 };
+	const yaw = 0.6;
+	const placed = sculptPlacement(camera, yaw);
+	assert.deepEqual(placed, { ...placementInFront({ x: 3, z: 4 }, yaw), y: 0 });
+	const straight = sculptPlacement({ x: 0, y: 1.6, z: 5 }, 0);
+	close(straight.x, 0, "x");
+	close(straight.z, 2.4, "z");
+	assert.equal(straight.y, 0);
+});
+
+check("the command tap reports finished receipts once, with job output and inner args", () => {
+	const tap = createCommandTap();
+	const busListeners = new Set();
+	const bus = { subscribe(listener) { busListeners.add(listener); return () => busListeners.delete(listener); } };
+	const events = [];
+	const off = tap.subscribe((event) => events.push(event), bus);
+	const sculptReceipt = { ok: true, action: "object.sculpt", status: "applied", receiptId: "r1", affectedIds: ["sculpt"] };
+	const handlers = tap.wrap({ run_action: () => sculptReceipt, verify: () => ({ ok: true, receiptId: "x" }) });
+	handlers.run_action({ args: { action: "object.sculpt", args: { id: "sculpt", edits: [] } } });
+	handlers.verify({});
+	assert.equal(events.length, 1);
+	assert.equal(events[0].action, "object.sculpt");
+	assert.deepEqual(events[0].args, { id: "sculpt", edits: [] });
+	assert.deepEqual(events[0].result.affectedIds, ["sculpt"]);
+
+	const compare = { ok: true, action: "sculpt.compare", status: "completed", receiptId: "r2", output: { report: { iou: 0.91 }, sheetDataUrl: "data:image/png;base64,AA==" } };
+	tap.report({ args: { action: "sculpt.compare", args: {} } }, { ok: true, action: "sculpt.compare", status: "started", receiptId: "r0" });
+	tap.report({ args: { action: "sculpt.compare", args: {} } }, compare);
+	for (const listener of busListeners) listener({ type: "job.completed", receipt: compare });
+	assert.equal(events.length, 2, "a started job and a job reported twice add one event");
+	assert.equal(events[1].result.report.iou, 0.91);
+	assert.equal(events[1].result.sheetDataUrl, "data:image/png;base64,AA==");
+
+	tap.report(null, { ok: false, action: "object.sculpt", receiptId: "r3" });
+	assert.equal(events.length, 2, "a refusal is not reported");
+	off();
+	assert.equal(busListeners.size, 0, "unsubscribing leaves the bus");
+});
+
+{
+	const tap = createCommandTap();
+	const events = [];
+	tap.subscribe((event) => events.push(event));
+	const handlers = tap.wrap({ run_action: async () => ({ ok: true, action: "object.sculpt", receiptId: "a1" }) });
+	await handlers.run_action({ args: { action: "object.sculpt", args: { recipe: {} } } });
+	check("an async live handler is reported when it settles", () => assert.equal(events.length, 1));
+}
+
+check("Start follows the Agent panel's readiness rule", () => {
+	assert.equal(agentSessionReady({ signedIn: true }), true);
+	assert.equal(agentSessionReady({ signedIn: false, providersConfigured: 2 }), true);
+	assert.equal(agentSessionReady({ signedIn: false, providersConfigured: 0 }), false);
+	assert.equal(agentSessionReady(null), false);
+});
+
+check("the run's agent client carries the live editor context", () => {
+	const sent = [];
+	const client = sculptAgentClient({ turn: (request, onEvent, signal) => { sent.push({ request, onEvent, signal }); return "ok"; } }, () => ({ host: { workspaceHandle: "h" } }));
+	const onEvent = () => {};
+	assert.equal(client.turn({ surface: "studio", text: "go", context: null }, onEvent, "signal"), "ok");
+	assert.deepEqual(sent[0].request, { surface: "studio", text: "go", context: { host: { workspaceHandle: "h" } } });
+	assert.equal(sent[0].onEvent, onEvent);
+	assert.equal(sent[0].signal, "signal");
+});
+
+if (failures) {
+	console.log(`${failures} check(s) failed`);
+	process.exit(1);
+}
+console.log("verify-sculpt-mode: all checks passed");
