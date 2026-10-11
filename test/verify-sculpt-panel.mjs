@@ -132,6 +132,34 @@ const sheet = "data:image/png;base64,BBBB";
 	console.log("PASS sculpt panel: live narration (wait line, trail, race, log, scan)");
 }
 
+/* ------------------------------------------------------- model picker --- */
+{
+	const modelPicker = {
+		state: "ready", model: "openai-codex/gpt-6-astra", effort: null, onModel: noop, onEffort: noop,
+		providers: [
+			{ id: "openai-codex", label: "ChatGPT", signedIn: true, models: [{ key: "openai-codex/gpt-6-astra", label: "GPT-6 Astra" }] },
+			{ id: "anthropic", label: "Anthropic", signedIn: false, models: [{ key: "anthropic/opus", label: "Opus" }] },
+		],
+		models: [{ id: "openai-codex/gpt-6-astra", label: "GPT-6 Astra", efforts: ["low", "medium", "high"], defaultEffort: "medium" }, { id: "anthropic/opus", label: "Opus" }],
+	};
+	const html = render({ reference, modelPicker });
+	assert.match(html, /<optgroup label="ChatGPT"><option value="openai-codex\/gpt-6-astra" selected="">GPT-6 Astra<\/option><\/optgroup>/);
+	assert.match(html, /<option value="anthropic\/opus" disabled="">Opus — add key<\/option>/, "a provider without a credential lists its models disabled");
+	assert.match(html, /<option value="" selected="">Default \(medium\)<\/option><option value="medium">medium<\/option><option value="low">low<\/option><option value="high">high<\/option>/);
+	assert.doesNotMatch(tag(html, "sculpt-model-select"), /disabled/);
+	const running = render({ reference, modelPicker, run: { ...baseRun, stage: "draft" } });
+	assert.match(tag(running, "sculpt-model-select"), /disabled=""/, "the model is locked while a run is out");
+	assert.match(tag(running, "sculpt-effort-select"), /disabled=""/);
+	assert.match(running, /locked while running/);
+	const loading = render({ modelPicker: { state: "loading", providers: [], models: [], model: "" } });
+	assert.match(loading, /Loading models…/);
+	assert.equal(tag(loading, "sculpt-effort-select"), null, "no effort without a model");
+	assert.match(render({ modelPicker: { state: "failed", providers: [], models: [], model: "" } }), /No model available/);
+	assert.equal(tag(render({}), "sculpt-model"), null, "no picker without a model list");
+	console.log("PASS sculpt panel: model picker (grouped, keyless disabled, effort, locked while running)");
+}
+
+/* ---------------------------------------------------------------- done --- */
 {
 	const html = render({ reference, sculptName: "Hero sculpt", run: { ...baseRun, stage: "done", round: 1, iou: 0.945, elapsedMs: 41_000, sheetDataUrl: sheet } });
 	assert.ok(tag(html, "sculpt-start"), "Start returns when done");

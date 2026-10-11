@@ -137,3 +137,10 @@
 @media (prefers-reduced-motion: reduce) {
 	.sculpt-clay, .sculpt-trail-dot, .sculpt-delta, .sculpt-race-bar > span, .sculpt-log-row, .sculpt-scanline, .sculpt-scan-span, .sculpt-now[data-over="true"] .sculpt-now-bar > span { animation: none; }
 }
+
+/* Model and effort */
+.sculpt-model { display: grid; gap: 4px; }
+.sculpt-model-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; }
+.sculpt-select { min-width: 0; height: 26px; padding: 0 6px; border-radius: var(--r-1); border: 1px solid var(--row-divider); background: var(--field); color: var(--text-1); font: inherit; font-size: 12px; }
+.sculpt-select:disabled { opacity: .6; }
+

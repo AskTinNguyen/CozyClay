@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import Foldout from "./Foldout.jsx";
 import { ko, isKo } from "../locale.js";
+import { effortOptions } from "../workflow/agent-client.js";
 import "./sculpt.css";
 
 // Sculpt mode side panel (#739). Pure view: the run controller owns the run state and the
@@ -151,7 +152,50 @@ function OutlineScan({ outline, scanning }) {
 	);
 }
 
-export default function SculptPanel({ run, reference, onReference, onStart, onCancel, onPlaceInScene, canStart, startRefusal, sculptName, hidden }) {
+/**
+ * Which model the run uses, and its effort. The list is the Agent panel's
+ * (/agent/models): grouped by provider, a provider without a credential lists
+ * its models disabled. Locked while a run is out, since every turn of one run
+ * uses the same model.
+ */
+function ModelPicker({ picker, locked }) {
+	if (!picker) return null;
+	const { state, providers = [], models = [], model, effort, onModel, onEffort } = picker;
+	const efforts = effortOptions(models.find((entry) => entry.id === model));
+	const disabled = locked || !models.length;
+	return (
+		<div className="sculpt-model" data-testid="sculpt-model">
+			<div className="sculpt-label"><span>{ko("Model", "모델")}</span>{locked && <small>{ko("locked while running", "실행 중엔 고정")}</small>}</div>
+			<div className="sculpt-model-row">
+				<select className="sculpt-select" data-testid="sculpt-model-select" aria-label={ko("Sculpt model", "조형 모델")} value={model || ""} disabled={disabled}
+					onChange={(event) => onModel?.(event.target.value)}>
+					{providers.length
+						? providers.map((provider) => (
+							<optgroup key={provider.id} label={provider.label ?? provider.id}>
+								{(provider.models ?? []).map((entry) => {
+									const key = entry.key ?? `${provider.id}/${entry.id}`;
+									const label = models.find((row) => row.id === key)?.label ?? entry.label ?? key;
+									return <option key={key} value={key} disabled={!provider.signedIn}>{provider.signedIn ? label : `${label} — ${ko("add key", "키 필요")}`}</option>;
+								})}
+							</optgroup>
+						))
+						: models.length
+							? models.map((entry) => <option key={entry.id} value={entry.id}>{entry.label ?? entry.id}</option>)
+							: <option value="">{state === "failed" ? ko("No model available", "사용할 모델 없음") : ko("Loading models…", "모델 불러오는 중…")}</option>}
+				</select>
+				{efforts.length > 0 && (
+					<select className="sculpt-select sculpt-effort" data-testid="sculpt-effort-select" aria-label={ko("Effort", "추론 강도")} value={effort ?? ""} disabled={locked}
+						onChange={(event) => onEffort?.(event.target.value || null)}>
+						<option value="">{isKo ? `기본 (${efforts[0]})` : `Default (${efforts[0]})`}</option>
+						{efforts.map((value) => <option key={value} value={value}>{value}</option>)}
+					</select>
+				)}
+			</div>
+		</div>
+	);
+}
+
+export default function SculptPanel({ run, reference, onReference, onStart, onCancel, onPlaceInScene, canStart, startRefusal, sculptName, hidden, modelPicker = null }) {
 	const fileRef = useRef(null);
 	const [dragging, setDragging] = useState(false);
 	// The sheet is the clearest picture of what is off, so it starts open.
@@ -213,6 +257,8 @@ export default function SculptPanel({ run, reference, onReference, onStart, onCa
 				<input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" className="multimodel-file-input" data-testid="sculpt-reference-input"
 					aria-label={ko("Reference image file", "참조 이미지 파일")}
 					onChange={(event) => { const files = [...(event.target.files ?? [])]; event.target.value = ""; take(files); }} />
+
+				<ModelPicker picker={modelPicker} locked={running} />
 
 				{running ? (
 					<button type="button" className="btn full sculpt-cancel" data-testid="sculpt-cancel" onClick={() => onCancel?.()}>

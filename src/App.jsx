@@ -54,7 +54,7 @@ import { createAgentPort, createSculptRun } from "./sculpt-run.js";
 import { SculptTurntable } from "./sculpt-stage.jsx";
 import { measureReferenceOutline } from "./sculpt-compare.js";
 import { browserSculptImages } from "./commands/sculpt-images.js";
-import { agentSessionReady, createCommandTap, sculptAgentClient, sculptTargetFromSelection } from "./sculpt-mode.js";
+import { agentSessionReady, createCommandTap, sculptAgentClient, sculptModelChoice, sculptModelLabel, sculptTargetFromSelection, storeSculptModel } from "./sculpt-mode.js";
 import { StudioProtocolError } from "./studio-agent-protocol.js";
 import { elementByPath } from "./studio-elements.js";
 import {
@@ -1565,6 +1565,14 @@ export default function App() {
 	const [sculptRun, setSculptRun] = useState(null);
 	const sculptRunRef = useRef(null);
 	const [sculptAgentStatus, setSculptAgentStatus] = useState("unknown");
+	// The model Sculpt runs on (its own pick, remembered apart from the chat model) and the list it comes from.
+	const [sculptModels, setSculptModels] = useState({ state: "loading", providers: [], models: [] });
+	const [sculptModelPick, setSculptModelPick] = useState({ model: "", effort: null });
+	const chooseSculptModel = (next) => setSculptModelPick((current) => {
+		const choice = { ...current, ...next };
+		storeSculptModel(choice);
+		return choice;
+	});
 	const [sculptTransport] = useState(() => createAgentTransport({ surface: "studio" }));
 	const [sculptTap] = useState(createCommandTap);
 	const sculptTarget = sceneObjects.find((object) => object.id === sculptTargetId && object.renderer === SCULPT_KIND) ?? null;
@@ -1585,10 +1593,22 @@ export default function App() {
 	useEffect(() => {
 		if (!sculptMode) return undefined;
 		let live = true;
-		const read = () => sculptTransport.status().then(
-			(status) => { if (live) setSculptAgentStatus(agentSessionReady(status) ? "ready" : "signed-out"); },
-			() => { if (live) setSculptAgentStatus("signed-out"); },
-		);
+		const read = () => {
+			sculptTransport.status().then(
+				(status) => { if (live) setSculptAgentStatus(agentSessionReady(status) ? "ready" : "signed-out"); },
+				() => { if (live) setSculptAgentStatus("signed-out"); },
+			);
+			// The Agent panel's catalogue: a key added or removed elsewhere changes what can run.
+			sculptTransport.models().then(
+				(advertised) => {
+					if (!live) return;
+					const list = Array.isArray(advertised?.models) ? advertised.models : [];
+					setSculptModels({ state: list.length ? "ready" : "failed", providers: advertised?.providers ?? [], models: list });
+					setSculptModelPick((current) => sculptModelChoice(advertised, current));
+				},
+				() => { if (live) setSculptModels((current) => ({ ...current, state: current.models.length ? current.state : "failed" })); },
+			);
+		};
 		read();
 		window.addEventListener("focus", read);
 		return () => { live = false; window.removeEventListener("focus", read); };
@@ -1610,6 +1630,9 @@ export default function App() {
 			sculptId: sculptTarget?.id ?? null,
 			score: (args) => appContext.bus.run("sculpt.compare", args, { origin: "ui" }),
 			measure: async (reference) => measureReferenceOutline(await browserSculptImages.decode(reference)),
+			model: sculptModelPick.model || undefined,
+			effort: sculptModelPick.effort || undefined,
+			modelLabel: sculptModelLabel(sculptModels, sculptModelPick.model) || undefined,
 		});
 		sculptRunRef.current = run;
 		let shownId = sculptTarget?.id ?? null;
@@ -7211,12 +7234,22 @@ export default function App() {
 			onStart={startSculptRun}
 			onCancel={() => sculptRunRef.current?.cancel()}
 			onPlaceInScene={placeSculptInScene}
-			canStart={Boolean(sculptReference) && sculptAgentStatus === "ready" && Boolean(liveWorkspaceHandle)}
+			canStart={Boolean(sculptReference) && sculptAgentStatus === "ready" && Boolean(liveWorkspaceHandle) && Boolean(sculptModelPick.model)}
+			modelPicker={{
+				...sculptModels,
+				model: sculptModelPick.model,
+				effort: sculptModelPick.effort,
+				// A new model starts at its own default effort.
+				onModel: (model) => chooseSculptModel({ model, effort: null }),
+				onEffort: (effort) => chooseSculptModel({ effort }),
+			}}
 			startRefusal={sculptAgentStatus === "signed-out"
 				? ko("Sign in to the Agent (⌘B) to sculpt from an image.", "이미지로 조형하려면 에이전트(⌘B)에 로그인하세요.")
 				: sculptAgentStatus === "ready" && !liveWorkspaceHandle
 					? ko("The live editor is disconnected — reconnect to sculpt.", "라이브 편집기가 연결되지 않았어요 — 연결 후 조형하세요.")
-					: null}
+					: sculptAgentStatus === "ready" && sculptModels.state === "failed"
+						? ko("No model is available — add a provider key in the Agent panel.", "사용할 모델이 없어요 — 에이전트 패널에서 제공자 키를 추가하세요.")
+						: null}
 			sculptName={sculptTarget?.name ?? null}
 		/>
 	) : null;
