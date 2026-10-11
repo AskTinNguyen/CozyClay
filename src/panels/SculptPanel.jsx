@@ -195,7 +195,67 @@ function ModelPicker({ picker, locked }) {
 	);
 }
 
-export default function SculptPanel({ run, reference, onReference, onStart, onCancel, onPlaceInScene, canStart, startRefusal, sculptName, hidden, modelPicker = null }) {
+/**
+ * The blueprint step: one image request turns the reference into a four-view
+ * orthographic model sheet. Pure view: App owns the request and its result.
+ */
+function BlueprintSection({ blueprint, disabled }) {
+	if (!blueprint) return null;
+	const { state = "idle", pose = "keep", notes = "", prompt = "", sheet = null, error = null, startedAt = null, refusal = null, onPose, onNotes, onGenerate, onCancel, layout = [] } = blueprint;
+	const busy = state === "generating";
+	const waited = busy && startedAt ? Math.floor((Date.now() - startedAt) / 1000) : 0;
+	return (
+		<div className="sculpt-blueprint" data-testid="sculpt-blueprint" data-state={state}>
+			<div className="sculpt-label"><span>{ko("Blueprint (model sheet)", "도면 (모델 시트)")}</span><small>{ko("front · side · back · top", "정면 · 측면 · 뒷면 · 윗면")}</small></div>
+			<div className="sculpt-blueprint-row">
+				<select className="sculpt-select" data-testid="sculpt-blueprint-pose" aria-label={ko("Pose on the sheet", "도면 포즈")} value={pose} disabled={busy || disabled} onChange={(event) => onPose?.(event.target.value)}>
+					<option value="keep">{ko("Pose: as in the reference", "포즈: 원본 그대로")}</option>
+					<option value="neutral">{ko("Pose: neutral rest pose", "포즈: 중립 자세")}</option>
+				</select>
+			</div>
+			<textarea className="sculpt-notes" data-testid="sculpt-blueprint-notes" rows={2} maxLength={600} disabled={busy || disabled}
+				placeholder={ko("Notes (optional): what it is, what to keep or fix", "메모 (선택): 무엇인지, 유지하거나 고칠 점")}
+				aria-label={ko("Blueprint notes", "도면 메모")} value={notes} onChange={(event) => onNotes?.(event.target.value)} />
+			{busy ? (
+				<div className="sculpt-now" data-testid="sculpt-blueprint-wait" role="status" aria-live="polite">
+					<span className="sculpt-clay" aria-hidden="true" />
+					<span className="sculpt-now-label">{ko("Drawing the four-view sheet", "4면 도면 그리는 중")}</span>
+					<span className="sculpt-now-time">{waited}s</span>
+					<span className="sculpt-now-expect">{ko("usually ~40–90s", "보통 ~40–90초")}</span>
+					<button type="button" className="btn ghost small" data-testid="sculpt-blueprint-cancel" onClick={() => onCancel?.()}>{ko("Cancel", "취소")}</button>
+				</div>
+			) : (
+				<button type="button" className="btn full" data-testid="sculpt-blueprint-generate" disabled={disabled || Boolean(refusal)} onClick={() => onGenerate?.()}>
+					{sheet ? ko("Generate again", "다시 생성") : ko("Generate blueprint", "도면 생성")}
+				</button>
+			)}
+			{refusal && !busy && <p className="inspector-hint" role="status" data-testid="sculpt-blueprint-refusal">{refusal}</p>}
+			{error && !busy && <p className="inspector-hint sculpt-error" role="alert" data-testid="sculpt-blueprint-error">{error}</p>}
+			{sheet && (
+				<figure className="sculpt-sheet-figure" data-testid="sculpt-blueprint-sheet">
+					<a href={sheet.dataUrl} target="_blank" rel="noreferrer" title={ko("Open full size", "원본 크기로 열기")}>
+						<img src={sheet.dataUrl} alt={ko("Generated four-view model sheet", "생성된 4면 도면")} />
+						{layout.map((panel) => (
+							<span key={panel.view} className="sculpt-sheet-tag" style={{ left: `${panel.x * 100}%`, top: `${panel.y * 100}%` }}>{panel.label}</span>
+						))}
+					</a>
+					<figcaption>
+						<span>{sheet.width}×{sheet.height}{Number.isFinite(sheet.ms) ? ` · ${Math.round(sheet.ms / 1000)}s` : ""}</span>
+						<a href={sheet.dataUrl} download="sculpt-blueprint.png" data-testid="sculpt-blueprint-download">{ko("Download", "내려받기")}</a>
+					</figcaption>
+				</figure>
+			)}
+			{prompt && (
+				<details className="sculpt-prompt" data-testid="sculpt-blueprint-prompt">
+					<summary>{ko("Request sent to the image model", "이미지 모델에 보내는 요청")}</summary>
+					<pre>{prompt}</pre>
+				</details>
+			)}
+		</div>
+	);
+}
+
+export default function SculptPanel({ run, reference, onReference, onStart, onCancel, onPlaceInScene, canStart, startRefusal, sculptName, hidden, modelPicker = null, blueprint = null }) {
 	const fileRef = useRef(null);
 	const [dragging, setDragging] = useState(false);
 	// The sheet is the clearest picture of what is off, so it starts open.
@@ -209,7 +269,7 @@ export default function SculptPanel({ run, reference, onReference, onStart, onCa
 	const showProgress = stage !== "idle";
 	const startDisabled = !canStart || Boolean(startRefusal);
 	const hasLog = Boolean(run?.activity?.length);
-	useTicking(running && Boolean(run?.waiting));
+	useTicking((running && Boolean(run?.waiting)) || blueprint?.state === "generating");
 
 	const take = (files) => {
 		const file = pickImage(files);
@@ -257,6 +317,8 @@ export default function SculptPanel({ run, reference, onReference, onStart, onCa
 				<input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" className="multimodel-file-input" data-testid="sculpt-reference-input"
 					aria-label={ko("Reference image file", "참조 이미지 파일")}
 					onChange={(event) => { const files = [...(event.target.files ?? [])]; event.target.value = ""; take(files); }} />
+
+				{reference && <BlueprintSection blueprint={blueprint} disabled={running} />}
 
 				<ModelPicker picker={modelPicker} locked={running} />
 

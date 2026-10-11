@@ -53,6 +53,8 @@ import SculptPanel from "./panels/SculptPanel.jsx";
 import { createAgentPort, createSculptRun } from "./sculpt-run.js";
 import { SculptTurntable } from "./sculpt-stage.jsx";
 import { measureReferenceOutline } from "./sculpt-compare.js";
+import { BLUEPRINT_LAYOUT, blueprintErrorMessage, blueprintRequest, buildBlueprintPrompt } from "./sculpt-blueprint.js";
+import { requestAgentImage, stylizeErrorMessage } from "./agent-image-client.js";
 import { browserSculptImages } from "./commands/sculpt-images.js";
 import { agentSessionReady, createCommandTap, sculptAgentClient, sculptModelChoice, sculptModelLabel, sculptTargetFromSelection, storeSculptModel } from "./sculpt-mode.js";
 import { StudioProtocolError } from "./studio-agent-protocol.js";
@@ -1613,8 +1615,37 @@ export default function App() {
 		window.addEventListener("focus", read);
 		return () => { live = false; window.removeEventListener("focus", read); };
 	}, [sculptMode, sculptTransport]);
+	// The blueprint step: the reference turned into a four-view model sheet by one image request.
+	const [sculptBlueprint, setSculptBlueprint] = useState({ state: "idle", pose: "keep", notes: "", sheet: null, error: null, startedAt: null });
+	const blueprintAbortRef = useRef(null);
+	async function generateSculptBlueprint() {
+		if (!sculptReference) return;
+		blueprintAbortRef.current?.abort();
+		const controller = new AbortController();
+		blueprintAbortRef.current = controller;
+		const startedAt = Date.now();
+		setSculptBlueprint((current) => ({ ...current, state: "generating", error: null, startedAt }));
+		try {
+			const result = await requestAgentImage(blueprintRequest({ reference: sculptReference, pose: sculptBlueprint.pose, notes: sculptBlueprint.notes }), { signal: controller.signal });
+			if (blueprintAbortRef.current !== controller) return;
+			setSculptBlueprint((current) => ({ ...current, state: "ready", sheet: { dataUrl: result.dataUrl, width: result.width, height: result.height, ms: Date.now() - startedAt } }));
+		} catch (error) {
+			if (blueprintAbortRef.current !== controller) return;
+			const cancelled = controller.signal.aborted;
+			setSculptBlueprint((current) => ({ ...current, state: current.sheet ? "ready" : "idle", error: cancelled ? null : blueprintErrorMessage(error, stylizeErrorMessage(error).replace(/^Stylize failed — |^스타일화 실패 — /, "")) }));
+		}
+	}
+	function cancelSculptBlueprint() {
+		const controller = blueprintAbortRef.current;
+		blueprintAbortRef.current = null;
+		controller?.abort();
+		setSculptBlueprint((current) => ({ ...current, state: current.sheet ? "ready" : "idle" }));
+	}
 	async function chooseSculptReference(file) {
 		try {
+			// A new reference makes the old sheet a drawing of something else.
+			cancelSculptBlueprint();
+			setSculptBlueprint((current) => ({ ...current, state: "idle", sheet: null, error: null }));
 			setSculptReference(await objectsDomain.storeSculptReference(file));
 		} catch (error) {
 			setToast(ko(`Could not read that image: ${error.message}`, `이미지를 읽지 못했어요: ${error.message}`));
@@ -7235,6 +7266,17 @@ export default function App() {
 			onCancel={() => sculptRunRef.current?.cancel()}
 			onPlaceInScene={placeSculptInScene}
 			canStart={Boolean(sculptReference) && sculptAgentStatus === "ready" && Boolean(liveWorkspaceHandle) && Boolean(sculptModelPick.model)}
+			blueprint={{
+				...sculptBlueprint,
+				prompt: buildBlueprintPrompt({ pose: sculptBlueprint.pose, notes: sculptBlueprint.notes }),
+				layout: BLUEPRINT_LAYOUT,
+				// The image model is ChatGPT-only (the sidecar refuses others with a reason).
+				refusal: sculptAgentStatus === "signed-out" ? ko("Sign in with ChatGPT in the Agent panel to generate a blueprint.", "도면을 생성하려면 에이전트 패널에서 ChatGPT로 로그인하세요.") : null,
+				onPose: (pose) => setSculptBlueprint((current) => ({ ...current, pose })),
+				onNotes: (notes) => setSculptBlueprint((current) => ({ ...current, notes })),
+				onGenerate: () => void generateSculptBlueprint(),
+				onCancel: cancelSculptBlueprint,
+			}}
 			modelPicker={{
 				...sculptModels,
 				model: sculptModelPick.model,

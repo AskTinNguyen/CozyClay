@@ -159,6 +159,38 @@ const sheet = "data:image/png;base64,BBBB";
 	console.log("PASS sculpt panel: model picker (grouped, keyless disabled, effort, locked while running)");
 }
 
+/* ---------------------------------------------------------- blueprint --- */
+{
+	const layout = [{ view: "front", label: "Front", x: 0, y: 0 }, { view: "side", label: "Left side", x: 0.5, y: 0 }];
+	const base = { state: "idle", pose: "keep", notes: "", prompt: "Make an orthographic model sheet", sheet: null, error: null, layout, onPose: noop, onNotes: noop, onGenerate: noop, onCancel: noop };
+	assert.equal(tag(render({ blueprint: base }), "sculpt-blueprint"), null, "no blueprint step before a reference");
+	const idle = render({ reference, blueprint: base });
+	assert.match(idle, /Generate blueprint/);
+	assert.doesNotMatch(tag(idle, "sculpt-blueprint-generate"), /disabled/);
+	assert.match(idle, /<option value="keep" selected="">Pose: as in the reference<\/option><option value="neutral">Pose: neutral rest pose<\/option>/);
+	assert.match(idle, /<summary>Request sent to the image model<\/summary><pre>Make an orthographic model sheet<\/pre>/, "the exact request is visible");
+	const waiting = render({ reference, blueprint: { ...base, state: "generating", startedAt: Date.now() - 12_000 } });
+	assert.ok(tag(waiting, "sculpt-blueprint-wait"));
+	assert.match(waiting, /Drawing the four-view sheet/);
+	assert.match(waiting, /<span class="sculpt-now-time">1[12]s<\/span>/);
+	assert.ok(tag(waiting, "sculpt-blueprint-cancel"));
+	assert.equal(tag(waiting, "sculpt-blueprint-generate"), null);
+	assert.match(tag(waiting, "sculpt-blueprint-pose"), /disabled=""/, "the pose is locked while drawing");
+	const ready = render({ reference, blueprint: { ...base, state: "ready", sheet: { dataUrl: "data:image/png;base64,SHEET", width: 1536, height: 1024, ms: 48_000 } } });
+	assert.match(ready, /Generate again/);
+	assert.match(ready, /<img src="data:image\/png;base64,SHEET" alt="Generated four-view model sheet"\/>/);
+	assert.match(ready, /<span class="sculpt-sheet-tag" style="left:50%;top:0%">Left side<\/span>/, "each view is tagged where the layout puts it");
+	assert.match(ready, /1536×1024 · 48s/);
+	assert.match(tag(ready, "sculpt-blueprint-download"), /download="sculpt-blueprint.png"/);
+	const failed = render({ reference, blueprint: { ...base, error: "This account cannot generate images." } });
+	assert.match(failed, /data-testid="sculpt-blueprint-error"[^>]*>This account cannot generate images\.</);
+	const refused = render({ reference, blueprint: { ...base, refusal: "Sign in with ChatGPT in the Agent panel to generate a blueprint." } });
+	assert.match(tag(refused, "sculpt-blueprint-generate"), /disabled=""/);
+	assert.ok(tag(refused, "sculpt-blueprint-refusal"));
+	assert.match(tag(render({ reference, blueprint: base, run: { ...baseRun, stage: "draft" } }), "sculpt-blueprint-generate"), /disabled=""/, "no new sheet while a sculpt run is out");
+	console.log("PASS sculpt panel: blueprint (pose, notes, visible request, wait, sheet with view tags, errors)");
+}
+
 /* ---------------------------------------------------------------- done --- */
 {
 	const html = render({ reference, sculptName: "Hero sculpt", run: { ...baseRun, stage: "done", round: 1, iou: 0.945, elapsedMs: 41_000, sheetDataUrl: sheet } });

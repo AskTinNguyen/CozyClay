@@ -144,3 +144,19 @@
 .sculpt-select { min-width: 0; height: 26px; padding: 0 6px; border-radius: var(--r-1); border: 1px solid var(--row-divider); background: var(--field); color: var(--text-1); font: inherit; font-size: 12px; }
 .sculpt-select:disabled { opacity: .6; }
 
+
+/* Blueprint (model sheet) */
+.sculpt-blueprint { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; min-width: 0; padding: 8px; border-radius: var(--r-2); background: var(--surface-raised); }
+.sculpt-blueprint-row { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; }
+.sculpt-blueprint > * { min-width: 0; }
+.sculpt-blueprint .sculpt-label small { overflow: hidden; text-overflow: ellipsis; }
+.sculpt-notes { box-sizing: border-box; width: 100%; min-width: 0; resize: vertical; padding: 6px; border-radius: var(--r-1); border: 1px solid var(--row-divider); background: var(--field); color: var(--text-1); font: inherit; font-size: 12px; }
+.sculpt-blueprint .sculpt-now .btn { grid-column: 1 / -1; justify-self: end; width: auto; }
+.sculpt-sheet-figure { display: grid; gap: 4px; margin: 0; }
+.sculpt-sheet-figure > a { position: relative; display: block; border-radius: var(--r-1); overflow: hidden; border: 1px solid var(--row-divider); background: #fff; }
+.sculpt-sheet-figure img { display: block; width: 100%; }
+.sculpt-sheet-tag { position: absolute; margin: 3px; padding: 0 4px; border-radius: 3px; font-size: 9.5px; line-height: 1.5; color: #fff; background: rgba(20, 22, 28, .62); pointer-events: none; }
+.sculpt-sheet-figure figcaption { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-3); }
+.sculpt-sheet-figure figcaption a { color: var(--select); }
+.sculpt-prompt summary { cursor: pointer; font-size: 11px; color: var(--text-2); }
+.sculpt-prompt pre { max-height: 180px; margin: 4px 0 0; padding: 6px; overflow: auto; white-space: pre-wrap; border-radius: var(--r-1); background: var(--field); font: 10.5px/1.45 var(--mono); color: var(--text-2); }
