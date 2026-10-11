@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
-import { createSculptRun } from "../src/sculpt-run.js";
+import { createAgentPort, createSculptRun } from "../src/sculpt-run.js";
 
 const reference = { dataUrl: "data:image/png;base64,AA==", name: "reference.png" };
 function fixture({ turns, clockStep = 1 } = {}) {
@@ -21,7 +21,7 @@ function fixture({ turns, clockStep = 1 } = {}) {
 			time += clockStep;
 		},
 	};
-	return { bus, agent, now: () => time, sent: () => sent, aborted: () => aborted, events };
+	return { bus, agent, now: () => time, sent: () => sent, aborted: () => aborted, events, listening: () => listeners.size };
 }
 const sculpt = (id = "sculpt-1") => ({ bus: { action: "object.sculpt", args: { id }, result: { affectedIds: [id] } } });
 const compare = (iou, sheetDataUrl = `data:image/png;base64,sheet-${iou}`) => ({ bus: { action: "sculpt.compare", args: { id: "sculpt-1" }, result: { report: { iou }, sheetDataUrl } } });
@@ -46,10 +46,11 @@ await runCase("target IoU stops after the first turn", async () => {
 	const f = fixture({ turns: [[sculpt(), compare(0.95)], [sculpt(), compare(0.1)]] });
 	const run = createSculptRun({ ...f, targetIou: 0.9 });
 	await run.start();
-	return { run, sent: f.sent };
-}, ({ run, sent }) => {
+	return { run, sent: f.sent, listening: f.listening };
+}, ({ run, sent, listening }) => {
 	assert.equal(sent(), 1);
 	assert.equal(run.getState().stage, "done");
+	assert.equal(listening(), 0, "a finished run leaves no bus listener");
 });
 
 await runCase("continuations are capped at maxRounds", async () => {
@@ -86,10 +87,11 @@ await runCase("cancel aborts the turn and sends nothing after", async () => {
 	const pending = run.start();
 	run.cancel();
 	await pending;
-	return { run, sent: () => sent, aborted: () => wasAborted };
-}, ({ run, sent, aborted }) => {
+	return { run, sent: () => sent, aborted: () => wasAborted, listening: f.listening };
+}, ({ run, sent, aborted, listening }) => {
 	assert.equal(sent(), 1);
 	assert.equal(aborted(), true);
+	assert.equal(listening(), 0, "a cancelled run leaves no bus listener");
 	assert.equal(run.getState().stage, "cancelled");
 });
 
@@ -97,11 +99,37 @@ await runCase("a turn without sculpt retries once then fails", async () => {
 	const f = fixture({ turns: [[], []] });
 	const run = createSculptRun({ ...f });
 	await run.start();
-	return { run, sent: f.sent };
-}, ({ run, sent }) => {
+	return { run, sent: f.sent, listening: f.listening };
+}, ({ run, sent, listening }) => {
 	assert.equal(sent(), 2);
+	assert.equal(listening(), 0, "a failed run leaves no bus listener");
 	assert.equal(run.getState().stage, "failed");
 	assert.match(run.getState().error, /object\.sculpt/);
+});
+
+await runCase("the agent port sends UUID session and turn ids the Studio envelope accepts", async () => {
+	const requests = [];
+	const port = createAgentPort({ turn: async (request) => { requests.push(request); } });
+	for await (const _event of port.sendTurn({ text: "one", signal: new AbortController().signal })) { /* drain */ }
+	for await (const _event of port.sendTurn({ text: "two", signal: new AbortController().signal })) { /* drain */ }
+	return requests;
+}, (requests) => {
+	const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+	assert.equal(requests.length, 2);
+	for (const request of requests) { assert.match(request.sessionId, uuid); assert.match(request.turnId, uuid); assert.equal(request.surface, "studio"); }
+	assert.equal(requests[0].sessionId, requests[1].sessionId, "one session per run");
+	assert.notEqual(requests[0].turnId, requests[1].turnId);
+});
+
+await runCase("a refused turn fails the run with the refusal, without a retry", async () => {
+	const f = fixture({ turns: [[{ type: "error", code: "INVALID_SESSION_ID", message: "Studio sessionId must be a UUID." }]] });
+	const run = createSculptRun({ ...f });
+	await run.start();
+	return { run, sent: f.sent };
+}, ({ run, sent }) => {
+	assert.equal(sent(), 1);
+	assert.equal(run.getState().stage, "failed");
+	assert.match(run.getState().error, /sessionId must be a UUID/);
 });
 
 if (process.exitCode) process.exit(1);

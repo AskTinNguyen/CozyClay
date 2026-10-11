@@ -47,7 +47,8 @@ function makeTurnText(reference, sculptId, continuation) {
  * Adapt the callback-based Studio client into the small port consumed by the
  * sculpt controller. The controller deliberately owns the session/turn loop.
  */
-export function createAgentPort(client, { sessionId = `sculpt-${crypto.randomUUID?.() ?? Date.now()}` } = {}) {
+// The sidecar's Studio envelope requires UUIDs for both the session and the turn.
+export function createAgentPort(client, { sessionId = crypto.randomUUID() } = {}) {
 	return {
 		async *sendTurn({ text, attachments = [], signal }) {
 			const events = [];
@@ -57,7 +58,7 @@ export function createAgentPort(client, { sessionId = `sculpt-${crypto.randomUUI
 			const result = client.turn({
 				surface: "studio",
 				sessionId,
-				turnId: crypto.randomUUID?.() ?? `sculpt-turn-${Date.now()}`,
+				turnId: crypto.randomUUID(),
 				text,
 				...(attachments.length ? { attachments } : {}),
 				context: null,
@@ -128,15 +129,21 @@ export function createSculptRun({
 	const consumeTurn = async text => {
 		turnSculpted = false;
 		const events = [];
-		const callback = event => { events.push(event); if (event?.type === "text.delta") publish({ message: `${state.message ?? ""}${event.text ?? ""}` }); };
+		let turnError = null;
+		const callback = event => {
+			events.push(event);
+			if (event?.type === "text.delta") publish({ message: `${state.message ?? ""}${event.text ?? ""}` });
+			// A refused or failed turn is the run's failure, not a turn that forgot to sculpt.
+			if (event?.type === "error") turnError ??= new Error(event.message || event.code || "The agent turn failed.");
+		};
 		const returned = agent.sendTurn({ text, attachments: reference?.dataUrl ? [{ dataUrl: reference.dataUrl, name: reference.name }] : [], signal: controller.signal }, callback);
 		if (isAsyncIterable(returned)) {
 			for await (const event of returned) callback(event);
 		} else await returned;
-		for (const event of events) if (event?.type === "text.delta") publish({ message: `${state.message ?? ""}${event.text ?? ""}` });
+		if (turnError) throw turnError;
 	};
 
-	const run = async () => {
+	const loop = async () => {
 		startedAt = now();
 		publish({ stage: "measure", round: 0, message: INITIAL_MESSAGE, error: null });
 		let text = makeTurnText(reference, sculptId, false);
@@ -176,6 +183,10 @@ export function createSculptRun({
 		}
 		settled = true;
 	};
+	// A finished run stops listening to the bus, whichever way it ended.
+	const run = async () => {
+		try { await loop(); } finally { unsubscribeBus(); }
+	};
 
 	return {
 		start() {
@@ -186,7 +197,7 @@ export function createSculptRun({
 		cancel() {
 			if (settled) return;
 			controller.abort("sculpt-run-cancelled");
-			if (!running) publish({ stage: "cancelled", message: "Sculpt run cancelled." });
+			if (!running) { unsubscribeBus(); publish({ stage: "cancelled", message: "Sculpt run cancelled." }); }
 		},
 		getState: () => state,
 		subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
