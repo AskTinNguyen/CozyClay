@@ -27,9 +27,24 @@ test("ring angle is signed by the right-hand rule about the axis", () => {
 test("the readout is the rotation away from the bind pose", () => {
 	const bind = new THREE.Quaternion().setFromEuler(new THREE.Euler(0.3, -0.2, 0.1));
 	assert.deepEqual(rotationFromBindDeg(bind, bind.clone()), { x: 0, y: 0, z: 0 });
-	const turned = bind.clone().multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), THREE.MathUtils.degToRad(30)));
+	const turned = bind.clone().premultiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), THREE.MathUtils.degToRad(30)));
 	assert.deepEqual(rotationFromBindDeg(bind, turned), { x: 0, y: 0, z: 30 });
 	assert.deepEqual(rotationFromBindDeg(null, new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), THREE.MathUtils.degToRad(-45))), { x: -45, y: 0, z: 0 });
+});
+
+test("a ring drag on a bone with a non-identity bind changes only that axis, by the dragged angle (#658)", () => {
+	// Humanoid-arm-like bind: far from identity, so bind⁻¹·q and q·bind⁻¹ disagree.
+	const bind = new THREE.Quaternion().setFromEuler(new THREE.Euler(0.4, 1.1, -1.3));
+	const ring = (axis, deg) => new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(...axis), THREE.MathUtils.degToRad(deg));
+	// Rings rotate in the parent frame, as the pose system applies a correction: delta · bind.
+	for (const [axis, key] of [[[1, 0, 0], "x"], [[0, 1, 0], "y"], [[0, 0, 1], "z"]]) {
+		const posed = bind.clone().premultiply(ring(axis, 25));
+		assert.deepEqual(rotationFromBindDeg(bind, posed), { x: 0, y: 0, z: 0, [key]: 25 });
+	}
+	const before = bind.clone().premultiply(ring([0, 0, 1], -15)).premultiply(ring([0, 1, 0], 20));
+	assert.deepEqual(rotationFromBindDeg(bind, before), { x: 0, y: 20, z: -15 });
+	const after = before.clone().premultiply(ring([1, 0, 0], 35));
+	assert.deepEqual(rotationFromBindDeg(bind, after), { x: 35, y: 20, z: -15 }, "the X drag leaves Y and Z where they were");
 });
 
 test("the readout lists the absolute angles and, while dragging, the signed delta", () => {

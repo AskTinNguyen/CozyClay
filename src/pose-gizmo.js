@@ -64,9 +64,13 @@ export function ringAngle(axis, origin, start, current) {
 const relative = new THREE.Quaternion();
 const euler = new THREE.Euler();
 
-/** Local rotation away from the bind pose, as XYZ Euler degrees rounded to 0.1. */
+/**
+ * Rotation away from the bind pose in the parent frame (the frame the rings turn in), as XYZ Euler
+ * degrees rounded to 0.1. The pose system applies a correction as `delta · bind`, so the delta is
+ * recovered as `current · bind⁻¹`.
+ */
 export function rotationFromBindDeg(bindQuat, quat) {
-	relative.copy(bindQuat ?? relative.identity()).invert().multiply(quat);
+	relative.copy(bindQuat ?? relative.identity()).invert().premultiply(quat);
 	euler.setFromQuaternion(relative, "XYZ");
 	const round = (rad) => Math.round(THREE.MathUtils.radToDeg(rad) * 10) / 10 || 0;
 	return { x: round(euler.x), y: round(euler.y), z: round(euler.z) };
