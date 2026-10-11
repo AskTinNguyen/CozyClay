@@ -93,10 +93,11 @@ Sculpt mode is the Studio's fifth viewport mode. It runs the workflow above for 
 
 1. Press **5**, or pick Sculpt in the viewport mode toolbar. If a sculpt is selected, the mode opens on that sculpt and a run re-sculpts it in place. Otherwise the first run creates a new sculpt. The main view shows only that sculpt on a turntable; W, E and R swing it to front, side and back. The shot preview still shows the whole scene.
 2. Drop, paste or choose a reference image (PNG, JPEG or WebP) in the **Sculpt from image** panel.
-3. Press **Start**. Start needs the Agent: sign in (⌘B) or configure a provider key, and the live editor must be connected. Without them the button stays disabled and the panel says why.
-4. Watch the stages: **Measure → Draft → Score → Refine**. The panel shows the round, the elapsed time, the IoU against the 0.9 target and, once scored, the overlay sheet. **Cancel** stops the run at any point.
-5. Fix details by chatting with the Agent (⌘B) while the sculpt is selected. These are ordinary `object.sculpt` edits, one undo each.
-6. Press **Place in scene**. The sculpt stands on the ground in front of the scene camera, stays selected, and the editor returns to Stage. One undo puts it back where it was.
+3. Pick the **model** and its **effort**. The list is the Agent panel's: models are grouped by provider, and a provider without a credential lists its models disabled. Sculpt remembers its own pick, apart from the chat model. The first time, it starts from the Agent panel's model. Both pickers are locked during a run, and the panel names the running model ("Claude Fable 5.1 is writing the recipe").
+4. Press **Start**. Start needs the Agent: sign in (⌘B) or configure a provider key, and the live editor must be connected. Without them the button stays disabled and the panel says why.
+5. Watch the stages: **Measure → Draft → Score → Refine**. The panel shows the round, the elapsed time, the IoU against the 0.9 target and, once scored, the overlay sheet. **Cancel** stops the run at any point.
+6. Fix details by chatting with the Agent (⌘B) while the sculpt is selected. These are ordinary `object.sculpt` edits, one undo each.
+7. Press **Place in scene**. The sculpt stands on the ground in front of the scene camera, stays selected, and the editor returns to Stage. One undo puts it back where it was.
 
 | Mode 5, nothing selected | A sculpt on the isolated turntable | After Place in scene |
 |---|---|---|
@@ -148,8 +149,11 @@ Every row is one real run, from pressing Start to Done, in a real editor tab. Ea
 | 5 | The harness measures the outline in pixels; a candidate score taken before an edit is not reused | 181 s | 3 | 0.734 |
 | 6 | First turn at effort "high" (reverted afterwards) | 253 s | 1 | 0.773 |
 | 7 | Final settings: default effort; the text says which shapes take roundness and taper | 206 s | 2 | **0.771**, no refused recipe |
+| 8 | Same harness, model switched in the new picker to **Claude Fable 5.1** (cliproxy) | **116 s** | 2 | **0.911**: target reached |
 
-The loop is now reliable: no refused turns, no stale scores, and three rounds fit in about three minutes. The **0.9 target is not reached** with the Studio model. Its first draft lands at 0.73–0.78, and candidate rounds add little. The drafts that reached 0.945 (see below) came from a stronger model that measured the image and spent minutes on a 31-part recipe. Raising the draft's quality is follow-up work (#740: generated views, parallel drafts).
+![Run 8 on Claude Fable 5.1: IoU 0.911 in 116 s](images/sculpt-mode-fable.png)
+
+The loop is now reliable: no refused turns, no stale scores, and three rounds fit in about three minutes. **The model decides the result.** On gpt-6-astra the first draft lands at 0.73–0.78 and candidate rounds add little. The same harness on Claude Fable 5.1 reached **0.911 in 116 s** (run 8). The drafts that reached 0.945 (see below) came from a stronger model that measured the image and spent minutes on a 31-part recipe. Raising the draft's quality is follow-up work (#740: generated views, parallel drafts).
 
 ## Measured: one loop vs parallel (Snorlax, 2026-10-11)
 
