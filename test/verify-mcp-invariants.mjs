@@ -13,6 +13,8 @@ const ROOT_DEPENDENCY_ALLOWLIST = Object.freeze({
 });
 const MCP_DEPENDENCY_BASELINE = Object.freeze({
 	"@modelcontextprotocol/sdk": "^1.30.0",
+	// compare_sculpt decodes JPEG references locally (#730); BSD-3-Clause, no dependencies.
+	"jpeg-js": "0.4.4",
 	ws: "^8.19.0",
 	zod: "^3.25.0",
 });

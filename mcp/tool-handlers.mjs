@@ -30,6 +30,8 @@ import { z } from "zod";
 
 import { MAX_COMMAND_TIMEOUT_MS } from "./live-hub.mjs";
 import { readMeshFromPath } from "./mesh-file.mjs";
+import { encodePng, readImageFromPath } from "./image-file.mjs";
+import { bestViewForReference, compareSculptToReference } from "../src/sculpt-compare.js";
 import { DEFAULT_POSE } from "../src/poses.js";
 import { generationArgs } from '../src/motion/generation.js';
 import { BLOCK_MAX_SECONDS, PROMPT_GUIDE, normalizePhases, splitLongBeat, tileClipFrames } from "./ardy-prompts.mjs";
@@ -57,9 +59,12 @@ import {
 	readSceneDocument,
 	serializeSceneDocument,
 } from "../src/scenes.js";
+import { normalizeSculptRecipe, patchSculptRecipe } from "../src/sculpt-recipe.js";
 import {
 	OBJECT_LIBRARY,
+	SCULPT_KIND,
 	createSceneObject,
+	createSculptObject,
 	objectSize,
 	removeSceneObject,
 	setSceneObjectParent,
@@ -102,7 +107,7 @@ export const liveWorkspace = new AsyncLocalStorage();
 const liveWorkspaceTools = new Set([
 	"describe_scene", "describe_shot", "render_prompt", "mark_camera_move", "describe_camera_move", "save_project",
 	"set_camera", "frame_shot", "add_character", "place_character", "remove_character",
-	"focus_character", "place_object", "import_mesh", "group_objects", "set_prompt_blocks", "generate_motion", "update_object",
+	"focus_character", "place_object", "import_mesh", "sculpt_object", "compare_sculpt", "group_objects", "set_prompt_blocks", "generate_motion", "update_object",
 	"remove_object", "apply_batch", "add_scene", "switch_scene", "open_project", "capture_frame", "load_motion",
 	"studio_commands", "studio_run",
 ]);
@@ -158,6 +163,8 @@ const TOOL_ANNOTATIONS = Object.freeze({
 	focus_character: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
 	place_object: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
 	import_mesh: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+	sculpt_object: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+	compare_sculpt: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
 	group_objects: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
 	set_prompt_blocks: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
 	load_motion: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
@@ -378,11 +385,11 @@ const applyLiveDescription = (description) => {
 			// A") defeats the name match, and a record without a renderer survives
 			// the save but cannot be drawn after the load.
 			const kind =
-				(typeof object.renderer === "string" && OBJECT_LIBRARY.some((entry) => entry.kind === object.renderer)
+				(typeof object.renderer === "string" && (object.renderer === SCULPT_KIND || OBJECT_LIBRARY.some((entry) => entry.kind === object.renderer))
 					? object.renderer
 					: null) ??
 				OBJECT_LIBRARY.find(({ label }) => object.name === label || object.name?.startsWith(`${label} `))?.kind;
-			const defaults = previous ?? (kind ? createSceneObject(kind, sc.objects, object) : null);
+			const defaults = previous ?? (kind === SCULPT_KIND ? createSculptObject({ recipe: object.recipe }, sc.objects, object).object ?? null : kind ? createSceneObject(kind, sc.objects, object) : null);
 			// The editor is the source of truth for anything it reports; the
 			// library defaults only fill what the frame omits. Defaulting AFTER
 			// the spread would reset a reported scale back to 1 and make every
@@ -410,6 +417,65 @@ const liveError = (error) => ({
 	content: [{ type: "text", text: `Live editor error: ${error.message}` }],
 	isError: true,
 });
+
+/** capture_frame's checked frame as a tool result; sculpt_object { capture: true } reuses it. */
+const captureFrameResult = async (maxInlineBytes) => {
+	if (!liveHub?.connected) return liveError(new Error(noLiveEditor("capture_frame requires a connected CozyClay editor with a renderable shot camera.")));
+		try {
+			const workspaceHandle = liveWorkspace.getStore();
+			const frame = await liveHub.command("capture_frame", {}, workspaceHandle);
+			const beforeHash = createHash("sha256").update(frame?.authoredStateBefore ?? "").digest("hex");
+			const afterHash = createHash("sha256").update(frame?.authoredStateAfter ?? "").digest("hex");
+			if (beforeHash !== afterHash) {
+				throw new Error(`capture_frame changed authored editor state; capture was rejected (${beforeHash} -> ${afterHash}).`);
+			}
+			if (!frame || frame.width !== 640 || frame.height !== 360 || frame.mimeType !== "image/png" || typeof frame.data !== "string") {
+				throw new Error("Live editor returned an invalid capture payload.");
+			}
+			const bytes = Buffer.from(frame.data, "base64");
+			if (bytes.length === 0 || bytes.length !== frame.byteSize || bytes.length > MAX_CAPTURE_BYTES) {
+				throw new Error(`Live editor returned an invalid compressed image size (maximum ${MAX_CAPTURE_BYTES} bytes).`);
+			}
+			if (frame.assertions?.renderable !== true || frame.assertions?.blackFrame === true) {
+				throw new Error("Live editor rejected the capture as non-renderable or black.");
+			}
+			const metadata = {
+				width: frame.width,
+				height: frame.height,
+				mimeType: frame.mimeType,
+				encoding: frame.encoding,
+				byteSize: frame.byteSize,
+				assertions: frame.assertions,
+				stateHashBefore: beforeHash,
+				stateHashAfter: afterHash,
+			};
+			if (bytes.length > maxInlineBytes) {
+				while (captureArtifacts.length >= MAX_CAPTURE_ARTIFACTS) {
+					const oldest = captureArtifacts.shift();
+					await unlink(oldest).catch(() => {});
+				}
+				const path = join(tmpdir(), `cozyclay-capture-${randomUUID()}.png`);
+				await writeFile(path, bytes, { mode: 0o600 });
+				captureArtifacts.push(path);
+				const expiry = setTimeout(() => {
+					const index = captureArtifacts.indexOf(path);
+					if (index >= 0) captureArtifacts.splice(index, 1);
+					void unlink(path).catch(() => {});
+				}, CAPTURE_ARTIFACT_TTL_MS);
+				expiry.unref?.();
+				return text(JSON.stringify({ ...metadata, artifact: { path, width: frame.width, height: frame.height, byteSize: bytes.length } }));
+			}
+			return {
+				content: [
+					{ type: "text", text: JSON.stringify({ ...metadata, image: { transport: "inline", width: frame.width, height: frame.height, byteSize: bytes.length } }) },
+					{ type: "image", data: frame.data, mimeType: frame.mimeType },
+				],
+			};
+		} catch (error) {
+			return liveError(error);
+		}
+};
+
 
 /* ------------------------------ formatting ------------------------------- */
 
@@ -528,7 +594,7 @@ function shotReport() {
 
 const studioAliasTools = new Set([
 	"set_camera", "frame_shot", "place_object", "update_object", "remove_object",
-	"import_mesh", "group_objects", "add_scene", "switch_scene", "apply_batch", "open_project",
+	"import_mesh", "sculpt_object", "group_objects", "add_scene", "switch_scene", "apply_batch", "open_project",
 	"add_character", "place_character", "remove_character", "set_prompt_blocks", "load_motion", "generate_motion",
 ]);
 const studioAdmissionSchema = {
@@ -656,60 +722,7 @@ export const createToolHandlers = ({ projectRootPromise } = {}) => {
 				},
 			},
 			async ({ max_inline_bytes }) => {
-				if (!liveHub?.connected) return liveError(new Error(noLiveEditor("capture_frame requires a connected CozyClay editor with a renderable shot camera.")));
-				try {
-					const workspaceHandle = liveWorkspace.getStore();
-					const frame = await liveHub.command("capture_frame", {}, workspaceHandle);
-					const beforeHash = createHash("sha256").update(frame?.authoredStateBefore ?? "").digest("hex");
-					const afterHash = createHash("sha256").update(frame?.authoredStateAfter ?? "").digest("hex");
-					if (beforeHash !== afterHash) {
-						throw new Error(`capture_frame changed authored editor state; capture was rejected (${beforeHash} -> ${afterHash}).`);
-					}
-					if (!frame || frame.width !== 640 || frame.height !== 360 || frame.mimeType !== "image/png" || typeof frame.data !== "string") {
-						throw new Error("Live editor returned an invalid capture payload.");
-					}
-					const bytes = Buffer.from(frame.data, "base64");
-					if (bytes.length === 0 || bytes.length !== frame.byteSize || bytes.length > MAX_CAPTURE_BYTES) {
-						throw new Error(`Live editor returned an invalid compressed image size (maximum ${MAX_CAPTURE_BYTES} bytes).`);
-					}
-					if (frame.assertions?.renderable !== true || frame.assertions?.blackFrame === true) {
-						throw new Error("Live editor rejected the capture as non-renderable or black.");
-					}
-					const metadata = {
-						width: frame.width,
-						height: frame.height,
-						mimeType: frame.mimeType,
-						encoding: frame.encoding,
-						byteSize: frame.byteSize,
-						assertions: frame.assertions,
-						stateHashBefore: beforeHash,
-						stateHashAfter: afterHash,
-					};
-					if (bytes.length > max_inline_bytes) {
-						while (captureArtifacts.length >= MAX_CAPTURE_ARTIFACTS) {
-							const oldest = captureArtifacts.shift();
-							await unlink(oldest).catch(() => {});
-						}
-						const path = join(tmpdir(), `cozyclay-capture-${randomUUID()}.png`);
-						await writeFile(path, bytes, { mode: 0o600 });
-						captureArtifacts.push(path);
-						const expiry = setTimeout(() => {
-							const index = captureArtifacts.indexOf(path);
-							if (index >= 0) captureArtifacts.splice(index, 1);
-							void unlink(path).catch(() => {});
-						}, CAPTURE_ARTIFACT_TTL_MS);
-						expiry.unref?.();
-						return text(JSON.stringify({ ...metadata, artifact: { path, width: frame.width, height: frame.height, byteSize: bytes.length } }));
-					}
-					return {
-						content: [
-							{ type: "text", text: JSON.stringify({ ...metadata, image: { transport: "inline", width: frame.width, height: frame.height, byteSize: bytes.length } }) },
-							{ type: "image", data: frame.data, mimeType: frame.mimeType },
-						],
-					};
-				} catch (error) {
-					return liveError(error);
-				}
+				return captureFrameResult(max_inline_bytes);
 			},
 		),
 
@@ -1051,7 +1064,7 @@ export const createToolHandlers = ({ projectRootPromise } = {}) => {
 			{
 				title: "Place an object in the set",
 				description:
-					`Unlike update_object and import_mesh, place_object adds a catalog prop instead of changing an existing one or loading a GLB, OBJ or FBX from disk. Available kinds: ${OBJECT_LIBRARY.map((o) => o.kind).join(", ")}. ` +
+					`Unlike update_object, import_mesh and sculpt_object, place_object adds a catalog prop instead of changing an existing one, loading a GLB, OBJ or FBX from disk, or building one from a recipe. Available kinds: ${OBJECT_LIBRARY.map((o) => o.kind).join(", ")}. ` +
 					"It returns the object id, which update_object and remove_object take.",
 				inputSchema: {
 					kind: z
@@ -1148,6 +1161,141 @@ export const createToolHandlers = ({ projectRootPromise } = {}) => {
 				} catch (error) {
 					return liveError(error);
 				}
+			},
+		),
+
+		tool(
+			"sculpt_object",
+			{
+				title: "Sculpt a clay prop from a recipe of soft parts",
+				description:
+					"Unlike place_object, import_mesh and compare_sculpt, sculpt_object builds or changes a clay prop from a recipe of parts you write, typically after reading a reference image. It needs no file and no catalogue entry. " +
+					"recipe = { version: 1, parts: [{ id, shape, size: [x, y, z], position?, rotation?, color?, parent?, mirror?, roundness?, taper?, border? }] }. " +
+					"Units are metres and degrees. The floor is y = 0, front is +z, and the subject's own left is +x. size is the full extent; position is the part's centre, in its parent part's frame when parent is set. " +
+					"shape: blob (soft superellipsoid: roundness 0 is an ellipsoid, 1 is a rounded box; taper narrows the top when positive and the bottom when negative), box (roundness bevels the edges), " +
+					"cylinder (taper 1 is a cone), torus (size [outer, outer, tube]), frame (a rectangular ring in x/y with a border width, for glasses rims, windows and picture frames). " +
+					"mirror: true adds a copy reflected across x = 0 of the parent frame, with its children; author the subject's left (+x) side once. color is #rrggbb. At most 48 parts after mirrors. " +
+					"To fix a sculpt, pass its id with edits instead of a whole recipe: [{ set: partId, ...fields }, { add: part }, { remove: partId }] (parent: null and mirror: false clear; remove takes the part's children). " +
+					"capture: true also returns the editor's frame (connected editor only), so one call is one round. " +
+					"Workflow: measure the reference's outline landmarks (limb tips, head top, feet as fractions of height) and place parts on them, compare_sculpt against the reference image, then rank 3-6 candidate edits with compare_sculpt { candidates } and apply the winner. Add small identity details (eyes, rims, plates) last as children of their parent part. " +
+					"A recipe or edit that cannot be drawn is refused with the path of the bad field.",
+				inputSchema: {
+					recipe: z.object({}).passthrough().optional().describe("{ version: 1, parts: [...] }; the whole recipe, for a new sculpt or a full rewrite"),
+					edits: z.array(z.object({}).passthrough()).min(1).max(48).optional().describe("part-level changes to the sculpt named by id"),
+					id: z.string().min(1).optional().describe("an existing sculpt's id to re-sculpt or patch in place (keeps its position and turn)"),
+					name: z.string().min(1).optional().describe("display name, e.g. 'Nerd turtle'"),
+					x: z.number().optional().describe("floor x in metres"),
+					z: z.number().optional().describe("floor z in metres"),
+					y: z.number().optional().describe("height above the floor in metres"),
+					facing: z.number().optional().describe("yaw in degrees"),
+					parent: z.string().optional().describe("object id to attach the new sculpt to"),
+					capture: z.boolean().optional().describe("true returns capture_frame's image with the result (connected editor only)"),
+				},
+			},
+			async ({ recipe, edits, id, name, x, z: zPos, y, facing, parent, capture, ...admission }) => {
+				if ((recipe === undefined) === (edits === undefined)) return { content: [{ type: "text", text: "Give exactly one of recipe (whole) or edits (part by part)." }], isError: true };
+				if (edits !== undefined && id === undefined) return { content: [{ type: "text", text: "edits patch an existing sculpt: give its id." }], isError: true };
+				const placement = {};
+				if (x !== undefined) placement.x = x;
+				if (zPos !== undefined) placement.z = zPos;
+				if (y !== undefined) placement.y = y;
+				if (facing !== undefined) placement.rot = facing;
+				if (liveHub?.connected) {
+					let result;
+					try {
+						result = await runStudioCommand({ ...admission, action: "object.sculpt", args: { ...(recipe === undefined ? { edits } : { recipe }), ...(id === undefined ? {} : { id }), ...(name === undefined ? {} : { name }), ...(Object.keys(placement).length ? { placement } : {}), ...(parent === undefined ? {} : { parent }) } });
+					} catch (error) {
+						return liveError(error);
+					}
+					if (capture !== true || result.isError) return result;
+					// The sculpt is applied either way; a failed capture is reported beside it, not as a failure.
+					const frame = await captureFrameResult(1_000_000);
+					return { content: [...result.content, ...frame.content] };
+				}
+				if (capture === true) return liveError(new Error(noLiveEditor("capture: true needs a connected CozyClay editor; call sculpt_object without it, or compare_sculpt.")));
+				const sc = scene();
+				if (parent !== undefined && !sc.objects.some((o) => o.id === parent)) {
+					return text(`No object "${parent}" to attach to. Call describe_scene for the current ids.`);
+				}
+				if (id !== undefined) {
+					const target = sc.objects.find((o) => o.id === id);
+					if (!target) return text(`No object "${id}". Call describe_scene for the current ids.`);
+					if (target.renderer !== SCULPT_KIND) return { content: [{ type: "text", text: `${id} is a ${target.renderer}, not a sculpt; omit id to create a new sculpt.` }], isError: true };
+					const next = edits !== undefined ? patchSculptRecipe(target.recipe, edits) : normalizeSculptRecipe(recipe);
+					if (!next.ok) return { content: [{ type: "text", text: `Recipe refused at ${next.error}` }], isError: true };
+					sc.objects = updateSceneObject(sc.objects, id, { ...placement, ...(name === undefined ? {} : { name }), recipe: next.recipe });
+					const row = sc.objects.find((o) => o.id === id);
+					const verb = edits !== undefined ? `Patched ${next.changed.join(", ")} on` : "Re-sculpted";
+					return text(`${verb} ${row.name} as ${row.id}: ${row.footprint.width} x ${row.footprint.depth} m, ${row.height} m tall.\n\n${sceneReport()}`);
+				}
+				const made = createSculptObject({ recipe, name }, sc.objects, placement);
+				if (made.error) return { content: [{ type: "text", text: `Recipe refused at ${made.error}` }], isError: true };
+				sc.objects = [...sc.objects, made.object];
+				if (parent !== undefined) sc.objects = setSceneObjectParent(sc.objects, made.object.id, parent);
+				const row = sc.objects.find((o) => o.id === made.object.id);
+				return text(`Sculpted ${row.name} as ${row.id}: ${row.footprint.width} x ${row.footprint.depth} m, ${row.height} m tall${parent !== undefined ? ` under ${parent}` : ""}.\n\n${sceneReport()}`);
+			},
+		),
+
+		tool(
+			"compare_sculpt",
+			{
+				title: "Compare a sculpt's silhouette with its reference image",
+				description:
+					"Unlike capture_frame and sculpt_object, compare_sculpt scores a sculpt's shape against a reference image instead of rendering the shot or changing the sculpt. " +
+					"Give the sculpt's id and the path of the reference (PNG or JPEG on this machine; a flat background or transparency). It reads the reference's subject as a mask, draws the sculpt's silhouette from a view (yaw: the camera's azimuth, 0 in front, positive toward the subject's own left; elevation: degrees above), " +
+					"fits it to the subject's height and position, and returns IoU, the width-to-height delta, which height band is missing area (top, middle, bottom) and which parts stick out, plus a sheet: reference | overlay (grey both, red missing, blue extra). " +
+					"Omit yaw to try -45..45 and keep the best. Pass candidates (up to 12 labelled edit sets) to score several fixes in one call without applying any; the answer ranks them against the current sculpt. Shape only: colour is not scored. Works without an editor.",
+				inputSchema: {
+					id: z.string().min(1).describe("the sculpt's object id"),
+					reference: z.string().min(1).describe("filesystem path to the reference PNG or JPEG"),
+					yaw: z.number().min(-180).max(180).optional().describe("reference camera azimuth in degrees; omitted tries -45..45"),
+					elevation: z.number().min(-60).max(60).optional().describe("reference camera elevation in degrees; default 0"),
+					candidates: z.array(z.object({ label: z.string().min(1).max(60), edits: z.array(z.object({}).passthrough()).min(1).max(48) })).min(1).max(12).optional()
+						.describe("alternative edit sets to score side by side without applying any; returns them ranked by IoU with the winner's sheet"),
+				},
+			},
+			async ({ id, reference, yaw, elevation = 0, candidates }) => {
+				const workspaceHandle = liveWorkspace.getStore();
+				if (liveHub?.connected) {
+					try { await refreshLiveDescription(workspaceHandle); } catch (error) { return liveError(error); }
+				}
+				const target = scene().objects.find((o) => o.id === id);
+				if (!target) return text(`No object "${id}". Call describe_scene for the current ids.`);
+				if (target.renderer !== SCULPT_KIND || !target.recipe) return { content: [{ type: "text", text: `${id} is a ${target.renderer}, not a sculpt.` }], isError: true };
+				let image;
+				try { image = await readImageFromPath(reference); } catch (error) { return { content: [{ type: "text", text: error.message }], isError: true }; }
+				const score = (recipe, view = yaw) => (view === undefined ? bestViewForReference(recipe, image, { elevation }) : compareSculptToReference(recipe, image, { yaw: view, elevation }));
+				let result;
+				try {
+					result = score(target.recipe);
+					if (candidates) {
+						// Every candidate is scored from the same view as the current sculpt, so the ranking compares shapes, not angles.
+						const view = result.report.view.yaw;
+						const ranked = [{ label: "current", result }];
+						const refused = [];
+						for (const candidate of candidates) {
+							const patched = patchSculptRecipe(target.recipe, candidate.edits);
+							if (!patched.ok) refused.push({ label: candidate.label, error: patched.error });
+							else ranked.push({ label: candidate.label, result: score(patched.recipe, view) });
+						}
+						ranked.sort((a, b) => b.result.report.iou - a.result.report.iou);
+						const best = ranked[0];
+						const png = encodePng(best.result.sheet.width, best.result.sheet.height, best.result.sheet.data);
+						const summary = { id, view: best.result.report.view, ranking: ranked.map(({ label, result: r }) => ({ label, iou: r.report.iou, delta: Number((r.report.iou - result.report.iou).toFixed(3)), missingByBand: r.report.missingByBand, extraByPart: r.report.extraByPart.slice(0, 3) })), ...(refused.length ? { refused } : {}),
+							note: `Nothing was applied. Apply the winner with sculpt_object { id: "${id}", edits }.` };
+						return { content: [{ type: "text", text: JSON.stringify(summary) }, { type: "image", data: png.toString("base64"), mimeType: "image/png" }] };
+					}
+				} catch (error) {
+					return { content: [{ type: "text", text: error.message }], isError: true };
+				}
+				const png = encodePng(result.sheet.width, result.sheet.height, result.sheet.data);
+				return {
+					content: [
+						{ type: "text", text: JSON.stringify({ id, ...result.report }) },
+						{ type: "image", data: png.toString("base64"), mimeType: "image/png" },
+					],
+				};
 			},
 		),
 

@@ -1,0 +1,319 @@
+/**
+ * Sculpt comparison: how close is a sculpt's silhouette to its reference image?
+ *
+ * The agent used to judge a capture against its memory of the reference. This
+ * module makes that a number and a picture, without a browser:
+ *
+ *  1. the reference becomes a foreground mask (alpha when it has one, otherwise
+ *     everything that differs from the border colour);
+ *  2. the recipe's parts are rasterized as a silhouette from a view (yaw,
+ *     elevation, orthographic — the reference's perspective is unknown);
+ *  3. the silhouette is fitted onto the mask's bounding box (height, centre),
+ *     so the score measures shape, not framing;
+ *  4. IoU, proportion deltas, the parts that stick out or fall short, and a
+ *     side-by-side sheet (reference | overlay: grey both, red missing, blue extra).
+ *
+ * Pure: image buffers in, numbers and RGBA out. The MCP tool owns the files.
+ */
+import { expandSculptParts } from "./sculpt-recipe.js";
+
+const COMPARE_SIZE = 256;
+
+function shrink(image, size) {
+	const scale = Math.min(1, size / Math.max(image.width, image.height));
+	const width = Math.max(1, Math.round(image.width * scale));
+	const height = Math.max(1, Math.round(image.height * scale));
+	const data = new Uint8Array(width * height * 4);
+	for (let y = 0; y < height; y += 1) {
+		const sy = Math.min(image.height - 1, Math.floor(y / scale));
+		for (let x = 0; x < width; x += 1) {
+			const sx = Math.min(image.width - 1, Math.floor(x / scale));
+			const s = (sy * image.width + sx) * 4, d = (y * width + x) * 4;
+			data[d] = image.data[s]; data[d + 1] = image.data[s + 1]; data[d + 2] = image.data[s + 2]; data[d + 3] = image.data[s + 3];
+		}
+	}
+	return { width, height, data };
+}
+
+function largestComponentFilled(mask, width, height) {
+	const label = new Int32Array(width * height);
+	let best = 0, bestSize = 0, next = 0;
+	const stack = [];
+	for (let i = 0; i < mask.length; i += 1) {
+		if (!mask[i] || label[i]) continue;
+		next += 1; let size = 0; stack.push(i); label[i] = next;
+		while (stack.length) {
+			const p = stack.pop(); size += 1;
+			const x = p % width, y = (p - x) / width;
+			for (const q of [x > 0 ? p - 1 : -1, x < width - 1 ? p + 1 : -1, y > 0 ? p - width : -1, y < height - 1 ? p + width : -1]) {
+				if (q >= 0 && mask[q] && !label[q]) { label[q] = next; stack.push(q); }
+			}
+		}
+		if (size > bestSize) { bestSize = size; best = next; }
+	}
+	const kept = new Uint8Array(mask.length);
+	for (let i = 0; i < mask.length; i += 1) kept[i] = label[i] === best ? 1 : 0;
+	const outside = new Uint8Array(mask.length);
+	for (let i = 0; i < mask.length; i += 1) {
+		const x = i % width, y = (i - x) / width;
+		if ((x === 0 || y === 0 || x === width - 1 || y === height - 1) && !kept[i] && !outside[i]) { outside[i] = 1; stack.push(i); }
+	}
+	while (stack.length) {
+		const p = stack.pop(), x = p % width, y = (p - x) / width;
+		for (const q of [x > 0 ? p - 1 : -1, x < width - 1 ? p + 1 : -1, y > 0 ? p - width : -1, y < height - 1 ? p + width : -1]) {
+			if (q >= 0 && !kept[q] && !outside[q]) { outside[q] = 1; stack.push(q); }
+		}
+	}
+	for (let i = 0; i < mask.length; i += 1) if (!outside[i]) kept[i] = 1;
+	return { mask: kept, area: bestSize };
+}
+
+/**
+ * The subject of a reference image as a mask at COMPARE_SIZE. Alpha wins when
+ * the image has a real transparent background; otherwise the border colour is
+ * the background (a flat studio backdrop, the usual reference).
+ */
+export function referenceMask(image, { tolerance = 40, size = COMPARE_SIZE } = {}) {
+	const small = shrink(image, size);
+	const { width, height, data } = small;
+	const n = width * height;
+	let transparent = 0;
+	for (let i = 0; i < n; i += 1) if (data[i * 4 + 3] < 128) transparent += 1;
+	const raw = new Uint8Array(n);
+	let source;
+	if (transparent > n * 0.05) {
+		source = "alpha";
+		for (let i = 0; i < n; i += 1) raw[i] = data[i * 4 + 3] >= 128 ? 1 : 0;
+	} else {
+		source = "border-colour";
+		const border = [];
+		for (let x = 0; x < width; x += 1) border.push(x, (height - 1) * width + x);
+		for (let y = 0; y < height; y += 1) border.push(y * width, y * width + width - 1);
+		const channel = (k) => border.map((i) => data[i * 4 + k]).sort((a, b) => a - b)[border.length >> 1];
+		const bg = [channel(0), channel(1), channel(2)];
+		for (let i = 0; i < n; i += 1) {
+			const d = Math.abs(data[i * 4] - bg[0]) + Math.abs(data[i * 4 + 1] - bg[1]) + Math.abs(data[i * 4 + 2] - bg[2]);
+			raw[i] = d > tolerance ? 1 : 0;
+		}
+	}
+	const { mask, area } = largestComponentFilled(raw, width, height);
+	if (area < n * 0.01) throw new Error("No subject found in the reference: give it a flat background or transparency.");
+	if (area > n * 0.97) throw new Error("The reference has no background to separate the subject from.");
+	return { width, height, mask, source, image: small };
+}
+
+const DEG = Math.PI / 180;
+
+/** Orthographic view from a camera at azimuth `yawDeg` (0 = in front, +90 = on the
+ * subject's own left, +x) and `elevationDeg` above: [screen right, screen up]. */
+function viewProject([x, y, z], yawDeg, elevationDeg) {
+	const a = yawDeg * DEG, e = elevationDeg * DEG;
+	const right = x * Math.cos(a) - z * Math.sin(a);
+	const towardCamera = x * Math.sin(a) + z * Math.cos(a);
+	return [right, y * Math.cos(e) - towardCamera * Math.sin(e)];
+}
+
+function applyMatrix(m, [x, y, z]) {
+	return [m[0] * x + m[4] * y + m[8] * z + m[12], m[1] * x + m[5] * y + m[9] * z + m[13], m[2] * x + m[6] * y + m[10] * z + m[14]];
+}
+
+function partSurfaceSamples(part) {
+	const [sx, sy, sz] = part.size.map((v) => v / 2);
+	const points = [];
+	if (part.shape === "box") {
+		for (const x of [-sx, sx]) for (const y of [-sy, sy]) for (const z of [-sz, sz]) points.push([x, y, z]);
+		return points;
+	}
+	const p = 2 + 6 * (part.roundness ?? 0);
+	const taper = part.taper ?? 0;
+	for (let i = 0; i <= 16; i += 1) {
+		const v = -1 + (2 * i) / 16;
+		const k = taper > 0 ? 1 - taper * 0.6 * ((v + 1) / 2) : taper < 0 ? 1 + taper * 0.6 * ((1 - v) / 2) : 1;
+		for (let j = 0; j < 24; j += 1) {
+			const t = (j / 24) * 2 * Math.PI;
+			if (part.shape === "cylinder") {
+				const r = 1 - Math.max(0, part.taper) * ((v + 1) / 2) - Math.max(0, -part.taper) * ((1 - v) / 2);
+				points.push([Math.cos(t) * sx * r, v * sy, Math.sin(t) * sz * r]);
+			} else if (part.shape === "torus" || part.shape === "frame") {
+				points.push([Math.cos(t) * sx, Math.sin(t) * sy, v * sz]);
+				if (part.shape === "frame") points.push([Math.sign(Math.cos(t)) * sx, Math.sign(Math.sin(t)) * sy, v * sz]);
+			} else {
+				const ring = Math.max(0, 1 - Math.abs(v) ** p) ** (1 / p);
+				const c = Math.cos(t), s = Math.sin(t);
+				const norm = (Math.abs(c) ** p + Math.abs(s) ** p) ** (1 / p);
+				points.push([(c / norm) * sx * ring * k, v * sy, (s / norm) * sz * ring * k]);
+			}
+		}
+	}
+	return points;
+}
+
+function convexHull(points) {
+	const pts = points.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+	const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+	const lower = [], upper = [];
+	for (const p of pts) { while (lower.length >= 2 && cross(lower.at(-2), lower.at(-1), p) <= 0) lower.pop(); lower.push(p); }
+	for (const p of pts.reverse()) { while (upper.length >= 2 && cross(upper.at(-2), upper.at(-1), p) <= 0) upper.pop(); upper.push(p); }
+	return lower.slice(0, -1).concat(upper.slice(0, -1));
+}
+
+/** Projected convex outline of every drawn part, in view metres. Frames keep their hole. */
+export function sculptViewPolygons(recipe, { yaw = 0, elevation = 0 } = {}) {
+	return expandSculptParts(recipe).map((part) => {
+		const local = partSurfaceSamples(part);
+		const polygon = convexHull(local.map((point) => viewProject(applyMatrix(part.matrix, point), yaw, elevation)));
+		let hole = null;
+		if (part.shape === "frame" || part.shape === "torus") {
+			const ix = part.size[0] / 2 - (part.shape === "frame" ? part.border : part.size[2]);
+			const iy = part.size[1] / 2 - (part.shape === "frame" ? part.border : part.size[2]);
+			if (ix > 0 && iy > 0) {
+				const corners = [[-ix, -iy], [ix, -iy], [ix, iy], [-ix, iy]].flatMap(([x, y]) => [[x, y, -part.size[2] / 2], [x, y, part.size[2] / 2]]);
+				const projected = corners.map((point) => viewProject(applyMatrix(part.matrix, point), yaw, elevation));
+				// See-through only where the front and back openings overlap; the back
+				// face's opening alone is a slightly generous stand-in.
+				const opening = convexHull(projected.filter((_, i) => i % 2 === 0));
+				hole = opening.length >= 3 ? opening : null;
+			}
+		}
+		return { id: part.id, polygon, hole };
+	});
+}
+
+function insidePolygon(polygon, x, y) {
+	let inside = false;
+	for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+		const [xi, yi] = polygon[i], [xj, yj] = polygon[j];
+		if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+	}
+	return inside;
+}
+
+function boundsOf(polygons) {
+	let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+	for (const { polygon } of polygons) for (const [x, y] of polygon) {
+		minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+	}
+	return { minX, maxX, minY, maxY };
+}
+
+function maskBounds(mask, width, height) {
+	let minX = width, maxX = -1, minY = height, maxY = -1;
+	for (let i = 0; i < mask.length; i += 1) if (mask[i]) {
+		const x = i % width, y = (i - x) / width;
+		if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y;
+	}
+	return { minX, maxX: maxX + 1, minY, maxY: maxY + 1 };
+}
+
+/**
+ * Rasterize the sculpt so its bounding box sits on `box` (pixel space, height
+ * matched, centred). Returns the mask and a per-pixel owner (part index + 1).
+ */
+function rasterizeFitted(polygons, width, height, box, shiftX = 0) {
+	const world = boundsOf(polygons);
+	const scale = (box.maxY - box.minY) / Math.max(1e-6, world.maxY - world.minY);
+	const cx = (box.minX + box.maxX) / 2 - ((world.minX + world.maxX) / 2) * scale + shiftX;
+	const top = box.minY + world.maxY * scale;
+	const mask = new Uint8Array(width * height), owner = new Int32Array(width * height);
+	const pixel = polygons.map(({ id, polygon, hole }) => ({
+		id,
+		polygon: polygon.map(([x, y]) => [cx + x * scale, top - y * scale]),
+		hole: hole?.map(([x, y]) => [cx + x * scale, top - y * scale]) ?? null,
+	}));
+	pixel.forEach(({ polygon, hole }, index) => {
+		if (polygon.length < 3) return;
+		const b = boundsOf([{ polygon }]);
+		for (let y = Math.max(0, Math.floor(b.minY)); y < Math.min(height, Math.ceil(b.maxY)); y += 1) {
+			for (let x = Math.max(0, Math.floor(b.minX)); x < Math.min(width, Math.ceil(b.maxX)); x += 1) {
+				if (!insidePolygon(polygon, x + 0.5, y + 0.5)) continue;
+				if (hole && insidePolygon(hole, x + 0.5, y + 0.5)) continue;
+				mask[y * width + x] = 1;
+				owner[y * width + x] = index + 1;
+			}
+		}
+	});
+	return { mask, owner, parts: pixel, shiftX };
+}
+
+const MISSING = [220, 40, 40], EXTRA = [40, 90, 220], BOTH = [190, 190, 190];
+
+/**
+ * Compare a recipe with a reference image (RGBA). `yaw` is the reference
+ * camera's azimuth: 0 is straight on, positive moves the camera round to the
+ * subject's own left (+x) side; `elevation` looks down from above.
+ */
+export function compareSculptToReference(recipe, image, { yaw = 0, elevation = 0 } = {}) {
+	const ref = referenceMask(image);
+	const { width, height } = ref;
+	const box = maskBounds(ref.mask, width, height);
+	const polygons = sculptViewPolygons(recipe, { yaw, elevation });
+	// Height and top are matched; the horizontal offset is searched, because a
+	// centred bounding box blames the body when only an arm sticks out.
+	const overlap = (sil) => {
+		let both = 0, union = 0;
+		for (let i = 0; i < sil.mask.length; i += 1) { both += ref.mask[i] & sil.mask[i]; union += ref.mask[i] | sil.mask[i]; }
+		return both / Math.max(1, union);
+	};
+	let sil = rasterizeFitted(polygons, width, height, box), bestScore = overlap(sil);
+	const reach = Math.round((box.maxX - box.minX) / 2);
+	for (let step = 8; step >= 1; step >>= 1) {
+		for (const direction of [-1, 1]) {
+			for (let shift = sil.shiftX + direction * step; Math.abs(shift) <= reach; shift += direction * step) {
+				const candidate = rasterizeFitted(polygons, width, height, box, shift), score = overlap(candidate);
+				if (score <= bestScore) break;
+				sil = candidate; bestScore = score;
+			}
+		}
+	}
+	let both = 0, missing = 0, extra = 0;
+	const extraByPart = new Map();
+	for (let i = 0; i < ref.mask.length; i += 1) {
+		const r = ref.mask[i], s = sil.mask[i];
+		if (r && s) both += 1;
+		else if (r) missing += 1;
+		else if (s) { extra += 1; const id = sil.parts[sil.owner[i] - 1].id; extraByPart.set(id, (extraByPart.get(id) ?? 0) + 1); }
+	}
+	const area = both + missing;
+	// Missing reference pixels, in thirds of the subject's height, so the agent knows where to add.
+	const bandMissing = [0, 0, 0];
+	const bandHeight = (box.maxY - box.minY) / 3;
+	for (let i = 0; i < ref.mask.length; i += 1) if (ref.mask[i] && !sil.mask[i]) {
+		const y = (i - (i % width)) / width;
+		bandMissing[Math.min(2, Math.max(0, Math.floor((y - box.minY) / bandHeight)))] += 1;
+	}
+	const silBox = maskBounds(sil.mask, width, height);
+	const refAspect = (box.maxX - box.minX) / (box.maxY - box.minY);
+	const silAspect = (silBox.maxX - silBox.minX) / Math.max(1, silBox.maxY - silBox.minY);
+	const round = (v, d = 3) => Number(v.toFixed(d));
+	const report = {
+		iou: round(both / Math.max(1, both + missing + extra)),
+		missingFraction: round(missing / Math.max(1, area)),
+		extraFraction: round(extra / Math.max(1, area)),
+		widthToHeight: { reference: round(refAspect), sculpt: round(silAspect), delta: round(silAspect - refAspect) },
+		missingByBand: { top: round(bandMissing[0] / Math.max(1, area)), middle: round(bandMissing[1] / Math.max(1, area)), bottom: round(bandMissing[2] / Math.max(1, area)) },
+		extraByPart: [...extraByPart.entries()].map(([id, px]) => ({ id, fraction: round(px / Math.max(1, area)) })).filter((row) => row.fraction >= 0.005).sort((a, b) => b.fraction - a.fraction).slice(0, 6),
+		mask: ref.source,
+		view: { yaw, elevation },
+	};
+	const sheet = new Uint8Array(width * 2 * height * 4);
+	for (let y = 0; y < height; y += 1) for (let x = 0; x < width; x += 1) {
+		const s = (y * width + x) * 4, i = y * width + x;
+		const left = (y * width * 2 + x) * 4, right = left + width * 4;
+		const alpha = ref.image.data[s + 3] / 255;
+		for (let k = 0; k < 3; k += 1) sheet[left + k] = Math.round(ref.image.data[s + k] * alpha + 255 * (1 - alpha));
+		sheet[left + 3] = 255;
+		const colour = ref.mask[i] && sil.mask[i] ? BOTH : ref.mask[i] ? MISSING : sil.mask[i] ? EXTRA : [255, 255, 255];
+		sheet[right] = colour[0]; sheet[right + 1] = colour[1]; sheet[right + 2] = colour[2]; sheet[right + 3] = 255;
+	}
+	return { report, sheet: { width: width * 2, height, data: sheet } };
+}
+
+/** Try a few yaws and keep the best: the reference's angle is usually a guess. */
+export function bestViewForReference(recipe, image, { yaws = [-45, -30, -15, 0, 15, 30, 45], elevation = 0 } = {}) {
+	let best = null;
+	for (const yaw of yaws) {
+		const result = compareSculptToReference(recipe, image, { yaw, elevation });
+		if (!best || result.report.iou > best.report.iou) best = result;
+	}
+	return best;
+}
