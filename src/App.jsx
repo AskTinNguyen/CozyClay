@@ -70,6 +70,7 @@ import { AppContext, createAppContext } from "./app-context.js";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
 
 import { PlanBoard } from "./planview.jsx";
+import { drawPlanDiagram } from "./plan-diagram.js";
 import { placementAt } from "./root-path.js";
 import { proxyYaw } from "./proxy-figure.jsx";
 import { autoColorHex, loadAutoColor } from "./auto-color.js";
@@ -3093,6 +3094,8 @@ export default function App() {
 		activeShotId: activeShot?.id ?? null,
 		captureCurrentFraming,
 		captureFramingPng,
+		// The Top View pull (verify_result visual "plan", capture_plan_png).
+		capturePlanPng,
 		captureShotMeta,
 		// The identity / environment reference pictures a capture carries (#167).
 		captureShotReferences,
@@ -3164,10 +3167,7 @@ export default function App() {
 		// not capture_frame's 640x360 preview, which stays exactly as it is.
 			capture_framing_png: (args = {}) => {
 				const live = appContext.live.state;
-				const requested = args?.output;
-				const output = Number.isFinite(requested?.width) && Number.isFinite(requested?.height)
-					? { width: Math.round(requested.width), height: Math.round(requested.height) }
-					: SHOT_ASPECT_PRESETS[live.stage.shotAspect] ?? SHOT_ASPECT_PRESETS["16:9"];
+				const output = requestedCaptureOutput(args) ?? SHOT_ASPECT_PRESETS[live.stage.shotAspect] ?? SHOT_ASPECT_PRESETS["16:9"];
 				const dataUrl = live.captureFramingPng(live.captureCurrentFraming(), output);
 				if (!dataUrl) throw new Error("The shot renderer is not ready");
 				return {
@@ -3184,6 +3184,9 @@ export default function App() {
 					references: live.captureShotReferences(),
 				};
 			},
+			// The Top View as the agent's plan picture: a 2D diagram of the cast,
+			// footprints and every shot camera drawn from state (src/plan-diagram.js).
+			capture_plan_png: (args = {}) => appContext.live.state.capturePlanPng(requestedCaptureOutput(args) ?? undefined),
 	};
 
 	useEffect(() => {
@@ -4960,7 +4963,7 @@ export default function App() {
 				? { label: ko("ROOT PATH", "루트 경로"), kind: "root" }
 				: null;
 
-	function bufferToPng(buffer, output = shotOutput) {
+	function bufferToPng(buffer, output = shotOutput, decorate = null) {
 		const canvas = document.createElement("canvas");
 		if (output === shotOutput) {
 			canvas.width = shotOutput.width;
@@ -4980,6 +4983,7 @@ export default function App() {
 			);
 		}
 		ctx.putImageData(image, 0, 0);
+		decorate?.(ctx);
 		return canvas.toDataURL("image/png");
 	}
 
@@ -5020,6 +5024,27 @@ export default function App() {
 			}
 			cam.updateProjectionMatrix();
 		}
+	}
+
+	/** A live capture command's requested `output` size, or null to use its default. */
+	function requestedCaptureOutput(args) {
+		const requested = args?.output;
+		return Number.isFinite(requested?.width) && Number.isFinite(requested?.height)
+			? { width: Math.round(requested.width), height: Math.round(requested.height) }
+			: null;
+	}
+
+	/** The Top View as a PNG: a 2D data diagram drawn from editor state by
+	    src/plan-diagram.js (grid, footprints, cast, every shot camera, the current
+	    shot's action line and blocked sight lines). No render is involved. */
+	function capturePlanPng(output = { width: 1280, height: 720 }) {
+		const live = appContext.live.state, s = readStudioState();
+		const canvas = document.createElement("canvas");
+		canvas.width = output.width;
+		canvas.height = output.height;
+		drawPlanDiagram(canvas.getContext("2d"), { frame: s.view.frame, frameCount: s.frameCount, objects: s.objects, characters: s.characters, shotDocument: { shots: s.shots }, camera: s.camera },
+			{ width: output.width, height: output.height, ports: { bounds: studioBounds }, currentShotId: live.activeShotId, aspect: shotOutput.width / shotOutput.height });
+		return { dataUrl: canvas.toDataURL("image/png"), width: output.width, height: output.height, frame: live.timeline.currentFrame, shotId: live.activeShotId };
 	}
 
 	/** The canvas runs under the floating panels, so "what I see" is only the uncovered middle.
@@ -7153,7 +7178,7 @@ export default function App() {
 		read: readStudioState, revision: sceneRevisionRef, bounds: studioBounds, commit: commitStudioDraft,
 		operate: operateStudio, undo: () => stepStudioHistory(false), redo: () => stepStudioHistory(true),
 		history: redo => appContext.historyEntry(redo), finishHistoryGesture: finishStudioHistoryGesture,
-		stepHistory: stepStudioHistory, capture: () => liveQueries.capture_framing_png({}),
+		stepHistory: stepStudioHistory, capture: () => liveQueries.capture_framing_png({}), capturePlan: () => liveQueries.capture_plan_png({}),
 		// One shot frame as raw read-back pixels (rows bottom-up), from the export
 		// path captureShotFramePng uses; an export in flight renders at its output.
 		renderFrameBuffer: frame => {

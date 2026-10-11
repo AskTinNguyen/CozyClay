@@ -144,6 +144,31 @@ cclay live capture --framing --out /tmp/329-doc/shots/f-a-wide-hip.png
 {"path":"/tmp/329-doc/shots/f-a-wide-hip.png","width":1920,"height":1080,"bytes":344608}
 ```
 
+To check the blocking from above instead, ask `verify` for the plan:
+`cclay live verify --receipt receipt-mu3uybub-4 --checks framing --visual plan --out /tmp/plan.png`
+writes the Top View at 1280×720: a 2D diagram drawn from the scene state
+(`src/plan-diagram.js`), not a render. It shows a 1 m grid labelled every 2 m
+with the origin marked, `+X` to the right and `+Z` down the image; object
+footprints as rotated tan rectangles (a group's parts share one hue);
+characters as blue circles with a facing arrow; every shot of the cut as
+`S1…Sn` with a 3 m wedge as wide as its horizontal field of view and a line to
+where it looks (the current shot filled red and labelled with its side of the
+action line, `L`/`R`); the current shot's action line dashed with the
+distance between its two subjects; and any prop blocking a camera's sight line
+to a subject outlined red with the blocked segment. The framing fits all of it
+with a 1.5 m margin, capped at 30 m. Its `visualRefs` entry carries
+`kind: "plan"`. A Studio Agent turn gets the same picture automatically, as a
+"Studio plan observation (top view)", when the scene has two or more
+characters, at least one shot, or the request talks about shots, cameras,
+coverage or framing (never alongside an attached frame; a failed capture just
+leaves it out). A `framing` check also returns `geometry`: per shot
+the two leading characters, the camera's side of the line between them
+(`cameraSide`: `left`, `right` or `on-axis` within 5 cm), the props crossing
+the sight line (`occluders`), and `axisConsistent` across the cut (false when
+a shot of the same pair crosses the line, null with fewer than two sided
+shots). The frame-shot receipt itself reports `occluded` and `cameraSide` in
+`checks`, and one `OCCLUDED` warning per prop in the way.
+
 Reading that PNG as an image shows the character standing center-frame, head
 to feet unclipped, the chair fully visible beside her, camera at hip height —
 the framing the receipt promised. Session (a) is done; the prop stays in the
@@ -352,7 +377,7 @@ state, never on a guess about what the dead hub saw.
 | `patch --target <kind>[:<id>] --set '<json>'` | set declared authored fields by path on one `character` / `object` / `shot` / `stage` target; `inspect --scope catalogue` lists the patchable paths | yes |
 | `frame-shot --subject <id> --size … --view … --level … [--side] [--focal]` or `--exact px,py,pz,lx,ly,lz,focal` | move the shot camera by film vocabulary or to an exact pose; `keyAtFrame` (via `cmd`) also authors a camera key | yes |
 | `operate [--select object:<id>] [--frame N] [--mode scene\|camera\|motion] [--play\|--pause]` | transient editor state — selection, playhead, mode; nothing authored | yes (transient) |
-| `verify --receipt <id> --checks placement,framing [--visual frame --out check.png]` | re-run a receipt's evidence, optionally writing its visual proof | no |
+| `verify --receipt <id> --checks placement,framing [--visual frame\|contact_sheet\|plan --out check.png]` | re-run a receipt's evidence, optionally writing its visual proof (`plan` is the Top View) | no |
 | `undo --receipt <id>` | restore the document through the editor's native history, one entry | yes |
 | `cmd <name> --args '<json>'` | any live-protocol command, raw (no admission, no auto-receipt) | per command |
 | `tool <name> --args '<json>'` | any registry tool the hub serves, e.g. `describe_shot` | no |
@@ -576,6 +601,87 @@ route answers 403 `AUTH_REQUIRED`, exactly like the turn's event stream.
 The other refusals: 404 when no Workflow or Studio turn carries that id, 409
 `NO_ACTIVE_TURN` when the turn has already ended (or was stopped), 400 when
 the text is missing or empty or an attachment is not an inline data URL.
+
+## Supervisor
+
+After a Studio turn ends, the sidecar reviews it once in the background and
+leaves the result as a note card in the Agent panel. The review never delays
+the turn and never talks back to the agent: the turn's stream ends with its
+`done` frame exactly as before, and only then does the review start. It runs
+only when the turn authored something (a tool result with `authored: true`)
+or met a refusal (`TARGET_NOT_READY`, `CAPABILITY_MISSING`,
+`CONFIRMATION_REQUIRED`), and was not stopped; read-only turns and questions
+are not reviewed.
+
+The reviewer is the turn's own model, at reasoning effort `high` (clamped to
+the nearest level the model supports), in one request with a 120 s
+timeout. It sees the user request, every receipt of the turn (bounded: no
+image bytes, 8 delta rows, 12 warnings), the refusals, the last reply, the
+geometry facts of a framing `verify_result` the sidecar issues itself for the
+shots the turn touched, and up to five pictures: the current shot frame, the
+Top View, and the start frame of each shot the turn created (the playhead is
+put back afterwards). It judges seven items: request coverage, refused versus
+missing deliverables, spatial sanity, framing, continuity across shots, undo
+integrity and report honesty.
+
+| variable | effect |
+| --- | --- |
+| `COZYCLAY_SUPERVISOR=off` | no review at all; the route answers 204 |
+| `COZYCLAY_SUPERVISOR_EFFORT` | the reasoning effort, default `high` |
+| `COZYCLAY_SUPERVISOR_AUTOFIX=blocker` | a note whose blockers carry fixes is marked `autofix: { eligible: true, severity: "blocker" }`; default off |
+
+The note is one more sequenced event on the turn's record, so
+`GET /agent/turn/<turnId>/events?after=N` replays it after `done`. The panel
+reads it from its own route, which takes the same `studio_owner` cookie:
+
+```sh
+curl -s http://127.0.0.1:5180/agent/turn/<turnId>/supervisor -H 'cookie: studio_owner=…'
+```
+```json
+{"type":"supervisor","turnId":"…","verdict":"reviewed","model":"cliproxy/claude-opus-5-5","effort":"high","elapsedMs":41210,"summary":"…","items":[{"text":"…","status":"done","evidence":"…"}],"issues":[{"severity":"concern","kind":"framing","text":"…","evidence":"…","fix":{"action":"shot.frame","args":{"shotId":"shot-1","subjectIds":["char-a","char-b"],"framing":{"intent":{"size":"medium shot"}}}}}],"fixes":[{"issueIndex":0,"severity":"concern","action":"shot.frame","args":{"shotId":"shot-1","subjectIds":["char-a","char-b"],"framing":{"intent":{"size":"medium shot"}}}}],"droppedFixes":[],"counts":{"blocker":0,"concern":1,"note":0,"fixes":1},"eventSeq":14}
+```
+
+`status` is `done`, `partial`, `refused` or `missing`; `severity` is
+`blocker`, `concern` or `note`; `kind` is `coverage`, `disclosure`,
+`spatial`, `framing`, `continuity`, `undo` or `honesty`. A review that could
+not run or did not answer with a valid verdict is still a note, with
+`verdict: "unavailable"`, empty lists and a `reason`. While the review is
+running the route holds the request up to 180 s; it answers 204 when the wait
+runs out, when the turn was not reviewed or the switch is off, 404 for an
+unknown turn and 403 for another session's cookie. The card's
+**Send as next prompt** button puts the blockers and concerns into the
+composer and sends them as an ordinary turn; nothing is sent on its own.
+
+### Fixes
+
+An issue may carry a `fix`: one `run_action` call, `{ "action", "args" }`,
+written with the real ids and values from the receipts and geometry. The
+reviewer's digest lists what a fix may name: `ACTIONS` is the turn's own
+action index (id and label), and `ACTION SCHEMAS` holds the input schemas of
+the pre-selected actions the index declares (`character.setPose`,
+`character.move`, `character.update`, `shot.frame`, `shot.set`,
+`shot.setRange`, `object.update`, `object.remove`, `objects.arrange`,
+`stage.set`, `edit.undo`, `view.update`), read with
+`inspect_studio { scope: "actions", ids }` and bounded to 6 KB (whole schemas
+only; the ids that did not fit are listed under `omitted`).
+
+Every fix is validated before the note is stored: its action must be in the
+action index, its `args` must be an object, and when the action's schema was
+read every key in its `required` list must be present. A fix that fails is
+removed from its issue and reported in `droppedFixes` as
+`{ issueIndex, action, reason }` (`unknown action`, `args is not an object`,
+`missing required key "<key>"`, `malformed fix`); the issue itself stays.
+The kept ones are repeated in `fixes` as
+`{ issueIndex, severity, action, args }`, and `counts.fixes` counts them.
+
+When a note has fixes, the expanded card shows each one as a code line under
+its issue and the button reads **Apply fixes as next prompt**. The prompt it
+sends asks for exactly those calls, in order, in one `script` call followed
+by `verify_result`, one line per fix (`- [severity] <issue> -> run_action
+{"action":…,"args":…}`); blockers and concerns without a fix follow under
+**Also check:**. `COZYCLAY_SUPERVISOR_AUTOFIX=blocker` never starts a turn:
+turns belong to the panel, and the sidecar only marks the note `autofix`, which
+the card mentions in the button's tooltip.
 
 ## Sessions
 
