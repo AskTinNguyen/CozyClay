@@ -10,11 +10,11 @@ export function register(registry, ports) {
 	registry.register({ ...studioActionDeclaration("export.shotVideo"),
 		available: state => state.exporting ? "An export is already running; wait for it to finish."
 			: state.canExportVideo || "There is nothing to record yet: add a shot (shot.create), camera keys or a motion take first.",
-		run: async ({ shotId }, context) => {
+		run: async ({ shotId, scope }, context) => {
 			const shot = shotId ? shotOf(ports, shotId) : null;
-			const result = await ports.exportShotVideo({ shotId: shotId ?? null }, context);
+			const result = await ports.exportShotVideo({ shotId: shotId ?? null, ...(scope ? { scope } : {}) }, context);
 			if (!result?.fileName) fail("TARGET_NOT_READY", "The video export did not finish; the editor's export panel shows why and offers Retry.");
 			return { affectedIds: shot ? [shot.id] : [], output: { fileName: result.fileName, frameCount: result.frameCount },
-				summary: `Recorded ${shot ? shotLabel(shot) : "the shot"} to ${result.fileName} (${result.frameCount} frames); the browser was asked to download it.` };
+				summary: `Recorded ${scope === "timeline" ? "the whole timeline" : shot ? shotLabel(shot) : "the shot"} to ${result.fileName} (${result.frameCount} frames); the browser was asked to download it.` };
 		} });
 }
