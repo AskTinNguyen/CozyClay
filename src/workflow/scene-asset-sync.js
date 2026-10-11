@@ -34,13 +34,6 @@ function objectHasAsset(object, assetId) {
 	return [object.assetId, object.sourceAssetId, object.matteAssetId].includes(assetId);
 }
 
-/** Return the document's active scene without exposing a mutable reference. */
-export function activeSceneRecord(document) {
-	const scenes = Array.isArray(document?.scenes) ? document.scenes : [];
-	const index = activeSceneIndex(scenes, document?.activeSceneId);
-	return index < 0 ? null : scenes[index] ?? null;
-}
-
 /**
  * Add an imported image as a cutout in the active scene.
  *
@@ -116,7 +109,7 @@ export function readStoredSceneDocument(storage = globalThis.localStorage) {
 }
 
 /** Persist a scene envelope and notify both local and remote Studio tabs. */
-export function publishSceneDocument(document, {
+function publishSceneDocument(document, {
 	storage = globalThis.localStorage,
 	target = globalThis,
 } = {}) {
@@ -204,7 +197,7 @@ export function subscribeToScenePlayback(onCommand, {
 }
 
 /** Import bytes through the canonical asset pipeline and warm the texture cache. */
-export async function importWorkflowImage(file, {
+async function importWorkflowImage(file, {
 	importer = importImageFile,
 	remember = rememberAsset,
 	importOptions,

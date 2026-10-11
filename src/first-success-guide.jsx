@@ -55,7 +55,7 @@ const STORYBOARD_STEPS = [
 	},
 ];
 
-export const STEPS_BY_MODE = { animation: ANIMATION_STEPS, storyboard: STORYBOARD_STEPS };
+const STEPS_BY_MODE = { animation: ANIMATION_STEPS, storyboard: STORYBOARD_STEPS };
 
 /** A compact, dismissible first-run checklist that follows the v2 shell grammar. */
 export default function FirstSuccessGuide({ open, onDismiss, previsMode = "animation" }) {

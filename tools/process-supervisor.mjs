@@ -33,7 +33,7 @@ function bridgeError(name, port, detail, code) {
 	return error;
 }
 
-export function waitForBridgeReady(child, { name, port, readyType, listenErrorType }, timeoutMs = 5000) {
+function waitForBridgeReady(child, { name, port, readyType, listenErrorType }, timeoutMs = 5000) {
 	return new Promise((resolve, reject) => {
 		let settled = false;
 		const finish = (callback, value) => {

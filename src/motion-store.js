@@ -1,10 +1,10 @@
-export const MOTION_DB_NAME = "cozyclay.motions";
-export const MOTION_DB_VERSION = 1;
-export const MOTION_STORE_NAME = "motions";
+const MOTION_DB_NAME = "cozyclay.motions";
+const MOTION_DB_VERSION = 1;
+const MOTION_STORE_NAME = "motions";
 
 const validId = (id) => typeof id === "string" && /^[0-9a-f]{64}$/i.test(id);
 
-export function normalizeMotion(record) {
+function normalizeMotion(record) {
 	if (!record || typeof record !== "object" || !validId(record.motionId)) return null;
 	if (record.encoding !== "base64" || typeof record.data !== "string") return null;
 	return { ...record, motionId: record.motionId.toLowerCase(), stored: true };

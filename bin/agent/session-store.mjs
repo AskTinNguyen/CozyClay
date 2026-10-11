@@ -2,7 +2,7 @@ import { appendFileSync, mkdirSync, readFileSync, readdirSync, writeFileSync } f
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-export const MAX_PERSISTED_IMAGE_BYTES = 2 * 1024 * 1024;
+const MAX_PERSISTED_IMAGE_BYTES = 2 * 1024 * 1024;
 
 const V2_FORMAT = "cozyclay-agent-v2";
 const V2_VERSION = 2;
@@ -12,7 +12,7 @@ function configDir() {
 		|| join(process.env.XDG_CONFIG_HOME || join(homedir(), ".config"), "cozyclay");
 }
 
-export function agentSessionsDir() {
+function agentSessionsDir() {
 	return process.env.COZYCLAY_AGENT_SESSIONS_DIR || join(configDir(), "agent-sessions");
 }
 
@@ -59,7 +59,7 @@ function rawImageTooLarge(value) {
 /** Keep a pi Message as the sole persisted shape, omitting only oversized
  * inline images (from either the legacy input_image part or the pi
  * ImageContent part) while keeping the text around it. */
-export function persistableMessage(message) {
+function persistableMessage(message) {
 	if (!message || typeof message !== "object") return message;
 	if (!Array.isArray(message.content)) return message;
 	const content = message.content.flatMap((part) => {

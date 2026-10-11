@@ -17,7 +17,7 @@ export const ROTATION_AXES = Object.freeze([
 	{ axis: "z", dir: new THREE.Vector3(0, 0, 1), color: "#5c9dff" },
 ]);
 
-export const RING_BACK_OPACITY = 0.22;
+const RING_BACK_OPACITY = 0.22;
 
 // Fades the half of a ring that faces away from the camera (relative to the ring's centre), the way
 // DCC rotate gizmos do, so the three rings stop crossing over the bone like a cage.
@@ -37,7 +37,7 @@ export function backFaceFade(material) {
 	return material;
 }
 
-export function handlePart(id = "") {
+function handlePart(id = "") {
 	const match = /^(left|right)(.*)$/.exec(String(id));
 	if (match) return `${match[1]}${/knee|foot|leg|toe|hip/i.test(match[2]) ? "Leg" : "Arm"}`;
 	if (id === "hips") return "pelvis";

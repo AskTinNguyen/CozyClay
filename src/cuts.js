@@ -11,7 +11,7 @@ import {
 	updateStableItem,
 } from "./stable-items.js";
 
-export const DEFAULT_SHOT_FRAMES = 40;
+const DEFAULT_SHOT_FRAMES = 40;
 
 const frameNumber = (value, fallback = 0) => Number.isFinite(value) ? Math.round(value) : fallback;
 
@@ -137,11 +137,6 @@ export function resizeShot(shots, shotId, edge, rawFrame, frameCount) {
 	if ((startFrame === shot.startFrame && endFrame === shot.endFrame) || overlaps(shots, startFrame, endFrame, shotId)) return shots;
 	return updateStableItem(shots, shotId, (entry) => ({ ...entry, startFrame, endFrame, cameraKeys: uniqueKeys(entry.cameraKeys, startFrame, endFrame) }), "shots")
 		.sort((a, b) => a.startFrame - b.startFrame);
-}
-
-/** Compatibility name for callers that move the left edge. */
-export function moveBoundary(shots, shotId, newStartFrame, frameCount) {
-	return resizeShot(shots, shotId, "start", newStartFrame, frameCount);
 }
 
 export function removeShot(shots, shotId) {

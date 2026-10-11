@@ -116,7 +116,7 @@ export const CURVE_GRAB_RADIUS_PX = 14;
  * any amount of drift (App.jsx paints it detached and refuses new gestures
  * until the view comes back). 1e-4 is tighter than any deliberate nudge and
  * looser than float noise from re-deriving the same matrix. */
-export const CAMERA_DRIFT_EPSILON = 1e-4;
+const CAMERA_DRIFT_EPSILON = 1e-4;
 
 /**
  * The rendering camera -> the C6 `camera` block: { fx, fy, cx, cy, R, t }.
@@ -577,7 +577,7 @@ export const DRAW_BUNCHED_WINDOW_FRAMES = 24;
  * two distinguishable PLACES on the path, and that is a screen-distance
  * question. Twice the grab radius is the app's own scale for "the same spot":
  * inside it a user could not have aimed at one end rather than the other. */
-export const DRAW_MATCH_MIN_SEPARATION_PX = 2 * CURVE_GRAB_RADIUS_PX;
+const DRAW_MATCH_MIN_SEPARATION_PX = 2 * CURVE_GRAB_RADIUS_PX;
 
 /** Seam easing, replacing the hard 2-frame pin on the DRAW path only.
  *
@@ -608,7 +608,7 @@ export const DRAW_MATCH_MIN_SEPARATION_PX = 2 * CURVE_GRAB_RADIUS_PX;
  * (Table 5), so a dozen frames is the scale at which the sampler already thinks
  * about "near a constraint". The 2-frame floor keeps the shortest legal window
  * behaving exactly like the pin it replaces. */
-export const SEAM_EASE_FRACTION = 0.15;
+const SEAM_EASE_FRACTION = 0.15;
 export const SEAM_EASE_MIN = 2;
 export const SEAM_EASE_MAX = 12;
 

@@ -22,7 +22,7 @@ const initialState = ({ targetIou, maxRounds }) => ({
 
 const ACTIVITY_LIMIT = 40;
 // How long each wait usually takes, from the live runs in docs/sculpt-from-image.md.
-export const EXPECTED_WAIT_MS = Object.freeze({ measure: 1500, draft: 60000, refine: 35000, agent: 20000, tool: 3000, score: 1500 });
+const EXPECTED_WAIT_MS = Object.freeze({ measure: 1500, draft: 60000, refine: 35000, agent: 20000, tool: 3000, score: 1500 });
 
 function toolLabel(action, args = {}, who = "Agent") {
 	if (action === "object.sculpt") return args.edits ? `${who} is applying the winning edits` : `${who} is building the recipe`;

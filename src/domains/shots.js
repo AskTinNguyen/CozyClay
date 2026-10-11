@@ -30,7 +30,7 @@ function normalizeState(value) {
 
 // The stable handle survives scene loads. Camera pose belongs to the same
 // history entry as the shot it frames; only the persisted shots are projected.
-export function createShotsDomain(appContext, initial = {}) {
+function createShotsDomain(appContext, initial = {}) {
   const initialState = value => normalizeState({ shots: [], frameCount: DEFAULT_DURATION_S * TIMELINE_FPS,
     cameraMove: CAMERA_MOVES[1], fovDeg: PRESETS.medium.fov, camera: null, manual: false, ...value });
   let native = createDocumentStore({ owned: { shot: initialState(initial) } });

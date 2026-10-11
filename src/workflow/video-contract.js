@@ -1,6 +1,6 @@
 // Fal H3 Max Turbo I2V schema: https://fal.ai/models/minimax/h3-max-turbo/image-to-video/api
 export const DEFAULT_FAL_VIDEO_MODEL = "minimax/h3-max-turbo/image-to-video";
-export const COMFY_VIDEO_ASPECTS = Object.freeze(["16:9", "9:16", "1:1", "21:9", "12:7"]);
+const COMFY_VIDEO_ASPECTS = Object.freeze(["16:9", "9:16", "1:1", "21:9", "12:7"]);
 
 export function falVideoContract(model = DEFAULT_FAL_VIDEO_MODEL) {
 	if (model === DEFAULT_FAL_VIDEO_MODEL) return { name: "H3 Max Turbo", aspectFromImage: true, cameraLocked: true, aspects: [], minDuration: 5, maxDuration: 15, integerDuration: true, defaultDuration: 5, resolution: ["480P", "768P", "1080P"], defaultResolution: "480P" };

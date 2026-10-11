@@ -3,7 +3,7 @@
 // transform recorded by the scene (uniform scale, Y rotation and translation).
 // It deliberately leaves local joint rotations untouched.
 
-export const MOTION_CALIBRATION_LIMITS = Object.freeze({
+const MOTION_CALIBRATION_LIMITS = Object.freeze({
 	minScale: 0.1,
 	maxScale: 10,
 	maxOffset: 100,

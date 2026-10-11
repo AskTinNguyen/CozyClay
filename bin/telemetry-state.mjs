@@ -3,8 +3,8 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 
 export const TELEMETRY_NOTICE_VERSION = 1;
-export const POSTHOG_PROJECT_TOKEN = "phc_CpizzZ8VhSorSS8yEeQhdpUcvB2erp5xkCbnFD8HTJ5m";
-export const POSTHOG_API_HOST = "https://t.cozyclay.org";
+const POSTHOG_PROJECT_TOKEN = "phc_CpizzZ8VhSorSS8yEeQhdpUcvB2erp5xkCbnFD8HTJ5m";
+const POSTHOG_API_HOST = "https://t.cozyclay.org";
 // First-launch answers plus the `npx cozyclay --via <source>` values the
 // landing page's copy commands carry (#466). Mirrors analytics HEARD_FROM_SOURCES.
 export const FIRST_LAUNCH_SOURCES = Object.freeze(["x", "hn", "reddit", "github", "friend", "other", "site", "playground"]);

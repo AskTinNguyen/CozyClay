@@ -46,7 +46,7 @@ export function readFbxVersion(bytes) {
 	return Number.isFinite(version) ? version : null;
 }
 
-export function parseFbxGroup(bytes) {
+function parseFbxGroup(bytes) {
 	const buffer = arrayBufferOf(bytes);
 	if (!buffer || !buffer.byteLength) return null;
 	return new FBXLoader().parse(buffer, "");

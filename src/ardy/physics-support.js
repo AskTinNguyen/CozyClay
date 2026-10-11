@@ -5,7 +5,7 @@ import { SEGMENT_MASSES } from "./auto-physics.js";
 const G = 9.81;
 const V = () => new THREE.Vector3();
 const smooth = (t) => { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); };
-export const SUPPORT_LIMITS = Object.freeze({ gap: .025, force: .22, moment: .10, maxDrop: .60, friction: .6 });
+const SUPPORT_LIMITS = Object.freeze({ gap: .025, force: .22, moment: .10, maxDrop: .60, friction: .6 });
 
 /** Cached bone lookup and an explicit approximate segmented physical body.
  * Mass is normalized: reported forces are body weights, not measured Newtons.

@@ -1,7 +1,7 @@
-export const I2V_MOTION_MODEL = "minimax/h3-max-turbo/image-to-video";
-export const I2V_MOTION_RESOLUTION = "480P";
+const I2V_MOTION_MODEL = "minimax/h3-max-turbo/image-to-video";
+const I2V_MOTION_RESOLUTION = "480P";
 export const I2V_MOTION_MIN_DURATION = 5;
-export const I2V_MOTION_MAX_DURATION = 15;
+const I2V_MOTION_MAX_DURATION = 15;
 // The durations the AI motion card offers. 15 s (362 frames) is the measured upper
 // end the H3 endpoint accepts and the extractor handles (#380 sit-to-bench).
 export const I2V_MOTION_DURATIONS = Object.freeze([5, 10, 15]);
@@ -61,7 +61,7 @@ export function submitMotionJob(input, fetchImpl = fetch) {
   return request(`/v1/motion/${kind}`, body, fetchImpl);
 }
 
-export function getMotionJob(id, fetchImpl = fetch) {
+function getMotionJob(id, fetchImpl = fetch) {
   return request(`/v1/motion/jobs/${encodeURIComponent(id)}`, undefined, fetchImpl);
 }
 

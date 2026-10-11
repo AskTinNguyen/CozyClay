@@ -28,7 +28,7 @@ export const SCRUB_THRESHOLD_PX = 4;
 
 /** Shift buys a quarter-speed pass for fine detail; Alt keeps its old 0.1x. */
 export const FINE_SCRUB_FACTOR = 0.25;
-export const EXTRA_FINE_SCRUB_FACTOR = 0.1;
+const EXTRA_FINE_SCRUB_FACTOR = 0.1;
 
 /**
  * The meaningful span a full drag sweeps when the field does not name one.

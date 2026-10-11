@@ -97,9 +97,9 @@ export const OBJECT_COLORS = [
 /** How many hand-mixed colours the inspector remembers. Six is one palette
  * row: enough to keep a scene's custom tints reachable, short enough that the
  * popover never turns into a second, unruly palette. */
-export const RECENT_OBJECT_COLORS_MAX = 6;
+const RECENT_OBJECT_COLORS_MAX = 6;
 /** Session memory of hand-mixed tints; versioned like every other key here. */
-export const RECENT_OBJECT_COLORS_KEY = "cozyclay.objectColors.recent";
+const RECENT_OBJECT_COLORS_KEY = "cozyclay.objectColors.recent";
 
 const HEX_SHORT = /^#?([0-9a-f]{3})$/i;
 const HEX_LONG = /^#?([0-9a-f]{6})$/i;
@@ -266,7 +266,7 @@ export const OBJECT_MENU_ENTRIES = Object.freeze([EMPTY_ENTRY, ...OBJECT_LIBRARY
  * plus the kinds that arrive by import and so are deliberately absent from the
  * "Add object" menu (a cutout without an image, a mesh without a GLB, has
  * nothing to draw). */
-export function objectLibraryEntry(kind) {
+function objectLibraryEntry(kind) {
 	if (kind === CUTOUT_KIND) return CUTOUT_ENTRY;
 	if (kind === MESH_KIND) return MESH_ENTRY;
 	if (kind === SCULPT_KIND) return SCULPT_ENTRY;
@@ -286,9 +286,9 @@ const cutoutHeight = (value) => Math.max(CUTOUT_HEIGHT_MIN, value);
 const cutoutAspect = (value) => clamp(value, CUTOUT_ASPECT_MIN, CUTOUT_ASPECT_MAX);
 
 /** How far a card may be pulled off the picture's own proportions. */
-export const CUTOUT_STRETCH_MIN = 0.1;
-export const CUTOUT_STRETCH_MAX = 10;
-export const cutoutStretch = (value) => {
+const CUTOUT_STRETCH_MIN = 0.1;
+const CUTOUT_STRETCH_MAX = 10;
+const cutoutStretch = (value) => {
 	const n = Number(value);
 	return Number.isFinite(n) ? clamp(n, CUTOUT_STRETCH_MIN, CUTOUT_STRETCH_MAX) : 1;
 };
@@ -1087,10 +1087,10 @@ export function groupUnderNewEmpty(objects, id) {
  * `renderer` (or a record without an id) has nothing to render or address,
  * so it is dropped rather than half-restored (plan §8.2).
  */
-export const OBJECT_OPACITY_MIN = 0.05;
+const OBJECT_OPACITY_MIN = 0.05;
 
 /** 1 = solid. Clamped above zero so a see-through object never becomes an invisible, unpickable one. */
-export function objectOpacity(value) {
+function objectOpacity(value) {
 	const n = Number(value);
 	return Number.isFinite(n) ? Math.min(1, Math.max(OBJECT_OPACITY_MIN, n)) : 1;
 }

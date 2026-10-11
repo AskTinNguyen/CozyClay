@@ -27,9 +27,9 @@ import { TRACK_TO_HML22_JOINT, UNMAPPABLE_TRACKS } from "./generate.mjs";
 
 /** The tracks a line edit (C6) or a replay entry (C10) may name — the wrapper's
  * own track -> hml22 joint table, never a copy of it. */
-export const LINE_EDIT_TRACK_IDS = Object.keys(TRACK_TO_HML22_JOINT);
-export const LINE_EDIT_POINTS_MIN = 2;
-export const LINE_EDIT_POINTS_MAX = 64; // matches src/line-edit.js MAX_LINE_POINTS
+const LINE_EDIT_TRACK_IDS = Object.keys(TRACK_TO_HML22_JOINT);
+const LINE_EDIT_POINTS_MIN = 2;
+const LINE_EDIT_POINTS_MAX = 64; // matches src/line-edit.js MAX_LINE_POINTS
 /** C6's OTHER gesture: 3D pins (`pins3d`), one per scrubbed moment.
  *
  * A pin is a keyframe — "the hand is HERE at frame 100" — and it is the shape
@@ -56,7 +56,7 @@ export const BOUNDARY_MARGIN = 5;
 /** Fields a replay entry may NOT carry: `replay` cannot be combined with the
  * modes that splice or rewrite an existing take, because then "the take the
  * replay applies to" has two candidate answers. */
-export const REPLAY_EXCLUSIVE = ["lineEdit", "motionEdit", "regenerateSegments"];
+const REPLAY_EXCLUSIVE = ["lineEdit", "motionEdit", "regenerateSegments"];
 
 /* ------------------------------------------------------------------------- */
 /* the per-field rules, shared by C6 and C10                                   */

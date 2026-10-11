@@ -18,7 +18,7 @@ function hash(value) {
 	return (result >>> 0).toString(36);
 }
 
-export class UnknownStableItemIdError extends Error {
+class UnknownStableItemIdError extends Error {
 	constructor(collection, id) {
 		super(`Unknown ${collection} ID: ${id}`);
 		this.name = "UnknownStableItemIdError";

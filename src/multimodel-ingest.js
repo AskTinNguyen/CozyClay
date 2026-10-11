@@ -8,8 +8,6 @@
 // and a silent fallback to a plausible-looking default is how footage that was
 // never read ends up looking ingested.
 
-export const INGEST_STAGES = Object.freeze(["idle", "fetching", "probing", "ready", "error"]);
-
 /** A successful extraction is not proof that vertical recovery was applied. */
 export function trajectoryReceipt(report, korean = false) {
 	if (!report) return "";
@@ -242,7 +240,7 @@ export function fpsFromFrameTimes(times, fallback = 30) {
 	return { fps: Math.round(1 / median), measured: true };
 }
 
-export function formatBytes(bytes) {
+function formatBytes(bytes) {
 	if (!Number.isFinite(bytes) || bytes < 0) return "";
 	if (bytes < 1024) return `${bytes} B`;
 	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;

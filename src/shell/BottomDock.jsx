@@ -16,8 +16,8 @@ import { insertPathMark, pathMarks } from "../object-path.js";
 // viewport drops under 480 px (top bar 44 + status bar 24 + three 1 px gaps).
 // Never below the sequencer's own grid (shell.css --shell-dock-default, 276
 // px): a shorter dock would have to scroll its lanes.
-export const DOCK_MIN_HEIGHT = 276;
-export const DOCK_MAX_HEIGHT = 480;
+const DOCK_MIN_HEIGHT = 276;
+const DOCK_MAX_HEIGHT = 480;
 const VIEWPORT_MIN_HEIGHT = 480;
 const SHELL_FIXED_ROWS = 44 + 24 + 3;
 // v2: v1 heights were clamped to a 324px floor that left an empty band under
@@ -58,7 +58,7 @@ const DOCK_TABS = [
 
 /** The dock's tabs for a project mode: a storyboard works in panels
  * (Board | Assets), an animation in the Sequencer (Animation | Assets). */
-export function dockTabsFor(previsMode) {
+function dockTabsFor(previsMode) {
 	const keys = previsMode === "storyboard" ? ["board", "assets"] : ["animation", "assets"];
 	return keys.map((key) => DOCK_TABS.find((entry) => entry.key === key));
 }

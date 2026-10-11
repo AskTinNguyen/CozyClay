@@ -2,14 +2,14 @@
 // 2d canvas. The canvas factory is injected so both the app (real canvas)
 // and tests (recording stub) can supply it.
 
-export const STORYBOARD_PROMPT_CHARS = 90;
+const STORYBOARD_PROMPT_CHARS = 90;
 /** The greybox inset beside a stylized panel: half the drawn picture's width
  * and height (a quarter of its area), in its bottom-right corner. */
 export const STORYBOARD_INSET_SCALE = 0.5;
 
 /** The line under a cell: the panel's own caption when it has one, else the
  * prompt line the cell was given. */
-export function storyboardCellText(shot) {
+function storyboardCellText(shot) {
 	const caption = typeof shot.caption === "string" ? shot.caption.trim() : "";
 	return (caption || String(shot.prompt ?? "")).slice(0, STORYBOARD_PROMPT_CHARS);
 }

@@ -2,10 +2,10 @@
 // shot render shrinks, and where it lands on the one image the agent sees.
 // Pure over RGBA byte buffers; App.jsx supplies the render and the encoder.
 
-export const CONTACT_SHEET_COLUMNS = 3;
-export const CONTACT_SHEET_ROWS = 2;
+const CONTACT_SHEET_COLUMNS = 3;
+const CONTACT_SHEET_ROWS = 2;
 export const CONTACT_SHEET_LAYOUT = "3x2 row-major";
-export const CONTACT_SHEET_MAX_SIDE = 1600;
+const CONTACT_SHEET_MAX_SIDE = 1600;
 
 /** Up to 6 frames spread evenly over a half-open range, first and last
  * included; "whole_clip" (or no range) is timeline frames 0..frameCount-1. */

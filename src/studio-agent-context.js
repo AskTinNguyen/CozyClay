@@ -10,10 +10,6 @@ export function encodeStudioContext(context) {
 	if (utf8ByteLength(encoded) > STUDIO_CONTEXT_MAX_BYTES) fail("CONTEXT_TOO_LARGE", `Escaped Studio context exceeds ${STUDIO_CONTEXT_MAX_BYTES / 1024} KiB.`);
 	return encoded;
 }
-export function buildStudioHistoryItem(context, userText) {
-	if (typeof userText !== "string") fail("INVALID_REQUEST", "User text must be a string.");
-	return { role: "user", content: [{ type: "input_text", text: `<studio-context>\n${encodeStudioContext(context)}\n</studio-context>` }, { type: "input_text", text: userText }] };
-}
 export function studioCacheKey(context, projectionKind = "scene") {
 	const c = validateStudioContext(context);
 	if (typeof projectionKind !== "string" || !projectionKind || projectionKind.length > 120) fail("INVALID_ARGUMENT", "Projection kind must be a bounded string.");
@@ -129,7 +125,7 @@ const physicalObject = object({ id, renderer: id, position: vec, rotationDeg: ve
 const physicalCharacter = object({ id, incarnation: id, modelId: nullable(id), rigId: nullable(id), rigReady: bool, hidden: bool, position: vec, yawDeg: num, scale: positive,
 	takeId: nullable(id), sessionMotionId: nullable(id), motionRevision: int, calibrationRevision: int, ikRevision: int,
 	waypoints: array(object({ frame: int, position: vec }), 10000) });
-export const PHYSICS_FINGERPRINT_SCHEMA = freezeStudioData(object({ objects: array(physicalObject), characters: array(physicalCharacter), floor: object({ model: id, y: num }), frameCount: int }));
+const PHYSICS_FINGERPRINT_SCHEMA = freezeStudioData(object({ objects: array(physicalObject), characters: array(physicalCharacter), floor: object({ model: id, y: num }), frameCount: int }));
 export function physicsFingerprintInput(input) {
 	// Ignore explicitly nonphysical source fields. Nested physical shapes remain
 	// closed and validated, including path timing and every inactive actor stamp.

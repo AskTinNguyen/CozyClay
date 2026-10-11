@@ -26,7 +26,7 @@ export function resourceStatusLabel(item) {
 	return ko("Missing", "누락");
 }
 
-export function resourceKindLabel(kind) {
+function resourceKindLabel(kind) {
 	return KIND_LABELS[kind]?.() ?? String(kind ?? "");
 }
 

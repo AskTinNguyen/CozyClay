@@ -61,9 +61,9 @@ const RUN_LINE_EDIT = join(HERE, "generate.mjs");
 
 const SSH_OPTS = ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10"];
 
-export const DEFAULT_REPO = "/home/yun/projflow-scout/repo";
-export const DEFAULT_PYTHON = "/home/yun/projflow-scout/venv/bin/python";
-export const DEFAULT_BOX_HOME = "/home/yun/projflow-scout/home";
+const DEFAULT_REPO = "/home/yun/projflow-scout/repo";
+const DEFAULT_PYTHON = "/home/yun/projflow-scout/venv/bin/python";
+const DEFAULT_BOX_HOME = "/home/yun/projflow-scout/home";
 
 function run(argv, timeoutMs = 60_000) {
 	return new Promise((resolve) => {

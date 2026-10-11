@@ -3,7 +3,7 @@
 // the unit test share one definition of what a Shot Prompt node produces.
 import { buildShotPrompt } from "../shot-prompt.js";
 
-export const SHOT_PROMPT_TARGETS = Object.freeze(["image", "video"]);
+const SHOT_PROMPT_TARGETS = Object.freeze(["image", "video"]);
 
 /** Defaults a fresh Shot Prompt node starts with. */
 export function shotPromptNodeData() {

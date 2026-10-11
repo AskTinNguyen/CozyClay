@@ -15,8 +15,8 @@
  * Contract: docs/sculpt-from-image.md.
  */
 
-export const SCULPT_RECIPE_VERSION = 1;
-export const SCULPT_SHAPES = Object.freeze(["blob", "box", "cylinder", "torus", "frame"]);
+const SCULPT_RECIPE_VERSION = 1;
+const SCULPT_SHAPES = Object.freeze(["blob", "box", "cylinder", "torus", "frame"]);
 export const SCULPT_LIMITS = Object.freeze({
 	/** after mirrors are expanded */
 	maxParts: 48,
@@ -25,7 +25,7 @@ export const SCULPT_LIMITS = Object.freeze({
 	maxOffset: 20,
 	maxDepth: 8,
 });
-export const SCULPT_DEFAULT_COLOR = "#c2c6c8";
+const SCULPT_DEFAULT_COLOR = "#c2c6c8";
 /** The suffix a mirrored copy's id gets. `.` is outside the id alphabet, so a
  * copy can never collide with an authored part. */
 export const SCULPT_MIRROR_SUFFIX = ".mirror";

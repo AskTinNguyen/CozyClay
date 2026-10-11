@@ -10,14 +10,14 @@ const MOTION_TELEMETRY_EVENTS = new Set([
 ]);
 const LIVE_TELEMETRY_EVENTS = new Set([...MOTION_TELEMETRY_EVENTS, ...EXECUTION_TELEMETRY_EVENTS.filter((event) => event.startsWith("mcp:"))]);
 
-export const LIVE_CONTROL_PORT = import.meta.env?.VITE_COZYCLAY_LIVE_PORT ?? "5184";
+const LIVE_CONTROL_PORT = import.meta.env?.VITE_COZYCLAY_LIVE_PORT ?? "5184";
 export const liveControlUrl = (port = LIVE_CONTROL_PORT) => `ws://127.0.0.1:${port}/live`;
-export const LIVE_CONTROL_URL = liveControlUrl();
+const LIVE_CONTROL_URL = liveControlUrl();
 // Reconnect schedule: 1 s doubling to a 15 s cap with +-25 % jitter, so a hub
 // that comes back does not take every editor's retry in the same millisecond.
-export const LIVE_RECONNECT_BASE_MS = 1_000;
+const LIVE_RECONNECT_BASE_MS = 1_000;
 export const LIVE_RECONNECT_MAX_MS = 15_000;
-export const LIVE_RECONNECT_JITTER = 0.25;
+const LIVE_RECONNECT_JITTER = 0.25;
 // App-level liveness, sent only to a hub that advertises `heartbeatMs`: a TCP
 // connection to a dead hub can stay open for minutes without a single frame.
 export const LIVE_PING_INTERVAL_MS = 20_000;
@@ -25,11 +25,11 @@ export const LIVE_PONG_TIMEOUT_MS = 10_000;
 // A blocked main thread (a 30 s capture_frame) delays every timer at once. A
 // tick that late is evidence of that stall, not of a dead hub, so the round is
 // restarted instead of being counted as a missed pong.
-export const LIVE_HEARTBEAT_SLACK_MS = 2_000;
+const LIVE_HEARTBEAT_SLACK_MS = 2_000;
 // Per-tab identity. sessionStorage is per tab and survives a reload, which is
 // exactly the lifetime the hub routes retained motion outcomes to.
 export const LIVE_WORKSPACE_ID_KEY = "cozyclay:live-workspace-id";
-export const LIVE_DUPLICATE_CLOSE_CODE = 1008;
+const LIVE_DUPLICATE_CLOSE_CODE = 1008;
 export const LIVE_DUPLICATE_CLOSE_REASON = "Workspace id is already connected";
 
 // Storage can be absent (Node), disabled, or throw on access alone; the tab

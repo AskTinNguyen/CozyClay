@@ -11,7 +11,7 @@ export const STARTER_SCENES = Object.freeze([
 	}),
 ]);
 
-export function starterSceneById(id) {
+function starterSceneById(id) {
 	return STARTER_SCENES.find((scene) => scene.id === id) ?? null;
 }
 

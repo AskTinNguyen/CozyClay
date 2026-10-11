@@ -20,7 +20,7 @@ const OBJECT_LABELS_KO = {
 	"Plane (aircraft)": "비행기",
 };
 
-export function displayObjectGroupName(name) {
+function displayObjectGroupName(name) {
 	return isKo ? (GROUP_LABELS_KO[name] ?? name) : name;
 }
 
@@ -40,7 +40,7 @@ export function displayObjectLabel(label) {
 /** The catalogue grouped by section. Shared with the hierarchy's right-click
  * create menu so both entry points list the same objects
  * (docs/unity-reference.md §9.7). */
-export function buildObjectMenuGroups() {
+function buildObjectMenuGroups() {
 	const groups = [];
 	for (const entry of OBJECT_MENU_ENTRIES) {
 		const group = groups.find((item) => item.name === entry.group);

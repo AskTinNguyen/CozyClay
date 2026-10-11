@@ -99,10 +99,10 @@
 
 import { buildFullBodyConstraints } from "./pose-constraints.mjs";
 
-export const LEFT_HAND_TYPE = "left-hand";
-export const RIGHT_HAND_TYPE = "right-hand";
-export const LEFT_FOOT_TYPE = "left-foot";
-export const RIGHT_FOOT_TYPE = "right-foot";
+const LEFT_HAND_TYPE = "left-hand";
+const RIGHT_HAND_TYPE = "right-hand";
+const LEFT_FOOT_TYPE = "left-foot";
+const RIGHT_FOOT_TYPE = "right-foot";
 
 /**
  * IK/mid-joint track id -> Kimodo effector constraint type.

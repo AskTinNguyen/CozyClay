@@ -43,10 +43,10 @@ const OVERLAY_ALPHA = 0.62;
 const STAGE_GROUND = "#141819";
 /** Interaction runs on a preview this wide at most — the paint underneath it
  * stays at the picture's own resolution. */
-export const EDIT_PREVIEW_MAX = 512;
+const EDIT_PREVIEW_MAX = 512;
 /** Zoom range. 1 is the whole picture — there is no reason to look at less of
  * it than that — and 16 puts a preview pixel under a fingertip. */
-export const MIN_ZOOM = 1;
+const MIN_ZOOM = 1;
 export const MAX_ZOOM = 16;
 /** How many edits back you can walk. Each step is a full-resolution copy of
  * the selection, so this is a memory budget as much as a usability one: seven

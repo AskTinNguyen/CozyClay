@@ -667,10 +667,6 @@ export function storeProjectSession(name, previsMode = DEFAULT_PREVIS_MODE, stor
 	}
 }
 
-export function clearProjectSession(storage = globalThis.localStorage) {
-	try { storage?.removeItem(PROJECT_SESSION_KEY); } catch { /* private mode */ }
-}
-
 async function idbSet(key, value) {
 	try {
 		const db = await openIdb();

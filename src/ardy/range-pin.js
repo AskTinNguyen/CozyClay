@@ -20,7 +20,7 @@ import { createIkState, ikBakeKeyframe, solveHipsTranslateToFloor, solveIk } fro
  *         | { space: "object", objectId, local: [x,y,z] } }
  */
 
-export const RANGE_PIN_TRACKS = Object.freeze(["leftHand", "rightHand", "leftFoot", "rightFoot"]);
+const RANGE_PIN_TRACKS = Object.freeze(["leftHand", "rightHand", "leftFoot", "rightFoot"]);
 const LEGS = ["leftFoot", "rightFoot"];
 const REACH_MARGIN = 0.005;
 const BODY_STEP = 0.01;
@@ -35,7 +35,7 @@ export function rangePinTracks(pin) {
 const BLEND_MAX = 240;
 const ID_MAX = 64;
 
-export class RangePinError extends Error {
+class RangePinError extends Error {
 	constructor(code, message) {
 		super(message);
 		this.name = "RangePinError";

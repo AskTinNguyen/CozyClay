@@ -354,7 +354,7 @@ export function captureArdyRoot(rig) {
  *  floor-shifted the same way prepOf does, in rig units via prep.scale.
  *  Cached per (rig, boneScale array) — one take, one skeleton. */
 const scaledOffsetCache = new WeakMap();
-export function scaledOffsets(prep, boneScale) {
+function scaledOffsets(prep, boneScale) {
 	let cached = scaledOffsetCache.get(boneScale);
 	if (cached && cached.prep === prep) return cached.offsets;
 	const grown = new Array(CSKEL27_JOINTS.length);

@@ -34,8 +34,8 @@ const DEG = Math.PI / 180;
 
 /** Namespace prefixes. Kept as exports so the App's QA surface and the tests
  * agree on the spelling instead of both hard-coding a string. */
-export const OBJECT_BLOCKER_PREFIX = "obj:";
-export const CHARACTER_BLOCKER_PREFIX = "char:";
+const OBJECT_BLOCKER_PREFIX = "obj:";
+const CHARACTER_BLOCKER_PREFIX = "char:";
 
 /** `obj:<sceneObjectId>` — one box per scene object. */
 export function objectBlockerId(sceneObjectId) {

@@ -132,4 +132,3 @@ const cache = createMeshSceneCache();
 export const loadMeshScene = cache.loadMeshScene;
 export const subscribeToMeshScene = cache.subscribeToMeshScene;
 export const evictMeshScene = cache.evictMeshScene;
-export const clearMeshScenes = cache.clearMeshScenes;

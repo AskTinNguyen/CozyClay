@@ -40,7 +40,7 @@ export function classifyProviderError(message) {
 	return "upstream";
 }
 
-export function extractStatus(message) {
+function extractStatus(message) {
 	const match = /\b(401|403|429|5\d\d)\b/.exec(message);
 	return match ? Number(match[1]) : undefined;
 }
@@ -166,7 +166,7 @@ function withoutInspectContext(part) {
  * recent tool result drops its re-embedded `context`, and the latest
  * context's static actionIndex moves to the end of the system prompt. The
  * stored lane messages are never touched; edited messages are new objects. */
-export function studioContextDiet({ messages, systemPrompt }) {
+function studioContextDiet({ messages, systemPrompt }) {
 	let latestContext = -1;
 	let latestToolResult = -1;
 	messages.forEach((message, index) => {

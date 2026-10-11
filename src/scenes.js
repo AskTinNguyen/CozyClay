@@ -21,9 +21,9 @@ export const SCENES_VERSION = 5;
 export const SCENES_STORAGE_KEY = "cozyclay.scenes.v5";
 export const SCENES_QUARANTINE_KEY = "cozyclay.scenes.v5.quarantine";
 export const PREVIOUS_SCENES_STORAGE_KEY = "cozyclay.scenes.v4";
-export const V3_SCENES_STORAGE_KEY = "cozyclay.scenes.v3";
-export const V2_SCENES_STORAGE_KEY = "cozyclay.scenes.v2";
-export const V1_SCENES_STORAGE_KEY = "cozyclay.scenes.v1";
+const V3_SCENES_STORAGE_KEY = "cozyclay.scenes.v3";
+const V2_SCENES_STORAGE_KEY = "cozyclay.scenes.v2";
+const V1_SCENES_STORAGE_KEY = "cozyclay.scenes.v1";
 export const LEGACY_SCENE_STORAGE_KEY = "cozyclay.scene.v1";
 /** Newest-first fallback chain: a user arriving from any older build still
  * finds their scenes, and the reader migrates whatever body it lands on. */
@@ -53,7 +53,7 @@ export function isProxyFigure(character) {
 export const DEFAULT_SUBJECT_ONE = "a young woman in a tan coat";
 export const DEFAULT_SUBJECT_TWO = "a man in a dark coat";
 
-export const DEFAULT_SCENE_STAGE = Object.freeze({
+const DEFAULT_SCENE_STAGE = Object.freeze({
 	characters: Object.freeze([
 		Object.freeze({ id: "char-a", model: DEFAULT_CHARACTER_MODEL, x: 0, z: 0, rot: 0, hidden: false, pose: null, subject: DEFAULT_SUBJECT_ONE }),
 	]),

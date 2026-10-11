@@ -3,7 +3,7 @@ import { findBone } from "./ik.js";
 
 // Extra measured patches are not IK handles. They let a seated/lying body
 // support itself without pretending its feet are planted.
-export const BODY_SUPPORT_SITES = [
+const BODY_SUPPORT_SITES = [
 	["pelvis", "Hips", /Hips$/], ["abdomen", "Spine", /Spine$/],
 	["chest", "Spine1", /Spine[12]$/], ["head", "Head", /Head/],
 	["neck", "Neck", /Neck$/], ["leftShoulder", "LeftShoulder", /LeftShoulder$/], ["rightShoulder", "RightShoulder", /RightShoulder$/],

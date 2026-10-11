@@ -17,7 +17,7 @@ export const ATTACHMENT_MAX_BYTES = 4 * 1024 * 1024;
 export const ATTACHMENT_JPEG_QUALITY = 0.85;
 /** The turn envelope accepts exactly these three, so the composer refuses the
  * rest here rather than letting the sidecar reject a turn the author sent. */
-export const ATTACHMENT_TYPES = Object.freeze(["image/png", "image/jpeg", "image/webp"]);
+const ATTACHMENT_TYPES = Object.freeze(["image/png", "image/jpeg", "image/webp"]);
 export const ATTACHMENT_LIMIT_NOTICE = "Up to 4 images per message";
 export const ATTACHMENT_TYPE_NOTICE = "Attach a PNG, JPEG or WebP image";
 export const ATTACHMENT_FAILED_NOTICE = "That image could not be attached";

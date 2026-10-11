@@ -8,7 +8,7 @@ import { readProjectDocument } from "./project.js";
 import { migrateScenesDocument as migrateToCurrentScenes } from "./scenes.js";
 import { resolveSceneParam } from "./starter-scenes.js";
 
-export const PLAYGROUND_EMBED = "playground";
+const PLAYGROUND_EMBED = "playground";
 const PLAYGROUND_GLOBAL = "__cozyclayPlayground";
 
 export function isPlaygroundEmbed(search) {
