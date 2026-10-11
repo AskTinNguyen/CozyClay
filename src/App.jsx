@@ -7483,6 +7483,8 @@ export default function App() {
 									size={sculptTarget ? objectSize(sculptTarget) : null}
 									view={sculptView}
 									light={uiTheme === "light"}
+									busy={["measure", "draft", "score", "refine"].includes(sculptRun?.stage)}
+									changedParts={sculptRun?.changedParts ?? null}
 								/>
 							)}
 

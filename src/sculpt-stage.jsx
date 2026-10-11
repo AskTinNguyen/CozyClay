@@ -62,7 +62,33 @@ function attached(node, scene) {
  * preview (shot camera, layer 0) still draws the scene with the sculpt in it.
  * Unmounting (leaving the mode by any route) takes the layer back off.
  */
-export function SculptTurntable({ camRef, objects, target, size, view, light = false }) {
+/**
+ * A lump of clay that kneads itself on the turntable while a run has no sculpt
+ * yet: squash and stretch, a slow turn. It says "working" in the viewport.
+ */
+function ClayLump({ at }) {
+	const ref = useRef(null);
+	useFrame(({ clock }) => {
+		const mesh = ref.current;
+		if (!mesh) return;
+		const t = clock.getElapsedTime();
+		const squash = Math.sin(t * 3.2) * 0.12;
+		mesh.scale.set(1 + squash, 1 - squash, 1 + squash * 0.6);
+		mesh.rotation.y = t * 0.8;
+		mesh.position.y = at[1] + 0.32 * (1 - squash);
+	});
+	return (
+		<mesh ref={ref} position={[at[0], at[1] + 0.32, at[2]]} castShadow>
+			<icosahedronGeometry args={[0.32, 5]} />
+			<meshStandardMaterial color="#c99a6e" roughness={0.9} metalness={0} />
+		</mesh>
+	);
+}
+
+// How long a changed part glows after an edit lands.
+const FLASH_MS = 1400;
+
+export function SculptTurntable({ camRef, objects, target, size, view, light = false, busy = false, changedParts = null }) {
 	const { scene, raycaster, invalidate } = useThree();
 	const [camera, setCamera] = useState(null);
 	// The key light aims at the sculpt; its target must sit in the scene graph.
@@ -78,6 +104,26 @@ export function SculptTurntable({ camRef, objects, target, size, view, light = f
 	// Refit on a new target, a view button, or a sculpt that grew or shrank by
 	// a step while a run lands; an orbit in between is the operator's own.
 	const sizeStep = Math.round((size?.height ?? 0) * 4);
+	// While a run works the turntable turns slowly; the operator's first grab stops it for that run.
+	const [grabbed, setGrabbed] = useState(false);
+	useEffect(() => { if (busy) setGrabbed(false); }, [busy]);
+	const spinning = busy && !grabbed;
+	// The canvas draws on demand; a spinning turntable and a kneading lump need frames.
+	useEffect(() => {
+		if (!spinning && !(busy && !target)) return undefined;
+		let frame = requestAnimationFrame(function tick() { invalidate(); frame = requestAnimationFrame(tick); });
+		return () => cancelAnimationFrame(frame);
+	}, [spinning, busy, target, invalidate]);
+	const flashRef = useRef({ nonce: null, startedAt: 0, ids: null });
+	useEffect(() => {
+		if (!changedParts?.nonce || changedParts.nonce === flashRef.current.nonce) return undefined;
+		flashRef.current = { nonce: changedParts.nonce, startedAt: performance.now(), ids: changedParts.ids };
+		let frame = requestAnimationFrame(function tick() {
+			invalidate();
+			if (performance.now() - flashRef.current.startedAt < FLASH_MS + 100) frame = requestAnimationFrame(tick);
+		});
+		return () => cancelAnimationFrame(frame);
+	}, [changedParts?.nonce, invalidate]);
 
 	useLayoutEffect(() => {
 		furnitureRef.current?.traverse((node) => node.layers.set(SCULPT_LAYER));
@@ -126,12 +172,26 @@ export function SculptTurntable({ camRef, objects, target, size, view, light = f
 		});
 		for (const old of taggedRef.current) if (!tagged.has(old)) old.layers.disable(SCULPT_LAYER);
 		taggedRef.current = tagged;
+		// The parts an edit just touched glow warm and fade (each part owns its material).
+		const flash = flashRef.current;
+		if (flash.nonce !== null) {
+			const age = performance.now() - flash.startedAt;
+			const glow = age < FLASH_MS ? Math.sin(Math.min(1, age / FLASH_MS) * Math.PI) * 0.55 : 0;
+			for (const node of nodes) node.traverse((child) => {
+				const part = child.userData?.sculptPart;
+				if (!part || !child.material?.emissive) return;
+				const hit = flash.ids === "all" || flash.ids?.includes(part);
+				child.material.emissive.setRGB(hit ? glow : 0, hit ? glow * 0.62 : 0, hit ? glow * 0.25 : 0);
+			});
+			if (age >= FLASH_MS) flash.nonce = null;
+		}
 	});
 
 	return (
 		<>
 			<PerspectiveCamera ref={(node) => { camRef.current = node; setCamera(node); }} makeDefault fov={SCULPT_FOV} near={0.05} far={100} />
-			{camera && <OrbitControls ref={controlsRef} camera={camera} enableDamping={false} minDistance={0.3} maxDistance={40} onChange={() => invalidate()} />}
+			{camera && <OrbitControls ref={controlsRef} camera={camera} enableDamping={false} minDistance={0.3} maxDistance={40} autoRotate={spinning} autoRotateSpeed={1.4}
+				onStart={() => setGrabbed(true)} onChange={() => invalidate()} />}
 			<group ref={furnitureRef}>
 				<hemisphereLight args={["#ffffff", "#3a3c42", 0.9]} />
 				<primitive object={lightTarget} position={framing.target} />
@@ -146,6 +206,7 @@ export function SculptTurntable({ camRef, objects, target, size, view, light = f
 					shadow-camera-top={floorRadius}
 					shadow-camera-bottom={-floorRadius}
 				/>
+				{busy && !target && <ClayLump at={[framing.target[0], framing.floorY, framing.target[2]]} />}
 				<mesh rotation-x={-Math.PI / 2} position={[framing.target[0], framing.floorY + 0.001, framing.target[2]]} receiveShadow userData={{ noInk: true }}>
 					<circleGeometry args={[floorRadius, 96]} />
 					<meshStandardMaterial color={tones.floor} roughness={0.95} metalness={0} />
