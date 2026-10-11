@@ -208,6 +208,56 @@ export function normalizeSculptRecipe(input) {
 	}
 }
 
+/**
+ * A recipe edited part by part instead of rewritten. `edits` are applied in
+ * order: `{ set: id, ...fields }` merges fields into one part (`parent: null`
+ * and `mirror: false` clear), `{ add: part }` appends, `{ remove: id }` drops a
+ * part and every part below it. The result is normalized as a whole, so an edit
+ * that leaves the recipe undrawable is refused with the usual path.
+ * Returns `{ ok: true, recipe, changed: [ids] }` or `{ ok: false, error, path }`.
+ */
+export function patchSculptRecipe(recipe, edits) {
+	const base = normalizeSculptRecipe(recipe);
+	if (!base.ok) return base;
+	if (!Array.isArray(edits) || edits.length === 0) return { ok: false, error: "edits: must be a non-empty array", path: "edits" };
+	const parts = base.recipe.parts.map((part) => ({ ...part }));
+	const changed = new Set();
+	for (const [index, edit] of edits.entries()) {
+		const at = `edits[${index}]`;
+		const ops = edit && typeof edit === "object" ? ["set", "add", "remove"].filter((key) => key in edit) : [];
+		if (ops.length !== 1) return { ok: false, error: `${at}: must have exactly one of set, add, remove`, path: at };
+		if (ops[0] === "add") {
+			parts.push(edit.add);
+			changed.add(edit.add?.id);
+			continue;
+		}
+		const id = edit[ops[0]];
+		const found = parts.findIndex((part) => part.id === id);
+		if (found < 0) return { ok: false, error: `${at}.${ops[0]}: no part named ${JSON.stringify(id)}`, path: `${at}.${ops[0]}` };
+		if (ops[0] === "remove") {
+			const gone = new Set([id]);
+			for (let grew = true; grew; ) {
+				grew = false;
+				for (const part of parts) if (part.parent && gone.has(part.parent) && !gone.has(part.id)) { gone.add(part.id); grew = true; }
+			}
+			for (let i = parts.length - 1; i >= 0; i -= 1) if (gone.has(parts[i].id)) parts.splice(i, 1);
+			gone.forEach((entry) => changed.add(entry));
+			continue;
+		}
+		const { set: _set, ...fields } = edit;
+		if ("id" in fields) return { ok: false, error: `${at}.id: rename by remove + add`, path: `${at}.id` };
+		const next = { ...parts[found], ...fields };
+		if (fields.parent === null) delete next.parent;
+		if (fields.mirror === false) delete next.mirror;
+		// Shape-specific defaults belong to the old shape, not the new one.
+		if ("shape" in fields) for (const key of ["roundness", "taper", "border"]) if (!(key in fields)) delete next[key];
+		parts[found] = next;
+		changed.add(id);
+	}
+	const normalized = normalizeSculptRecipe({ version: SCULPT_RECIPE_VERSION, parts });
+	return normalized.ok ? { ...normalized, changed: [...changed] } : normalized;
+}
+
 const DEG = Math.PI / 180;
 
 /** Column-major 4x4, three.js layout, so the geometry side can hand it to

@@ -146,6 +146,30 @@ await check("object.sculpt refuses a bad recipe and a non-sculpt target with the
 	}
 });
 
+await check("object.sculpt edits patch one part in place as one undo, and are refused without an id", () => {
+	const f = objectsFixture();
+	try {
+		const id = ok(f.run("object.sculpt", { recipe: turtle, placement: { x: 1 } })).affectedIds[0];
+		const before = f.objects.read().find((entry) => entry.id === id).recipe;
+		const patched = ok(f.run("object.sculpt", { id, edits: [{ set: "head", color: "#336677" }, { remove: "tooth" }] }));
+		assert.match(patched.summary, /^Patched head, tooth on Sculpt \(sculpt\)/);
+		const after = f.objects.read().find((entry) => entry.id === id).recipe;
+		assert.equal(after.parts.find((p) => p.id === "head").color, "#336677");
+		assert.equal(after.parts.some((p) => p.id === "tooth"), false);
+		assert.equal(after.parts.length, before.parts.length - 1);
+		assert.equal(f.run("edit.undo", { receiptId: patched.receiptId }).status, "undone");
+		assert.deepEqual(f.objects.read().find((entry) => entry.id === id).recipe, before);
+		const noId = f.run("object.sculpt", { edits: [{ remove: "tooth" }] });
+		assert.match(noId.message, /edits patch an existing sculpt/);
+		const both = f.run("object.sculpt", { id, recipe: pillar, edits: [{ remove: "tooth" }] });
+		assert.match(both.message, /exactly one of recipe/);
+		const ghost = f.run("object.sculpt", { id, edits: [{ set: "ghost", color: "#000000" }] });
+		assert.match(ghost.message, /no part named "ghost"/);
+	} finally {
+		f.dispose();
+	}
+});
+
 await check("object.sculpt can hang the new sculpt off a parent", () => {
 	const f = objectsFixture();
 	try {

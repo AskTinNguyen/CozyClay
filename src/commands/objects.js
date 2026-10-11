@@ -4,7 +4,7 @@ import { characterOf, fail } from "./shared.js";
 import { elementSetSchema, registerElementSet } from './elements.js';
 import './elements/object.js';
 import { createSceneObject, updateSceneObject, removeSceneObject, setSceneObjectParent, descendantsOf, normalizeSceneObject, groupUnderNewEmpty, objectPatchFields, createSculptObject, SCULPT_KIND } from '../scene-objects.js';
-import { expandSculptParts, normalizeSculptRecipe } from '../sculpt-recipe.js';
+import { expandSculptParts, normalizeSculptRecipe, patchSculptRecipe } from '../sculpt-recipe.js';
 import { clampWarning } from '../receipt-findings.js';
 import { STUDIO_TOOL_SCHEMAS, StudioSchemas } from '../studio-agent-protocol.js';
 
@@ -23,8 +23,8 @@ const semantic = [
 	mutation('object.add', 'Add object', input({ kind: { type: 'string' }, placement, name: { type: 'string' }, parent: id, first: { type: 'boolean' } }, ['kind'])),
 	// A clay prop from a recipe of soft parts (docs/sculpt-from-image.md). With `id` it re-sculpts that
 	// sculpt in place (one undo); without, it creates one. The recipe is checked by sculpt-recipe.js.
-	{ ...mutation('object.sculpt', 'Sculpt a clay prop from a recipe', input({ recipe: { type: 'object', properties: {}, additionalProperties: true }, id, name: { type: 'string', maxLength: 240 }, placement, parent: id }, ['recipe'])),
-		description: 'Create a sculpt (or re-sculpt one by id) from a recipe { version: 1, parts: [{ id, shape: blob|box|cylinder|torus|frame, size: [x,y,z] m, position, rotation (deg), color, parent, mirror, roundness, taper, border }] }. Floor is y=0, front +z, the subject\'s left +x; mirror reflects across x=0.' },
+	{ ...mutation('object.sculpt', 'Sculpt a clay prop from a recipe', input({ recipe: { type: 'object', properties: {}, additionalProperties: true }, edits: { type: 'array', minItems: 1, maxItems: 48, items: { type: 'object', properties: {}, additionalProperties: true } }, id, name: { type: 'string', maxLength: 240 }, placement, parent: id }, [])),
+		description: 'Create a sculpt (or re-sculpt one by id) from a recipe, or patch a sculpt by id with edits [{ set: partId, ...fields } | { add: part } | { remove: partId }]. Recipe { version: 1, parts: [{ id, shape: blob|box|cylinder|torus|frame, size: [x,y,z] m, position, rotation (deg), color, parent, mirror, roundness, taper, border }] }. Floor is y=0, front +z, the subject\'s left +x; mirror reflects across x=0.' },
 	mutation('object.remove', 'Remove objects', input({ ids })),
 	mutation('object.rename', 'Rename object', input({ id, name: { type: 'string', maxLength: 240 } })),
 	mutation('object.group', 'Group objects', input({ parent: id, children: ids })),
@@ -72,7 +72,15 @@ export function register(registry, ports) {
 		},
 		'object.sculpt': args => {
 			const before = owned().read();
-			const refused = normalizeSculptRecipe(args.recipe);
+			if ((args.recipe === undefined) === (args.edits === undefined)) fail('INVALID_ARGUMENT', 'Give exactly one of recipe (whole) or edits (part by part).');
+			if (args.edits !== undefined && args.id === undefined) fail('INVALID_ARGUMENT', 'edits patch an existing sculpt: give its id.');
+			let refused, changedParts = null;
+			if (args.edits !== undefined) {
+				const target = objectOf(args.id);
+				if (target.renderer !== SCULPT_KIND) fail('INVALID_ARGUMENT', `${args.id} is a ${target.renderer}, not a sculpt.`);
+				refused = patchSculptRecipe(target.recipe, args.edits);
+				changedParts = refused.changed;
+			} else refused = normalizeSculptRecipe(args.recipe);
 			if (!refused.ok) fail('INVALID_ARGUMENT', `Recipe refused at ${refused.error}`);
 			const patch = { ...(args.placement ?? {}), ...(args.name === undefined ? {} : { name: args.name }) };
 			let objectId = args.id;
@@ -91,7 +99,7 @@ export function register(registry, ports) {
 			const parts = expandSculptParts(sculpted.recipe).length;
 			const size = `${sculpted.footprint.width} × ${sculpted.footprint.depth} m, ${sculpted.height} m tall`;
 			return { affectedIds: [objectId, ...result(before, '').affectedIds.filter(row => row !== objectId)],
-				summary: `${args.id === undefined ? 'Sculpted' : 'Re-sculpted'} ${sculpted.name} (${objectId}): ${parts} parts, ${size}.` };
+				summary: `${args.id === undefined ? 'Sculpted' : changedParts ? `Patched ${changedParts.join(', ')} on` : 'Re-sculpted'} ${sculpted.name} (${objectId}): ${parts} parts, ${size}.` };
 		},
 		'object.remove': ({ ids }) => {
 			const before = owned().read(); ids.forEach(objectOf);

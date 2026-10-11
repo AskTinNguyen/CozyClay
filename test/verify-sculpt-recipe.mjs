@@ -10,6 +10,7 @@ import {
 	SCULPT_MIRROR_SUFFIX,
 	expandSculptParts,
 	normalizeSculptRecipe,
+	patchSculptRecipe,
 	sculptBounds,
 	sculptStandingBox,
 } from "../src/sculpt-recipe.js";
@@ -107,6 +108,53 @@ await check("the part limit counts mirrored copies", () => {
 
 await check("a mirror inside a mirrored subtree is refused (it would mint one id twice)", () => {
 	refused({ parts: [blob("eye", { mirror: true }), blob("pupil", { parent: "eye", mirror: true })] }, /"eye" above it is already mirrored/);
+});
+
+/* ------------------------------------------------------------- patch ---- */
+
+await check("a patch edits one part and leaves every other part byte-identical", () => {
+	const before = accepted(turtle);
+	const result = patchSculptRecipe(before, [{ set: "head", size: [0.75, 0.38, 0.5], color: "#336677" }]);
+	assert.equal(result.ok, true, result.error);
+	assert.deepEqual(result.changed, ["head"]);
+	const head = result.recipe.parts.find((p) => p.id === "head");
+	assert.deepEqual(head.size, [0.75, 0.38, 0.5]);
+	assert.equal(head.color, "#336677");
+	assert.equal(head.roundness, before.parts.find((p) => p.id === "head").roundness, "untouched fields stay");
+	for (const part of result.recipe.parts.filter((p) => p.id !== "head")) {
+		assert.deepEqual(part, before.parts.find((p) => p.id === part.id));
+	}
+});
+
+await check("add appends, remove takes the subtree, null and false clear", () => {
+	const base = accepted({ parts: [blob("head"), blob("eye", { parent: "head", mirror: true, position: [0.1, 0, 0] }), blob("pupil", { parent: "eye" })] });
+	const added = patchSculptRecipe(base, [{ add: blob("hat", { parent: "head", position: [0, 0.3, 0] }) }]);
+	assert.equal(added.ok, true, added.error);
+	assert.deepEqual(added.recipe.parts.map((p) => p.id), ["head", "eye", "pupil", "hat"]);
+	const removed = patchSculptRecipe(base, [{ remove: "eye" }]);
+	assert.deepEqual(removed.recipe.parts.map((p) => p.id), ["head"]);
+	assert.deepEqual(removed.changed.sort(), ["eye", "pupil"]);
+	const cleared = patchSculptRecipe(base, [{ set: "eye", parent: null, mirror: false }]);
+	const eye = cleared.recipe.parts.find((p) => p.id === "eye");
+	assert.equal("parent" in eye || "mirror" in eye, false);
+});
+
+await check("changing a shape drops the old shape's options instead of refusing them", () => {
+	const base = accepted({ parts: [blob("a", { roundness: 0.9, taper: 0.4 })] });
+	const result = patchSculptRecipe(base, [{ set: "a", shape: "frame", size: [0.6, 0.4, 0.05] }]);
+	assert.equal(result.ok, true, result.error);
+	assert.equal(result.recipe.parts[0].shape, "frame");
+	assert.equal("roundness" in result.recipe.parts[0], false);
+});
+
+await check("a patch that breaks the recipe is refused with the path, and edits are checked", () => {
+	const base = accepted(turtle);
+	assert.match(patchSculptRecipe(base, [{ set: "head", size: [0.4, 40, 0.4] }]).error, /parts\[head\]\.size\[1\]/);
+	assert.match(patchSculptRecipe(base, [{ set: "ghost", size: [1, 1, 1] }]).error, /edits\[0\]\.set: no part named "ghost"/);
+	assert.match(patchSculptRecipe(base, [{ set: "head", add: blob("x") }]).error, /exactly one of set, add, remove/);
+	assert.match(patchSculptRecipe(base, [{ set: "head", id: "face" }]).error, /rename by remove \+ add/);
+	assert.match(patchSculptRecipe(base, [{ add: blob("head") }]).error, /is used twice/);
+	assert.match(patchSculptRecipe(base, []).error, /non-empty/);
 });
 
 /* ---------------------------------------------------------- expansion ---- */
