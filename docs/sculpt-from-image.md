@@ -105,6 +105,21 @@ Sculpt mode is the Studio's fifth viewport mode. It runs the workflow above for 
 
 ![A real run on the Snorlax reference: done after 2 rounds at IoU 0.771](images/sculpt-mode-run.png)
 
+**Blueprint (model sheet)**
+
+Once a reference is in, **Generate blueprint** makes one image request (gpt-image-2, ChatGPT sign-in) that turns the reference into a four-view orthographic model sheet: FRONT and LEFT SIDE on the top row, sharing their head and foot lines, then BACK and TOP. The request is a fixed, subject-agnostic template (`src/sculpt-blueprint.js`). It asks for:
+
+- true orthographic panels at one scale, with no perspective
+- the same identity, colours and pose as the reference (or a neutral rest pose)
+- nothing that is not part of the subject (motion lines, shadows, fabric texture)
+- a plain white background and no text
+
+The operator adds only optional notes. The exact request can be read in the panel. The sidecar sends it as written (`composition: "sheet"`, 1536×1024, quality high). Well-known characters are often refused by the image model's safety system, and the panel says so.
+
+![A blueprint from an original sunflower patch design: front, left side, back, top](images/sculpt-blueprint-sunflower.png)
+
+*Generated in 23 s from a flat embroidered-patch design. The side and top views supply the depth the front cannot. The sheet is not yet used by the sculpt run.*
+
 **While it runs**
 
 The run says what it is doing at every moment, so a long model call never looks like a hang:
