@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2.1.0 - 2026-10-12
+
 Storyboard and Animation modes. A project is now either a storyboard (a row of
 still panels) or an animation (moving shots); both are on in a normal launch.
 
