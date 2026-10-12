@@ -1,6 +1,6 @@
-import { useEffect, useLayoutEffect, useState } from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useState } from "react";
 import { useStudioShell } from "./studio-shell-context.js";
+import ShotPreviewHeader from "./ShotPreviewHeader.jsx";
 import { ko } from "../locale.js";
 import { PRESETS, SHOT_ASPECT_PRESETS } from "../app-stage.jsx";
 import { CAMERA_PRESETS } from "../camera-move.js";
@@ -111,23 +111,6 @@ function MenuItem({ checked, role = "menuitemradio", className = "", children, .
 			<span className="vp-menu-mark" aria-hidden="true">{checked ? "✓" : ""}</span>
 			{children}
 		</button>
-	);
-}
-
-/** The inset card's header (violet dot, shot name, lens) lives in App's
- * `.vp-shot-preview-tag`; this region only fills in the words it shows. */
-function ShotPreviewHeader({ name, lens }) {
-	const [host, setHost] = useState(null);
-	useLayoutEffect(() => {
-		setHost(document.querySelector(".vp-shot-preview .vp-shot-preview-tag"));
-	}, []);
-	if (!host) return null;
-	return createPortal(
-		<span className="vp-shot-preview-meta" data-testid="shot-preview-header">
-			<span className="vp-shot-preview-name">{name}</span>
-			<span className="vp-shot-preview-lens">{lens}</span>
-		</span>,
-		host,
 	);
 }
 
