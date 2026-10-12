@@ -156,7 +156,7 @@ const connectEditor = async (url, workspaceId, meta, controls = { silent: new Se
 			case "capture_framing_png": return { dataUrl: `data:image/png;base64,${PNG_BASE64}`, width: 1920, height: 1080, frame: 0, shotId: "shot-1" };
 			case "verify_result": return {
 				receiptId: args.receiptId ?? null, revision: state.revision,
-				checks: state.lastReceipt?.checks ?? { coverage: "unavailable" }, verification: null, semanticStatus: "unavailable",
+				checks: args.targets ? { coverage: "sampled-timeline-subject-bounds-projection", framing: { coverage: "sampled-timeline-subject-bounds-projection", evaluatedFrames: 2, sampledFrames: [0, 11], sampledChecks: [{ frame: 0, screenFraction: 0.4, clipped: false, behindCamera: false, occluded: false }, { frame: 11, screenFraction: 0.1, clipped: true, behindCamera: false, occluded: false }], issueFrames: [{ frame: 11, codes: ["CLIPPED"], screenFraction: 0.1 }] } } : (state.lastReceipt?.checks ?? { coverage: "unavailable" }), verification: null, semanticStatus: "unavailable",
 				visualRefs: args.visual && args.visual !== "none" ? [{ imageId: "image-1" }] : [], unsupportedChecks: [],
 			};
 			case "resolve_studio_image": {
@@ -427,6 +427,13 @@ try {
 	assert.ok(readFileSync(visualPath).subarray(0, 8).equals(PNG_MAGIC), "verify --visual must write real PNG bytes");
 	assert.equal(alpha.received.at(-1).name, "resolve_studio_image");
 	evidence.verify = verified;
+
+	const sampled = ok(await run(["verify", "--targets", "char-a", "--checks", "framing", "--range", "0:12"]));
+	assert.deepEqual(alpha.received.at(-1).args.args, { targets: ["char-a"], checks: ["framing"], range: { startFrame: 0, endFrameExclusive: 12 } });
+	assert.deepEqual(sampled.checks.framing.issueFrames.map(({ frame }) => frame), [11]);
+	const strictSampled = await run(["verify", "--targets", "char-a", "--checks", "framing", "--range", "0:12", "--strict"]);
+	assert.equal(strictSampled.code, 1, `${strictSampled.stdout}${strictSampled.stderr}`);
+	assert.equal(only(strictSampled).error.code, "VERIFICATION_FAILED");
 
 	const undone = ok(await run(["undo", "--receipt", arranged.receiptId]));
 	assert.equal(undone.status, "undone");

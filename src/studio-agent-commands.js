@@ -11,6 +11,7 @@ import { coplanarConflicts } from './coplanar-depth.js';
 import { clampWarning } from './receipt-findings.js';
 import { occludersOf, primarySubjects, sideOfAxis } from './studio-geometry-facts.js';
 import { StudioProtocolError, StudioSchemas, STUDIO_PATCH_KINDS, STUDIO_PATCH_DESCRIPTORS, validateStudioSchema, validateStudioIdentity, validateReceipt, freezeStudioData } from './studio-agent-protocol.js';
+import { sampleContactSheetFrames } from './studio-contact-sheet.js';
 
 const DEG = Math.PI / 180, EPS = 1e-8, CHARACTER_SUPPORT_TOLERANCE = 5e-3;
 const fail = (code, message) => { throw new StudioProtocolError(code, message); };
@@ -398,6 +399,32 @@ export function framingChecks(ids, state, ports) {
   const subjects = ids.map(id => entityById(state, id)), boxes = subjects.map(entity => geometry(entity, state, ports));
   const projected = projectSubject(boxes.flat(), state.camera, focalMmToFov(state.camera.focalMm, state.filmback.sensorId, state.filmback.aspectRatio), state.filmback.aspectRatio).checks;
   return { ...projected, ...sightChecks(subjects, boxes, state.camera.position, state, ports).checks };
+}
+
+/** Framing evidence over explicit timeline samples. The caller supplies the
+ * sampled state so camera keys and animated subject bounds use the same frame.
+ * A sample is evidence for that frame only; it is never advertised as an
+ * all-frame proof. */
+export function sampledFramingChecks(ids, state, ports, frames) {
+  if (!Array.isArray(frames) || !frames.length) fail('INVALID_RANGE', 'Framing sampling needs at least one timeline frame.');
+  if (typeof ports.sampleStateAt !== 'function') fail('CAPABILITY_MISSING', 'This editor cannot sample framing at timeline frames.');
+  const samples = frames.map(frame => {
+    const sampledState = ports.sampleStateAt(frame, state);
+    if (!sampledState) fail('TARGET_NOT_READY', `The editor could not read timeline frame ${frame}.`);
+    const checks = framingChecks(ids, sampledState, ports), codes = [checks.clipped ? 'CLIPPED' : null, checks.behindCamera ? 'BEHIND_CAMERA' : null, checks.occluded ? 'OCCLUDED' : null].filter(Boolean);
+    return { frame, checks, codes };
+  });
+  const sampledChecks = samples.map(({ frame, checks }) => ({ frame, screenFraction: checks.screenFraction, clipped: checks.clipped, behindCamera: checks.behindCamera, occluded: checks.occluded }));
+  const issueFrames = samples.filter(sample => sample.codes.length).map(({ frame, checks, codes }) => ({ frame, codes, screenFraction: checks.screenFraction }));
+  return { ...samples.at(-1).checks, coverage: 'sampled-timeline-subject-bounds-projection', evaluatedFrames: frames.length, sampledFrames: frames, sampledChecks, issueFrames };
+}
+export function sampledFramingResult(args, scene, ports, frameCount, measured, receipt) {
+  const range = args.range === 'whole_clip' ? { startFrame: 0, endFrameExclusive: frameCount } : args.range;
+  if (range.endFrameExclusive > frameCount) fail('INVALID_RANGE', 'Framing verification range exceeds the scene timeline.');
+  const ids = measured ?? (args.targets ?? receipt?.affectedIds ?? []).filter(id => scene.objects.some(o => o.id === id) || scene.characters.some(c => c.id === id));
+  if (!ids.length) return { reason: 'No target is available for sampled framing verification.' };
+  try { return sampledFramingChecks(ids, scene, ports, sampleContactSheetFrames(args.range, frameCount)); }
+  catch (error) { if (!(error instanceof StudioProtocolError)) throw error; return { reason: error.message }; }
 }
 export function frameDraft(command, state, ports) {
   if (state.frameCount <= 0) fail('TARGET_NOT_READY', 'A nonempty timeline is required.');
