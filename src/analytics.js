@@ -1051,34 +1051,16 @@ export async function initAnalytics() {
 			void recordDeviceProfile();
 			if (resolved.distribution === "npm") {
 				track("app:session_started");
-				// This follows the session marker so the two events form one
-				// capability baseline in funnel queries.
-				void recordMotionBackendState();
 				if (resolved.firstLaunch) {
 					const heardFrom = resolved.firstLaunchHeardFrom;
 					track("install:first_launch", heardFrom ? { heard_from: heardFrom } : {});
 				}
-			} else {
-				// Hosted sessions have PostHog's native session marker rather than
-				// the npm-only custom event above.
-				void recordMotionBackendState();
 			}
 		} catch {
 			console.info("[analytics] initialization failed");
 		}
 	})();
 	await initPromise;
-}
-
-async function recordMotionBackendState() {
-	let health = null;
-	try {
-		const response = await fetch("/ardy/health", { signal: AbortSignal.timeout(5000) });
-		if (response.ok) health = await response.json();
-	} catch {
-		// No bridge is a normal hosted/demo state.
-	}
-	track("motion:backend_state", motionBackendState(health));
 }
 
 export function track(event, props = {}) {

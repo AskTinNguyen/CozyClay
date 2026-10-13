@@ -377,7 +377,6 @@ export function createStudioAppBinding(ports) {
 		arrange_characters: request => execute({ ...request, name: "arrange_characters" }),
 		patch_elements: request => execute({ ...request, name: "patch_elements" }),
 		frame_shot: request => execute({ ...request, name: "frame_shot" }),
-		generate_motion: request => execute({ ...request, name: "generate_motion" }),
 		verify_result: request => execute({ ...request, name: "verify_result" }),
 		undo_edit: request => runAction(request, { action: "edit.undo", args: request.args }),
 		run_action: request => execute({ ...request, name: "run_action" }),
