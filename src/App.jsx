@@ -6858,7 +6858,7 @@ export default function App() {
 				ikBodyDragRef.current || lineDragRef.current || lineDrawRef.current || linePinDragRef.current || live.studioPhysicsRunning || recRef.current) };
 	}
 	function sampleStudioStateAt(frame, current = readStudioState()) {
-		const shot = shotAtFrame(current.shots, frame);
+		const shot = shotAtFrame(current.shots ?? current.shotDocument?.shots ?? [], frame);
 		const sampledPlayback = sampleAt(playbackScene, shot, frame);
 		const sampledSubject = sampledPlayback.subject;
 		const primaryId = current.activeCharacterId ?? current.characters[0]?.id;

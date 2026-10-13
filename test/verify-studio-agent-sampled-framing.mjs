@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
+import { readStudioFunction } from "./bus/verify-domain-modules.mjs";
 import { framingChecks, sampledFramingChecks } from "../src/studio-agent-commands.js";
+import { sampleAt } from "../src/sample-at.js";
+import { shotAtFrame } from "../src/cuts.js";
+import { fovToFocalMm } from "../src/shot.js";
 
 const scene = {
   frame: 0,
@@ -26,4 +30,29 @@ assert.equal(result.sampledChecks.length, 3);
 assert.equal(typeof result.sampledChecks[0].screenFraction, "number");
 assert.deepEqual(result.issueFrames.map(({ frame }) => frame), [24, 47]);
 assert.equal(result.evaluatedFrames, 3);
+
+// Execute the App port itself with the envelope the binding sends to it.
+const samplerSource = readStudioFunction("sampleStudioStateAt");
+const playbackScene = { frameCount: 48, filmback: scene.filmback };
+const forwardFrom = (yaw, pitch) => ({
+  x: -Math.sin(yaw) * Math.cos(pitch), y: Math.sin(pitch), z: -Math.cos(yaw) * Math.cos(pitch),
+});
+const sampleStateAt = new Function(
+  "sampleAt", "shotAtFrame", "fovToFocalMm", "forwardFrom", "playbackScene",
+  `${samplerSource}; return sampleStudioStateAt;`,
+)(sampleAt, shotAtFrame, fovToFocalMm, forwardFrom, playbackScene);
+const bindingScene = {
+  ...scene,
+  shotDocument: { shots: [{
+    id: "camera-move", startFrame: 0, endFrame: 47, camera: { mode: "keys" },
+    cameraKeys: [0, 47].map(frame => ({
+      frame, framing: { pos: { x: frame ? 100 : 0, y: 1, z: 5 }, yaw: 0, pitch: 0, fovDeg: 45 },
+    })),
+  }] },
+};
+const before = structuredClone(bindingScene);
+assert.equal(sampleStateAt(47, bindingScene).camera.position.x, 100, "sampled camera must use the binding's shot document");
+const cameraResult = sampledFramingChecks(["subject"], bindingScene, { sampleStateAt }, [0, 47]);
+assert.deepEqual(cameraResult.issueFrames.map(({ frame }) => frame), [47], "a keyed camera moving away from the subject must fail its last sample");
+assert.deepEqual(bindingScene, before, "verification must not mutate the current scene or camera");
 console.log("verify-studio-agent-sampled-framing: ok");
