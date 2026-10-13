@@ -32,6 +32,18 @@
 		color: var(--text-1);
 	}
 	.app[data-embed-mode] .viewport-titlebar { display: none; }
+	.app[data-embed-mode] .vp-embed-guide {
+		position: absolute;
+		top: var(--sp-1);
+		right: var(--sp-1);
+		z-index: 6;
+		padding: var(--sp-1);
+		border-radius: var(--r-2);
+		background: var(--surface-panel);
+		color: var(--text-2);
+	}
+	.app[data-embed-mode] .vp-embed-guide:hover,
+	.app[data-embed-mode] .vp-embed-guide.on { color: var(--select); }
 
 	.viewport-titlebar button { font-family: inherit; }
 	.viewport-titlebar button:focus-visible {
