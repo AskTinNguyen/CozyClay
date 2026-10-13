@@ -1870,5 +1870,109 @@
       "count": 3,
       "uniques": 3
     }
+  ],
+  "2026-10-12": [
+    {
+      "referrer": "github.com",
+      "count": 137,
+      "uniques": 104
+    },
+    {
+      "referrer": "Google",
+      "count": 136,
+      "uniques": 75
+    },
+    {
+      "referrer": "cozyclay.org",
+      "count": 105,
+      "uniques": 68
+    },
+    {
+      "referrer": "l.threads.com",
+      "count": 61,
+      "uniques": 42
+    },
+    {
+      "referrer": "t.co",
+      "count": 46,
+      "uniques": 13
+    },
+    {
+      "referrer": "chatgpt.com",
+      "count": 24,
+      "uniques": 12
+    },
+    {
+      "referrer": "ruanyifeng.com",
+      "count": 19,
+      "uniques": 15
+    },
+    {
+      "referrer": "libhunt.com",
+      "count": 6,
+      "uniques": 5
+    },
+    {
+      "referrer": "DuckDuckGo",
+      "count": 3,
+      "uniques": 3
+    },
+    {
+      "referrer": "search.brave.com",
+      "count": 3,
+      "uniques": 2
+    }
+  ],
+  "2026-10-13": [
+    {
+      "referrer": "Google",
+      "count": 154,
+      "uniques": 76
+    },
+    {
+      "referrer": "github.com",
+      "count": 141,
+      "uniques": 104
+    },
+    {
+      "referrer": "cozyclay.org",
+      "count": 111,
+      "uniques": 71
+    },
+    {
+      "referrer": "t.co",
+      "count": 56,
+      "uniques": 25
+    },
+    {
+      "referrer": "l.threads.com",
+      "count": 40,
+      "uniques": 23
+    },
+    {
+      "referrer": "chatgpt.com",
+      "count": 21,
+      "uniques": 12
+    },
+    {
+      "referrer": "ruanyifeng.com",
+      "count": 19,
+      "uniques": 15
+    },
+    {
+      "referrer": "libhunt.com",
+      "count": 6,
+      "uniques": 5
+    },
+    {
+      "referrer": "search.brave.com",
+      "count": 3,
+      "uniques": 2
+    },
+    {
+      "referrer": "Baidu",
+      "count": 2,
+      "uniques": 2
+    }
   ]
 }
