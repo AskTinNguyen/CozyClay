@@ -482,12 +482,12 @@ function ShotCard() {
 						{ko("Exit", "나가기")}
 						<kbd>Esc</kbd>
 					</button>
-				) : (
+				) : activeShot ? (
 					<button type="button" className="dock-shot-look" aria-pressed="false" onClick={enterShotLook} title={ko("Look through the shot camera (Esc returns)", "샷 카메라 시점으로 보기 (Esc로 복귀)")}>
 						<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.75 8S4 3.75 8 3.75 14.25 8 14.25 8 12 12.25 8 12.25 1.75 8 1.75 8z M8 6.25a1.75 1.75 0 1 1 0 3.5 1.75 1.75 0 1 1 0-3.5z" /></svg>
 						{ko("Look through", "샷 시점")}
 					</button>
-				)}
+				) : null}
 			</footer>
 		</section>
 	);

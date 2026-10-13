@@ -1,6 +1,6 @@
-import { useEffect, useLayoutEffect, useState } from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useState } from "react";
 import { useStudioShell } from "./studio-shell-context.js";
+import ShotPreviewHeader from "./ShotPreviewHeader.jsx";
 import { ko } from "../locale.js";
 import { PRESETS, SHOT_ASPECT_PRESETS } from "../app-stage.jsx";
 import { CAMERA_PRESETS } from "../camera-move.js";
@@ -10,6 +10,7 @@ import { CHARACTER_MODEL_IDS } from "../scenes.js";
 import { elementByPath } from "../studio-elements.js";
 import { saveAutoColor } from "../auto-color.js";
 import { trackFeature } from "../analytics.js";
+import { GUIDE_LABELS, nextGuideMode } from "../shot-guides.js";
 import "./viewport.css";
 
 // G1: the single mode+tool pill. Keys 1-5 and W/E/R are bound in App's
@@ -113,30 +114,13 @@ function MenuItem({ checked, role = "menuitemradio", className = "", children, .
 	);
 }
 
-/** The inset card's header (violet dot, shot name, lens) lives in App's
- * `.vp-shot-preview-tag`; this region only fills in the words it shows. */
-function ShotPreviewHeader({ name, lens }) {
-	const [host, setHost] = useState(null);
-	useLayoutEffect(() => {
-		setHost(document.querySelector(".vp-shot-preview .vp-shot-preview-tag"));
-	}, []);
-	if (!host) return null;
-	return createPortal(
-		<span className="vp-shot-preview-meta" data-testid="shot-preview-header">
-			<span className="vp-shot-preview-name">{name}</span>
-			<span className="vp-shot-preview-lens">{lens}</span>
-		</span>,
-		host,
-	);
-}
-
 export default function ViewportToolbar() {
 	const {
 		workflowMode, selectWorkflowMode, poseRefusal, gizmoMode, setGizmoMode, snapEnabled,
 		setSnapEnabled, preset, applyPreset, cameraPresetId, i2vMotionCameraLocked,
 		runStudioAction, shotAspectKey, fovDeg, shotsDomain, shot, shots, activeShot,
 		setNonce, workspaceLayout, viewMenuTriggerRef, viewMenuOpen,
-		setViewMenuOpen, viewLooksActive, gridView, setGridView,
+		setViewMenuOpen, viewLooksActive, gridView, setGridView, guideMode,
 		autoColor, setAutoColor, isCharacterSelection, partColoursChoice, embedMode,
 		agentCollapsed, addSceneObject, spawnCharacter, characters, flySpeed,
 		ikEditTool, setIkEditTool, showTrails, setShowTrails, motion, setRangePinPartPick,
@@ -515,19 +499,12 @@ export default function ViewportToolbar() {
 							onClick={() => menu.toggle("shading")}
 						>
 							<RailIcon name="shading" />
-							<span className="vp-label">{autoColor ? ko("Auto Color", "자동 색") : ko("Clay Lit", "클레이 조명")}</span>
+							<span className="vp-label">{ko("Clay Lit", "클레이 조명")}</span>
 						</button>
 						{menu.open === "shading" && (
 							<div className="vp-menu" role="menu" aria-label={ko("Shading", "셰이딩")}>
 								<MenuItem checked={!autoColor} onClick={() => { setAutoColorOn(false); menu.close(); }}>
 									{ko("Clay Lit", "클레이 조명")}
-								</MenuItem>
-								<MenuItem
-									checked={autoColor}
-									title={ko("Flat, distinct colour per object — captures include them while on", "오브젝트별 평면 구분 색 — 켜둔 동안 캡처에도 포함됩니다")}
-									onClick={() => { setAutoColorOn(true); menu.close(); }}
-								>
-									{ko("Auto Color", "자동 색")}
 								</MenuItem>
 							</div>
 						)}
@@ -586,6 +563,19 @@ export default function ViewportToolbar() {
 								>
 									<span className="view-menu-mark" aria-hidden="true">{autoColor ? "✓" : ""}</span>
 									{ko("Auto Color", "자동 색")}
+								</button>
+								<button
+									type="button"
+									role="menuitemcheckbox"
+									className={"view-menu-item vp-guide-cycle" + (guideMode === "off" ? "" : " active")}
+									aria-checked={guideMode !== "off"}
+									aria-pressed={guideMode !== "off"}
+									title={ko(GUIDE_LABELS[guideMode].en, GUIDE_LABELS[guideMode].ko) + ko(" · click to cycle", " · 클릭으로 전환")}
+									onClick={() => runStudioAction("view.setGuideMode", { mode: nextGuideMode(guideMode) })}
+								>
+									<span className="view-menu-mark" aria-hidden="true">{guideMode !== "off" ? "✓" : ""}</span>
+									{ko("Composition guides", "구도 가이드")}
+									<small>{ko(GUIDE_LABELS[guideMode].en, GUIDE_LABELS[guideMode].ko)}</small>
 								</button>
 								<button
 									type="button"

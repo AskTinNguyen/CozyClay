@@ -124,6 +124,7 @@ function GenerateMotion() {
 							key={action.id}
 							className="menubar-item"
 							data-generate-action={action.id}
+							disabled={Boolean(action.reason)}
 							aria-disabled={action.reason ? "true" : undefined}
 							data-disabled-reason={action.reason || undefined}
 							onClick={() => {

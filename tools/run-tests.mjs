@@ -127,6 +127,7 @@ const NODE_FILES = [
 	"test/verify-agent-context-budget.mjs",
 	"test/verify-agent-supervisor.mjs",
 	"test/verify-studio-agent-protocol.mjs",
+	"test/verify-studio-agent-sampled-framing.mjs",
 	"test/verify-studio-agent-tokens.mjs",
 	"test/verify-studio-agent-jobs.mjs",
 	"test/verify-agent-execution.mjs",

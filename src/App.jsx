@@ -6,6 +6,7 @@ import { useScenes } from "./domains/scenes.js";
 import { useStage } from "./domains/stage.js";
 import StudioShell from "./shell/StudioShell.jsx";
 import ViewportToolbar from "./shell/ViewportToolbar.jsx";
+import CompositionGuideButton from "./shell/CompositionGuideButton.jsx";
 import { StudioShellContext } from "./shell/studio-shell-context.js";
 
 import {
@@ -275,9 +276,7 @@ import { exportOffscreenVideo } from "./offscreen-export.js";
 import { parseRigNodeId } from "./hierarchy-model.js";
 import { timelineContentExtent } from "./timeline-extent.js";
 import {
-	GUIDE_LABELS,
 	guideGeometry,
-	nextGuideMode,
 	readStoredGuideMode,
 	writeStoredGuideMode,
 } from "./shot-guides.js";
@@ -4219,7 +4218,7 @@ export default function App() {
 		generate: (kind) => void generateI2vMotion(kind),
 		enableShaded: () => runStudioAction("view.setPartColours", { mode: "shaded" }),
 	};
-	const viewLooksActive = gridView || autoColor || partColoursEnabled;
+	const viewLooksActive = gridView || autoColor || partColoursEnabled || guideMode !== "off";
 	const rigSelection = parseRigNodeId(selectedHierarchyId);
 	const isRigSelection = rigSelection !== null;
 	const inspectorHasContent = isSceneSelection || isCameraSelection || isCharacterSelection || isRigSelection
@@ -6857,6 +6856,25 @@ export default function App() {
 			bridgeReady: Boolean(bridge?.ok), busy: storeRef.current.present() !== storeRef.current.objects || Boolean(studioGestureRef.current ||
 				ikBodyDragRef.current || lineDragRef.current || lineDrawRef.current || linePinDragRef.current || live.studioPhysicsRunning || recRef.current) };
 	}
+	function sampleStudioStateAt(frame, current = readStudioState()) {
+		const shot = shotAtFrame(current.shots ?? current.shotDocument?.shots ?? [], frame);
+		const sampledPlayback = sampleAt(playbackScene, shot, frame);
+		const sampledSubject = sampledPlayback.subject;
+		const primaryId = current.activeCharacterId ?? current.characters[0]?.id;
+		const characters = sampledSubject && primaryId
+			? current.characters.map(character => character.id === primaryId ? { ...character, x: sampledSubject.x, z: sampledSubject.z } : character)
+			: current.characters;
+		const sampled = sampledPlayback.camera;
+		if (!sampled) return { ...current, frame, characters, view: { ...current.view, frame } };
+		const position = { x: sampled.pos.x, y: sampled.pos.y, z: sampled.pos.z };
+		const direction = forwardFrom(sampled.yaw, sampled.pitch);
+		return { ...current, frame, characters, view: { ...current.view, frame }, camera: {
+			position,
+			lookAt: { x: position.x + direction.x, y: position.y + direction.y, z: position.z + direction.z },
+			focalMm: fovToFocalMm(sampled.fovDeg * Math.PI / 180, current.filmback.sensorId, current.filmback.aspectRatio),
+			sensorId: current.filmback.sensorId,
+		} };
+	}
 
 	/** The authored stage envelope (key light, environment, filmback) published
 	 * as one body: the live read model first, so the next synchronous read sees
@@ -6994,6 +7012,7 @@ export default function App() {
 	appContext.updatePorts({
 		read: readStudioState, revision: sceneRevisionRef, bounds: studioBounds, commit: commitStudioDraft,
 		operate: operateStudio, undo: () => stepStudioHistory(false), redo: () => stepStudioHistory(true),
+		sampleStateAt: sampleStudioStateAt,
 		history: redo => appContext.historyEntry(redo), finishHistoryGesture: finishStudioHistoryGesture,
 		stepHistory: stepStudioHistory, capture: () => liveQueries.capture_framing_png({}), capturePlan: () => liveQueries.capture_plan_png({}),
 		// One shot frame as raw read-back pixels (rows bottom-up), from the export
@@ -7165,6 +7184,7 @@ export default function App() {
 		fovDeg, shotsDomain, shot, setNonce, workspaceLayout,
 		viewMenuTriggerRef, viewMenuOpen, setViewMenuAnchor, setViewMenuOpen, viewLooksActive,
 		viewMenuAnchor, gridView, setGridView, autoColor, setAutoColor,
+		guideMode,
 		isCharacterSelection, partColoursChoice, embedMode, agentCollapsed, sceneSaveError,
 		studioAgentError, studioAgentMode, setStudioAgentMode, AgentPanel, setAgentCollapsed,
 		buildStudioAgentContext, highlightAgentTargets, generateI2vMotionFromUi, selectedSceneObject, rigSelection,
@@ -7253,6 +7273,7 @@ export default function App() {
 						}
 					}}>
 				<ViewportToolbar />
+				{(embedMode || playgroundMode) && <CompositionGuideButton guideMode={guideMode} onCycle={(mode) => runStudioAction("view.setGuideMode", { mode })} />}
 				{sculptMode && !sculptTarget && (
 					<div className="vp-sculpt-hint" role="status" data-testid="sculpt-empty">
 						<strong>{ko("New sculpt", "새 조형물")}</strong>
@@ -7907,18 +7928,6 @@ export default function App() {
 							<span className="vp-inset-tag vp-shot-preview-tag">
 								<span className="vp-rec-dot" aria-hidden="true" />
 								{ko("Shot", "샷")}
-								<button
-									type="button"
-									className={"vp-guide-cycle" + (guideMode === "off" ? "" : " on")}
-									aria-label={ko("Cycle composition guides", "구도 가이드 전환")}
-									title={ko(GUIDE_LABELS[guideMode].en, GUIDE_LABELS[guideMode].ko) + ko(" · click to cycle", " · 클릭으로 전환")}
-									onClick={() => runStudioAction("view.setGuideMode", { mode: nextGuideMode(guideMode) })}
-								>
-									<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-										<path d="M3 3h18v18H3z" />
-										<path d="M9 3v18M15 3v18M3 9h18M3 15h18" />
-									</svg>
-								</button>
 								<button
 									type="button"
 									className="vp-look-through"

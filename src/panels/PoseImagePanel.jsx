@@ -82,7 +82,7 @@ export default function PoseImagePanel({ hidden, capturePoseImage }) {
 	};
 
 	return (
-		<Foldout hidden={hidden} title={ko("Image from pose", "포즈로 이미지 생성")}>
+		<Foldout hidden={hidden} defaultOpen={false} title={ko("Image from pose", "포즈로 이미지 생성")}>
 			<div className="pose-image" data-testid="pose-image">
 				<div className="pose-image-frame">
 					<div className="pose-image-source" role="radiogroup" aria-label={ko("Frame source", "프레임 시점")}>
