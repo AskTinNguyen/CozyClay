@@ -255,7 +255,7 @@ function registerTests() {
 	});
 	test("L2 vec3 elements carry per-axis minimum/maximum, catalogue exposes matching range descriptors, and an out-of-range patch is rejected", () => {
 		const scale = protocol.STUDIO_PATCH_SET_SCHEMAS.object.properties.scale;
-		for (const axis of ["x", "y", "z"]) { assert.equal(scale.properties[axis].minimum, 0.1); assert.equal(scale.properties[axis].maximum, 100); }
+		for (const axis of ["x", "y", "z"]) { assert.equal(scale.properties[axis].minimum, 0.01); assert.equal(scale.properties[axis].maximum, 100); }
 		const objectPosition = protocol.STUDIO_PATCH_SET_SCHEMAS.object.properties.position;
 		assert.deepEqual({ min: objectPosition.properties.x.minimum, max: objectPosition.properties.x.maximum }, { min: -240, max: 240 });
 		assert.deepEqual({ min: objectPosition.properties.y.minimum, max: objectPosition.properties.y.maximum }, { min: 0, max: 240 });
@@ -265,7 +265,7 @@ function registerTests() {
 		// The catalogue's patchable vocabulary carries the same declared ranges, not
 		// just the bare path list.
 		const objectDescriptor = protocol.STUDIO_PATCH_DESCRIPTORS.find(d => d.path === "object.scale");
-		assert.deepEqual(objectDescriptor, { path: "object.scale", type: "vec3", min: { x: 0.1, y: 0.1, z: 0.1 }, max: { x: 100, y: 100, z: 100 } });
+		assert.deepEqual(objectDescriptor, { path: "object.scale", type: "vec3", min: { x: 0.01, y: 0.01, z: 0.01 }, max: { x: 100, y: 100, z: 100 } });
 		const charPositionDescriptor = protocol.STUDIO_PATCH_DESCRIPTORS.find(d => d.path === "character.position");
 		assert.deepEqual(charPositionDescriptor.min, { x: -4, y: 0, z: -4 });
 		assert.deepEqual(charPositionDescriptor.max, { x: 4, y: 240, z: 4 });
@@ -281,11 +281,11 @@ function registerTests() {
 		// range instead of the generic union rejection: every patchOp variant
 		// fails on a bad number, and the caller needs to know which path and
 		// which bound, not just that no variant matched.
-		try { protocol.validateStudioCommand({ name: "patch_elements", args: { ops: [{ target: { kind: "object", id: "cube-24" }, set: { scale: { x: 1, y: 0.06, z: 1 } } }] } }); assert.fail("out-of-range scale must be refused"); }
+		try { protocol.validateStudioCommand({ name: "patch_elements", args: { ops: [{ target: { kind: "object", id: "cube-24" }, set: { scale: { x: 1, y: 0.006, z: 1 } } }] } }); assert.fail("out-of-range scale must be refused"); }
 		catch (error) {
 			assert.equal(error.code, "INVALID_ARGUMENT");
 			assert.match(error.message, /scale\.y/);
-			assert.match(error.message, /0\.1/);
+			assert.match(error.message, /0\.01/);
 			assert.match(error.message, /100/);
 		}
 		try { protocol.validateStudioCommand({ name: "patch_elements", args: { ops: [{ target: { kind: "character", id: "char-alex" }, set: { position: { x: 5, y: 0, z: 0 } } }] } }); assert.fail("out-of-range position must be refused"); }

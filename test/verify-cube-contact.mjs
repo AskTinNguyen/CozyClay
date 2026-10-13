@@ -16,7 +16,7 @@ const b = parseSceneBox({ x: 1, z: 3, rot: 0, scaleX: 2, scaleY: 0.5, scaleZ: 4 
 assert.deepEqual(sceneBoxRecord(b).min, [0, 0, 1]); assert.deepEqual(sceneBoxRecord(b).max, [2, 0.5, 5]);
 assert.equal(boxCorners(b).length, 8); assert.equal(BOX_EDGES.length, 12);
 assert.equal(parseSceneBox({ ...b, rot: 360 }).rot, 0);
-for (const value of [{}, { x: 0, z: 0, sx: 1, sy: -1, sz: 1 }, { ...b, rot: NaN }, { ...b, sy: 0.02 }, { ...b, sx: 101 }, { ...b, x: 241 }]) assert.throws(() => parseSceneBox(value));
+for (const value of [{}, { x: 0, z: 0, sx: 1, sy: -1, sz: 1 }, { ...b, rot: NaN }, { ...b, sy: 0.002 }, { ...b, sx: 101 }, { ...b, x: 241 }]) assert.throws(() => parseSceneBox(value));
 const turned = { ...b, rot: 90 }, corners = boxCorners(turned);
 assert.ok(Math.abs(corners[0][0] + 1) < 1e-12); assert.ok(Math.abs(corners[0][2] - 4) < 1e-12);
 assert.equal(sceneBoxRecord(turned).min, undefined); assert.equal(sceneBoxRecord(turned).yawDeg, 90);

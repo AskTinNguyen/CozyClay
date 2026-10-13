@@ -39,7 +39,7 @@ const entries = [
 	{ path: "object.renderer", type: "enum", persisted: true, undoDomain: "objects", normalizer: "normalizeSceneObject", enum: ["cube", "sphere", "capsule", "cylinder", "cone", "plane", "chair", "car", "small-plane", "empty"] },
 	{ path: "object.position", type: "vec3", persisted: true, undoDomain: "objects", normalizer: "normalizeSceneObject", min: { x: -240, y: 0, z: -240 }, max: { x: 240, y: 240, z: 240 }, note: "y is the object's base: y=0 rests on the floor; height/supportY rise from it" },
 	{ path: "object.rotation", type: "vec3", persisted: true, undoDomain: "objects", normalizer: "normalizeSceneObject", min: { x: -180, y: -180, z: -180 }, max: { x: 180, y: 180, z: 180 }, note: "rot/rotX/rotZ degrees, wrapped at the upper bound" },
-	{ path: "object.scale", type: "vec3", persisted: true, undoDomain: "objects", normalizer: "normalizeSceneObject", min: { x: 0.1, y: 0.1, z: 0.1 }, max: { x: 100, y: 100, z: 100 } },
+	{ path: "object.scale", type: "vec3", persisted: true, undoDomain: "objects", normalizer: "normalizeSceneObject", min: { x: 0.01, y: 0.01, z: 0.01 }, max: { x: 100, y: 100, z: 100 } },
 	{ path: "object.name", type: "string", persisted: true, undoDomain: "objects", normalizer: "normalizeSceneObject" },
 	{ path: "object.color", type: "color", persisted: true, undoDomain: "objects", normalizer: "normalizeSceneObject" },
 	{ path: "object.opacity", type: "number", persisted: true, undoDomain: "objects", normalizer: "normalizeSceneObject", min: 0.05, max: 1, note: "1 is solid; lower is see-through, e.g. 0.3 for clear glass" },
