@@ -5,16 +5,16 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { createServer } from 'vite';
 import { castFixture, proxyCast } from './cast-fixture.mjs';
 import { appFixture } from './app-fixture.mjs';
-import { motionCache } from './history-owners.mjs';
+
 import { freeReferences } from './verify-domain-modules.mjs';
 import { createStudioAppActions } from '../../src/commands/index.js';
-import { createMotionEdit } from '../../src/ardy/motion-edit.js';
-import { CSKEL27_NEUTRAL } from '../../src/ardy/cskel27-neutral.js';
+import { compileTakeSource } from '../../src/domains/motion/take-source.js';
+import { skeletonFor } from '../../src/motion3/rigs/index.js';
 
 // Follow only the shipped constants/pure helpers used by motion. The renderer
 // components co-located in app-stage are not needed to mount the real hook.
 const stage = readFileSync(new URL('../../src/app-stage.jsx', import.meta.url), 'utf8')
-  + readFileSync(new URL('../../src/ardy-bridge-contract.js', import.meta.url), 'utf8')
+  + readFileSync(new URL('../../src/timeline-defaults.js', import.meta.url), 'utf8')
   + readFileSync(new URL('../../src/stage-startup-defaults.js', import.meta.url), 'utf8');
 const motionSource = readFileSync(new URL('../../src/domains/motion.js', import.meta.url), 'utf8');
 const ast = parseSync('stage.jsx', stage).program, definitions = new Map(), imports = new Map();
@@ -35,22 +35,19 @@ const stageSubset = ast.body.filter(node => selected.has(node)).map(node => stag
 const server = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false }, optimizeDeps: { noDiscovery: true, include: [] }, appType: 'custom',
   plugins: [{ name: 'motion-without-renderer', enforce: 'pre', load(id) {
     if (id.endsWith('/src/app-stage.jsx')) return stageSubset;
-    if (id.endsWith('/src/motion-store.js')) return `export * from '../test/bus/motion-cache-fixture.mjs';`;
+    
   } }] });
 let useMotion;
 try { ({ useMotion } = await server.ssrLoadModule('/src/domains/motion.js')); }
 finally { await server.close(); }
 
-export function seedMotion(frames = 48) {
-  const rotMats = new Float32Array(frames * 243), rootPos = new Float32Array(frames * 3), posedJoints = new Float32Array(frames * 81);
-  for (let f = 0; f < frames; f++) {
-    for (let j = 0; j < 27; j++) {
-      rotMats.set([1, 0, 0, 0, 1, 0, 0, 0, 1], (f * 27 + j) * 9);
-      const p = CSKEL27_NEUTRAL[j]; posedJoints.set([p[0], p[1] + 1.3544128, p[2]], (f * 27 + j) * 3);
-    }
-    rootPos.set(posedJoints.subarray(f * 81, f * 81 + 3), f * 3);
-  }
-  return { frames, fps: 24, personScale: 1, rotMats, rootPos, posedJoints, anchorX: 0, anchorZ: 0, anchorFrame: 0, rotationDeg: 0, editSegments: createMotionEdit(frames), url: '/ardy/motions/123456-abcdef' };
+// A compiled take v3 for the fixture's Y Bot cast: standing, with a slow head turn.
+export function seedMotion(frames = 48, model = 'y-bot-tpose') {
+  const sk = skeletonFor(model), I = sk.index, P = sk.restWorldPos, ank = P[I.LeftFoot][1];
+  const spec = { schema: 'cozyclay.motion-spec.v1', fps: 24, frames,
+    keys: [{ f: 0, set: { root: [0, P[I.Hips][1] - 0.01, 0], yaw: 0, foot_l: [0.09, ank, -0.03], foot_r: [-0.09, ank, 0.03], head_yaw: 0 } },
+      { f: frames - 1, set: { head_yaw: 30 } }] };
+  return compileTakeSource({ schema: 'cozyclay.take.v3', rig: model, spec, placement: { position: [0, 0, 0], yaw: 0 }, scene: { objects: {} } });
 }
 // `{ proxy: true }` adds one capsule figure (cast-fixture PROXY_ID) to the cast.
 export function motionFixture({ proxy = false } = {}) {
@@ -76,5 +73,5 @@ export function motionFixture({ proxy = false } = {}) {
     actions: () => registry, recordAction: f.actual.recordStudioAction, beginAction: f.actual.beginStudioAction });
   f.ports.actions = () => registry; Object.assign(f.ports, app.ports);
   const snapshot = () => structuredClone(app.storeDomain('motion').documentStore.getSnapshot().slices);
-  return { ...f, motion, registry, snapshot, renderMotion, motionCache, dispose() { f.dispose(); motion.dispose?.(); } };
+  return { ...f, motion, registry, snapshot, renderMotion, dispose() { f.dispose(); motion.dispose?.(); } };
 }

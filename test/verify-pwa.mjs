@@ -44,7 +44,6 @@ assert.match(worker, /addEventListener\("install"/);
 assert.match(worker, /addEventListener\("activate"/);
 assert.match(worker, /addEventListener\("fetch"/);
 assert.match(worker, /SKIP_WAITING/);
-assert.match(worker, /url\.pathname\.includes\("\/ardy\/"\)/);
 assert.match(worker, /request\.headers\.has\("range"\)/);
 assert.match(worker, /status:\s*206/);
 pass("service worker registers install, activation, offline fetch, range requests, and update handling");

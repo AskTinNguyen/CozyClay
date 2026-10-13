@@ -67,8 +67,7 @@ export default function DetailsSlot() {
 		appContext, removePose, activeRig, saveCurrentPose,
 		tlFrame,
 		isRigSelection, ikChains, ikFocus, footSnap, poseObjectOpacity, setPoseObjectOpacity, capturePoseImage,
-		ikEditTool, setIkEditTool, showTrails, setShowTrails,
-		trailFalloffS, setTrailFalloffS, trailEdit, trailTrackFocus, selectTrailTrack, clearTrailTrackFocus,
+		ikEditTool, setIkEditTool,
 		pendingIkEdit, applyPendingIkEdit, cancelPendingIkEdit,
 		rangePins, rangePinResiduals, rangePinSelection, rangePinPartPick, rangePinPreview,
 		sceneObjects, setRangePinSelection, setRangePinPartPick, previewRangePinDraft, applyRangePinDraft,
@@ -225,14 +224,7 @@ export default function DetailsSlot() {
 				tlFrame={tlFrame}
 				ikEditTool={ikEditTool}
 				setIkEditTool={setIkEditTool}
-				showTrails={showTrails}
-				setShowTrails={setShowTrails}
-				trailFalloffS={trailFalloffS}
-				setTrailFalloffS={setTrailFalloffS}
-				trailEdit={trailEdit}
-				trailTrackFocus={trailTrackFocus}
-				selectTrailTrack={selectTrailTrack}
-				clearTrailTrackFocus={clearTrailTrackFocus}
+				
 				pendingIkEdit={pendingIkEdit}
 				applyPendingIkEdit={applyPendingIkEdit}
 				cancelPendingIkEdit={cancelPendingIkEdit}

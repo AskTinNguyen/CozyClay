@@ -23,7 +23,6 @@ const editor = { camera: { x: 0 }, characters: [{ id: "a", x: 0 }], objects: [] 
 let mode = "ok";
 let objectNumber = 0;
 let withheld;
-let installation;
 let ready;
 let socket;
 const receive = (raw) => {
@@ -51,13 +50,7 @@ const receive = (raw) => {
 		const failed = mode === "rollback" || mode === "partial";
 		if (mode !== "rollback" && mode !== "noop") editor.objects.push({ id: `object-${++objectNumber}` });
 		value = { applied: [1], failed: failed ? [{ index: 2, error: "PRIVATE failure" }] : [], rolledBack: mode === "rollback" };
-	} else if (frame.name === "load_motion") {
-		value = { loaded: mode !== "noop" };
-		if (installation) {
-			installation.resolve(frame);
-			return;
-		}
-	} else throw new Error(`Unexpected command ${frame.name}`);
+		} else throw new Error(`Unexpected command ${frame.name}`);
 	socket.send(JSON.stringify(error ? { type: "result", id: frame.id, ok: false, error } : { type: "result", id: frame.id, ok: true, value }));
 };
 const connect = async () => {
@@ -140,25 +133,6 @@ try {
 	await assert.rejects(hub.observeExecution("set_camera", handle, () => { throw new DOMException("PRIVATE aborted", "AbortError"); }), { name: "AbortError" });
 	expect(offset, "cancelled", false);
 
-	// Queuing succeeds before generation finishes. The existing async context
-	// carries only telemetry state, not a job/command ID or persisted scene data.
-	offset = telemetry.length;
-	const generated = Promise.withResolvers();
-	installation = Promise.withResolvers();
-	let job;
-	await hub.observeExecution("generate_motion", handle, () => {
-		job = generated.promise.then(() => hub.command("load_motion", {}, handle));
-		return { status: "queued" };
-	});
-	expect(offset, "succeeded", false);
-	generated.resolve();
-	const load = await bounded(installation.promise);
-	expect(offset, "succeeded", false);
-	for (let i = 0; i < 2; i++) socket.send(JSON.stringify({ type: "result", id: load.id, ok: true, value: { loaded: true } }));
-	await job;
-	expect(offset, "succeeded", true);
-	installation = null;
-
 	// Randomness, initial/terminal clock reads, and sync/async sinks cannot
 	// change the operation's return value or turn it into a rejection.
 	const sentinel = {};
@@ -185,7 +159,7 @@ try {
 	handle = await connect();
 	await hub.command("describe", {}, handle);
 	assert.equal(telemetry.length, offset, "reconnect and non-MCP hub commands do not replay telemetry");
-	console.log("MCP execution receipts PASS: real hub acknowledgements, aliases, no-op, rollback, partial failure, retry, verification/timeout uncertainty, cancellation, async motion ack, duplicate receipt, clock/random/sink failures, disconnection and no replay");
+	console.log("MCP execution receipts PASS: real hub acknowledgements, aliases, no-op, rollback, partial failure, retry, verification/timeout uncertainty, cancellation, duplicate receipt, clock/random/sink failures, disconnection and no replay");
 } finally {
 	if (hub.editors.has(handle)) await disconnect(handle);
 	await new Promise((resolve) => hub.server.close(resolve));

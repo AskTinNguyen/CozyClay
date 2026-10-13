@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { resolveIkRig, solveIk } from "../../src/ardy/ik.js";
+import { resolveIkRig, solveIk } from "../../src/motion/ik.js";
 import { primeBindPose } from "../../src/poses.js";
 import {
 	buildCollisionCapsules,
@@ -11,7 +11,7 @@ import {
 	TRIM_FRACTION,
 	HINGE_SLACK_FACTOR,
 	MIN_DEPTH,
-} from "../../src/ardy/fix-collisions.js";
+} from "../../src/motion/fix-collisions.js";
 
 // Collision DETECTION only: capsules, penetrations and the documented
 // thresholds. The 2.x fixCollisions solver was removed with ARDY.

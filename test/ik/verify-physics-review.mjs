@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import * as THREE from "three";
-import { SUPPORT_SITES, copyPhysicsKeys, physicsKeyStamp, supportIntervals, physicsMetrics } from "../../src/ardy/physics-review.js";
+import { SUPPORT_SITES, copyPhysicsKeys, physicsKeyStamp, supportIntervals, physicsMetrics } from "../../src/motion/physics-review.js";
 
 // Contact measurement used by motion verification. The AutoPhysics review
 // pass that used to share this file was removed with ARDY.

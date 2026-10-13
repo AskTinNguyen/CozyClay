@@ -27,7 +27,7 @@ import {
 	MID_TRACKS,
 	FK_TRACKS,
 	ikControlIsExposed,
-} from "../../src/ardy/ik.js";
+} from "../../src/motion/ik.js";
 import { primeBindPose, applyPose, POSE_BONES, DEFAULT_POSE } from "../../src/poses.js";
 
 /** app-stage.jsx's REST_BONES: every joint at zero, i.e. the bind pose. */

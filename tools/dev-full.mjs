@@ -8,7 +8,6 @@ import { fileURLToPath } from "node:url";
 import {
 	installSignalCleanup,
 	spawnOwned,
-	startBridge,
 	terminateOwned,
 	waitForExit,
 } from "./process-supervisor.mjs";
@@ -32,10 +31,9 @@ const livePort = process.env.COZYCLAY_LIVE_PORT ?? "5184";
 const configuredOAuthPort = process.env.COZYCLAY_OAUTH_PORT?.trim();
 const mainPort = mainPortFrom(viteArgs);
 
-// Vite runs with --strictPort and reports a taken port as a raw stack trace —
-// after the bridge has already started and printed its own banner. Probe the
-// port first so the failure is one actionable line before anything spawns,
-// the same courtesy `npx cozyclay` already extends.
+// Vite runs with --strictPort and reports a taken port as a raw stack trace.
+// Probe the port first so the failure is one actionable line before anything
+// spawns, the same courtesy `npx cozyclay` already extends.
 await new Promise((resolvePromise, reject) => {
 	const probe = createNetServer();
 	probe.once("error", reject);
@@ -47,53 +45,8 @@ await new Promise((resolvePromise, reject) => {
 });
 
 const children = [];
-let stopping = false;
-const removeSignalCleanup = installSignalCleanup(() => children, () => { stopping = true; });
-const trackChild = (child) => children.push(child);
-const untrackChild = (child) => children.splice(children.indexOf(child), 1);
-// The bridge's only backend is Kimodo, and that runner refuses to start
-// without a box to talk to. Starting it unconditionally turned a fresh
-// clone's first `npm run dev` into a hard exit over a variable a new
-// contributor has no reason to have set yet. An unset CCLAY_KIMODO_HOST is
-// the normal case, not a fault — `npx cozyclay` has always treated it that
-// way, and the studio itself already renders the sidecar as absent rather
-// than crashing, which is exactly what `npm run dev:ui` is.
-const kimodoHost = process.env.CCLAY_KIMODO_HOST?.trim();
-let bridge;
-let bridgePort;
-if (kimodoHost) {
-	try {
-		({ child: bridge, port: bridgePort } = await startBridge({
-			command: process.execPath,
-			args: ["tools/ardy/bridge.mjs"],
-			cwd: REPO,
-			env: process.env,
-			mainPort,
-			onSpawn: trackChild,
-			onFailure: untrackChild,
-			onReady: (child) => child.once("exit", () => {
-				if (stopping) return;
-				stopping = true;
-				console.error("[dev] motion generation sidecar exited unexpectedly");
-				void Promise.allSettled(children.filter((entry) => entry !== child).map((entry) => terminateOwned(entry))).then(() => process.exit(1));
-			}),
-		}));
-	} catch (err) {
-		console.error(`[dev] Studio did not start: ${err.message}`);
-		removeSignalCleanup();
-		await Promise.allSettled(children.map((child) => terminateOwned(child)));
-		process.exit(1);
-	}
-} else {
-	console.error(
-		"[dev] CCLAY_KIMODO_HOST is not set — starting the studio without motion generation (set CCLAY_KIMODO_HOST=user@gpu-box to enable Block Generation).",
-	);
-}
-
-// Resolved once per Studio admission by task 6, not from the historical port.
-const getBridgeOrigin = () => bridge && bridgePort !== undefined && bridge.exitCode === null && bridge.signalCode === null
-	? `http://127.0.0.1:${bridgePort}` : null;
-const agentHandler = createAgentHandler({ port: mainPort, getBridgeOrigin });
+const removeSignalCleanup = installSignalCleanup(() => children, () => {});
+const agentHandler = createAgentHandler({ port: mainPort });
 const oauthServer = createServer((req, res) => {
 	const path = (req.url || "").split("?")[0];
 	const hosts = new Set([`127.0.0.1:${mainPort}`, `localhost:${mainPort}`]);
@@ -113,10 +66,6 @@ const vite = spawnOwned(process.execPath, ["node_modules/vite/bin/vite.js", ...v
 	cwd: REPO,
 		env: {
 			...process.env,
-			// Left as it came in when no bridge runs: Vite's /ardy proxy then
-			// falls back the same way `dev:ui` does, and the probe fails
-			// gracefully instead of pointing at a port nothing owns.
-			...(bridgePort === undefined ? {} : { COZYCLAY_BRIDGE_PORT: String(bridgePort), COZYCLAY_BRIDGE_ORIGIN: `http://127.0.0.1:${bridgePort}` }),
 			COZYCLAY_LIVE_PORT: livePort,
 			COZYCLAY_OAUTH_PORT: String(actualOAuthPort),
 		},

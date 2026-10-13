@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { SCENE_ATTACH_BONES } from "./scene-objects.js";
-import { TRAIL_EFFECTOR_JOINTS } from "./motion-trail.js";
+
 import { normalizeBoneName } from "./poses.js";
 
 /** The rig rows that ARE an attach frame: `rig.<track id>`, the same camel
@@ -8,14 +8,14 @@ import { normalizeBoneName } from "./poses.js";
  * rig.leftArm …) name a limb, not a frame, so they are deliberately absent. */
 export const ATTACH_BONE_ROWS = new Map(SCENE_ATTACH_BONES.map((bone) => [`rig.${bone}`, bone]));
 
-/** Attach track id -> the Mixamo bone carrying that frame on the shipped rigs.
- * TRAIL_EFFECTOR_JOINTS names the cskel27 joint, and cskel27 and Mixamo agree
- * everywhere except the spine, which sits one bone up the Mixamo chain (the
- * same shift ardy/playback.js SKINNING_MAP makes). */
-export const ATTACH_BONE_NAMES = Object.fromEntries(SCENE_ATTACH_BONES.map((bone) => {
-	const joint = TRAIL_EFFECTOR_JOINTS[bone];
-	return [bone, joint === "Spine1" ? "Spine" : joint === "Spine2" ? "Spine1" : joint];
-}));
+/** Attach track id -> the Mixamo bone carrying that frame on the shipped rigs. */
+const MIXAMO_ATTACH_BONES = {
+	hips: "Hips", spine: "Spine", chest: "Spine1", neck: "Neck", head: "Head",
+	leftShoulder: "LeftArm", leftElbow: "LeftForeArm", leftHand: "LeftHand",
+	rightShoulder: "RightArm", rightElbow: "RightForeArm", rightHand: "RightHand",
+	leftKnee: "LeftLeg", leftFoot: "LeftFoot", rightKnee: "RightLeg", rightFoot: "RightFoot",
+};
+export const ATTACH_BONE_NAMES = Object.fromEntries(SCENE_ATTACH_BONES.map((bone) => [bone, MIXAMO_ATTACH_BONES[bone]]));
 
 // One scratch set for the whole module: resolving a frame runs per attached
 // prop per frame and must never allocate.
@@ -36,7 +36,7 @@ export const placeEuler = new THREE.Euler();
 
 /** The bone a rig offers under `mixamoName`, by the project's matching rule
  * (normalised names equal, or one a suffix of the other; first depth-first
- * match wins — poses.js and ardy/playback.js agree). Cached per rig: this is
+ * match wins — poses.js and motion3/playback.js agree). Cached per rig: this is
  * asked once per attached prop per rendered frame. */
 export const attachBoneCache = new WeakMap();
 export function attachBoneOf(rig, mixamoName) {
@@ -65,8 +65,8 @@ export function attachBoneOf(rig, mixamoName) {
  * A carried prop takes the bone's place and facing; its size stays its own.
  *
  * `bone === null` is the character's animated ROOT: the hips' travel (during
- * playback the whole root trajectory lives in the bones — see
- * ardy/playback.js) carried at the character's own yaw, so a prop dropped on
+ * playback the hips travel lives in the bones — see motion3/playback.js)
+ * carried at the character's own yaw, so a prop dropped on
  * the character walks with the body instead of rolling with the hips.
  */
 export function attachFrameMatrix(rig, bone, out = new THREE.Matrix4()) {

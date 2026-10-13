@@ -22,9 +22,7 @@ import {
 	removeScene,
 	renameScene,
 	serializeSceneDocument,
-	takeAnchor,
 } from "../src/scenes.js";
-import { resolveMotionSource } from "../src/motion-resources.js";
 
 let scenes = [];
 scenes = addScene(scenes);
@@ -252,55 +250,26 @@ assert.equal(createCharacterEntry({ scale: 99 }).scale, 3, "an absurd stature cl
 assert.equal(createCharacterEntry({ scale: 0.05 }).scale, 0.2, "a tiny stature clamps to the band");
 assert.equal(createCharacterEntry({ y: -2 }).y, 0, "lift cannot sink below the deck");
 assert.equal(createCharacterEntry({ y: 10 }).y, 10, "lift has no ceiling — a crane shot may hoist the body");
-const sceneCalibration = { scale: 1.12, yawDeg: 14, offsetX: 0.4, offsetY: 0.08, offsetZ: -0.2 };
-const calibratedEntry = createCharacterEntry({ motionRef: { url: "/ardy/motions/calibrated.npz", calibration: sceneCalibration } });
-assert.deepEqual(calibratedEntry.motionRef.calibration, sceneCalibration, "scene calibration survives character normalization");
-assert.notEqual(calibratedEntry.motionRef.calibration, sceneCalibration, "scene calibration is owned by the normalized entry");
-sceneCalibration.offsetX = 99;
-assert.equal(calibratedEntry.motionRef.calibration.offsetX, 0.4, "mutating the source calibration cannot rewrite the entry");
-const clampedCalibration = createCharacterEntry({ motionRef: { url: "/ardy/motions/clamped.npz", calibration: { scale: 99, yawDeg: 540, offsetX: 101 } } }).motionRef.calibration;
-assert.deepEqual(clampedCalibration, { scale: 10, yawDeg: -180, offsetX: 100, offsetY: 0, offsetZ: 0 }, "persisted calibration uses the bounded scene envelope");
-assert.equal(createCharacterEntry({ motionRef: { url: "/ardy/motions/legacy.npz" } }).motionRef.calibration, undefined, "legacy motion refs remain free of calibration fields");
-
-// A motionRef names its take by content (motionId, embedded in the project)
-// and/or by location (url, a bridge run). Either alone is enough; a legacy
-// url-only ref keeps its exact shape so v4 documents stay byte-stable.
-const motionId = "a3f1".repeat(16);
-const legacyRef = createCharacterEntry({ motionRef: { url: "/ardy/motions/legacy.npz", prompt: "walks", rotationDeg: 90, anchorX: 1, anchorZ: -2 } }).motionRef;
-assert.deepEqual(legacyRef, { url: "/ardy/motions/legacy.npz", prompt: "walks", rotationDeg: 90, anchorX: 1, anchorZ: -2 }, "url-only motionRef normalizes without a motionId key");
-assert.deepEqual(Object.keys(legacyRef), ["url", "prompt", "rotationDeg", "anchorX", "anchorZ"], "legacy motionRef key order is untouched");
-const embeddedRef = createCharacterEntry({ motionRef: { motionId, prompt: "walks" } }).motionRef;
-assert.deepEqual(embeddedRef, { motionId, prompt: "walks", rotationDeg: 0, anchorX: 0, anchorZ: 0 }, "motionId-only motionRef is valid without a url");
-const takeRef = createCharacterEntry({ motionRef: { motionId, url: "/ardy/motions/take.npz", studioTakeId: "take-7f3a" } }).motionRef;
-assert.equal(takeRef.studioTakeId, "take-7f3a", "an agent-installed motionRef keeps its Studio take id through normalization");
-assert.equal(createCharacterEntry({ motionRef: { url: "/ardy/motions/legacy.npz", studioTakeId: 42 } }).motionRef.studioTakeId, undefined, "a non-string take id is dropped");
-const bothRef = createCharacterEntry({ motionRef: { motionId: motionId.toUpperCase(), url: "/ardy/motions/both.npz", calibration: { scale: 1.1 } } }).motionRef;
-assert.equal(bothRef.motionId, motionId, "motionId normalizes to lowercase");
-assert.equal(bothRef.url, "/ardy/motions/both.npz", "url is kept next to motionId");
-assert.deepEqual(Object.keys(bothRef), ["motionId", "url", "prompt", "rotationDeg", "anchorX", "anchorZ", "calibration"], "motionId leads when both are present");
-assert.equal(createCharacterEntry({ motionRef: { prompt: "walks" } }).motionRef, null, "neither motionId nor url is not a motionRef");
-assert.equal(createCharacterEntry({ motionRef: { motionId: "not-a-hash" } }).motionRef, null, "a malformed motionId alone is not a motionRef");
-assert.equal(createCharacterEntry({ motionRef: { motionId: motionId.slice(0, 63) } }).motionRef, null, "a short motionId alone is not a motionRef");
-assert.deepEqual(createCharacterEntry({ motionRef: { motionId: "not-a-hash", url: "/ardy/motions/x.npz" } }).motionRef, { url: "/ardy/motions/x.npz", prompt: "", rotationDeg: 0, anchorX: 0, anchorZ: 0 }, "a malformed motionId is dropped, the url survives");
-const refRoundTrip = readSceneDocument(serializeSceneDocument({
+// CozyClay 3: a 2.x motionRef (npz url / embedded clip) is not a take any more.
+// A compiled take saves its source as motionTake; anything malformed drops.
+assert.equal(createCharacterEntry({ motionRef: { url: "/ardy/motions/legacy.npz", prompt: "walks" } }).motionRef, undefined, "a 2.x motionRef is dropped");
+const takeSpec = { schema: "cozyclay.motion-spec.v1", fps: 24, frames: 48, keys: [] };
+const motionTake = { schema: "cozyclay.take.v3", rig: "x-bot-tpose", spec: takeSpec, placement: { position: [1, 0, 2], yaw: 90 }, scene: { objects: {} }, takeId: "take-7f3a" };
+const takeEntry = createCharacterEntry({ motionTake });
+assert.deepEqual(takeEntry.motionTake, motionTake, "a take v3 source survives character normalization");
+assert.notEqual(takeEntry.motionTake.spec, takeSpec, "the normalized source is owned by the entry");
+assert.equal(createCharacterEntry({ motionTake: { ...motionTake, placement: { position: [1, 0], yaw: 0 } } }).motionTake, null, "a bad placement is not a take");
+assert.equal(createCharacterEntry({ motionTake: { ...motionTake, spec: { ...takeSpec, schema: "other" } } }).motionTake, null, "a foreign spec is not a take");
+assert.equal(createCharacterEntry({ motionTake: { ...motionTake, takeId: 42 } }).motionTake.takeId, undefined, "a non-string take id is dropped");
+const takeRoundTrip = readSceneDocument(serializeSceneDocument({
 	version: SCENES_VERSION,
-	activeSceneId: "s-ref",
-	scenes: [{ id: "s-ref", name: "Ref", objects: [], shotDocument: null, stage: createSceneStage({ characters: [{ id: "char-a", motionRef: { motionId } }, { id: "char-b", motionRef: { url: "/ardy/motions/b.npz" } }] }) }],
+	activeSceneId: "s-take",
+	scenes: [{ id: "s-take", name: "Take", objects: [], shotDocument: null, stage: createSceneStage({ characters: [{ id: "char-a", motionTake }, { id: "char-b" }] }) }],
 }));
-assert.equal(refRoundTrip.status, "valid", "motionId refs do not bump SCENES_VERSION");
-const refStage = createSceneStage(refRoundTrip.document.scenes[0].stage);
-assert.equal(refStage.characters[0].motionRef.motionId, motionId, "motionId survives save and reload");
-assert.equal(refStage.characters[1].motionRef.url, "/ardy/motions/b.npz", "url refs survive save and reload");
-
-// Restore priority: embedded bytes win over a bridge url, and a ref that
-// resolves to neither is reported as missing rather than guessed.
-const embeddedRecord = { motionId, encoding: "base64", data: "", bytes: 0, frames: 1, fps: 24 };
-const motionsById = new Map([[motionId, embeddedRecord]]);
-assert.deepEqual(resolveMotionSource(bothRef, motionsById), { kind: "embedded", record: embeddedRecord }, "embedded beats url");
-assert.deepEqual(resolveMotionSource(bothRef, new Map()), { kind: "url", url: "/ardy/motions/both.npz" }, "url when the motion is not embedded");
-assert.deepEqual(resolveMotionSource(legacyRef, motionsById), { kind: "url", url: "/ardy/motions/legacy.npz" }, "legacy url-only ref resolves to url");
-assert.deepEqual(resolveMotionSource(embeddedRef, new Map()), { kind: "missing" }, "motionId without embedded bytes or url is missing");
-assert.deepEqual(resolveMotionSource(null, motionsById), { kind: "missing" }, "no ref is missing");
+assert.equal(takeRoundTrip.status, "valid", "a take source does not bump SCENES_VERSION");
+const takeStage = createSceneStage(takeRoundTrip.document.scenes[0].stage);
+assert.deepEqual(takeStage.characters[0].motionTake, motionTake, "the take source survives save and reload");
+assert.equal(takeStage.characters[1].motionTake, null, "a character without a take saves none");
 const staturedStage = createSceneStage({ characters: [{ id: "char-a", scale: 1.18 }, { id: "char-b" }] });
 assert.equal(staturedStage.characters[0].scale, 1.18, "a stored stature survives the stage envelope");
 assert.equal(staturedStage.characters[1].scale, 1, "a cast member without a take stays canonical");
@@ -321,10 +290,7 @@ const v3Stage = {
 		x: 0, z: 0, rot: 0,
 		layer: {
 			waypoints: [{ frame: 0, x: 0, z: 0, heading: null }, { frame: 40, x: 1, z: 2, heading: null }, { frame: 100, x: 2, z: 3, heading: null }],
-			promptClips: [
-				{ id: "clip-1", text: "walks in", startFrame: 40, endFrame: 80 },
-				{ id: "clip-2", text: "stops", startFrame: 80, endFrame: 120 },
-			],
+			promptClips: [{ id: "clip-1", text: "walks in", startFrame: 40, endFrame: 80 }],
 		},
 	}],
 	hasCharSheet: false,
@@ -338,13 +304,8 @@ const v3Read = readSceneDocument(JSON.stringify({
 assert.equal(v3Read.status, "migrated");
 const v4Layer = v3Read.document.scenes[0].stage.characters[0].layer;
 assert.deepEqual(v4Layer.waypoints.map((waypoint) => waypoint.frame), [0, 48, 120], "waypoint frames move onto the 24 fps clock");
-assert.deepEqual(
-	v4Layer.promptClips.map((clip) => [clip.startFrame, clip.endFrame]),
-	[[48, 96], [96, 144]],
-	"prompt blocks land exactly on the new 48-frame grid"
-);
+assert.equal(v4Layer.promptClips, undefined, "2.x prompt blocks are dropped on read");
 assert.equal(v4Layer.waypoints[1].x, 1, "the clock migration touches frames only, never positions");
-assert.equal(v4Layer.promptClips[0].text, "walks in", "prompt text survives the clock migration");
 assert.equal(createSceneStage(v3Read.document.scenes[0].stage).characters[0].scale, 1, "a v3 cast member reads back at canonical stature");
 const v3Rewritten = readSceneDocument(serializeSceneDocument(v3Read.document));
 assert.equal(v3Rewritten.status, "valid");
@@ -359,23 +320,11 @@ assert.deepEqual(
 const migratedStage = migrateStageFrames(v3Stage);
 assert.deepEqual(migratedStage.characters[0].layer.waypoints.map((waypoint) => waypoint.frame), [0, 48, 120]);
 assert.deepEqual(v3Stage.characters[0].layer.waypoints.map((waypoint) => waypoint.frame), [0, 40, 100], "the source stage is not mutated");
-// Ascending order and the half-open no-overlap rule hold even for a body that
-// never had them.
+// Ascending order holds even for a body that never had it.
 const disorderly = migrateStageFrames({ characters: [{ id: "char-a", layer: {
 	waypoints: [{ frame: 100, x: 0, z: 0 }, { frame: 40, x: 0, z: 0 }, { frame: 40, x: 9, z: 9 }],
-	promptClips: [{ id: "b", startFrame: 80, endFrame: 120 }, { id: "a", startFrame: 40, endFrame: 90 }],
 } }] });
 assert.deepEqual(disorderly.characters[0].layer.waypoints.map((waypoint) => waypoint.frame), [48, 120], "duplicate frames collapse and the list stays ascending");
-const disorderlyClips = disorderly.characters[0].layer.promptClips;
-assert.deepEqual(disorderlyClips.map((clip) => [clip.startFrame, clip.endFrame]), [[48, 108], [108, 144]], "overlapping blocks are pushed apart, never left overlapping");
-assert.ok(disorderlyClips.every((clip, index) => index === 0 || clip.startFrame >= disorderlyClips[index - 1].endFrame));
-
-// Extra extraction takes stand at their filmed offset, rotated into the
-// active character's facing.
-assert.deepEqual(takeAnchor({ x: 0, z: 0, rot: 0 }, 0.8, 0.2), { x: 0.8, z: 0.2 });
-const rotatedAnchor = takeAnchor({ x: 1, z: -1, rot: 90 }, 1, 0);
-assert.ok(Math.abs(rotatedAnchor.x - 1) < 1e-9 && Math.abs(rotatedAnchor.z + 2) < 1e-9, "a quarter turn sends a +X offset to -Z");
-assert.deepEqual(takeAnchor(null, undefined, NaN), { x: 0, z: 0 }, "junk placement resolves to the origin, never NaN");
 
 import { readStudioSource, readStudioFunction } from "./bus/verify-domain-modules.mjs";
 const appSource = readStudioSource();
@@ -390,11 +339,6 @@ assert.doesNotMatch(
 	openSceneBody,
 	/setRigs\(\{\}\)/,
 	"opening a scene preserves mounted rig instances so motion can load immediately"
-);
-assert.match(
-	appSource,
-	/const targetCharacter = appContext\.live\.characters\.find\(\(entry\) => entry\.id === targetCharacterId\)[\s\S]*?await appContext\.shared\.waitForRig\(targetCharacter\.id\)/,
-	"motion loading waits for the active rig instead of losing the request to mount timing"
 );
 const batchSource = readStudioFunction("applyObjectBatch");
 assert.match(

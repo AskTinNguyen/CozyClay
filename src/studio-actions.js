@@ -38,7 +38,7 @@ const castOverride = {
 /** A world floor point in metres; y is the floor. */
 const floorPoint = input({ x: { type: "number" }, z: { type: "number" } });
 const waypointFrame = { ...frame, minimum: 1 };
-/** The tracks an IK key stores (src/ardy/ik.js IK_TRACKS and FK_TRACKS). A
+/** The tracks an IK key stores (src/motion/ik.js IK_TRACKS and FK_TRACKS). A
  * chain track keys its three bones (upper, lower, end); a joint track one. */
 export const STUDIO_IK_CHAIN_TRACKS = freezeStudioData(["leftHand", "rightHand", "leftFoot", "rightFoot"]);
 export const STUDIO_IK_JOINT_TRACKS = freezeStudioData(["hips", "spine", "chest", "neck", "head", "leftShoulder", "rightShoulder"]);
@@ -47,9 +47,9 @@ const perBone = items => ({ type: "array", items, minItems: 1, maxItems: 3 });
 const quaternion = input({ x: num, y: num, z: num, w: num });
 /** One track's key: the IK state's { q, p, baseQ, basePos, chainP,
  * keepTranslations, blend, pin, correctionRange } with quaternions as {x,y,z,w} and positions
- * as {x,y,z}; blend is the key's own correction range in frames (src/ardy/ik.js
+ * as {x,y,z}; blend is the key's own correction range in frames (src/motion/ik.js
  * correctionWeight), absent for the editor's default range; pin is the id of
- * the range pin that baked the key (src/ardy/range-pin.js). correctionRange
+ * the range pin that baked the key (src/motion/range-pin.js). correctionRange
  * pairs the boundary keys of an explicitly selected interval. */
 const ikTrackKey = input({}, { q: perBone(quaternion), p: StudioSchemas.Vec3, baseQ: perBone(quaternion), basePos: StudioSchemas.Vec3,
 	chainP: perBone(StudioSchemas.Vec3), keepTranslations: { type: "boolean" }, blend: { type: "integer", minimum: 1, maximum: 240 },

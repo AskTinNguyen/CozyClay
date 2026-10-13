@@ -171,20 +171,16 @@ expect(
 );
 expect("the seed is armed by state, so an effect can wait on the rig", start.includes("setTutorialSeedPending(true)"));
 
-const seed = app.slice(app.indexOf("// The camera tutorial's seed (#209)"), app.indexOf("}, [tutorialSeedPending, activeRig, motionBusy]);"));
+const seed = app.slice(app.indexOf("// The camera tutorial's seed (#209)"), app.indexOf("}, [tutorialSeedPending, activeRig]);"));
 expect("the seed effect exists", seed.length > 0);
 expect(
 	"it waits on the new character's rig, never on a timer",
-	seed.includes("if (!tutorialSeedPending || !activeRig || motionBusy) return;") && !/setTimeout|requestAnimationFrame/.test(seed),
+	seed.includes("if (!tutorialSeedPending || !activeRig) return;") && !/setTimeout|requestAnimationFrame/.test(seed),
 );
-expect("it loads the shipped walk take", seed.includes("loadMotion(DEMO_MOTION_URL, DEMO_MOTION_PROMPT,"));
+expect("it compiles a walk take v3 for the starter character", seed.includes('runStudioAction("motion.compile", { characterId: activeChar.id, spec })') && seed.includes("tutorialWalkSpec(activeChar)"));
 expect("it fires regardless of bridge state", !/if \([^)]*bridge/.test(seed));
-expect("it consumes the flag once", seed.includes("setTutorialSeedPending(false)") && seed.includes("demoSeeded.current = true"));
-expect("the take the tutorial seeds is the landing page's", app.includes("DEMO_MOTION_URL,") && app.includes("DEMO_MOTION_PROMPT,"));
-expect(
-	"the walk clip still ships with the build",
-	readFileSync(new URL("../src/stage-startup-defaults.js", import.meta.url), "utf8").includes('export const DEMO_MOTION_URL = "/demo/walk-then-stop.npz"'),
-);
+expect("it consumes the flag once", seed.includes("setTutorialSeedPending(false)") && seed.includes("tutorialSeedEpochRef.current = null"));
+expect("no shipped npz clip is fetched any more", !/loadMotion|\.npz/.test(seed));
 expect(
 	"the starter it opens is a real bundled scene named City Block",
 	(() => {

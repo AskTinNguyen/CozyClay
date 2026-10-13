@@ -44,8 +44,7 @@ import {
 import { playgroundSceneUrl, fetchSceneProject } from "../playground.js";
 import { openAssetDb, referencedAssetIds, getAsset, putAsset } from "../scene-assets.js";
 import { internWorkflowOutputs, workflowOutputRefs, resolveWorkflowOutputs } from "../workflow/workflow-resources.js";
-import { encodeMotionResource } from "../motion-resources.js";
-import { openMotionDb, putMotion, sweepMotions } from "../motion-store.js";
+
 import { resourceManifest } from "../project-resources.js";
 import { isKo, ko } from "../locale.js";
 import { track, bucketCount, bucketProjectAge, startExportAttempt } from "../analytics.js";
@@ -54,7 +53,7 @@ import { DEFAULT_WORKSPACE_LAYOUT, DEFAULT_DURATION_S, TIMELINE_FPS } from "../a
 import { saveCustomPoses } from "../poses.js";
 import { readShotAuthoringDocument } from "../shot-authoring.js";
 import { initialShots } from "../cuts.js";
-import { createIkState } from "../ardy/ik.js";
+import { createIkState } from "../motion/ik.js";
 
 // The scene list and project identity share one history. Dirty is derived from
 // the saved checkpoint, not an authored edit, and has its own non-history slice.
@@ -238,56 +237,17 @@ export function useScenes(appContext) {
 		return JSON.stringify(createProjectDocument(projectDocumentInput(name)));
 	}
 
-	async function collectProjectSerialized(name) {
+		async function collectProjectSerialized(name) {
 		const input = projectDocumentInput(name);
-		const scenesDocument = {
-			...input.scenesDocument,
-			scenes: input.scenesDocument.scenes.map((scene) => ({
-				...scene,
-				stage: scene.stage
-					? {
-						...scene.stage,
-						characters: (scene.stage.characters ?? []).map((character) => ({
-							...character,
-							motionRef: character.motionRef ? { ...character.motionRef } : character.motionRef,
-						})),
-					}
-					: scene.stage,
-			})),
-		};
+		const scenesDocument = input.scenesDocument;
 		const db = await openAssetDb();
 		try {
 			const ids = [...referencedAssetIds(scenesDocument.scenes)];
 			const assets = await Promise.all(ids.map((id) => getAsset(db, id)));
 			const workflowResult = await internWorkflowOutputs(input.workflow);
-			const referencedMotionIds = new Set(
-				scenesDocument.scenes.flatMap((scene) => (scene.stage?.characters ?? [])
-					.map((character) => character.motionRef?.motionId?.toLowerCase())
-					.filter(Boolean)),
-			);
-			const motions = [...appContext.shared.projectMotionsRef.current.entries()]
-				.filter(([id]) => referencedMotionIds.has(id))
-				.map(([, record]) => record);
-			const motionCache = new Map();
-			for (const record of motions) motionCache.set(record.motionId.toLowerCase(), record);
-			for (const scene of scenesDocument.scenes) for (const character of scene.stage?.characters ?? []) {
-				const clip = appContext.shared.motionFullRef.current.get(character.id);
-				if (!clip?.sourceBytes) continue;
-				let record = appContext.shared.motionEncodingCacheRef.current.get(clip.sourceBytes);
-				if (!record) {
-					record = await encodeMotionResource(clip.sourceBytes, { prompt: character.motionRef?.prompt, sourceUrl: character.motionRef?.url });
-					appContext.shared.motionEncodingCacheRef.current.set(clip.sourceBytes, record);
-				}
-				const cached = motionCache.get(record.motionId) ?? record;
-				motionCache.set(record.motionId, cached);
-				if (!motions.includes(cached)) motions.push(cached);
-				appContext.shared.projectMotionsRef.current.set(record.motionId.toLowerCase(), cached);
-				character.motionRef = { ...(character.motionRef || {}), motionId: cached.motionId };
-			}
-			try { const motionDb = await openMotionDb(); await Promise.all(motions.map((record) => putMotion(motionDb, record))); motionDb.close(); } catch (error) { console.warn("[cozyclay] could not cache motions", error); }
 			const allAssets = [...assets.filter(Boolean), ...workflowResult.assets];
-			const nextInput = { ...input, scenesDocument, workflow: workflowResult.graph, assets: allAssets, motions };
-			const manifest = resourceManifest({ scenesDocument: nextInput.scenesDocument, workflow: nextInput.workflow, poseLibrary: nextInput.customPoses, assets: allAssets, motions, workflowOutputRefs });
+			const nextInput = { ...input, scenesDocument, workflow: workflowResult.graph, assets: allAssets };
+			const manifest = resourceManifest({ scenesDocument: nextInput.scenesDocument, workflow: nextInput.workflow, poseLibrary: nextInput.customPoses, assets: allAssets, workflowOutputRefs });
 			setProjectManifest(manifest);
 			if (manifest.missing.length) {
 				const error = new Error("Project has missing resources");
@@ -445,10 +405,8 @@ export function useScenes(appContext) {
 		appContext.shared.setTutorialSeedPending(false);
 		appContext.shared.setCameraTutorialHandoff(null);
 		appContext.shared.exportShotIdRef.current = null;
-		appContext.shared.projectMotionsRef.current = new Map((project.motions ?? []).map((record) => [record.motionId?.toLowerCase(), record]).filter(([id]) => id));
 		const source = project.scenesDocument;
-		openMotionDb().then(async (db) => { try { await Promise.all([...appContext.shared.projectMotionsRef.current.values()].map((record) => putMotion(db, record))); const ids = new Set((source?.scenes ?? []).flatMap((scene) => (scene.stage?.characters ?? []).map((character) => character.motionRef?.motionId?.toLowerCase()).filter(Boolean))); await sweepMotions(db, ids); } finally { db.close(); } }).catch(() => {});
-		// A project FILE carries its own scene document and never passes the
+				// A project FILE carries its own scene document and never passes the
 		// storage reader, so the 20 fps → 24 fps clock migration is applied here
 		// too — otherwise an older .cozyclay would open a sixth too fast.
 		const doc = migrateToCurrentScenes(source);
@@ -470,7 +428,7 @@ export function useScenes(appContext) {
 		// Whatever document this is, it is no longer the scene the tutorial opened
 		// for itself; startCameraTutorial re-arms the flag after its own open.
 		appContext.shared.tutorialStarterRef.current = false;
-		setProjectManifest(resourceManifest({ scenesDocument: doc, workflow: resolvedWorkflow, poseLibrary: mergedCustomPoses, assets: project.assets ?? [], motions: appContext.shared.projectMotionsRef.current, workflowOutputRefs }));
+		setProjectManifest(resourceManifest({ scenesDocument: doc, workflow: resolvedWorkflow, poseLibrary: mergedCustomPoses, assets: project.assets ?? [], workflowOutputRefs }));
 		track("project:opened", { age_bucket: bucketProjectAge(Date.now() - (project.savedAt ?? Date.now())) });
 	}
 
@@ -586,7 +544,6 @@ export function useScenes(appContext) {
 		setProjectNameDialog(null);
 		const fresh = createSceneDocument(ko("SCENE 01", "씬 01"));
 		storeWorkflowGraph(createWorkflowGraph());
-		appContext.shared.projectMotionsRef.current = new Map();
 		appContext.shared.motionFullRef.current.clear();
 		domain.replaceDocument(fresh.scenes, fresh.activeSceneId, name, previsMode);
 		persistScenes(fresh.scenes, fresh.activeSceneId);
@@ -660,16 +617,16 @@ export function useScenes(appContext) {
 		// The motion-layer buffer reloads from the scene's first character.
 		const firstLayer = stage.characters[0]?.layer;
 		appContext.shared.setWaypoints(firstLayer?.waypoints ?? shotState.waypoints ?? []);
-		appContext.shared.setPromptClips(firstLayer?.promptClips?.map((clip) => ({ ...clip })) ?? []);
-		// Takes belong to the room being left; restoreMotionRefs re-fetches the
+		
+		// Takes belong to the room being left; the motion layers load the
 		// incoming scene's, and a stale full take must never survive the switch.
 		appContext.shared.motionFullRef.current.clear();
-		appContext.shared.setSelectedPromptId(null);
+		
 		appContext.shared.ikStatesRef.current.clear();
 		appContext.shared.ikStateRef.current = createIkState();
 		appContext.shared.loadedLayerCharRef.current = stage.characters[0]?.id ?? null;
 		appContext.shared.setActiveCharacterId(stage.characters[0]?.id ?? null);
-		appContext.shared.restoreMotionRefs(stage.characters);
+		
 		appContext.shared.setTlFrame(0);
 		appContext.shared.setMovePlaying(false);
 		appContext.shared.manualCameraOverrideRef.current = false;

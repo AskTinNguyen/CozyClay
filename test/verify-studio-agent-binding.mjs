@@ -14,17 +14,19 @@ import { createObjectsDomain, createMotionDomain, mountHistoryCast } from './bus
 import { createStageDomain } from '../src/domains/stage.js';
 import { createCharacterEntry, createCharacterLayer, addScene, duplicateScene, renameScene, removeScene, isProxyFigure } from '../src/scenes.js';
 import * as characterKind from '../src/character-kind.js';
-import { judgeNextWaypoint } from '../src/ardy/waypoints.js';
+import { judgeNextWaypoint } from '../src/motion/waypoints.js';
 import { createStableItemId, removeStableItem, updateStableItem } from '../src/stable-items.js';
 import { createCameraBlock, removeCameraRail, updateCameraBlock } from '../src/camera-block.js';
 import { railFollowForNewGeometry } from '../src/camera-rail-schedule.js';
 import { createSemanticState, createFirstEditTracker } from '../src/semantic-edit.js';
 import * as objects from '../src/scene-objects.js';
-import * as ik from '../src/ardy/ik.js';
-import { copyPhysicsKeys, physicsKeyStamp } from '../src/ardy/physics-review.js';
-import * as playback from '../src/ardy/playback.js';
+import * as ik from '../src/motion/ik.js';
+import { copyPhysicsKeys, physicsKeyStamp } from '../src/motion/physics-review.js';
+import * as playback from '../src/motion3/playback.js';
+import * as rigSnapshot from '../src/motion/rig-snapshot.js';
+import { compileTakeSource } from '../src/domains/motion/take-source.js';
+import { skeletonFor } from '../src/motion3/rigs/index.js';
 import { primeBindPose, normalizeBoneName } from '../src/poses.js';
-import { TRAIL_EFFECTOR_JOINTS } from '../src/motion-trail.js';
 import { sampleAt } from '../src/sample-at.js';
 import { createShot, shotAtFrame, addShotAtFrame } from '../src/cuts.js';
 import { placementAt } from '../src/root-path.js';
@@ -41,12 +43,6 @@ import { focalMmToFov, fovToFocalMm, IMAGE_MODELS, CUSTOM_MOVE, SUBJECT_HEIGHT_M
 import { PART_COLOURS } from '../src/part-colours.js';
 import { objectTransformAt } from '../src/object-path.js';
 import { dispatchLiveFrame } from '../src/live-control.js';
-import { CSKEL27_NEUTRAL } from '../src/ardy/cskel27-neutral.js';
-import { characterScaleFor } from '../src/ardy/npz.js';
-import { retimeMotion } from '../src/ardy/retime.js';
-import { createMotionEdit } from '../src/ardy/motion-edit.js';
-import { applyMotionCalibration, normalizeMotionCalibration } from '../src/ardy/motion-calibration.js';
-import { decodeMotionResource, encodeMotionResource, resolveMotionSource, sha256Hex } from '../src/motion-resources.js';
 
 const cases = ['previs-mode-and-character-kind', 'verify-plan-and-geometry', 'inspect-entity-transforms', 'targeted-commit-and-undo', 'stale-target-and-epoch', 'mid-gesture-target', 'lost-acknowledgement', 'camera-undo', 'still-frame-shot-camera-key', 'clip-frame-shot-camera-key', 'rail-camera-undo', 'rail-camera-undo-after-object-undo', 'context-revisions', 'recreated-motion-read-and-verify', 'stale-receipt-undo', 'reverted-edit-invalidates-target', 'patch-character-tint-and-undo', 'patch-stage-key-light-and-undo', 'patch-partial-drop', 'patch-during-gesture', 'patch-shot-and-prompt-blocks', 'patch-stage-environment-text-and-undo', 'run-action-shot-create-and-undo', 'run-action-object-duplicate-and-undo', 'run-action-refusals', 'run-action-character-waypoints-and-undo', 'run-action-character-ik-keys-and-undo', 'run-action-object-attach-and-undo', 'ui-refusals-localized-or-silent', 'run-action-shot-camera-rail-and-undo', 'run-action-view-toggles', 'context-entity-index', 'context-assets', 'inspect-scopes', 'cursor-survives-edit', 'verify-stale-receipt', 'verify-result-targets', 'late-apply-inspect-patch', 'arrange-with-attached-prop', 'arrange-local-space', 'run-action-export-shot-video', 'run-action-scenes', 'run-action-project-save', 'run-action-asset-import-and-undo', 'run-action-ai-prepare-shot'];
 const argv = process.argv.slice(2);
@@ -69,7 +65,7 @@ const carried = (() => {
  const source = readFileSync(new URL('../src/stage-attach-frames.js', import.meta.url), 'utf8');
  const start = source.indexOf('export const ATTACH_BONE_ROWS'), end = source.length;
  assert(start > 0 && end > start, 'app-stage.jsx attachment block');
- return new Function('THREE', 'SCENE_ATTACH_BONES', 'TRAIL_EFFECTOR_JOINTS', 'normalizeBoneName', `${source.slice(start, end).replace(/^export /gm, '')}\nreturn { attachFrameMatrix, sceneObjectMatrix, attachPlacementPatch, placeSceneObject, attachWorldMatrix };`)(THREE, objects.SCENE_ATTACH_BONES, TRAIL_EFFECTOR_JOINTS, normalizeBoneName);
+ return new Function('THREE', 'SCENE_ATTACH_BONES', 'normalizeBoneName', `${source.slice(start, end).replace(/^export /gm, '')}\nreturn { attachFrameMatrix, sceneObjectMatrix, attachPlacementPatch, placeSceneObject, attachWorldMatrix };`)(THREE, objects.SCENE_ATTACH_BONES, normalizeBoneName);
 })();
 function bounded(promise) {
  let timer;
@@ -77,10 +73,11 @@ function bounded(promise) {
 }
 const aimAt = (p,t) => ({ yaw: Math.atan2(-(t.x-p.x), -(t.z-p.z)), pitch: Math.atan2(t.y-p.y, Math.hypot(t.x-p.x,t.z-p.z)) });
 const forwardFrom = (yaw,pitch) => new THREE.Vector3(-Math.sin(yaw)*Math.cos(pitch),Math.sin(pitch),-Math.cos(yaw)*Math.cos(pitch));
+// A 48-frame compiled take v3 (standing Y Bot) for the active character.
 function clip() {
- const frames=48,rotMats=new Float32Array(frames*243),rootPos=new Float32Array(frames*3),posedJoints=new Float32Array(frames*81);
- for(let f=0;f<frames;f++) {for(let j=0;j<27;j++){rotMats.set([1,0,0,0,1,0,0,0,1],(f*27+j)*9);const p=CSKEL27_NEUTRAL[j];posedJoints.set([p[0],p[1]+1.3544128,p[2]],(f*27+j)*3);}rootPos.set(posedJoints.subarray(f*81,f*81+3),f*3);}
- return { frames,fps:24,personScale:1,rotMats,rootPos,posedJoints };
+ const sk=skeletonFor('y-bot-tpose'),I=sk.index,P=sk.restWorldPos,ank=P[I.LeftFoot][1];
+ const spec={schema:'cozyclay.motion-spec.v1',fps:24,frames:48,keys:[{f:0,set:{root:[0,P[I.Hips][1]-0.01,0],yaw:0,foot_l:[0.09,ank,-0.03],foot_r:[-0.09,ank,0.03]}}]};
+ return compileTakeSource({schema:'cozyclay.take.v3',rig:'y-bot-tpose',spec,placement:{position:[0,0,0],yaw:0},scene:{objects:{}}});
 }
 const bytes = readFileSync(new URL('../public/models/y-bot-tpose.fbx', import.meta.url));
 function rig() { const r=new FBXLoader().parse(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength),'');r.scale.setScalar(.01);primeBindPose(r);const parent=new THREE.Group();parent.add(r);parent.updateMatrixWorld(true);return r; }
@@ -91,7 +88,7 @@ function fixture(options={}) {
  const a=createCharacterEntry({id:'actor-a',model:'y-bot-tpose',x:0,z:0}), b=createCharacterEntry({id:'actor-b',model:'y-bot-tpose',x:4,z:0});
  const chars=options.characters??[a,b], rigs={'actor-a':rig(),'actor-b':rig()}; rigs['actor-b'].parent.position.x=4;rigs['actor-b'].parent.updateMatrixWorld(true);
  const actionsRef=ref(null);
- const revision=ref(0), clock=ref(0), lastObject=ref(0), history=ref({past:[],future:[]}), studioHistory=ref(new Map()), characterRef=ref(chars), buffer=ref({waypoints:[],promptClips:[],motion:null}), state=ref(ik.createIkState()), layers=ref(new Map());
+ const revision=ref(0), clock=ref(0), lastObject=ref(0), history=ref({past:[],future:[]}), studioHistory=ref(new Map()), characterRef=ref(chars), buffer=ref({waypoints:[],motion:null}), state=ref(ik.createIkState()), layers=ref(new Map());
  const stage={shotAspect:'16:9',cameraPresetId:null,sensorId:'fullFrame',hasCharSheet:false,environmentImage:null,environment:'a sunlit modern living room',style:'moody cinematic lighting, 35mm film look',hasEnvSheet:false,keyLight:{x:6,y:9,z:4,intensity:1.12,warmth:0.5}};
  const live=ref({characters:chars,objects:[],rigs,shots:[],scenes:[{id:'scene',name:'Fixture',objects:[],shotDocument:null,stage:null}],activeCharacterId:a.id,stage,timeline:{currentFrame:0,frameCount:48},filmback:{sensorId:'fullFrame',aspectRatio:16/9},studioSelection:{kind:'character',id:a.id},studioShotId:null,studioView:{mode:'scene',frame:0,playing:false,lookThrough:false,grid:false,autoColor:false}});
  const camera=new THREE.PerspectiveCamera(45,16/9); camera.position.set(0,1.6,5);
@@ -118,7 +115,7 @@ function fixture(options={}) {
   cameraMove:'Static / locked-off',customMove:'',hasCharSheet:false,hasEnvSheet:false,partColoursEnabled:false,shotOutput:{label:'16:9',width:1920,height:1080},characters:chars,
   captureFramingPng:framing=>{captures.push(framing);return `data:image/png;base64,${btoa(JSON.stringify(framing.pos))}`;},captureRef:ref(null),bufferToPng:()=>null,
   navigator:{clipboard:{writeText:async text=>{clipboard.push(text);}}}};
- const scope={THREE,cloneSkeleton,createCommandBus,HISTORY_LIMIT,...characterKind,isProxyFigure,placementAt,...protocol,...context,...commands,...objects,...ik,...playback,verifyInstalledTake:studioMotion.verifyInstalledTake,copyPhysicsKeys,physicsKeyStamp,sampleAt,shotAtFrame,focalMmToFov,fovToFocalMm,objectTransformAt,aimAt,forwardFrom,
+ const scope={THREE,cloneSkeleton,createCommandBus,HISTORY_LIMIT,...characterKind,isProxyFigure,placementAt,...protocol,...context,...commands,...objects,...ik,...playback,...rigSnapshot,verifyInstalledTake:studioMotion.verifyInstalledTake,copyPhysicsKeys,physicsKeyStamp,sampleAt,shotAtFrame,focalMmToFov,fovToFocalMm,objectTransformAt,aimAt,forwardFrom,
  liveStateRef:live,sceneRevisionRef:revision,charactersRef:characterRef,loadedLayerCharRef:ref(a.id),bufferRef:buffer,ikStateRef:state,ikStatesRef:layers,storeRef:store,
  charHistoryRef:history,opClockRef:clock,lastObjectOpRef:lastObject,studioHistoryRef:studioHistory,studioActionGroupRef:ref(null),motionFullRef:ref(new Map()),
  store:store.current,suppressObjectClockRef:suppressObjectClock,studioBindingRef:ref(null),objectDeleteUndo:null,selectedSceneObjectId:null,
@@ -130,21 +127,20 @@ function fixture(options={}) {
  // Stands in for the mounted prop groups: where each prop is drawn right now.
  propWorldRef:ref((id,out)=>{const o=store.current.objects.find(row=>row.id===id);if(!o)return null;const local=carried.sceneObjectMatrix(o,new THREE.Matrix4());if(!o.attach)return out.copy(local);const frame=carried.attachFrameMatrix(rigs[o.attach.characterId]??null,o.attach.bone??null,new THREE.Matrix4());return frame?out.copy(frame.multiply(local)):null;}),snapshotCast:()=>({}),markSemanticEdit,setCharacters:castOwner.set,editCharacters:castOwner.edit,setShots:shotsOwner.set,editShots:shotsOwner.edit,
  ...studioActions,addShotAtFrame,shots:[],tlFrame:0,tlFrameCount:48,captureCurrentFraming:()=>({pos:{x:0,y:1.6,z:5},yaw:0,pitch:0,fovDeg:40}),trackFeature:()=>{},window:{dispatchEvent:()=>true},
- ko:options.korean?(en,kr)=>kr:en=>en,isKo:Boolean(options.korean),studioActionsRef:actionsRef,loadMotionFromUrl:(...args)=>urlLoader(...args),sha256Hex,encodeMotionResource,decodeMotionResource,resolveMotionSource,retimeMotion,TIMELINE_FPS:24,createMotionEdit,applyMotionCalibration,normalizeMotionCalibration,characterScaleFor,
- projectMotionsRef:ref(new Map()),motionEncodingCacheRef:ref(new WeakMap()),restoreEpochRef:ref(0),
+ ko:options.korean?(en,kr)=>kr:en=>en,isKo:Boolean(options.korean),studioActionsRef:actionsRef,TIMELINE_FPS:24,
  // The scene document: App's own scene handlers over the real scenes.js
  // edits; persistence is a no-op and openScene stands in for the React room swap.
  scenesRef:ref(live.current.scenes),addScene,duplicateScene,renameScene,removeScene,track:()=>{},persistScenes:()=>{},snapshotActiveScene:()=>scope.scenesRef.current,
  openMotionDb:async()=>({close(){}}),getMotion:async(db,id)=>motionStore.get(id.toLowerCase())??null,
  putMotion:async(db,record)=>{motionStore.set(record.motionId.toLowerCase(),record);return record;}};
- for(const name of ['setTlFps','setProjectManifest','setCameraPos','setFovDeg','setCameraPresetId','setWaypoints','setPromptClips','setMotion','setCommittedIkEdits','setIkTick','setTlFrameCount','setToast','setActiveCharacterId','setSelectedHierarchyId','setTlFrame','setWorkflowMode','setLookThroughShot','setGridView','setAutoColor','setTlPlaying','setIkMode','setIkFocus','setKeyLight','setEnvironmentImage','setEnvironment','setStyle','setHasEnvSheet','setShotAspectKey','setSensorFormat','setMovePlaying','setPartColoursEnabled','setPartColoursMode','setGuideMode','setWorkspaceLayout','setInsetPos','setResult','setResultOpen','setCopied','setRecordedVideoName'])scope[name]=noPublish(name);
+ for(const name of ['setTlFps','setProjectManifest','setCameraPos','setFovDeg','setCameraPresetId','setWaypoints','setMotion','setCommittedIkEdits','setIkTick','setTlFrameCount','setToast','setActiveCharacterId','setSelectedHierarchyId','setTlFrame','setWorkflowMode','setLookThroughShot','setGridView','setAutoColor','setTlPlaying','setIkMode','setIkFocus','setKeyLight','setEnvironmentImage','setEnvironment','setStyle','setHasEnvSheet','setShotAspectKey','setSensorFormat','setMovePlaying','setPartColoursEnabled','setPartColoursMode','setGuideMode','setWorkspaceLayout','setInsetPos','setResult','setResultOpen','setCopied','setRecordedVideoName'])scope[name]=noPublish(name);
  scope.setToast=value=>{values.setToast=studioActions.resolveStudioToast(value,Boolean(options.korean),scope.ko).uiMessage;};
  // App's render-time choice for the Send-to-AI package (its mode/imageModel state).
  Object.assign(scope,aiScope,{mode:'image',imageModel:'gpt_image_2'});
  scope.setMotion=value=>{noPublish('setMotion')(value);for(const done of motionSet.splice(0))done(value);};
  scope.setScenes=noPublish('setScenes');
  scope.openScene=(scene,nextScenes)=>{scope.scenesRef.current=nextScenes;live.current.scenes=nextScenes;scope.activeSceneIdRef.current=scene.id;scope.studioSceneEpochRef.current=crypto.randomUUID();};
- const names=['beginStudioObjectAction','stepObjectHistory','publishStudioShots','commitStudioShots','finishStudioHistoryGesture',"canUndoStudioReceipt",'restoreMotionRefs','readStudioCamera','readStudioState','publishStudioCamera','publishStudioStage','snapshotStudioDomain','publishStudioCharacters','syncStudioLayerBuffer','stepStudioHistory','undoScene','redoScene','commitStudioDraft','studioBounds','operateStudio','snapshotExportRig','restoreExportRig','poseMemberAtFrame','beginPlaybackOn','leaveIkMode','sceneObjectWorldMatrix','recordStudioAction','beginStudioAction','publishStudioDomain','isStudioHistoryRetained','addTimelineShot','runStudioAction',
+ const names=['beginStudioObjectAction','stepObjectHistory','publishStudioShots','commitStudioShots','finishStudioHistoryGesture',"canUndoStudioReceipt",'readStudioCamera','readStudioState','publishStudioCamera','publishStudioStage','snapshotStudioDomain','publishStudioCharacters','syncStudioLayerBuffer','stepStudioHistory','undoScene','redoScene','commitStudioDraft','studioBounds','operateStudio','snapshotExportRig','restoreExportRig','poseMemberAtFrame','leaveIkMode','sceneObjectWorldMatrix','recordStudioAction','beginStudioAction','publishStudioDomain','isStudioHistoryRetained','addTimelineShot','runStudioAction',
   'choosePartColours','setInsetCollapsed','expandInset','setShotCameraRail','clearShotCameraRail','changeActiveCamera','framingSessionOpen','attachSceneObject','setCharacterIkKey','removeCharacterIkKey','clearCharacterIkKeys','ikStateFor','editCharacterIkKeys','snapshotIkKeys',
   'validateWaypointAt','castMemberOf','readCharacterWaypoints','writeCharacterWaypoints','addCharacterWaypoint','moveCharacterWaypoint','removeCharacterWaypoint','clearCharacterWaypoints',
   'switchSceneDocument','addSceneDocument','duplicateSceneDocument','renameSceneDocument','deleteSceneDocument',
@@ -508,13 +504,10 @@ const implementations={
   assert.deepEqual(shot.document.shots.map(s=>({id:s.id,name:s.name,range:{startFrame:s.startFrame,endFrameExclusive:s.endFrame+1},mode:s.camera.mode,
    cameraKeys:s.cameraKeys.map(({id,...key})=>key),rail:s.camera.cameraRail})),[{id:rail.id,name:'Rail shot',range:{startFrame:0,endFrameExclusive:48},mode:'rail',
    cameraKeys:[{frame:5,framing:{pos:{x:0,y:1.6,z:5},yaw:0.1,pitch:-0.05,fovDeg:40}}],rail:[{x:-2,z:4},{x:2,z:4}]}]);
-  const blocks=await f.call('patch_elements',f.request('patch_elements',{ops:[{target:{kind:'character',id:'actor-a'},set:{promptBlocks:[{startFrame:0,endFrame:24,text:'walks in'}]}}]}));
-  assert.equal(blocks.status,'applied',JSON.stringify(blocks));
   f.scope.castDomain.run('cast.setLayer',{characterId:'actor-a',layer:{...f.scope.castDomain.read()[0].layer,waypoints:[{frame:0,x:0,z:0},{frame:24,x:1,z:2}]}});
   const keyed=await f.call('run_action',f.request('run_action',{action:'ik.setKey',args:{characterId:'actor-b',frame:7,tracks:{hips:{p:{x:0,y:1,z:0},q:[{x:0,y:0,z:0,w:1}]}}}}));
   assert.equal(keyed.ok,true,JSON.stringify(keyed));
   const motion=await f.call('inspect_studio',{scope:'motion'}),actor=motion.document.characters.find(c=>c.id==='actor-a');
-  assert.deepEqual(actor.layer.promptClips.map(({id,...clip})=>clip),[{startFrame:0,endFrame:24,text:'walks in'}]);
   assert.deepEqual(actor.layer.waypoints.map(p=>({frame:p.frame,position:{x:p.x,y:p.y??0,z:p.z}})),[{frame:0,position:{x:0,y:0,z:0}},{frame:24,position:{x:1,y:0,z:2}}]);
   assert.deepEqual(motion.document.motion.find(c=>c.id==='actor-b').ikKeys.map(k=>k.frame),[7]);
   assert.equal(f.binding.context().entities.find(c=>c.id==='actor-a').motion.frames,0);
@@ -558,7 +551,7 @@ const implementations={
   assert.equal((await f.call('undo_edit',f.request('undo_edit',{receiptId:r.receiptId}))).status,'undone');
   assert.equal(f.store.current.objects.find(o=>o.id===id).color,'#c2c6c8');
  },
- async 'patch-shot-and-prompt-blocks'(f){const framed=await f.call('frame_shot',f.request('frame_shot',{subjectIds:['actor-a'],keyAtFrame:0,framing:{exact:{position:{x:0,y:1.6,z:5},lookAt:{x:0,y:1,z:0},focalMm:35}}}));assert.equal(framed.ok,true,JSON.stringify(framed));const shotId=f.live.current.shots[0].id;const model=await f.call('patch_elements',f.request('patch_elements',{ops:[{target:{kind:'shot',id:shotId},set:{targetModel:'seedance-2.5'}}]}));assert.equal(model.status,'applied',JSON.stringify(model));assert.equal(f.live.current.shots[0].targetModel,'seedance-2.5');assert.deepEqual(model.delta,[{id:shotId,after:{patched:[{path:'shot.targetModel',text:'seedance-2.5'}]}}]);const unnamed=await f.call('patch_elements',f.request('patch_elements',{ops:[{target:{kind:'shot'},set:{targetModel:'no-such-model'}}]}));assert.equal(unnamed.code,'INVALID_ARGUMENT','owned collection patches require an explicit id');const unknown=await f.call('patch_elements',f.request('patch_elements',{ops:[{target:{kind:'shot',id:shotId},set:{targetModel:'no-such-model'}}]}));assert.equal(unknown.status,'partial',JSON.stringify(unknown));assert.deepEqual(unknown.ops,[{index:0,status:'partial',droppedPaths:['shot.targetModel']}]);assert.equal(f.live.current.shots[0].targetModel,undefined,'an unknown video model is dropped by the shot document repair');const blocks=[{startFrame:0,endFrame:24,text:'walks in'}];const schedule=await f.call('patch_elements',f.request('patch_elements',{ops:[{target:{kind:'character',id:'actor-a'},set:{promptBlocks:blocks}}]}));assert.equal(schedule.status,'applied',JSON.stringify(schedule));assert.deepEqual(schedule.delta[0].after.patched,[{path:'character.promptBlocks',count:1}]);assert.equal(f.buffer.current.promptClips.length,1,'the active layer buffer carries the published schedule');assert.equal(f.buffer.current.promptClips[0].text,'walks in');assert(f.actual.stepStudioHistory(false));assert.equal(f.buffer.current.promptClips.length,0);},
+ async 'patch-shot-and-prompt-blocks'(f){const framed=await f.call('frame_shot',f.request('frame_shot',{subjectIds:['actor-a'],keyAtFrame:0,framing:{exact:{position:{x:0,y:1.6,z:5},lookAt:{x:0,y:1,z:0},focalMm:35}}}));assert.equal(framed.ok,true,JSON.stringify(framed));const shotId=f.live.current.shots[0].id;const model=await f.call('patch_elements',f.request('patch_elements',{ops:[{target:{kind:'shot',id:shotId},set:{targetModel:'seedance-2.5'}}]}));assert.equal(model.status,'applied',JSON.stringify(model));assert.equal(f.live.current.shots[0].targetModel,'seedance-2.5');assert.deepEqual(model.delta,[{id:shotId,after:{patched:[{path:'shot.targetModel',text:'seedance-2.5'}]}}]);const unnamed=await f.call('patch_elements',f.request('patch_elements',{ops:[{target:{kind:'shot'},set:{targetModel:'no-such-model'}}]}));assert.equal(unnamed.code,'INVALID_ARGUMENT','owned collection patches require an explicit id');const unknown=await f.call('patch_elements',f.request('patch_elements',{ops:[{target:{kind:'shot',id:shotId},set:{targetModel:'no-such-model'}}]}));assert.equal(unknown.status,'partial',JSON.stringify(unknown));assert.deepEqual(unknown.ops,[{index:0,status:'partial',droppedPaths:['shot.targetModel']}]);assert.equal(f.live.current.shots[0].targetModel,undefined,'an unknown video model is dropped by the shot document repair');},
  async 'patch-stage-environment-text-and-undo'(f){const before=f.binding.refresh().revision;const r=await f.call('patch_elements',f.request('patch_elements',{ops:[{target:{kind:'stage'},set:{environment:'a rainy rooftop at dusk',style:'handheld 16mm',hasEnvSheet:true}}]}));assert.equal(r.status,'applied',JSON.stringify(r));assert.equal(r.revision.after,before+1);assert.deepEqual(r.delta[0].after.patched,stageEvidence({'stage.environment':{text:'a rainy rooftop at dusk'},'stage.style':{text:'handheld 16mm'},'stage.hasEnvSheet':{flag:true}}));assert.equal(f.live.current.stage.environment,'a rainy rooftop at dusk');assert.equal(f.live.current.stage.style,'handheld 16mm');assert.equal(f.live.current.stage.hasEnvSheet,true);assert.equal(f.history.current.past.length,1,'one stage patch is one history entry');const undo=await f.call('undo_edit',f.request('undo_edit',{receiptId:r.receiptId}));assert.equal(undo.status,'undone',JSON.stringify(undo));assert.notEqual(f.live.current.stage.environment,'a rainy rooftop at dusk');assert.equal(f.live.current.stage.hasEnvSheet,false);},
  async 'patch-during-gesture'(f){f.scope.studioGestureRef.current=true;const r=await f.call('patch_elements',f.request('patch_elements',{ops:[{target:{kind:'stage'},set:{'keyLight.warmth':0.9}}]}));assert.equal(r.code,'TARGET_BUSY',JSON.stringify(r));assert.equal(f.history.current.past.length,0);assert.equal(f.live.current.stage.keyLight.warmth,0.5);},
  async 'run-action-shot-create-and-undo'(f){

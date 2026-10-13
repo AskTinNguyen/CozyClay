@@ -1,4 +1,4 @@
-import { createGroundSampler, isCollidable } from "../../src/ardy/ground.js";
+import { createGroundSampler, isCollidable } from "../../src/motion/ground.js";
 
 let failures = 0;
 function check(name, cond, detail = "") {

@@ -141,8 +141,8 @@ function verify() {
       scenes: ['persistScenes', 'openScene', 'saveProject', 'applyProject'],
       objects: ['addSceneObject', 'importCutout', 'importMesh', 'spawnCutoutAt', 'spawnMeshAt'],
       shots: ['addCameraKeyframe', 'moveCameraKeyframe', 'removeCameraKeyframe'],
-      cast: ['updateCharacterAt', 'removeCharacter', 'addPromptClip', 'changePromptClip', 'removePromptClip'],
-      motion: ['loadMotion', 'clearMotion', 'toggleIkMode', 'ikAddKeyframe'],
+      cast: ['updateCharacterAt', 'removeCharacter', 'savePose', 'removePose'],
+      motion: ['clearMotion', 'toggleIkMode', 'ikAddKeyframe', 'ikDragEnd'],
     };
     const functions = tree => {
       const names = [];

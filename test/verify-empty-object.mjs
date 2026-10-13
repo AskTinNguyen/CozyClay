@@ -22,8 +22,8 @@ import {
 	setSceneObjectParent,
 	updateSceneObject,
 } from "../src/scene-objects.js";
-import { sceneObjectBlockers } from "../src/ardy/collision-blockers.js";
-import { createGroundSampler } from "../src/ardy/ground.js";
+import { sceneObjectBlockers } from "../src/motion/collision-blockers.js";
+import { createGroundSampler } from "../src/motion/ground.js";
 import { coplanarDepthRanks } from "../src/coplanar-depth.js";
 import { sceneObjectsAt } from "../src/object-travel.js";
 import { buildHierarchyNodes } from "../src/hierarchy-model.js";

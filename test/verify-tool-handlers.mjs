@@ -46,8 +46,7 @@ CAMERA
 CAST (total: 1, returned: 1, truncated: false, revision: <rev>)
   A char-a  "a young woman in a tan coat"  at x 0, z 0, facing 0deg  [y-bot-tpose]  <- framed
     model: y-bot-tpose  kind: rig  pose: null  tint: null  scale: 1
-    motionRef: null
-    layer: {"waypoints":[],"promptClips":[]}
+    layer: {"waypoints":[]}
 
 SET (total: 0, returned: 0, truncated: false, revision: <rev>)
   empty — add with place_object

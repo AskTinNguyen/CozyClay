@@ -412,7 +412,7 @@ function registerTests() {
 		const fake=receiptFixture("undone");fake.restoredTargets[0].sceneEpoch="another-epoch";rejects(()=>protocol.validateReceipt(fake));
 	});
 	test("D4 compact fallback preserves every mandatory ID and validates stale cursors", () => {
-		const c = contextFixture(); c.entities = Array.from({length:24},(_,i)=>({id:`char-${i}`,kind:"character",token:`t-${i}`,name:"<".repeat(120),position:point(),yawDeg:0,scale:1,motion:{takeId:null,frames:144,ikKeyCount:0,promptBlockCount:0,keyIds:Array.from({length:8},(_,j)=>`key-${j}-${"x".repeat(100)}`)}}));
+		const c = contextFixture(); c.entities = Array.from({length:24},(_,i)=>({id:`char-${i}`,kind:"character",token:`t-${i}`,name:"<".repeat(120),position:point(),yawDeg:0,scale:1,motion:{takeId:null,frames:144,ikKeyCount:0,keyIds:Array.from({length:8},(_,j)=>`key-${j}-${"x".repeat(100)}`)}}));
 		// Filler whose escaped names overflow the budget through the index alone.
 		c.entities.push(...Array.from({length:376},(_,i)=>({id:`prop-${i}`,kind:"object",token:`p-${i}`,name:"<".repeat(120),position:point(),scale:{x:1,y:1,z:1}})));
 		c.selection={kind:"character",id:"char-23"};c.activeCharacterId="char-22";c.scene.characterCount=24;c.scene.objectCount=376;

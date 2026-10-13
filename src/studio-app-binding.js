@@ -3,7 +3,7 @@
 // history, the action registry); this module owns no React or renderer state.
 import { createCommandBus } from "./command-bus.js";
 import { readElementDocument, elementReadback, elementPatchArgs, elementTarget, elementPatchReceipt } from "./commands/elements.js";
-import { physicsKeyStamp } from "./ardy/physics-review.js";
+import { physicsKeyStamp } from "./motion/physics-review.js";
 import { shotAtFrame } from "./cuts.js";
 import { isProxyFigure } from "./scenes.js";
 import { CUTOUT_KIND, MESH_KIND, OBJECT_LIBRARY, supportHeightForObject } from "./scene-objects.js";
@@ -34,8 +34,7 @@ export function createStudioAppBinding(ports) {
 	const motionContentKey = value => {
 		if (!value || typeof value !== "object") return null;
 		if (typeof value.studioTakeId === "string" && value.studioTakeId) return value.studioTakeId;
-		if (typeof value.motionRef?.motionId === "string" && value.motionRef.motionId) return value.motionRef.motionId;
-		return `${value.frames ?? 0}:${value.fps ?? 0}:${value.rotMats?.length ?? 0}:${value.rootPos?.length ?? 0}:${value.posedJoints?.length ?? 0}`;
+				return `${value.frames ?? 0}:${value.fps ?? 0}`;
 	};
 	const calibrationContentKey = value => value && typeof value === "object" ? JSON.stringify(value) : null;
 	const tokens = new Map(), receipts = new Map(), images = new Map();
@@ -121,7 +120,7 @@ export function createStudioAppBinding(ports) {
 			return { id: c.id, kind: "character", token: tokens.get(c.id).token, name: c.subject || c.id,
 				position: { x: c.x, y: c.y ?? 0, z: c.z }, yawDeg: c.rot ?? 0, scale: c.scale ?? 1, tint: c.tint ?? null, modelId: c.model ?? null,
 				motion: { takeId: t?.motion?.studioTakeId ?? null, frames: t?.motion?.frames ?? 0,
-					ikKeyCount: t?.ikState?.keys.size ?? 0, promptBlockCount: c.layer?.promptClips?.length ?? 0 },
+					ikKeyCount: t?.ikState?.keys.size ?? 0 },
 				capabilities: { rigReady: Boolean(t?.rig), ik: Boolean(t?.rig?.userData?.poseBind), measuredFeet: false },
 				characterKind: isProxyFigure(c) ? "proxy" : "rig", ...(isProxyFigure(c) ? { posture: c.posture ?? "stand" } : {}) };
 		}), ...s.objects.map(o => { const local = localTransformReadback(o, s.objects); return { id: o.id, kind: "object", token: tokens.get(o.id).token, name: o.name || o.id,

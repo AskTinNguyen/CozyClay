@@ -1,7 +1,7 @@
 import * as THREE from "three";
-import { correctionWeight, createIkState, ikEvaluate } from "../../src/ardy/ik.js";
-import { ikKeyJson, ikTrackKeyFromJson } from "../../src/ardy/ik-key-json.js";
-import { copyPhysicsKeys } from "../../src/ardy/physics-review.js";
+import { correctionWeight, createIkState, ikEvaluate } from "../../src/motion/ik.js";
+import { ikKeyJson, ikTrackKeyFromJson } from "../../src/motion/ik-key-json.js";
+import { copyPhysicsKeys } from "../../src/motion/physics-review.js";
 import { studioActionDeclaration } from "../../src/studio-actions.js";
 import { validateStudioSchema } from "../../src/studio-agent-protocol.js";
 

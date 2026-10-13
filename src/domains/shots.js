@@ -381,7 +381,7 @@ export function useShots(appContext) {
   function clampShotRailRanges() {}
   const extentInputs = useRef(null);
   function syncTimelineExtent() {
-    const inputs = [appContext.shared.characters, appContext.shared.activeChar.id, appContext.shared.motion, appContext.shared.promptClips];
+    const inputs = [appContext.shared.characters, appContext.shared.activeChar.id, appContext.shared.motion];
     // App also re-runs this effect when shot history publishes. Only new
     // content can request a new extent; replaying it after Undo would replace
     // the restored entry and destroy Redo. Shot writes already clamp ranges.

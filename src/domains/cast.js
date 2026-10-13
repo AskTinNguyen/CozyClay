@@ -1,4 +1,4 @@
-import { copyPhysicsKeys } from "../ardy/physics-review.js";
+import { copyPhysicsKeys } from "../motion/physics-review.js";
 import { useState, useMemo, useEffect, useSyncExternalStore, useContext } from "react";
 import { AppContext } from '../app-context.js';
 import { createDocumentStore } from "../document-store.js";
@@ -18,11 +18,10 @@ import {
 	DEFAULT_SUBJECT2,
 	nextCharacterId,
 	MAX_WAYPOINTS,
-	TIMELINE_FPS,
 } from "../app-stage.jsx";
 import { ko, isKo } from "../locale.js";
-import { createIkState } from "../ardy/ik.js";
-import { judgeNextWaypoint } from "../ardy/waypoints.js";
+import { createIkState } from "../motion/ik.js";
+import { judgeNextWaypoint } from "../motion/waypoints.js";
 import { StudioProtocolError } from "../studio-agent-protocol.js";
 import { studioActionRefusal } from "../studio-actions.js";
 import { createStableItemId, removeStableItem } from "../stable-items.js";
@@ -323,7 +322,6 @@ export function useCast(appContext) {
 	// every playhead tick.
 	const ghostLayers = useMemo(() => characters.flatMap((entry, index) => entry.id === activeChar.id || entry.hidden ? [] : [{
 		owner: `S${index + 1}`,
-		promptClips: entry.layer?.promptClips ?? [],
 		waypointFrames: (entry.layer?.waypoints ?? []).map((waypoint) => waypoint.frame),
 	}]), [characters, activeChar.id]);
 
@@ -334,7 +332,7 @@ export function useCast(appContext) {
 		characters: appContext.live.characters.map((entry) => ({
 			...entry,
 			layer: entry.id === activeChar.id
-				? { waypoints: appContext.shared.bufferRef.current.waypoints, promptClips: appContext.shared.bufferRef.current.promptClips }
+				? { waypoints: appContext.shared.bufferRef.current.waypoints }
 				: entry.layer,
 		})),
 		bufferMotion: appContext.shared.bufferRef.current.motion,
@@ -359,11 +357,7 @@ export function useCast(appContext) {
 
 	const [hasCharSheet, setHasCharSheet] = useState(appContext.shared.startupStage.hasCharSheet);
 
-	// Bumped when something outside the Inspector needs the Prompt Blocks panel
-	// on screen — selecting or adding a block on the timeline.
-	const [promptBlocksReveal, setPromptBlocksReveal] = useState(0);
-
-	const revealPromptBlocks = () => setPromptBlocksReveal((n) => n + 1);
+	
 
 	// Root waypoints {frame, x, z, heading: null}, kept sorted by frame —
 	// the fixed bridge contract rejects out-of-order or duplicate frames.
@@ -376,13 +370,6 @@ export function useCast(appContext) {
 
 	const [pendingWaypointFrame, setPendingWaypointFrame] = useState(null);
 
-	const promptClips = activeChar.layer.promptClips;
-	const setPromptClips = value => setLayerField('promptClips', value);
-	const editPromptClips = value => writeLayerField(domain.activeId, 'promptClips', value);
-	function writeLayerField(characterId, key, value) {
-		domain.write(rows => rows.map(entry => entry.id === characterId ? { ...entry, layer: { ...entry.layer,
-			[key]: typeof value === 'function' ? value(entry.layer[key]) : value } } : entry));
-	}
 	function setLayerField(key, value) {
 		const entry = domain.read().find(entry => entry.id === domain.activeId) ?? domain.read()[0];
 		const next = typeof value === 'function' ? value(entry.layer[key]) : value;
@@ -390,7 +377,7 @@ export function useCast(appContext) {
 		return domain.run('cast.setLayer', { characterId: entry.id, layer: { [key]: next } });
 	}
 
-	const [selectedPromptId, setSelectedPromptId] = useState(null);
+	
 
 	// The library is the user's own material: poses read from photographs and
 	// poses saved off the rig, accumulating across sessions and projects. No
@@ -705,42 +692,8 @@ export function useCast(appContext) {
 		if (studioPick === id) setStudioPick(DEFAULT_POSE.id);
 	}
 
-	function addPromptClip(frame, surface = "timeline") {
-		const before = domain.read().find(entry => entry.id === domain.activeId).layer.promptClips;
-		const receipt = domain.run('character.addPromptBlock', { characterId: domain.activeId, frame });
-		const clip = domain.read().find(entry => entry.id === domain.activeId).layer.promptClips.find(clip => !before.some(row => row.id === clip.id));
-		setSelectedPromptId(clip.id);
-		trackFeature('prompt_block_add'); return receipt;
-	}
-
-	function changePromptClip(id, text) {
-		domain.beginGesture();
-		const receipt = domain.edit('character.changePromptBlock', { characterId: domain.activeId, id, text });
-		return receipt;
-	}
-
-	// Quality policy: one prompt block never spans more than 5 s. Kimodo
-	// walk-to-run sweeps (seeds 7/21/99; seam stall ratio, 1.0 = no stall)
-	// scored 0.79 for 5 s blocks (best of the sweep), close to a seam-free
-	// single take at 0.85; 8 s blocks collapsed to 0.32. <2 s blocks lose
-	// about a third of their frames to the transition window, so 3-5 s is the recommended
-	// authoring range.
-	const PROMPT_BLOCK_MAX_FRAMES = 5 * TIMELINE_FPS;
-
-	function resizePromptClip(id, edge, frame) {
-		return domain.edit('character.resizePromptBlock', { characterId: domain.activeId, id, edge, frame });
-	}
-	function movePromptClip(id, frame) {
-		return domain.edit('character.movePromptBlock', { characterId: domain.activeId, id, frame });
-	}
-	function removePromptClip(id) {
-		const receipt = domain.run('character.removePromptBlock', { characterId: domain.activeId, id });
-		if (selectedPromptId === id) setSelectedPromptId(null);
-		return receipt;
-	}
 	function applyExternalCharacters(characters) {
 		appContext.storeDomain('cast').run('cast.replace', { characters });
-		appContext.shared.restoreMotionRefs(characters);
 	}
 	function publishStudioCharacters(next) {
 		if (typeof next === 'function') next = next(appContext.live.characters);
@@ -750,18 +703,15 @@ export function useCast(appContext) {
 		for (const entry of next) if (Object.hasOwn(entry, 'sessionMotion')) owner.publishMotion(entry.id, entry.sessionMotion);
 	}
 	/** The active character's layer lives in the editing buffer, and the read
-	 * model folds that buffer back over the cast. A published or restored prompt
-	 * schedule or root path has to reach it in the same tick, or the next read
-	 * would revert it. */
+	 * model folds that buffer back over the cast. A published or restored root
+	 * path has to reach it in the same tick, or the next read would revert it. */
 	function syncStudioLayerBuffer(rows) {
 		if (appContext.storeDomain('cast')) return appContext.storeDomain('cast').syncLayer();
 		const layer = rows.find(entry => entry.id === appContext.shared.loadedLayerCharRef.current)?.layer;
 		const changed = key => Array.isArray(layer?.[key]) && JSON.stringify(layer[key]) !== JSON.stringify(appContext.shared.bufferRef.current[key]);
-		const clips = changed("promptClips"), path = changed("waypoints");
-		if (!clips && !path) return;
-		appContext.shared.bufferRef.current = { ...appContext.shared.bufferRef.current, ...(clips ? { promptClips: layer.promptClips } : {}), ...(path ? { waypoints: layer.waypoints } : {}) };
-		if (clips) setPromptClips(layer.promptClips);
-		if (path) setWaypoints(layer.waypoints);
+		if (!changed("waypoints")) return;
+		appContext.shared.bufferRef.current = { ...appContext.shared.bufferRef.current, waypoints: layer.waypoints };
+		setWaypoints(layer.waypoints);
 	}
 	function undoScene() {
 		const receipt = appContext.bus.run('edit.undo');
@@ -807,7 +757,7 @@ export function useCast(appContext) {
 		switchNativeMotionLayer(previous, entry);
 		appContext.shared.loadedLayerCharRef.current = entry.id;
 		domain.syncLayer();
-		setSelectedPromptId(null); setWaypointMode(false); setActiveWaypointId(null); setPendingWaypointFrame(null);
+		setWaypointMode(false); setActiveWaypointId(null); setPendingWaypointFrame(null);
 	}
 	function createLegacyCastHandlers(finitePatch, characterForRef) {
 		function replaceCharacters(next) { return domain.run('cast.replace', { characters: next }); }
@@ -846,29 +796,14 @@ export function useCast(appContext) {
 			domain.run('character.remove', { characterId: character.id });
 			return { id: character.id };
 		}
-		function setLivePromptBlocks(args) {
-			if (!Array.isArray(args.blocks)) throw new Error("Invalid blocks");
-			const stamp = Date.now();
-			const clips = args.blocks.map((block, i) => {
-				const startFrame = Math.round(Number(block.startFrame));
-				const endFrame = Math.round(Number(block.endFrame));
-				if (!Number.isFinite(startFrame) || !Number.isFinite(endFrame) || endFrame <= startFrame) {
-					throw new Error(`Invalid frame range on block ${i + 1}`);
-				}
-				if (typeof block.text !== "string" || !block.text.trim()) throw new Error(`Block ${i + 1} needs text`);
-				return { id: `prompt-${stamp}-${i}`, startFrame, endFrame, text: block.text.trim() };
-			});
-			domain.run('character.setPromptBlocks', { characterId: domain.activeId, blocks: clips });
-			return { blocks: clips.length };
-		}
-		return { add_character: addLiveCharacter, update_character: updateLiveCharacter, remove_character: removeLiveCharacter, set_prompt_blocks: setLivePromptBlocks };
+		return { add_character: addLiveCharacter, update_character: updateLiveCharacter, remove_character: removeLiveCharacter };
 	}
 	function toggleCharacterHidden(charId) { return domain.run('character.update', { characterId: charId, patch: { hidden: castMemberOf(charId).hidden !== true } }); }
 	domain.snapshotMotion = snapshotNativeMotion;
 	domain.syncLayer = () => {
 		const entry = domain.read().find(entry => entry.id === appContext.shared.loadedLayerCharRef.current) ?? domain.read()[0];
 		appContext.shared.bufferRef.current = { ...appContext.shared.bufferRef.current, ...entry.layer };
-		setSelectedPromptId(id => entry.layer.promptClips.some(clip => clip.id === id) ? id : null);
+		
 		setActiveWaypointId(id => entry.layer.waypoints.some(waypoint => waypoint.id === id) ? id : null);
 	};
 	domain.loadView = () => { appContext.shared.loadedLayerCharRef.current = domain.activeId; setActiveCharacterId(domain.activeId); };
@@ -882,8 +817,7 @@ export function useCast(appContext) {
 		const shots = appContext.storeDomain('shot');
 		if (!shots) return;
 		const current = domain.projection(), active = current.find(entry => entry.id === domain.activeId) ?? current[0];
-		const extent = timelineContentExtent(current, active.id, appContext.shared.bufferRef.current.motion,
-			active.layer.promptClips, null);
+		const extent = timelineContentExtent(current, active.id, appContext.shared.bufferRef.current.motion, null);
 		domain.setTimeline(Math.max(24, timelineSpan(extent, shots.read(), shots.state().frameCount)));
 	};
 	domain.extendTimeline = domain.syncTimeline;
@@ -904,14 +838,12 @@ export function useCast(appContext) {
 		spawnCharacter, charKeyToHierarchyId, charIdFromHierarchyId, activeCharacterId, setActiveCharacterId,
 		rowIdForCharIndex, activeChar, selectActiveCharacterInHierarchy, activeCharIndex, activeRig, waitForRig,
 		ghostLayers, snapshotCast, changeInspectorCharacter, hasCharSheet,
-		setHasCharSheet, promptBlocksReveal, setPromptBlocksReveal, revealPromptBlocks, waypointMode,
+		setHasCharSheet, waypointMode,
 		setWaypointMode, waypoints, setWaypoints, activeWaypointId, setActiveWaypointId, pendingWaypointFrame,
-		setPendingWaypointFrame, promptClips, setPromptClips, editPromptClips, selectedPromptId,
-		setSelectedPromptId, allPoses, selectablePoses,
+		setPendingWaypointFrame, allPoses, selectablePoses,
 		posingIndex, posingChar, posedRig, setPosed, rootStart, queueRootWaypointFrame, castMemberOf,
 		addCharacterWaypoint, moveCharacterWaypoint, removeCharacterWaypoint, clearCharacterWaypoints,
 		addFloorWaypoint, moveWaypoint, removeWaypoint, toggleWaypointMode, openStudio, closeStudio,
-		saveCurrentPose, savePose, removePose, addPromptClip, changePromptClip,
-		PROMPT_BLOCK_MAX_FRAMES, resizePromptClip, movePromptClip, removePromptClip,
+		saveCurrentPose, savePose, removePose,
 	};
 }

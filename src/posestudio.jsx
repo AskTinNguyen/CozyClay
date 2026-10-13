@@ -4,7 +4,7 @@ import { Html, Line } from "@react-three/drei";
 import * as THREE from "three";
 import { POSE_BONES, normalizeBoneName, primeBindPose } from "./poses.js";
 import { poseThumbnail, warmThumbnailModels } from "./pose-thumbs.js";
-import { IK_TRACKS, MID_TRACKS, ikControlIsExposed } from "./ardy/ik.js";
+import { IK_TRACKS, MID_TRACKS, ikControlIsExposed } from "./motion/ik.js";
 import { shouldRefreshIkExposure } from "./use-render-activity.js";
 import { POSER_LAYER } from "./dualview.jsx";
 import { ko, isKo } from "./locale.js";

@@ -4,10 +4,10 @@
 
 import { DEFAULT_SENSOR_FORMAT, SENSOR_FORMATS } from "./shot.js";
 import { normalizeStableItems } from "./stable-items.js";
-import { normalizeMotionCalibration } from "./ardy/motion-calibration.js";
-import { normalizeTrailEdits } from "./motion-trail.js";
+
 import { elementByPath } from "./studio-elements.js";
 import { wrapAngle } from "./scene-objects.js";
+import { normalizeTakeSource } from "./domains/motion/take-source.js";
 // The timeline clock lives in timeline-fps.js (three-free, so the agent
 // sidecar can import it); re-exported here for every scene-side caller.
 import { LEGACY_FRAME_FPS, TIMELINE_FRAME_FPS, toTimelineFrame } from "./timeline-fps.js";
@@ -135,27 +135,13 @@ export function normalizeReferenceImage(value) {
 	return typeof value === "string" && value.startsWith("data:image/") ? value : null;
 }
 
-/** Stature band for a cast member. Wider than ardy/npz.js's mocap band
- * (0.6-1.5, a sanity clamp on ESTIMATED statures): the gizmo's scale handles
- * are a deliberate artistic ask, and a previs giant or child is legitimate. */
+/** Stature band for a cast member: the gizmo's scale handles are a deliberate
+ * artistic ask, and a previs giant or child is legitimate. */
 export const CHARACTER_SCALE_MIN = CHARACTER_SCALE_LIMITS.min;
 export const CHARACTER_SCALE_MAX = CHARACTER_SCALE_LIMITS.max;
 const clampScale = (value) => (Number.isFinite(value) && value > 0
 	? Math.max(CHARACTER_SCALE_LIMITS.min, Math.min(CHARACTER_SCALE_LIMITS.max, value))
 	: 1);
-
-/** Where an extra extraction take's performer stands: the filmed offset from
- * person 0, rotated into the ACTIVE character's facing. Pure geometry, so the
- * placement can be proven without a renderer. */
-export function takeAnchor(active, offsetX, offsetZ) {
-	const rad = (finiteOr(active?.rot, 0) * Math.PI) / 180;
-	const dx = finiteOr(offsetX, 0);
-	const dz = finiteOr(offsetZ, 0);
-	return {
-		x: finiteOr(active?.x, 0) + dx * Math.cos(rad) + dz * Math.sin(rad),
-		z: finiteOr(active?.z, 0) - dx * Math.sin(rad) + dz * Math.cos(rad),
-	};
-}
 
 /** One character entry in the stage envelope. `source` may be a v3 entry, a
  * partial (spawn dialog), or null — every field falls back to a sane default
@@ -190,25 +176,17 @@ export function createCharacterEntry(source = null, index = 0) {
 		// take's root travel was authored against it — see the render path.
 		scale: clampScale(s.scale),
 		subject: typeof s.subject === "string" ? s.subject : index === 0 ? DEFAULT_SUBJECT_ONE : DEFAULT_SUBJECT_TWO,
-		// The character's animation layer: its own root path and prompt-block
-		// schedule. The generated clip itself is heavy, so only a lightweight
-		// reference (bridge URL + generation params) is persisted — enough to
-		// re-fetch and decode it on the next session.
+		// The character's animation layer: its own root path.
 		layer: normalizeLayer(s.layer),
-		motionRef: normalizeMotionRef(s.motionRef),
 		// The Pose-mode / IK edits on this character's layer (encoded keys, range
 		// pins and their residuals). The motion domain owns them while the scene
 		// is open; this is what the saved scene carries so a reload keeps them.
 		ikEdits: normalizeIkEdits(s.ikEdits),
+		// A compiled take v3 saves its source; the motion layer compiles it again on load.
+		motionTake: normalizeTakeSource(s.motionTake),
 	};
 }
 
-const MOTION_ID_RE = /^[0-9a-f]{64}$/i;
-
-// A motionRef names its take by content (motionId: SHA-256 of the npz, kept
-// in the project's embedded motions) and/or by location (url: a bridge run,
-// which is what pre-motionId documents carry). Either one alone is a valid
-// ref; the restore path prefers the embedded bytes when both are present.
 function normalizeIkEdits(value) {
 	if (!plainObject(value)) return null;
 	const rows = (list, valid) => (Array.isArray(list) ? list.filter(valid).map((entry) => cloneValue(entry)) : []);
@@ -218,40 +196,10 @@ function normalizeIkEdits(value) {
 	return keys.length || pins.length ? { keys, pins, pinResiduals } : null;
 }
 
-function normalizeMotionRef(ref) {
-	if (!plainObject(ref)) return null;
-	const motionId = typeof ref.motionId === "string" && MOTION_ID_RE.test(ref.motionId) ? ref.motionId.toLowerCase() : null;
-	const url = typeof ref.url === "string" && ref.url ? ref.url : null;
-	if (!motionId && !url) return null;
-	const normalized = {};
-	// Field order matters only for byte-stable serialization; a url-only ref
-	// keeps the exact legacy shape (url first, no motionId key).
-	if (motionId) normalized.motionId = motionId;
-	if (url) normalized.url = url;
-	Object.assign(normalized, {
-		prompt: typeof ref.prompt === "string" ? ref.prompt : "",
-		rotationDeg: Number.isFinite(ref.rotationDeg) ? ref.rotationDeg : 0,
-		anchorX: Number.isFinite(ref.anchorX) ? ref.anchorX : 0,
-		anchorZ: Number.isFinite(ref.anchorZ) ? ref.anchorZ : 0,
-	});
-	// Scene calibration is deliberately metadata on the lightweight motionRef,
-	// never an NPZ member.  Keep it optional so old documents retain their exact
-	// shape, while preserving the calibration produced by the extraction/load
-	// boundary for a later scene reload. cloneValue also strips non-finite values
-	// and recursively owns the object, so a caller cannot mutate the saved stage.
-	if (plainObject(ref.calibration)) normalized.calibration = normalizeMotionCalibration(ref.calibration);
-	if (ref.trailEdits != null) normalized.trailEdits = normalizeTrailEdits(ref.trailEdits);
-	// An agent-installed take keeps the Studio take id its receipts name, so a
-	// reload still reports the same take. Optional, like calibration.
-	if (typeof ref.studioTakeId === "string" && ref.studioTakeId) normalized.studioTakeId = ref.studioTakeId;
-	return normalized;
-}
-
 function normalizeLayer(layer) {
 	const source = plainObject(layer) ? layer : {};
 	return {
 		waypoints: normalizeStableItems(cloneValue(source.waypoints), "waypoint"),
-		promptClips: normalizeStableItems(cloneValue(source.promptClips), "prompt-clip"),
 	};
 }
 
@@ -265,7 +213,6 @@ function normalizeStageLayers(stage) {
 				...character,
 				layer: {
 					waypoints: normalizeStableItems(cloneValue(character.layer?.waypoints), "waypoint", ids),
-					promptClips: normalizeStableItems(cloneValue(character.layer?.promptClips), "prompt-clip", ids),
 				},
 			}))
 			: source.characters,
@@ -273,16 +220,12 @@ function normalizeStageLayers(stage) {
 }
 
 export function createCharacterLayer() {
-	return { waypoints: [], promptClips: [] };
+	return { waypoints: [] };
 }
 
 /** Retime one animation layer from the 20 fps authoring clock onto the 24 fps
- * production clock. Frame numbers only: positions, headings and prompt text
- * are untouched. The mapping is strictly increasing, so ascending order and
- * the gaps between prompt blocks survive it — the guards below re-establish
- * both anyway, because a hand-edited body may never have had them. Prompt
- * ranges are half-open [start, end), matching movePromptClipFrames: touching
- * blocks are legal, overlapping ones are not. */
+ * production clock. Frame numbers only: positions and headings are untouched.
+ * The mapping is strictly increasing, so ascending order survives it. */
 function migrateLayerFrames(layer) {
 	if (!plainObject(layer)) return layer;
 	const next = { ...cloneValue(layer) };
@@ -294,20 +237,6 @@ function migrateLayerFrames(layer) {
 			byFrame.set(frame, { ...cloneValue(waypoint), frame });
 		}
 		next.waypoints = [...byFrame.values()].sort((a, b) => a.frame - b.frame);
-	}
-	if (Array.isArray(layer.promptClips)) {
-		const ordered = layer.promptClips
-			.filter((clip) => plainObject(clip) && Number.isFinite(clip.startFrame) && Number.isFinite(clip.endFrame))
-			.sort((a, b) => a.startFrame - b.startFrame);
-		const clips = [];
-		let floor = 0;
-		for (const clip of ordered) {
-			const startFrame = Math.max(floor, toTimelineFrame(Math.round(clip.startFrame)));
-			const endFrame = Math.max(startFrame, toTimelineFrame(Math.round(clip.endFrame)));
-			clips.push({ ...cloneValue(clip), startFrame, endFrame });
-			floor = endFrame;
-		}
-		next.promptClips = clips;
 	}
 	return next;
 }

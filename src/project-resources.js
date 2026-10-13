@@ -2,16 +2,17 @@
  * Project resource manifest: everything a project points at, and whether the
  * bytes are here.
  *
- * A `.cclayproject` is only portable when every picture, motion clip, pose
- * and workflow output it names travels with it. This module answers "which
+  * A `.cclayproject` is only portable when every picture, mesh, pose and
+ * workflow output it names travels with it (a compiled take is its motion
+ * spec inside the scene document, so it always travels). This module answers "which
  * ones do, which ones live on a server, and which ones are gone" from the
  * documents already in memory. It is a runtime calculation: nothing here is
  * written to the file, and nothing here decodes or hashes bytes.
  *
  * Statuses:
- *   embedded  — the record is in `assets` / `motions` / `poseLibrary`, or the
- *               workflow output is a data: URL that will be interned on save.
- *   external  — reachable by URL only (a bridge take, an http(s) output).
+  *   embedded  — the record is in `assets` / `poseLibrary`, or the workflow
+ *               output is a data: URL that will be interned on save.
+ *   external  — reachable by URL only (an http(s) output).
  *   missing   — nothing to load. An image that the browser still holds in
  *               IndexedDB is flagged `stored: true` so the integrator can
  *               offer to embed it instead of reporting it lost.
@@ -111,9 +112,8 @@ function charactersOf(scene) {
 
 /**
  * One item per (kind, id). A second sighting of the same resource only adds
- * a ref — unless it resolves BETTER (a character that carries a url for a
- * motion another character names by id alone), in which case the status is
- * upgraded so the manifest is not order-dependent.
+ * a ref — unless it resolves BETTER, in which case the status is upgraded so
+ * the manifest is not order-dependent.
  */
 function collector(kind) {
 	const items = new Map();
@@ -144,12 +144,7 @@ function resolveImage(id, assetsById, storedIds) {
 	return { status: "missing", stored };
 }
 
-function resolveMotion(motionId, url, motionsById) {
-	const record = motionId ? motionsById.get(motionId) : null;
-	if (record) return { status: "embedded", stored: record.stored === true, bytes: byteSize(record.bytes) ?? byteSize(record.data) };
-	if (url) return { status: "external", url };
-	return { status: "missing" };
-}
+
 
 function defaultWorkflowOutputRefs() {
 	return [];
@@ -168,20 +163,19 @@ export function resourceManifest(options) {
 		scenesDocument,
 		workflow,
 		poseLibrary,
-		assets,
-		motions,
+				assets,
 		storedAssetIds,
 		workflowOutputRefs,
 	} = plainObject(options) ? options : {};
 
 	const assetsById = recordsById(assets, "id");
-	const motionsById = recordsById(motions, "motionId");
+	
 	const storedIds = idSet(storedAssetIds);
 	const scenes = scenesOf(scenesDocument);
 
 	const images = collector("image");
 	const meshes = collector("mesh");
-	const motionItems = collector("motion");
+	
 	const poses = collector("pose");
 	const outputs = collector("workflow-output");
 
@@ -199,21 +193,6 @@ export function resourceManifest(options) {
 			if (object.renderer === "mesh" && isMeshAssetId(object.assetId)) {
 				meshes.note(object.assetId, resolveImage(object.assetId, assetsById, storedIds), { sceneId, objectId, field: "assetId" });
 			}
-		}
-	}
-
-	/* ---- motions: motionId (embedded) → url (external) → missing ---- */
-	for (const scene of scenes) {
-		const sceneId = nonEmptyString(scene?.id) ?? undefined;
-		for (const character of charactersOf(scene)) {
-			const ref = character?.motionRef;
-			if (!plainObject(ref)) continue;
-			const motionId = nonEmptyString(ref.motionId);
-			const url = nonEmptyString(ref.url);
-			const id = motionId ?? url;
-			if (!id) continue;
-			const characterId = nonEmptyString(character.id) ?? undefined;
-			motionItems.note(id, resolveMotion(motionId, url, motionsById), { sceneId, characterId, field: "motionRef" });
 		}
 	}
 
@@ -276,7 +255,7 @@ export function resourceManifest(options) {
 		}
 	}
 
-	const items = [...images.items.values(), ...meshes.items.values(), ...motionItems.items.values(), ...poses.items.values(), ...outputs.items.values()];
+	const items = [...images.items.values(), ...meshes.items.values(), ...poses.items.values(), ...outputs.items.values()];
 	const totals = { embedded: 0, external: 0, missing: 0, bytes: 0 };
 	for (const item of items) {
 		totals[item.status] += 1;

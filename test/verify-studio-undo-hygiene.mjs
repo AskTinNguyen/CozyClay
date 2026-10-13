@@ -25,7 +25,7 @@ import {
 } from "../src/scenes.js";
 import { createProjectDocument, readProjectDocument } from "../src/project.js";
 import { createSceneHistoryStore } from "../src/document-store.js";
-import { copyPhysicsKeys } from "../src/ardy/physics-review.js";
+import { copyPhysicsKeys } from "../src/motion/physics-review.js";
 import { HISTORY_LIMIT } from "../src/history.js";
 import { createAppContext } from "../src/app-context.js";
 import { createCommandBus } from "../src/command-bus.js";
@@ -87,7 +87,7 @@ function fixture() {
 		activeCharIndex: 0,
 		shots: [],
 		committedIkEdits: [],
-		bufferRef: ref({ waypoints: [], promptClips: [], motion: null }),
+		bufferRef: ref({ waypoints: [], motion: null }),
 		loadedLayerCharRef: ref("actor"),
 		ikStateRef: ref({ keys: new Map(), tracked: new Set() }),
 		ikStatesRef: ref(new Map()),
@@ -164,19 +164,13 @@ const COMMAND_INPUTS = {
 	'character.update': { characterId: 'actor', patch: { x: 2 } },
 	'character.move': { characterId: 'actor', x: 2, z: 0, rot: 0 },
 	'character.setPose': { characterId: 'actor', pose: { id: 'new-pose', bones: {} } },
-	'character.setPromptBlocks': { characterId: 'actor', blocks: [] },
 	'characters.arrange': { ops: [{ op: 'remove', characterId: 'actor-other' }] },
 	'cast.replace': { characters: [createCharacterEntry({ id: 'replacement' })] },
 	'cast.setCustomPoses': { poses: [] },
 	'cast.savePose': { pose: { id: 'saved', bones: {} }, characterId: 'actor' },
 	'cast.removePose': { id: 'saved' },
 	'cast.showExtras': { show: true },
-	'cast.setLayer': { characterId: 'actor', layer: { promptClips: [] } },
-	'character.addPromptBlock': { characterId: 'actor', frame: 48 },
-	'character.movePromptBlock': { characterId: 'actor', id: 'block', frame: 48 },
-	'character.resizePromptBlock': { characterId: 'actor', id: 'block', edge: 'end', frame: 96 },
-	'character.changePromptBlock': { characterId: 'actor', id: 'block', text: 'Changed' },
-	'character.removePromptBlock': { characterId: 'actor', id: 'block' },
+	'cast.setLayer': { characterId: 'actor', layer: { waypoints: [] } },
 	'motion.clear': { characterId: 'actor' },
 	"character.addWaypoint": { characterId: "actor", position: { x: 0, z: 2 }, frame: 40 },
 	"character.moveWaypoint": { characterId: "actor", position: { x: 0, z: 1.1 }, frame: 24 },
@@ -211,7 +205,7 @@ function commandFixture({ frame = 8, still = false } = {}) {
 	const state = {
 		shots: [{ ...createShot("Shot 1", 0, 15, [{ id: "key-1", frame: 0, framing: { pos: { x: 0, y: 1.6, z: 5 }, yaw: 0, pitch: 0, fovDeg: 40 } }], { mode: "rail", cameraRail: [{ x: -2, z: 4 }, { x: 2, z: 4 }] }), id: "shot-1", ...(still ? { kind: "still" } : {}) }],
 		objects: [{ ...createSceneObject("sphere"), id: "parent-1" }, { ...createSceneObject("cube"), id: "object-1", parent: "parent-1" }, { ...createSceneObject("chair"), id: "group-2" }],
-		characters: [createCharacterEntry({ id: 'actor', subject: 'Ada', layer: { waypoints: [], promptClips: [{ id: 'block', text: 'Walk', startFrame: 0, endFrame: 48 }] } }), createCharacterEntry({ id: 'actor-other' })], customPoses: [], frame, frameCount: 48, selectedObjectId: null, activeCharacterId: "actor",
+		characters: [createCharacterEntry({ id: 'actor', subject: 'Ada', layer: { waypoints: [] } }), createCharacterEntry({ id: 'actor-other' })], customPoses: [], frame, frameCount: 48, selectedObjectId: null, activeCharacterId: "actor",
 		promptBlockCount: 0, generating: false, motionReady: true, exporting: false, canExportVideo: true,
 		scenes: [{ id: "scene-1", name: "ONE" }, { id: "scene-2", name: "TWO" }], activeSceneId: "scene-1",
 		project: { name: "Heist", previsMode: "animation", hasFile: true, fileAccess: false, gesture: false },
@@ -332,7 +326,7 @@ const cases = {
 	},
 	async "every command mutation writes inside one entry of its undo domain"() {
 		const mutations = Object.values(COMMAND_MODULES).flatMap(module => module.declarations).filter(entry => entry.kind === "mutation");
-		assert.equal(mutations.length, 85);
+		assert.equal(mutations.length, 72);
 		for (const declaration of mutations) {
 			// A new shot needs free room at the playhead; the others act inside shot-1.
 			const f = commandFixture({ frame: declaration.id === "shot.create" ? 24 : 8, still: ["shot.setHold", "shot.createStill"].includes(declaration.id) }), [name] = Object.entries(COMMAND_MODULES).find(([, module]) => module.declarations.includes(declaration));

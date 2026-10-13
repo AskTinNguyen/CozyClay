@@ -1,18 +1,7 @@
 import { defineConfig } from "vite";
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import react from "@vitejs/plugin-react";
-import { PROMPT_MAX_CHARS } from "./tools/ardy/prompt-limits.mjs";
 
-// Vite can run as a UI-only server. Do not silently proxy /ardy to the
-// bridge's historical default port: a different local process may own it.
-// dev-full supplies COZYCLAY_BRIDGE_PORT after starting its own sidecar;
-// COZYCLAY_BRIDGE_URL remains an explicit escape hatch for a user-managed
-// bridge.
-const explicitBridgePort = process.env.COZYCLAY_BRIDGE_PORT?.trim();
-const motionBridgeUrl = explicitBridgePort
-	? `http://127.0.0.1:${explicitBridgePort}`
-	: process.env.COZYCLAY_BRIDGE_URL?.trim() || null;
 const livePort = process.env.COZYCLAY_LIVE_PORT ?? "5184";
 const oauthPort = process.env.COZYCLAY_OAUTH_PORT?.trim();
 const oauthUrl = oauthPort ? `http://127.0.0.1:${oauthPort}` : null;
@@ -21,9 +10,6 @@ const agentUrl = oauthUrl;
 export default defineConfig({
 	define: {
 		"import.meta.env.VITE_COZYCLAY_LIVE_PORT": JSON.stringify(livePort),
-		// The API imports the same shared constant. Do not make this client cap
-		// environment-overridable: a divergent build would accept prompts the API rejects.
-		"import.meta.env.VITE_DEMO_PROMPT_MAX_CHARS": JSON.stringify(String(PROMPT_MAX_CHARS)),
 	},
 	// Root-absolute on purpose: the site has its own apex domain, and the studio
 	// is served from "/app/" while its public assets stay at the root. A relative
@@ -44,9 +30,6 @@ export default defineConfig({
 				privacy: resolve(import.meta.dirname, "privacy/index.html"),
 				// Standalone Vibe-Workflow inspired graph editor.
 				workflow: resolve(import.meta.dirname, "workflow/index.html"),
-				// Hosted demo composer and its queue/result ticket.
-				demo: resolve(import.meta.dirname, "demo/index.html"),
-				ticket: resolve(import.meta.dirname, "d/index.html"),
 			},
 		},
 	},
@@ -92,26 +75,6 @@ export default defineConfig({
 						res.end(JSON.stringify({ error: "agent sidecar is not configured" }));
 						return;
 					}
-					if (!motionBridgeUrl && /^\/ardy\/(health|bases|generate|footage|extract|motions)(\/|$)/.test(path)) {
-						res.statusCode = 503;
-						res.setHeader("content-type", "application/json; charset=utf-8");
-						if (path === "/ardy/health") {
-							res.end(JSON.stringify({ ok: false, backend: "none", host_configured: false, reason: "unconfigured", capabilities: { lineEdit: false }, error: "motion sidecar is not configured" }));
-						} else {
-							res.end(JSON.stringify({ error: "motion sidecar is not configured" }));
-						}
-						return;
-					}
-					// The lying clip is a browser-regression fixture. Serve it only from
-					// the dev server so it can exercise the real UI without shipping a
-					// second motion archive in production output.
-					if (path === "/demo/qa-lying.npz") {
-						res.statusCode = 200;
-						res.setHeader("content-type", "application/octet-stream");
-						res.setHeader("cache-control", "no-store");
-						res.end(readFileSync(resolve(import.meta.dirname, "test/fixtures/qa-lying.npz")));
-						return;
-					}
 					if ((req.url || "").split("?")[0] !== "/sw.js") return next();
 					res.setHeader("content-type", "text/javascript; charset=utf-8");
 					res.setHeader("cache-control", "no-store");
@@ -133,36 +96,13 @@ export default defineConfig({
 	],
 	server: {
 		port: 5180,
-		// Dev-only: the motion sidecar (tools/ardy/bridge.mjs) is an optional
-		// companion on loopback. The proxy is enabled only when dev-full (or a
-		// user-managed bridge) explicitly provides its endpoint. The production
-		// build stays fully static, so this proxy must never become a requirement.
-		...(motionBridgeUrl || oauthUrl
+		// Dev-only: the OAuth/agent sidecar is an optional companion on loopback.
+		// The production build stays fully static, so this proxy must never
+		// become a requirement.
+		...(oauthUrl
 			? {
 				proxy: {
-					...(oauthUrl ? { "/oauth": { target: oauthUrl }, "/agent": { target: agentUrl } } : {}),
-					...(motionBridgeUrl
-						? {
-							// Only the routes the bridge actually owns. /ardy/ is ALSO a public
-							// asset directory (cskel27-rest.json), and a blanket proxy would
-							// hand those static files to the bridge, which 404s them.
-							"/ardy": {
-								target: motionBridgeUrl,
-								configure(proxy) {
-									proxy.on("error", (_error, req, res) => {
-										if ((req.url || "").split("?")[0] !== "/ardy/health" || res.headersSent) return;
-										res.writeHead(503, { "content-type": "application/json; charset=utf-8" });
-										res.end(JSON.stringify({ ok: false, backend: "local_kimodo", host_configured: true, reason: "unreachable", capabilities: { lineEdit: false } }));
-									});
-								},
-								bypass(req) {
-									const path = (req.url || "").split("?")[0];
-									if (/^\/ardy\/(health|bases|generate|footage|extract|motions)(\/|$)/.test(path)) return undefined;
-									return req.url; // not a bridge route: serve the static asset
-								},
-							},
-						}
-						: {}),
+					"/oauth": { target: oauthUrl }, "/agent": { target: agentUrl },
 				},
 			}
 			: {}),

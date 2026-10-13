@@ -5,9 +5,9 @@ import "./dock.css";
 import LibrarySlot from "./LibrarySlot.jsx";
 import BoardSlot from "./BoardSlot.jsx";
 import { ko } from "../locale.js";
-import Timeline from "../ardy/timeline.jsx";
+import Timeline from "../motion/timeline.jsx";
 import { DEFAULT_PLAYBACK_SPEED, SHOT_ASPECT_PRESETS, sceneObjectNameDisplayKo } from "../app-stage.jsx";
-import { motionEditLayout, createMotionEdit } from "../ardy/motion-edit.js";
+
 import { trackFeature } from "../analytics.js";
 import { defaultRailRange } from "../camera-rail-schedule.js";
 import { insertPathMark, pathMarks } from "../object-path.js";
@@ -74,9 +74,8 @@ export default function BottomDock({ tab: requestedTab = "animation", onTabChang
 		tlFrame, motion, waypointMode, craneSelectedIndex,
 		isCameraSelection, addActiveCranePoint, deleteSelectedCranePoint, setCraneSelectedIndex, tlFrameCount,
 		tlFps, characters, activeCharIndex, ghostLayers, pathSpeed,
-		tlPlaying, workflowMode, waypoints, pendingWaypointFrame, promptClips,
-		selectedPromptId, stateBadge, ikMode, ikChains, applyMotionTrim,
-		resetMotionTrim, cutMotionAtPlayhead, changeMotionSegmentSpeed, removeMotionSegmentById, ikFrames,
+		tlPlaying, workflowMode, waypoints, pendingWaypointFrame,
+		stateBadge, ikMode, ikChains, ikFrames,
 		rangePins, rangePinSelection, ikEditTool, rangePinPreview, footSnap,
 		bodyContact, shots, shotAspectKey, activeShotIdx, railDraw,
 		pathDraw, pathTarget, setPathDraw, setRailDraw, setWorkspaceLayout,
@@ -85,8 +84,7 @@ export default function BottomDock({ tab: requestedTab = "animation", onTabChang
 		setBodyContact, setToast, setFootSnap, setTlFrame, advanceFrame,
 		stepFrame, cameraPreviewEndRef, manualCameraOverrideRef, setTlPlaying, toggleWaypointMode,
 		setWaypointMode, selectActiveCharacterInHierarchy, setActiveWaypointId, setPendingWaypointFrame, removeWaypoint,
-		queueRootWaypointFrame, addPromptClip, revealPromptBlocks, setSelectedPromptId,
-		changePromptClip, resizePromptClip, movePromptClip, removePromptClip, setSelectedHierarchyId,
+		queueRootWaypointFrame, setSelectedHierarchyId,
 		selectWorkflowMode, addCameraKeyframe, moveCameraKeyframe, removeCameraKeyframe, syncActiveCameraFraming,
 		activeCamera, activeShotDuration, changeActiveCamera, cameraRail, previewCameraShot,
 		toggleCameraRailDraw, deleteCameraRail, selectTimelineShot, shotsDomain, runStudioAction,
@@ -224,22 +222,10 @@ export default function BottomDock({ tab: requestedTab = "animation", onTabChang
 			waypointMode={waypointMode}
 			waypoints={waypoints}
 			pendingWaypointFrame={pendingWaypointFrame}
-			previsMode={previsMode}
-			promptClips={promptClips}
-			selectedPromptId={selectedPromptId}
 			badge={stateBadge}
 			ikMode={ikMode}
 			ikDisabled={!ikChains}
-			motion={motion ? {
-				frames: motion.frames,
-				label: motion.prompt || ko("Loaded take", "불러온 테이크"),
-				segments: motionEditLayout(motion.editSegments ?? createMotionEdit(motion.frames)),
-			} : null}
-			onMotionTrim={applyMotionTrim}
-			onMotionTrimReset={resetMotionTrim}
-			onMotionCut={cutMotionAtPlayhead}
-			onMotionSpeedChange={changeMotionSegmentSpeed}
-			onMotionSegmentRemove={removeMotionSegmentById}
+			motion={motion ? { frames: motion.frames, label: motion.prompt || ko("Compiled take", "컴파일된 테이크") } : null}
 			ikFrames={ikFrames}
 			rangePins={rangePins}
 			selectedPinId={rangePinSelection}
@@ -337,20 +323,7 @@ export default function BottomDock({ tab: requestedTab = "animation", onTabChang
 			}}
 			onMarkerRemove={removeWaypoint}
 			onRootKeyframeAdd={queueRootWaypointFrame}
-			onPromptAdd={(frame) => {
-				addPromptClip(frame);
-				selectActiveCharacterInHierarchy();
-				revealPromptBlocks();
-			}}
-			onPromptSelect={(id) => {
-				setSelectedPromptId(id);
-				selectActiveCharacterInHierarchy();
-				revealPromptBlocks();
-			}}
-			onPromptChange={changePromptClip}
-			onPromptResize={resizePromptClip}
-			onPromptMove={movePromptClip}
-			onPromptRemove={removePromptClip}
+			
 			onCameraMoveSelect={() => {
 				setSelectedHierarchyId("camera");
 				if (workflowMode !== "camera") selectWorkflowMode("camera");

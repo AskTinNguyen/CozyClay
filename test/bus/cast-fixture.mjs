@@ -15,10 +15,9 @@ export const proxyCast = () => [createCharacterEntry({ id: 'actor-a', model: 'y-
 // Keep the shipped constants and cast hook; exclude only renderer components
 // imported by app-stage, which cannot mount in this Node integration fixture.
 const source = readFileSync(new URL('../../src/app-stage.jsx', import.meta.url), 'utf8')
-  + readFileSync(new URL('../../src/ardy-bridge-contract.js', import.meta.url), 'utf8')
+  + readFileSync(new URL('../../src/timeline-defaults.js', import.meta.url), 'utf8')
   + readFileSync(new URL('../../src/stage-startup-defaults.js', import.meta.url), 'utf8');
-const names = new Set(['DEFAULT_SUBJECT', 'DEFAULT_SUBJECT2', 'nextCharacterId', 'DEFAULT_PROMPT_CLIPS',
-  'MAX_WAYPOINTS', 'ARDY_PROMPT_HORIZON_FRAMES', 'ARDY_DURATION_MIN', 'TIMELINE_FPS']);
+const names = new Set(['DEFAULT_SUBJECT', 'DEFAULT_SUBJECT2', 'nextCharacterId', 'MAX_WAYPOINTS', 'TIMELINE_FPS']);
 const constants = parseSync('stage.jsx', source).program.body.filter(node => node.type === 'ExportNamedDeclaration' &&
   names.has(node.declaration?.id?.name ?? node.declaration?.declarations?.[0]?.id?.name)).map(node => source.slice(node.start, node.end)).join('\n');
 const server = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false },
@@ -32,9 +31,8 @@ finally { await server.close(); }
 export function castFixture(f = appFixture()) {
   const scope = f.scope, app = scope.appContext;
   Object.assign(scope, { startupStage: { characters: f.characterRef.current, hasCharSheet: false }, startupShotState: {},
-    rigReportersRef: { current: new Map() }, rigWaitersRef: { current: new Map() }, promptTextSessionRef: { current: null },
-    setArdyDuration() {}, setArdyPrompt() {}, setActiveWaypointId() {}, setPendingWaypointFrame() {},
-    setSelectedPromptId() {}, setWaypointMode() {}, setPosing() {}, setPosingClosing() {},
+    rigReportersRef: { current: new Map() }, rigWaitersRef: { current: new Map() },
+    setActiveWaypointId() {}, setPendingWaypointFrame() {}, setWaypointMode() {}, setPosing() {}, setPosingClosing() {},
     clearMotion() { throw new Error('motion clearing must be supplied by the native-motion integration case'); },
   });
   let cast;

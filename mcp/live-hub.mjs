@@ -11,7 +11,7 @@ export const DEFAULT_COMMAND_TIMEOUT_MS = 5_000;
 export const MAX_COMMAND_TIMEOUT_MS = 300_000;
 export const DEFAULT_HEARTBEAT_MS = 15_000;
 export const RUN_WORKFLOW_TIMEOUT_MS = 180_000;
-export const LOAD_MOTION_TIMEOUT_MS = 30_000;
+
 export const IMPORT_ASSET_TIMEOUT_MS = 30_000;
 export const CAPTURE_FRAME_TIMEOUT_MS = 30_000;
 export const STUDIO_COMMAND_TIMEOUT_MS = 30_000;
@@ -31,9 +31,7 @@ const mutationCommands = new Set([
 	"remove_object",
 	"group_objects",
 	"ungroup_objects",
-	"apply_batch",
-	"set_prompt_blocks",
-	"load_motion",
+		"apply_batch",
 	"load_scenes",
 	"operate_studio", "arrange_objects", "arrange_characters", "patch_elements", "frame_shot", "undo_edit", "run_action",
 	"import_asset",
@@ -75,7 +73,7 @@ const safely = (work) => {
 const mutationState = (name, description) => {
 	if (!description || typeof description !== "object") return undefined;
 	if (name === "set_camera") return description.camera;
-	if (["add_character", "update_character", "remove_character", "set_prompt_blocks"].includes(name)) return description.characters;
+	if (["add_character", "update_character", "remove_character"].includes(name)) return description.characters;
 	if (name === "load_scenes") return description.document;
 	return description.objects;
 };
@@ -138,7 +136,7 @@ export class LiveHub {
 	}
 
 	static commandTimeoutMs(name) {
-		if (name === "load_motion") return LOAD_MOTION_TIMEOUT_MS;
+		
 		// A 32 MiB mesh as a data URL will not decode, store and stand in 5 s.
 		if (name === "import_asset") return IMPORT_ASSET_TIMEOUT_MS;
 		// Close two-person shots (OTS) raycast two skinned rigs over a full-frame
@@ -216,7 +214,7 @@ export class LiveHub {
 		const observer = {
 			hub: this, handle,
 			before(command) {
-				if (!LiveHub.commandMayMutate(command) || command === "load_motion" || command === "run_action") return false;
+				if (!LiveHub.commandMayMutate(command) || command === "run_action") return false;
 				mutation = { name: command, before: mutationState(command, description), acknowledged: false };
 				description = undefined;
 				return mutation.before === undefined;
@@ -253,9 +251,7 @@ export class LiveHub {
 						if (mutation) mutation.rolledBack = value?.rolledBack === true;
 						if (value?.rolledBack === true || value?.failed?.length > 0) failure = "failed";
 					}
-					// The load acknowledgement is the existing installation receipt,
-					// including generation jobs whose MCP control response was queued.
-					if (command === "load_motion" && value?.loaded === true) applied = true;
+					
 				}
 				emitApplied();
 			},

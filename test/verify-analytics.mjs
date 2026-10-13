@@ -597,12 +597,11 @@ const { createSceneHistoryStore } = await import("../src/document-store.js");
 const { createCameraBlock, updateCameraBlock } = await import("../src/camera-block.js");
 const { dispatchLiveFrame } = await import("../src/live-control.js");
 const { addShotAtFrame, resizeShot, renameShot, moveCameraKey } = await import("../src/cuts.js");
-const { createIkState, ikBakeKeyframe, ikTouch } = await import("../src/ardy/ik.js");
-const { copyPhysicsKeys } = await import("../src/ardy/physics-review.js");
+const { createIkState, ikBakeKeyframe, ikTouch } = await import("../src/motion/ik.js");
+const { copyPhysicsKeys } = await import("../src/motion/physics-review.js");
 const { Bone } = await import("three");
 const framing = { pos: { x: 0, y: 2, z: 3 }, yaw: 0, pitch: 0, fovDeg: 40 };
 const shot = { id: "shot-1", name: "private shot", startFrame: 0, endFrame: 95, camera: createCameraBlock(), cameraKeys: [] };
-const block = { id: "block-1", startFrame: 0, endFrame: 48, text: "private prompt" };
 const actor = { id: "actor-1", x: 0, pose: { bones: { Head: [0, 0, 0] }, rootY: 0 } };
 const object = createSceneObject("chair", []);
 assert.ok(object);
@@ -615,8 +614,6 @@ const matrix = [
 	["shot_edit", "shots", [shot], (items) => resizeShot(items, shot.id, "end", 80, 96)],
 	["camera_key_record", "shots", [shot], (items) => items.map((entry) => ({ ...entry, cameraKeys: [{ id: "key-1", frame: 0, framing }] }))],
 	["rail_edit", "shots", [shot], (items) => items.map((entry) => ({ ...entry, camera: updateCameraBlock(entry.camera, { cameraRail: [{ x: 0, z: 0 }, { x: 2, z: 3 }], mode: "rail" }) }))],
-	["prompt_block_add", "promptClips", [], () => [block]],
-	["prompt_block_edit", "promptClips", [block], (items) => items.map((entry) => ({ ...entry, text: "changed private prompt" }))],
 ];
 for (const surface of ["craft", "playground"]) {
 	for (const [kind, domain, before, mutate] of matrix) {
@@ -679,9 +676,8 @@ for (const commit of [false, true]) {
 {
 	const events = [];
 	const observe = createFirstEditTracker((...event) => events.push(event));
-	// UUID churn does not turn an identical camera key or prompt into an edit.
+	// UUID churn does not turn an identical camera key into an edit.
 	observe("craft", "shots", [{ ...shot, cameraKeys: [{ id: "old", frame: 0, framing }] }], [{ ...shot, cameraKeys: [{ id: "new", frame: 0, framing }] }]);
-	observe("craft", "promptClips", [block], [{ ...block, id: "new-id" }]);
 	observe("craft", "characters", [actor], [{ ...actor, pose: { ...actor.pose, id: "new-library-id", label: "private" } }]);
 	observe("craft", "pose", { Head: [0, 0, 0] }, { Head: [0, 0, 0] });
 	assert.equal(events.length, 0);

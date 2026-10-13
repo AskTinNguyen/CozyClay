@@ -7,8 +7,9 @@ import { readFileSync } from 'node:fs';
 import * as THREE from 'three';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 import { primeBindPose } from '../src/poses.js';
-import { createIkState } from '../src/ardy/ik.js';
-import { CSKEL27_NEUTRAL } from '../src/ardy/cskel27-neutral.js';
+import { createIkState } from '../src/motion/ik.js';
+import { compileTakeSource } from '../src/domains/motion/take-source.js';
+import { skeletonFor } from '../src/motion3/rigs/index.js';
 import { createSceneObject } from '../src/scene-objects.js';
 import { verifyInstalledTake } from '../src/studio-agent-motion.js';
 import { createCharacterEntry, PROXY_FIGURE_MODEL } from '../src/scenes.js';
@@ -18,17 +19,13 @@ function rigFixture() {
   const rig = new FBXLoader().parse(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), '');
   rig.scale.setScalar(.01); primeBindPose(rig); rig.updateMatrixWorld(true); return rig;
 }
+// A compiled take v3 (Y Bot): standing, optionally lifted off the floor or
+// sliding along +Z over the take.
 function clipFixture({ frames = 48, hover = 0, travel = 0 } = {}) {
-  const rotMats = new Float32Array(frames * 243), rootPos = new Float32Array(frames * 3), posedJoints = new Float32Array(frames * 81);
-  for (let f = 0; f < frames; f++) {
-    for (let j = 0; j < 27; j++) {
-      rotMats.set([1,0,0,0,1,0,0,0,1], (f * 27 + j) * 9);
-      const p = CSKEL27_NEUTRAL[j];
-      posedJoints.set([p[0], p[1] + .9544128 + hover, p[2] + travel * f / (frames - 1)], (f * 27 + j) * 3);
-    }
-    rootPos.set(posedJoints.subarray(f * 81, f * 81 + 3), f * 3);
-  }
-  return { frames, fps: 24, personScale: 1, rotMats, rootPos, posedJoints };
+  const sk = skeletonFor('y-bot-tpose'), I = sk.index, P = sk.restWorldPos, ank = P[I.LeftFoot][1], hips = P[I.Hips][1] - .01;
+  const at = z => ({ root: [0, hips + hover, z], yaw: 0, foot_l: [.09, ank + hover, z - .03], foot_r: [-.09, ank + hover, z + .03] });
+  const spec = { schema: 'cozyclay.motion-spec.v1', fps: 24, frames, keys: [{ f: 0, set: at(0) }, { f: frames - 1, set: at(travel) }] };
+  return compileTakeSource({ schema: 'cozyclay.take.v3', rig: 'y-bot-tpose', spec, placement: { position: [0, 0, 0], yaw: 0 }, scene: { objects: {} } });
 }
 const bones = rig => { const rows = []; rig.traverse(n => { if (n.isBone) rows.push([...n.position.toArray(), ...n.quaternion.toArray(), ...n.scale.toArray()]); }); return rows; };
 function fixture(options = {}) {
@@ -73,8 +70,9 @@ test('installed take: every verification measures current floor inputs, independ
 });
 test('installed take: moving props and other cast are sampled off the playhead without posing visible rigs', async () => {
   const f = fixture();
-  f.environment.objects = [{ ...createSceneObject('cube'), scaleX: .2, scaleY: .3, scaleZ: .2, y: 1.45,
-    path: { points: [{ x: -.8, y: 1.45, z: -2 }, { x: -.8, y: 1.45, z: 2 }], speed: 0, faceTravel: false, loop: false, extend: false, timing: null } }];
+  // The take stands with its arms down, so the moving prop sweeps through the shins.
+  f.environment.objects = [{ ...createSceneObject('cube'), scaleX: .2, scaleY: .3, scaleZ: .2, y: .3,
+    path: { points: [{ x: .1, y: .3, z: -2 }, { x: .1, y: .3, z: 2 }], speed: 0, faceTravel: false, loop: false, extend: false, timing: null } }];
   assert.equal((await f.verify({ range: { startFrame: 0, endFrameExclusive: 1 } })).supportedCollisionFrames, 0);
   assert((await f.verify()).supportedCollisionFrames > 0);
   f.environment.objects = [];

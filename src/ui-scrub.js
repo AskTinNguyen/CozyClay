@@ -7,7 +7,7 @@
  * a pixel buy?". They live here so a Node test can prove them without a DOM.
  *
  * Sensitivity is a RATE over a fixed travel, the same rule the timeline's
- * curve editors follow (src/ardy/timeline.jsx DRAG_TRAVEL_PX): dragging the
+ * curve editors follow (src/motion/timeline.jsx DRAG_TRAVEL_PX): dragging the
  * hand across `SCRUB_TRAVEL_PX` sweeps one meaningful span of the field. The
  * old `pixels * step` mapping tied the feel to the field's precision, so a
  * step 0.05 field needed 100 px to move 5 units while a step 1 field bolted.

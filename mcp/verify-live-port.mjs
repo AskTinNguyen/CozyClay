@@ -74,8 +74,6 @@ const child = spawn(process.execPath, ["tools/dev-full.mjs", "--host", "127.0.0.
 	detached: true,
 	env: {
 		...process.env,
-		CCLAY_MOTION_BACKEND: "kimodo",
-		CCLAY_KIMODO_HOST: "test@kimodo",
 		COZYCLAY_LIVE_PORT: String(livePort),
 		// On CI runners picocolors turns color on for a piped Vite, wrapping
 		// the port in ANSI bold and defeating the URL match below.

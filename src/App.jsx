@@ -25,20 +25,8 @@ import {
 } from "@react-three/drei";
 import * as THREE from "three";
 
-import {
-	loadMotionFromUrl,
-} from "./ardy/npz.js";
-
-
-import {
-	applyMotionFrame,
-	restorePlaybackBones,
-	snapshotPlaybackBones,
-} from "./ardy/playback.js";
-
-import {
-	jointTrailPoints,
-} from "./motion-trail.js";
+import { restorePlaybackBones, snapshotPlaybackBones } from "./motion/rig-snapshot.js";
+import { applyTakeFrame } from "./motion3/playback.js";
 
 import { FlyControls, aimAt, forwardFrom } from "./controls.jsx";
 import { createLiveControl, loadLiveWorkspaceId, mintLiveWorkspaceId } from "./live-control.js";
@@ -166,7 +154,7 @@ import {
 	pathMetrics,
 	strokeToPathPoints,
 } from "./object-path.js";
-import { carriedPointAt, sceneObjectsAt } from "./object-travel.js"; import { objectTracksOf } from "./motion3/object-tracks.js";
+import { carriedPointAt, sceneObjectsAt } from "./object-travel.js"; import { objectTracksOf } from "./motion3/object-tracks.js"; import { savedTakeSource } from "./domains/motion/take-source.js"; import { tutorialWalkSpec } from "./tutorial-walk.js";
 import { routeOwnerFor } from "./route-owner.js";
 import {
 	analyticsActive,
@@ -203,7 +191,7 @@ import {
 	ikSeedTargets,
 	resolveIkRig,
 	shareContactMeasurements,
-} from "./ardy/ik.js";
+} from "./motion/ik.js";
 
 import {
 	Toast,
@@ -251,15 +239,13 @@ import {
 	CraneHandles,
 	DEFAULT_CAMERA_POSITION,
 	DEFAULT_DURATION_S,
-	DEMO_MOTION_PROMPT,
-	DEMO_MOTION_URL,
 	EditorCamSeed,
 	FollowCamRig,
 	GIZMO_HOTKEYS,
 	KeyLightPuck,
 	MCP_CAPTURE_H,
 	MCP_CAPTURE_W,
-	MotionTrails,
+	
 	MoveRig,
 	OBJECT_DELETE_UNDO_MS,
 	ObjectPathHandles,
@@ -363,7 +349,7 @@ function poseMemberAtFrame(rig, clip, ikState, frame, blendFrames = 0, pose = nu
 	if (!rig) return;
 	if (clip) {
 		const sampled = sampleAt({ frameCount: clip.frames, motion: clip }, null, frame);
-		applyMotionFrame(rig, clip, sampled.motionFrame);
+		applyTakeFrame(rig, clip, sampled.motionFrame);
 	} else if (pose) {
 		applyPose(rig, pose);
 		applyHipsOffset(rig, pose.rootY ?? 0);
@@ -588,7 +574,7 @@ export default function App() {
 		get markSemanticEdit() { return markSemanticEdit; },
 		get motionPos() { return motionPos; },
 		get playMode() { return playMode; },
-		get promptTextSessionRef() { return promptTextSessionRef; },
+		
 
 		get runStudioAction() { return runStudioAction; },
 		get selectWorkflowMode() { return selectWorkflowMode; },
@@ -609,7 +595,7 @@ export default function App() {
 		get exportRequest() { return exportRequest; },
 		get motion() { return motion; },
 		get playgroundMode() { return playgroundMode; },
-		get promptClips() { return promptClips; },
+		
 		get recRef() { return recRef; },
 		get runShotExport() { return runShotExport; },
 		get setCameraPos() { return setCameraPos; },
@@ -1017,7 +1003,7 @@ export default function App() {
 		get markSemanticEdit() { return markSemanticEdit; },
 		get motion() { return motion; },
 		get motionFullRef() { return motionFullRef; },
-		get promptTextSessionRef() { return promptTextSessionRef; },
+		
 		get publishStudioCharacters() { return publishStudioCharacters; },
 		get rigReportersRef() { return rigReportersRef; },
 		get rigWaitersRef() { return rigWaitersRef; },
@@ -1058,7 +1044,7 @@ export default function App() {
 		get snapshotExportRig() { return snapshotExportRig; },
 		get studioBindingRef() { return studioBindingRef; },
 		get objectsDomain() { return objectsDomain; },
-		get restoreMotionRefs() { return restoreMotionRefs; },
+		
 		get shotsDomain() { return shotsDomain; },
 	}));
 	const {
@@ -1067,15 +1053,13 @@ export default function App() {
 		updateCharacterAt, setShowB, moveCharacter, removeCharacter, reportRig, spawnCharacter,
 		charKeyToHierarchyId, charIdFromHierarchyId, activeCharacterId, setActiveCharacterId, rowIdForCharIndex,
 		activeChar, selectActiveCharacterInHierarchy, activeCharIndex, activeRig, waitForRig, ghostLayers,
-		snapshotCast, changeInspectorCharacter, hasCharSheet, setHasCharSheet, promptBlocksReveal,
-		setPromptBlocksReveal, revealPromptBlocks, waypointMode, setWaypointMode, waypoints, setWaypoints,
-		activeWaypointId, setActiveWaypointId, pendingWaypointFrame, setPendingWaypointFrame, promptClips,
-		setPromptClips, editPromptClips, selectedPromptId, setSelectedPromptId, allPoses, selectablePoses, posingIndex, posingChar, posedRig, setPosed, rootStart, commitPosedPose,
+		snapshotCast, changeInspectorCharacter, hasCharSheet, setHasCharSheet,
+		waypointMode, setWaypointMode, waypoints, setWaypoints,
+		activeWaypointId, setActiveWaypointId, pendingWaypointFrame, setPendingWaypointFrame, allPoses, selectablePoses, posingIndex, posingChar, posedRig, setPosed, rootStart, commitPosedPose,
 		queueRootWaypointFrame, castMemberOf, addCharacterWaypoint, moveCharacterWaypoint,
 		removeCharacterWaypoint, clearCharacterWaypoints, addFloorWaypoint, moveWaypoint, removeWaypoint,
 		toggleWaypointMode, openStudio, closeStudio, saveCurrentPose, savePose, removePose,
-		addPromptClip, changePromptClip, PROMPT_BLOCK_MAX_FRAMES, resizePromptClip, movePromptClip,
-		removePromptClip,
+		
 	} = castDomain;
 	const { publishStudioCharacters, syncStudioLayerBuffer, undoScene, redoScene, snapshotStudioDomain } = castDomain;
 	// The cast as of this render, for async handlers: an extraction that
@@ -1141,11 +1125,11 @@ export default function App() {
 
 	const motionDomain = useMotion(appContext.forRender({
 		get attachFrameRef() { return attachFrameRef; },
-		get PROMPT_BLOCK_MAX_FRAMES() { return PROMPT_BLOCK_MAX_FRAMES; },
+		
 		get activeChar() { return activeChar; },
 		get activeCharIndex() { return activeCharIndex; },
 		get activeRig() { return activeRig; },
-		get addPromptClip() { return addPromptClip; },
+		
 		get bufferRef() { return bufferRef; },
 		get cameraPreviewEndRef() { return cameraPreviewEndRef; },
 		get castDomain() { return castDomain; },
@@ -1168,19 +1152,19 @@ export default function App() {
 		get poserLook() { return poserLook; },
 		get posing() { return posing; },
 		get posingChar() { return posingChar; },
-		get projectMotionsRef() { return projectMotionsRef; },
-		get promptClips() { return promptClips; },
+		
+		
 		get publishStudioCharacters() { return publishStudioCharacters; },
-		get restoreEpochRef() { return restoreEpochRef; },
-		get restoreRef() { return restoreRef; },
-		get revealPromptBlocks() { return revealPromptBlocks; },
+		
+		
+		
 		get rigs() { return rigs; },
 		get rowIdForCharIndex() { return rowIdForCharIndex; },
 		get runStudioAction() { return runStudioAction; },
 		get sceneObjects() { return sceneObjects; },
 		get selectActiveCharacterInHierarchy() { return selectActiveCharacterInHierarchy; },
 		get setProjectManifest() { return setProjectManifest; },
-		get setPromptClips() { return setPromptClips; },
+		
 		get setSelectedHierarchyId() { return setSelectedHierarchyId; },
 		get setTlFps() { return setTlFps; },
 		get setTlFrame() { return setTlFrame; },
@@ -1192,8 +1176,8 @@ export default function App() {
 		get tlFrame() { return tlFrame; },
 		get tlFrameCount() { return tlFrameCount; },
 		get tlFrameRef() { return tlFrameRef; },
-		get trailBaseMotionRef() { return trailBaseMotionRef; },
-		get trailPreviewMotionRef() { return trailPreviewMotionRef; },
+		
+		
 		get tutorialProjectEpochRef() { return tutorialProjectEpochRef; },
 		get waitForRig() { return waitForRig; },
 		get waypointMode() { return waypointMode; },
@@ -1202,7 +1186,7 @@ export default function App() {
 		get enterShotLook() { return enterShotLook; },
 		get captureLiveFraming() { return liveQueries.capture_framing_png; },
 		get lookThroughShot() { return lookThroughShot; },
-		get motionEncodingCacheRef() { return motionEncodingCacheRef; },
+		
 		get readStudioState() { return readStudioState; },
 		get restoreExportRig() { return restoreExportRig; },
 		get setCameraPos() { return setCameraPos; },
@@ -1216,18 +1200,15 @@ export default function App() {
 	const {
 		ikMode, ikChains, setIkChains, ikFkJoints, setIkFkJoints, ikFocus, setIkFocus, footSnap, setFootSnap,
 		bodyContact, setBodyContact, IK_CORRECTION_BLEND_FRAMES,
-		ikTick, setIkTick, committedIkEdits, setCommittedIkEdits, trailFalloffS, setTrailFalloffS, showTrails,
-		setShowTrails, ikEditTool, setIkEditTool, trailEdit, trailTrackFocus, selectTrailTrack, clearTrailTrackFocus, trailFalloffFrames, focusIkHandle, snapshotIkKeys,
+		ikTick, setIkTick, committedIkEdits, setCommittedIkEdits, ikEditTool, setIkEditTool, focusIkHandle, snapshotIkKeys,
 		pendingIkEdit, applyPendingIkEdit, cancelPendingIkEdit,
 		rangePins, rangePinResiduals, rangePinSelection, setRangePinSelection, rangePinPartPick, setRangePinPartPick, rangePinPreview, previewRangePinDraft, applyRangePinDraft, deleteRangePin,
 		setCharacterIkKey, removeCharacterIkKey, clearCharacterIkKeys,
-		motion, motionBusy,
+		motion,
 		advanceFrame, stepFrame,
-		leaveIkMode, beginPlaybackOn, loadMotion, clearMotion, applyMotionTrim, resetMotionTrim, cutMotionAtPlayhead,
-		changeMotionSegmentSpeed, removeMotionSegmentById, poseOtherCastMembers, toggleIkMode, ikSolve,
+		leaveIkMode, clearMotion, poseOtherCastMembers, toggleIkMode, ikSolve,
 		ikDragEnd, ikAddKeyframe,
 		ikDeleteKeyframe, ikApplyPoseAsKey,
-		onTrailDragStart, onTrailDragPreview, onTrailDragEnd, restoreMotionRefs,
 	} = motionDomain;
 	const [partColoursEnabled, setPartColoursEnabled] = useState(false);
 	const [partColoursMode, setPartColoursMode] = useState("shaded");
@@ -1266,9 +1247,7 @@ export default function App() {
 			// renders for a specific cast member, so selecting the group used to
 			// drop the operator into Motion with nothing to drag.
 			setSelectedHierarchyId(rowIdForCharIndex(activeCharIndex));
-			// Selecting Motion should land on its first useful control rather than
-			// leaving the operator to hunt through a long inspector column.
-			setPromptBlocksReveal((signal) => signal + 1);
+			
 		}
 		// Pose lands on the active character's rig: its Rig Control panel holds
 		// the IK tools that W/E/R switch between.
@@ -1435,14 +1414,14 @@ export default function App() {
 		get loadedLayerCharRef() { return loadedLayerCharRef; },
 		get manualCameraOverrideRef() { return manualCameraOverrideRef; },
 		get markSemanticEdit() { return markSemanticEdit; },
-		get motionEncodingCacheRef() { return motionEncodingCacheRef; },
+		
 		get motionFullRef() { return motionFullRef; },
 		get playgroundMode() { return playgroundMode; },
 		get projectHandleRef() { return projectHandleRef; },
-		get projectMotionsRef() { return projectMotionsRef; },
+		
 		get projectSnapshotRef() { return projectSnapshotRef; },
 		get projectStateRef() { return projectStateRef; },
-		get restoreMotionRefs() { return restoreMotionRefs; },
+		
 		get runStudioAction() { return runStudioAction; },
 		get saveBlockedRef() { return saveBlockedRef; },
 		get saveFailureToastRef() { return saveFailureToastRef; },
@@ -1454,11 +1433,11 @@ export default function App() {
 		get setHasCharSheet() { return setHasCharSheet; },
 		get setMovePlaying() { return setMovePlaying; },
 		get setPendingWaypointFrame() { return setPendingWaypointFrame; },
-		get setPromptClips() { return setPromptClips; },
+		
 		get setRailDraw() { return setRailDraw; },
 		get setRigMountEpoch() { return setRigMountEpoch; },
 		get setSelectedHierarchyId() { return setSelectedHierarchyId; },
-		get setSelectedPromptId() { return setSelectedPromptId; },
+		
 		get setShots() { return setShots; },
 		get setTlFrame() { return setTlFrame; },
 		get setTlFrameCount() { return setTlFrameCount; },
@@ -1520,9 +1499,7 @@ export default function App() {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 		[ikTick]);
 
-	 // {track, grabFrame, radiusFrames, clipDelta}
-	const trailBaseMotionRef = useRef(null);
-	const trailPreviewMotionRef = useRef(null);
+	 
 
 	function selectHierarchy(id) {
 		// A selection switch is the user starting something else: settle any open
@@ -1667,10 +1644,7 @@ export default function App() {
 		camera.rotation.set(angles.pitch, angles.yaw, 0);
 	}
 
-	// Prompt-block text (inspector field AND the timeline chip both land in
-	// changePromptClip) and viewport/plan camera framing are the two streams
-	// that would otherwise push an entry per keystroke / per pointermove.
-	const promptTextSessionRef = useRef(null);
+	// Viewport/plan camera framing would otherwise push an entry per pointermove.
 	const framingSessionRef = useRef(null);
 	// A colour picker streams values for as long as its dialog is open.
 	const tintSessionRef = useRef(null);
@@ -1757,12 +1731,12 @@ export default function App() {
 				requestSculptView({ KeyW: "front", KeyE: "side", KeyR: "back" }[event.code]);
 				return;
 			}
-			// Pose mode's W/E/R are the IK tools, gated like their Rig Control
-			// buttons: the trail tool needs visible trails, the range pin a take.
+			// Pose mode's W/R are the IK tools, gated like their Rig Control
+			// buttons: the range pin needs a take.
 			if (workflowMode === "pose" && GIZMO_HOTKEYS[event.code]) {
 				event.preventDefault();
 				if (event.code === "KeyW") setIkEditTool("ik");
-				else if (event.code === "KeyE" && showTrails) setIkEditTool("trail");
+				
 				else if (event.code === "KeyR" && motion) { setIkEditTool("pin"); setRangePinPartPick(null); }
 				return;
 			}
@@ -2218,14 +2192,13 @@ export default function App() {
 	// into the saved stage below with each character, and a change to them is
 	// a reason to autosave.
 	const motionLayers = appContext.storeDomain("motion")?.read() ?? null;
-	const ikEditsOf = (id) => {
-		const row = motionLayers?.find((layer) => layer.id === id);
-		if (!row || (!row.ikKeys?.length && !row.ikPins?.length)) return null;
-		return { keys: row.ikKeys, pins: row.ikPins ?? [], pinResiduals: row.ikPinResiduals ?? [] };
-	};
-	// sessionMotion is stripped: generated clips are session-only and far too
-	// heavy for the stage envelope; paths, prompt blocks and IK edits persist.
-	const stageCharacters = characters.map(({ sessionMotion, ...entry }) => ({ ...entry, ikEdits: ikEditsOf(entry.id) }));
+	const ikEditsOf = (row) => (!row || (!row.ikKeys?.length && !row.ikPins?.length) ? null : { keys: row.ikKeys, pins: row.ikPins ?? [], pinResiduals: row.ikPinResiduals ?? [] });
+	// sessionMotion is stripped: baked takes are session-only and far too heavy
+	// for the stage envelope; a take v3 persists as its source (spec, placement).
+	const stageCharacters = characters.map(({ sessionMotion, ...entry }) => {
+		const row = motionLayers?.find((layer) => layer.id === entry.id);
+		return { ...entry, ikEdits: ikEditsOf(row), motionTake: savedTakeSource(row?.take) };
+	});
 	actorStageRef.current = {
 		characters: stageCharacters,
 		hasCharSheet,
@@ -2377,11 +2350,7 @@ export default function App() {
 		return () => { window.removeEventListener("cozyclay:agent-panel-toggle", toggle); window.removeEventListener("keydown", key); };
 	}, [embedMode]);
 	const projectHandleRef = useRef(null);
-	const projectMotionsRef = useRef(new Map());
-	// Loaded clips keep the same Uint8Array identity while they remain active.
-	// Reuse the expensive encoded record until a new byte buffer is supplied.
-	const motionEncodingCacheRef = useRef(new WeakMap());
-	const restoreEpochRef = useRef(0);
+	
 
 	const projectSnapshotRef = useRef("");
 	const projectStateRef = useRef(null);
@@ -2459,7 +2428,6 @@ export default function App() {
 			&& tutorialInitialSnapshotRef.current === collectProjectSnapshot("Tutorial");
 		if (seed) {
 			tutorialLoadingRef.current = true;
-			demoSeeded.current = true;
 			try {
 				const opened = await openStarterScene("city-block", "tutorial");
 				if (opened) {
@@ -2566,7 +2534,6 @@ export default function App() {
 		removeCharacter,
 		persistScenes,
 		openScene,
-		loadMotion,
 		// The framing-capture pair the agent commands call. Both are per-render
 		// closures (captureFramingPng sizes its canvas off the render's own
 		// shotOutput), so the ref must always hold THIS render's instance — a
@@ -2756,10 +2723,10 @@ export default function App() {
 
 	// These hooks are declared after the liveStateRef assignment above runs, so
 	// they join the live read model here — same render, no TDZ.
-	appContext.patchLive({ promptClips, setPromptClips, editPromptClips, setTlFrameCount });
+	appContext.patchLive({ setTlFrameCount });
 
 	// Dirty tracking: any divergence from the last saved file lights the dot.
-	useEffect(scenesDomain.refreshProjectDirty, [scenes, activeSceneId, workspaceLayout, customPoses, characters, shots, waypoints, promptClips, projectName, keyLight, sceneObjects, shotAspectKey, environmentImage, environment, style, hasEnvSheet, sensorId, tlFrameCount, workflowRevision]);
+	useEffect(scenesDomain.refreshProjectDirty, [scenes, activeSceneId, workspaceLayout, customPoses, characters, shots, waypoints, projectName, keyLight, sceneObjects, shotAspectKey, environmentImage, environment, style, hasEnvSheet, sensorId, tlFrameCount, workflowRevision]);
 
 	// The untrimmed take per CHARACTER. Trims are non-destructive views of the
 	// full take, so re-trimming and "restore full" always cut from the
@@ -2767,17 +2734,7 @@ export default function App() {
 	// ref would hand Subject 2's take to Subject 1 on the next switch.
 	const motionFullRef = useRef(new Map()); // charId -> untrimmed take
 
-	// Which ik tracks a preserve run would name in its editRanges, derived the
-	// same way runArdy derives them: the prompt-block schedule, the blocks that
-	// contain authored IK keys, the tracks keyed inside those blocks. The blocks
-	// TILE 0..clipFrames, so the union over the edited ones is just the union
-	// over the whole clip — blocks without keys contribute nothing either way.
-	// Empty means the request carries no `tracks` at all and the panel says
-	// nothing extra. Regenerating a take is the only clock that matters here, so
-	// clipFrames comes from the loaded take exactly as runArdy takes it.
-
-
-	 // idle | running | done | error
+	
 
 
 	// Cast render props, memoized with Character itself (React.memo): during
@@ -2847,20 +2804,18 @@ export default function App() {
 	}, [gizmoView, characters, activeChar.id]);
 
 	/* --------------------- per-character layer buffers ---------------------
-	 * waypoints / promptClips / motion above are the EDITING BUFFER of the
+	 * waypoints / motion above are the EDITING BUFFER of the
 	 * active character's animation layer. On a character switch the buffer is
 	 * committed back into the previous character's entry and the new one's
 	 * layer is loaded, so each cast member keeps its own schedule. The
 	 * generated clip is session-only; paths and prompt blocks persist in the
 	 * stage envelope via the characters array. */
-	const bufferRef = useRef({ waypoints: [], promptClips: [], motion: null, ik: null });
-	bufferRef.current = { waypoints, promptClips, motion, ik: ikStateRef.current };
+	const bufferRef = useRef({ waypoints: [], motion: null, ik: null });
+	bufferRef.current = { waypoints, motion, ik: ikStateRef.current };
 	const loadedLayerCharRef = useRef(activeChar.id);
 	const ikStatesRef = useRef(new Map()); // charId -> ikState, one per layer
 	useEffect(castDomain.switchActiveCharacterLayer, [activeChar.id]);
-	// Pre-playback bone snapshot; restoring it (after Character's pose effect
-	// has re-applied poseA) puts the rig back exactly where it was.
-	const restoreRef = useRef(null);
+	
 
 	const shotCamRef = useRef(null);
 	const captureRef = useRef(null);
@@ -3213,11 +3168,10 @@ export default function App() {
 			characters,
 			activeChar.id,
 			motion,
-			promptClips,
 			null,
 		);
 		// Camera-only scenes still use their authored production duration. Once
-		// motion or prompt content exists, content is the authoritative record
+		// motion exists, content is the authoritative record
 		// range even if an older timeline count was left behind.
 		return contentExtent > 0 ? contentExtent : tlFrameCount;
 	}
@@ -3827,17 +3781,11 @@ export default function App() {
 	const inspectorHasContent = isSceneSelection || isCameraSelection || isCharacterSelection || isRigSelection
 		|| selectedHierarchyId === "environment" || selectedHierarchyId === "props" || selectedHierarchyId === "light" || Boolean(selectedSceneObject) || sculptMode;
 
-	// Hosted-demo seed. A build served as static files has no ARDY sidecar, so
-	// a first-time visitor would otherwise land on a character standing still
-	// with no way to see generated motion. The clip below ships with the build
-	// and is loaded once, only when the bridge is absent and nothing has been
-	// loaded or generated yet. A local session with the bridge running is
-	// untouched.
-	const motionRefsRestored = useRef(false);
+	// Startup idle work, once.
+	const startupWarmed = useRef(false);
 	useEffect(() => {
-		if (motionRefsRestored.current) return;
-		motionRefsRestored.current = true;
-		restoreMotionRefs(startupStage.characters);
+		if (startupWarmed.current) return;
+		startupWarmed.current = true;
 		// Parse the thumbnail rigs during startup idle so the first pose-studio
 		// open starts rendering immediately instead of paying a 100ms+ FBX parse.
 		warmPoseThumbnails();
@@ -3845,30 +3793,21 @@ export default function App() {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
-	const demoSeeded = useRef(false);
-
-	// The camera tutorial's seed (#209). The hosted-demo seed above is gated on
-	// a missing bridge, which is why the tutorial used to open on an empty room
-	// in a local session. startCameraTutorial arms tutorialSeedPending once the
-	// starter scene is applied, and the same clip goes on regardless of bridge
-	// state as soon as that scene's character has a parsed rig — a state
-	// condition, not a timer, exactly like the seed above.
+	// The camera tutorial's seed (#209). startCameraTutorial arms
+	// tutorialSeedPending once the starter scene is applied, and a compiled walk
+	// (take v3) goes on as soon as that scene's character has a parsed rig: a
+	// state condition, not a timer. The compile installs synchronously, so no
+	// agent or user edit can land between the rig being ready and the take.
 	useEffect(() => {
-		if (!tutorialSeedPending || !activeRig || motionBusy) return;
+		if (!tutorialSeedPending || !activeRig) return;
 		const seedEpoch = tutorialSeedEpochRef.current;
-		if (seedEpoch === null || seedEpoch !== tutorialProjectEpochRef.current) {
-			tutorialSeedEpochRef.current = null;
-			setTutorialSeedPending(false);
-			return;
-		}
 		tutorialSeedEpochRef.current = null;
 		setTutorialSeedPending(false);
-		demoSeeded.current = true; // one seeded clip per session, whichever got here first
-		loadMotion(DEMO_MOTION_URL, DEMO_MOTION_PROMPT, undefined, null, activeChar.id, null, { tutorialEpoch: seedEpoch }).catch(() => {
-			/* the take is the tutorial's set dressing, never an error to act on */
-		});
+		if (seedEpoch === null || seedEpoch !== tutorialProjectEpochRef.current) return;
+		const spec = tutorialWalkSpec(activeChar); // the take is set dressing, never an error to act on
+		if (spec && runStudioAction("motion.compile", { characterId: activeChar.id, spec })) { setTlFrame(0); setTlPlaying(false); }
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [tutorialSeedPending, activeRig, motionBusy]);
+	}, [tutorialSeedPending, activeRig]);
 
 	// Drive every cast member from ITS OWN clip on the shared playhead. The
 	// active character's buffer motion and the stored session motions of the
@@ -3887,7 +3826,7 @@ export default function App() {
 	// clock. Recomputing both directions matters: deleting Subject 2 or
 	// shortening its take must pull the end back in instead of leaving the
 	// recorder with frozen tail frames (#80).
-	useEffect(shotsDomain.syncTimelineExtent, [characters, activeChar.id, motion, promptClips, shots]);
+	useEffect(shotsDomain.syncTimelineExtent, [characters, activeChar.id, motion, shots]);
 
 	/* ------------------------------ IK logic ------------------------------ */
 
@@ -3947,7 +3886,7 @@ export default function App() {
 	}, [ikMode, ikChains, activeRig, motion, posing, tlFrame, ikTick, ikFkJoints]);
 
 	// QA hook: lets headless visual checks read the live rig/motion state
-	// (tools/ardy/visual-qa.mjs). Harmless in normal use.
+	// (test/motion3/qa-motion3-*-browser.mjs). Harmless in normal use.
 	useEffect(() => {
 	window.__cozyclay = {
 			runStudioAction, setFrame: setTlFrame,
@@ -4063,16 +4002,7 @@ export default function App() {
 			addSceneObject: (kind, placement = {}) => addSceneObject(kind, placement),
 			scrub: (frame) => setTlFrame(Math.max(0, Math.min(tlFrameCount - 1, Math.round(frame)))),
 			pause: () => setTlPlaying(false),
-			// Motion-trail QA surface: read the current trail policy and drive the
-			// same drag -> preview -> pending-edit path headless checks cannot reach
-			// through synthetic pointers reliably.
-			trail: { falloffFrames: trailFalloffFrames, falloffS: trailFalloffS, edit: trailEdit, tool: ikEditTool, visible: showTrails, activeTrackId: trailTrackFocus, visibleTracks: trailTrackFocus ? [trailTrackFocus] : null },
-			trailPoints: (jointName = "Hips") => jointTrailPoints(motion, jointName, { baseY: activeChar.y ?? 0, scale: activeChar.scale ?? 1 }),
-			trailEditApply: (grabFrame, delta) => {
-				onTrailDragStart({ track: "hips", grabFrame });
-				onTrailDragPreview({ track: "hips", grabFrame, delta });
-				onTrailDragEnd({ track: "hips", grabFrame, delta });
-			},
+			
 			// QA-only IK drag seam: resolves the same production solve/end path as
 			// the viewport manipulator, with a deterministic world-space offset.
 			ikPreviewApply: (track = "leftHand", offset = { x: 0.02, y: 0, z: 0 }) => {
@@ -4087,7 +4017,7 @@ export default function App() {
 			pathDraw,
 		};
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [activeRig, motion, tlFrame, tlFrameCount, ikMode, ikChains, ikFocus, ikTick, charA, rangePins, rangePinResiduals, committedIkEdits, waypoints, lookThroughShot, selectedSceneObject, sceneObjects, rigs, characters, pathPointIndex, preview, posing, playMode, pathDraw, trailEdit, trailTrackFocus, pendingIkEdit, trailFalloffFrames, trailFalloffS, ikEditTool, showTrails]);
+	}, [activeRig, motion, tlFrame, tlFrameCount, ikMode, ikChains, ikFocus, ikTick, charA, rangePins, rangePinResiduals, committedIkEdits, waypoints, lookThroughShot, selectedSceneObject, sceneObjects, rigs, characters, pathPointIndex, preview, posing, playMode, pathDraw, pendingIkEdit, ikEditTool]);
 	// QA hook (plan §6.5): exposes history depth and the present === objects
 	// invariant so the browser suite can assert undo entry counts directly.
 	// Reads live store state at call time; re-registered after every render.
@@ -4116,16 +4046,7 @@ export default function App() {
 		};
 	});
 
-	// On clear, restore the exact pre-playback bone rotations. This runs in
-	// the parent AFTER Character's pose effect (children flush first), so even
-	// a pose change made during playback cannot leak into the restored rig.
-	useEffect(() => {
-		if (motion) return;
-		const saved = restoreRef.current;
-		if (!saved) return;
-		restoreRef.current = null;
-		restorePlaybackBones(saved.rig, saved.bones);
-	}, [motion]);
+	
 
 	const playbackSceneBase = useMemo(() => ({
 		frameCount: tlFrameCount,
@@ -4557,7 +4478,7 @@ export default function App() {
 	function readStudioState() {
 		const live = appContext.live.state;
 		const list = appContext.live.characters.map(c => c.id === loadedLayerCharRef.current ? {
-			...c, layer: { ...c.layer, waypoints: bufferRef.current.waypoints, promptClips: bufferRef.current.promptClips }, sessionMotion: bufferRef.current.motion,
+			...c, layer: { ...c.layer, waypoints: bufferRef.current.waypoints }, sessionMotion: bufferRef.current.motion,
 		} : c);
 		const targets = new Map(list.map(c => [c.id, { rig: live.rigs[c.id], motion: c.sessionMotion ?? null,
 			ikState: c.id === loadedLayerCharRef.current ? ikStateRef.current : ikStatesRef.current.get(c.id),
@@ -4676,7 +4597,7 @@ export default function App() {
 		}));
 		parent.matrixAutoUpdate = false; parent.matrix.copy(target.rig.parent?.matrixWorld ?? new THREE.Matrix4()); parent.add(rig);
 		try {
-			if (target.motion) applyMotionFrame(rig, target.motion, sampleAt({ frameCount: target.motion.frames, motion: target.motion }, null, frame).motionFrame);
+			if (target.motion) applyTakeFrame(rig, target.motion, sampleAt({ frameCount: target.motion.frames, motion: target.motion }, null, frame).motionFrame);
 			// The clone shares the source rig's bind pose, so its contact radii
 			// and heights are the same numbers: measure the source once and
 			// hand them over instead of re-scanning every vertex per query (#413).
@@ -4740,12 +4661,7 @@ export default function App() {
 		encodePng: (buffer, output) => bufferToPng(buffer, output),
 		// The pose library a character.pose patch resolves its id against.
 		poses: () => [DEFAULT_POSE, ...customPoses],
-		loadArtifact: (artifact, options) => {
-			// Keep the server-pinned URL. Stripping the origin would silently fetch
-			// from a different bridge after a reconnect. The bridge owner must allow
-			// CORS or supply a pinned same-origin artifact proxy; never use load_motion.
-			return loadMotionFromUrl(artifact.url, options);
-		},
+		
 		ikRevision: (id, stamp) => {
 			const prior = studioIkStampsRef.current.get(id);
 			if (!prior || prior.stamp !== stamp) studioIkStampsRef.current.set(id, { stamp, revision: (prior?.revision ?? 0) + 1 });
@@ -4764,7 +4680,7 @@ export default function App() {
 		state: () => ({
 			shots: appContext.live.state.shots, objects: storeRef.current.objects, characters: appContext.live.characters, frame: tlFrame, frameCount: tlFrameCount,
 			selectedObjectId: selectedSceneObjectId, activeCharacterId: activeChar?.id ?? null,
-			promptBlockCount: promptClips.filter((clip) => clip.text.trim()).length,
+			
 			generating: false,
 			motionReady: false,
 			// The Export menu offers Video (mp4) on exactly these conditions.
@@ -4818,7 +4734,7 @@ export default function App() {
 		studioBindingRef.current.publishSemantic = (domain, after) => {
 			if (domain === "characters" && Array.isArray(after)) { appContext.publishCharacters(after); appContext.patchLive({ characters: after }); }
 			if (domain === "shots") appContext.patchLive({ shots: after });
-			if (domain === "promptClips") bufferRef.current.promptClips = after;
+			
 		};
 	}
 	useEffect(() => () => studioBindingRef.current?.dispose(), []);
@@ -4907,12 +4823,9 @@ export default function App() {
 		posing, removeCharacter, setShowB, activeChar, changeInspectorCharacter,
 		selectablePoses, ikApplyPoseAsKey,
 		setStudioPick, appContext, removePose, activeRig, saveCurrentPose,
-		promptBlocksReveal, promptClips, selectedPromptId,
-		setTlFrame, tlFrameCount, changePromptClip,
-		addPromptClip,
+		setTlFrame, tlFrameCount,
 		tlFrame, isRigSelection, ikChains, ikFocus, footSnap, poseObjectOpacity, setPoseObjectOpacity, capturePoseImage,
-		ikEditTool, setIkEditTool, showTrails,
-		setShowTrails, trailFalloffS, setTrailFalloffS, trailEdit, trailTrackFocus, selectTrailTrack, clearTrailTrackFocus,
+		ikEditTool, setIkEditTool,
 		pendingIkEdit, applyPendingIkEdit, cancelPendingIkEdit,
 		rangePins, rangePinResiduals, rangePinSelection, rangePinPartPick,
 		rangePinPreview, setRangePinSelection, setRangePinPartPick, previewRangePinDraft, applyRangePinDraft,
@@ -4931,15 +4844,13 @@ export default function App() {
 		waypointMode,
 		craneSelectedIndex,
 		addActiveCranePoint, deleteSelectedCranePoint, setCraneSelectedIndex, tlFps, ghostLayers,
-		pathSpeed, tlPlaying, pendingWaypointFrame, stateBadge, applyMotionTrim,
-		resetMotionTrim, cutMotionAtPlayhead, changeMotionSegmentSpeed, removeMotionSegmentById, bodyContact,
+		pathSpeed, tlPlaying, pendingWaypointFrame, stateBadge, bodyContact,
 		activeShotIdx, railDraw, pathDraw, pathTarget, setPathDraw, setRailDraw,
 		setWorkspaceLayout, timingTokenRef, railCurve, ikAddKeyframe, ikDeleteKeyframe, pathPointIndex, setPathPointIndex,
 		setBodyContact, setFootSnap, advanceFrame, stepFrame, cameraPreviewEndRef,
 		manualCameraOverrideRef, setTlPlaying, setWaypointMode, selectActiveCharacterInHierarchy,
 		toggleWaypointMode: storyboardProject ? undefined : toggleWaypointMode,
-		setActiveWaypointId, setPendingWaypointFrame, removeWaypoint, queueRootWaypointFrame, revealPromptBlocks,
-		resizePromptClip, movePromptClip, removePromptClip, setSelectedHierarchyId, addCameraKeyframe,
+		setActiveWaypointId, setPendingWaypointFrame, removeWaypoint, queueRootWaypointFrame, setSelectedHierarchyId, addCameraKeyframe,
 		moveCameraKeyframe, removeCameraKeyframe, syncActiveCameraFraming, activeCamera, activeShotDuration,
 		changeActiveCamera, cameraRail, previewCameraShot, toggleCameraRailDraw, deleteCameraRail,
 		selectTimelineShot, clearMotion,
@@ -5476,26 +5387,7 @@ export default function App() {
 								height={shotOutput.height}
 							/>
 							<CaptureRig apiRef={mcpCaptureRef} camRef={shotCamRef} width={MCP_CAPTURE_W} height={MCP_CAPTURE_H} />
-							{/* IK-mode motion trails: the root path plus the focused effector's
-							    trajectory, grabbable to deform the take with falloff. */}
-							{ikMode && motion && (
-								<MotionTrails
-									motion={motion}
-									rig={activeRig}
-									baseY={activeChar.y ?? 0}
-									charScale={activeChar.scale ?? 1}
-									ikFocus={ikFocus}
-									activeTrackId={trailTrackFocus}
-									falloffFrames={trailFalloffFrames}
-									playheadFrame={tlFrame}
-									pendingEdit={trailEdit}
-									enabled={ikMode && ikEditTool === "trail" && showTrails && !posing && !playMode}
-									visible={showTrails}
-									onDragStart={onTrailDragStart}
-									onDragPreview={onTrailDragPreview}
-									onDragEnd={onTrailDragEnd}
-								/>
-							)}
+							
 							<DualRender
 								stageRef={stageRef}
 								mainRef={mainPaneRef}

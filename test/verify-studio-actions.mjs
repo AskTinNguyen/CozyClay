@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { STUDIO_ACTIONS, STUDIO_ACTION_IDS, STUDIO_ACTION_KINDS, studioActionDeclaration, createStudioActionRegistry } from "../src/studio-actions.js";
 import { validateStudioCommand, validateStudioSchema } from "../src/studio-agent-protocol.js";
 import * as studioActions from "../src/studio-actions.js";
-import { FK_TRACKS, IK_TRACKS } from "../src/ardy/ik.js";
+import { FK_TRACKS, IK_TRACKS } from "../src/motion/ik.js";
 import { SCENE_ATTACH_BONES } from "../src/scene-objects.js";
 import { GUIDE_MODES } from "../src/shot-guides.js";
 import { IMAGE_MODELS } from "../src/shot.js";

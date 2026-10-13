@@ -12,15 +12,13 @@ function expect(name, condition) {
 import { readStudioSource } from "./bus/verify-domain-modules.mjs";
 const app = readStudioSource()
 	+ readFileSync(new URL("../src/app-stage.jsx", import.meta.url), "utf8")
-	+ readFileSync(new URL("../src/ardy-bridge-contract.js", import.meta.url), "utf8")
+	+ readFileSync(new URL("../src/timeline-defaults.js", import.meta.url), "utf8")
 	+ readFileSync(new URL("../src/stage-startup-defaults.js", import.meta.url), "utf8")
 	+ readFileSync(new URL("../src/stage-characters.jsx", import.meta.url), "utf8")
 	+ readFileSync(new URL("../src/stage-canvas-rigs.jsx", import.meta.url), "utf8");
-const extract = readFileSync(new URL("../tools/ardy/extract.mjs", import.meta.url), "utf8");
-const bridge = readFileSync(new URL("../tools/ardy/bridge.mjs", import.meta.url), "utf8");
 const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
 const planview = readFileSync(new URL("../src/planview.jsx", import.meta.url), "utf8");
-const timeline = readFileSync(new URL("../src/ardy/timeline.jsx", import.meta.url), "utf8");
+const timeline = readFileSync(new URL("../src/motion/timeline.jsx", import.meta.url), "utf8");
 const dualview = readFileSync(new URL("../src/dualview.jsx", import.meta.url), "utf8");
 const offscreenExport = readFileSync(new URL("../src/offscreen-export.js", import.meta.url), "utf8");
 const ui = readFileSync(new URL("../src/ui.jsx", import.meta.url), "utf8");
@@ -133,7 +131,6 @@ expect(
 expect("selection routing is derived once, not repeated per foldout", app.includes("const isCharacterSelection = selectedHierarchyId ===") && app.includes("const inspectorHasContent ="));
 expect("an unowned selection explains itself instead of showing a blank column", app.includes("data-inspector-empty") && css.includes(".inspector-empty"));
 expect("the heavy motion pipeline starts collapsed", app.includes("function Foldout({ title, hidden, defaultOpen = true, openSignal = 0, children })") && app.includes("useState(defaultOpen)"));
-expect("new sessions start without prompt blocks", app.includes("const DEFAULT_PROMPT_CLIPS = [];") && app.includes("useState(null)"));
 expect(
 	"recording captures the clean render without a frame stamp",
 	app.includes("capture: (frame, kind) => withExportFrame(frame, kind") &&
@@ -166,29 +163,12 @@ expect(
 	"a collapsed panel can be revealed from outside the Inspector",
 	app.includes("openSignal = 0") && app.includes("if (openSignal <= 0) return undefined;") && app.includes('scrollIntoView({ block: "nearest" })'),
 );
+// A compiled take is installed by motion.compile through the motion owner's
+// replace(); no npz loader, prompt schedule or async completion is left.
 expect(
-	"inactive live motion and its prompt clips commit in one character update",
-	app.includes('commitLoadedTake(targetCharacter.id, loaded, { recipe, job, promptClips: targetPromptClips, scale })') &&
-		app.includes('owned.replace(characterId, take, { recipe: imported, versions })') &&
-		app.includes('layer: promptClips ? { ...row.layer, promptClips } : row.layer'),
-);
-expect(
-	"a deleted inactive motion target cannot clear the active editing motion",
-	app.includes('if (!targetStillExists) throw new Error(`Motion target ${targetCharacterId} no longer exists.`)') && !/\bsetMotion\(/.test(app),
-);
-// Given B owns a completed motion while A becomes the editing buffer during
-// decode or the B-rig wait, when completion resumes, then B keeps both its
-// take and prompt schedule without installing either into A.
-expect(
-	"a B completion after selection changes retains B ownership through decode and rig waits",
-	app.includes("const targetCharacter = appContext.live.characters.find((entry) => entry.id === targetCharacterId);") && app.includes("const targetStillExists = appContext.live.characters.some((entry) => entry.id === targetCharacter.id);") && app.includes("const bufferOwnsTarget = targetCharacter.id === appContext.shared.loadedLayerCharRef.current;") && app.includes("if (bufferOwnsTarget) {") && app.includes('commitLoadedTake(targetCharacter.id, loaded, { recipe, job, promptClips: targetPromptClips, scale })'),
-);
-// Given A starts a completion and B becomes active before it settles, when
-// the target-owned completion resumes, then B's editing buffer receives B's
-// clip and prompts and an A failure cannot clear B's motion.
-expect(
-	"an active B receives its own completion after an A to B selection interleaving",
-	app.includes("domain.loadRemote = async (args, context) => {") && app.includes("args.drop ?? null, args.characterId, clips, { commandContext, recipe: entry?.recipe }") && !/\bsetMotion\(/.test(app),
+	"motion installs only through the motion owner, never a raw setter",
+	app.includes("function replace(id, take, { ikKeys = [], ikPins = [], ikPinResiduals = [] } = {})") && !/\bsetMotion\(/.test(app)
+		&& !app.includes("loadMotion(") && !app.includes("commitLoadedTake"),
 );
 expect("individual block generation action is removed", !app.includes("Generate selected block"));
 expect("desktop stage fills the remaining viewport", css.includes("aspect-ratio: auto") && css.includes("height: 100%"));
@@ -198,7 +178,6 @@ expect("timeline IK text controls size to their labels", css.includes(".tl-btn.i
 // Floor-click authoring: waypoints are placed by clicking the set floor, so
 // frame 0 is owned implicitly — the request prepends Subject 1's position and
 // authored pins can never claim frame 0 or earlier.
-expect("generated motion anchors frame zero at the target character", app.includes("anchorX: targetCharacter.x") && app.includes("anchorZ: targetCharacter.z") && app.includes("anchorFrame: 0"));
 expect("returned playback has no CozyClay root coordinate warp", !app.includes("warpMotionRootToPath"));
 expect("Top-View root path draws from Subject 1 without a duplicate marker", planview.includes("[{ x: start.x, z: start.z }, ...waypoints]") && planview.includes("waypoints.map((w, i)"));
 expect(
@@ -307,55 +286,18 @@ expect(
 	"expert foldouts stay enabled in the always-advanced Studio",
 	app.includes('hidden={!isCharacterSelection}'),
 );
+// A take v3 persists as its source: the baked arrays are stripped from the
+// stage, and the motion layer compiles the saved source again on load.
 expect(
-	"the bridge advertises GVHMR as the only extraction backend",
-	extract.includes('|| "gvhmr").toLowerCase()') &&
-	extract.includes('EXTRACT_BACKEND_SUPPORTED = EXTRACT_BACKEND === "gvhmr" && !EXTRACT_CMD') &&
-	extract.includes('reason: "extract-backend-unsupported"') &&
-	/extractionBackend:\s*EXTRACT_BACKEND_SUPPORTED\s*\?\s*EXTRACT_BACKEND\s*:\s*"unsupported"/.test(bridge),
-);
-// THE INVARIANT: extraction divided root travel by the filmed person's
-// stature, so the clip and the scale must be applied together.
-expect(
-	"stature survives the save: only the session clip is stripped from the stage, and the layer's IK edits ride along",
-	app.includes("characters.map(({ sessionMotion, ...entry }) => ({ ...entry, ikEdits: ikEditsOf(entry.id) }))") && app.includes("characters: stageCharacters,") &&
-	app.includes("appContext.storeDomain('motion').hydrate(entry.id, clip, entry.motionRef)"),
+	"the save keeps the layer's IK edits and the take v3 source, never the baked arrays",
+	app.includes("characters.map(({ sessionMotion, ...entry }) => {") && app.includes("ikEdits: ikEditsOf(row), motionTake: savedTakeSource(row?.take)") && app.includes("characters: stageCharacters,") &&
+	app.includes("const saved = normalizeTakeSource(entry.motionTake), take = saved ? restoredTake(entry.id, saved) : null;") &&
+	app.includes("compileTakeSource(take.source)"),
 );
 expect(
-	"trim composes from the per-character full-take map",
-	app.includes("const motionFullRef = useRef(new Map());") &&
-	app.includes("const full = fullMotionFor(id), take = motionFor(id);") &&
-	app.includes("const previous = take.editSegments, rendered = { ...renderMotionEdit(full, segments), url: null };") &&
-	app.includes("edit('motion.trim', { characterId: appContext.shared.activeChar.id, start, end })"),
-);
-expect(
-	"a cut take drops its source url and migrates retained IK keys",
-	app.includes("rendered = { ...renderMotionEdit(full, segments), url: null }") &&
-	app.includes("remapFrameKeyMap(decodeMotionKeys(layer(id).ikKeys), previous, segments)"),
-);
-expect(
-	"an extracted take is trimmable too",
-	app.includes('function replace(id, take, { fullTake = take') &&
-	app.includes('take: snapshotTake(take), fullTake: snapshotTake(fullTake)') &&
-	app.includes('owned.replace(characterId, take, { recipe: imported, versions })'),
-);
-expect(
-	"the timeline receives the active take, both trim handlers, and the department it draws for",
-	app.includes("onMotionTrim={applyMotionTrim}") &&
-	app.includes("onMotionTrimReset={resetMotionTrim}") &&
-	app.includes("motion={motion ? {") &&
-	app.includes("frames: motion.frames,") &&
-	app.includes("segments: motionEditLayout(") &&
-	app.includes("workflowMode={workflowMode}"),
-);
-// Trim, retime and Cut edit the take: Scene and Camera never draw them, and
-// inside Motion they belong to the segment the playhead selects (#191).
-expect(
-	"take trim, retime and Cut render only in Motion mode on the selected segment",
-	timeline.includes('const motionTools = workflowMode === "motion";') &&
-	timeline.includes("segmentTools = (segment) => motionTools && (segment.preview === true || selectedMotionSegment?.id === segment.id)") &&
-	timeline.includes("segmentTools(segment) && <button") &&
-	timeline.includes("name === IK_LANE && motion && motionTools && selectedMotionSegment && ("),
+	"the timeline receives the active take as one passive Body strip",
+	app.includes('motion={motion ? { frames: motion.frames, label: motion.prompt || ko("Compiled take", "컴파일된 테이크") } : null}') &&
+	timeline.includes('className="tl-motion-clip"') && !timeline.includes("onMotionTrim") && !timeline.includes("tl-motion-clip-handle"),
 );
 // Foot snap and Body contact only reinterpret an IK drag (R7).
 expect(

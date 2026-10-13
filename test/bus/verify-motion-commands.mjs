@@ -16,13 +16,7 @@ const cases = {
   'motion.rangePin.apply': () => ({ characterId: 'actor-a', pin }),
   'motion.rangePin.remove': () => ({ characterId: 'actor-a', pinId: pin.id }),
   'motion.clear': () => ({ characterId: 'actor-a' }),
-  'motion.trim': () => ({ characterId: 'actor-a', start: 4, end: 39 }),
-  'motion.resetTrim': () => ({ characterId: 'actor-a' }),
-  'motion.cut': () => ({ characterId: 'actor-a', frame: 24 }),
-  'motion.setSegmentSpeed': f => ({ characterId: 'actor-a', id: f.motion.motionFor('actor-a').editSegments[0].id, speed: 2 }),
-  'motion.removeSegment': f => ({ characterId: 'actor-a', id: f.motion.motionFor('actor-a').editSegments[0].id }),
-  'motion.set': () => ({ id: 'actor-a', set: { take: { anchorX: 2 } } }),
-  'motion.editTrail': () => ({ characterId: 'actor-a', grabFrame: 12, radiusFrames: 6, delta: { x: 0.2, y: 0, z: 0 } }),
+  'motion.set': () => ({ id: 'actor-a', set: { take: { prompt: 'Renamed take' } } }),
   'ik.applyPose': () => ({ characterId: 'actor-a', frame: 0, pose: { bones: {}, rootY: 0 } }),
   ...Object.fromEntries(['ik.setKey', 'character.setIkKey'].map(id => [id, () => ({ characterId: 'actor-a', frame: 0, tracks })])),
   ...Object.fromEntries(['ik.removeKey', 'character.removeIkKey'].map(id => [id, () => ({ characterId: 'actor-a', frame: 0 })])),
@@ -32,16 +26,15 @@ async function prepare(f, command) {
   seed(f);
   if (command === 'motion.rangePin.remove') ok(f.run('motion.rangePin.apply', { characterId: 'actor-a', pin }));
   if (command.includes('removeKey') || command.includes('removeIkKey') || command.includes('clearKeys') || command.includes('clearIkKeys')) ok(f.run('ik.setKey', { characterId: 'actor-a', frame: 0, tracks: { head: { q: [unit] } } }));
-  if (command === 'motion.resetTrim') ok(f.run('motion.trim', { characterId: 'actor-a', start: 4, end: 39 }));
-  if (command === 'motion.removeSegment') ok(f.run('motion.cut', { characterId: 'actor-a', frame: 24 }));
 }
 
 test('motion: owned intent and inspect include take, recipes, versions and JSON IK; mutable input buffers cannot rewrite history', async () => {
   const f = motionFixture();
   try {
-    owned(f); const take = seed(f), original = take.rootPos[0];
-    take.rootPos[0] += 10;
-    assert.equal(f.motion.motionFor('actor-a').rootPos[0], original);
+    owned(f); const take = seed(f), original = take.rot[0];
+    take.rot[0] += 10;
+    assert.equal(f.motion.motionFor('actor-a').rot[0], original);
+    assert.equal(f.motion.layer('actor-a').take.source?.schema, 'cozyclay.take.v3', 'the layer keeps the take source');
     const doc = await f.call('inspect_studio', { scope: 'document', select: ['motion'] });
     assert.equal(doc.document.motion[0].take.frames, 48);
     assert.deepEqual(doc.document.motion[0].ikKeys, []);
@@ -63,20 +56,6 @@ test('motion: an agent IK key and undo restore both the authored key layer and e
     assert.deepEqual(f.snapshot(), before); assert.deepEqual(f.actual.snapshotExportRig(f.rigs['actor-a']), rig);
     assert.deepEqual(f.motion.documentStore.depths(), { past: 0, future: 1 });
     assert.equal(f.cast.documentStore.depths().past, 0, 'IK does not duplicate history in cast');
-  } finally { f.dispose(); }
-});
-
-test('motion: trim drag previews from one retained take and commits exactly one undo entry', () => {
-  const f = motionFixture();
-  try {
-    owned(f); seed(f); const before = f.snapshot();
-    const tx = ok(f.run('run.begin', { id: 'motion.trim', args: { characterId: 'actor-a', start: 0, end: 47 } }));
-    for (const end of [43, 39, 35]) ok(f.run('run.update', { txId: tx.txId, args: { characterId: 'actor-a', start: 0, end } }));
-    assert.equal(f.motion.documentStore.depths().past, 0);
-    const committed = ok(f.run('run.commit', { txId: tx.txId }));
-    assert.equal(committed.undo.entries, 1); assert.equal(f.motion.documentStore.depths().past, 1);
-    assert.equal(f.motion.motionFor('actor-a').frames, 36);
-    ok(f.run('edit.undo', { receiptId: committed.receiptId })); assert.deepEqual(f.snapshot(), before);
   } finally { f.dispose(); }
 });
 

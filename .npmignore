@@ -8,7 +8,6 @@ docs/
 fixtures/
 test/
 node_modules/
-tools/ardy/out/
 public/
 *.log
 .DS_Store

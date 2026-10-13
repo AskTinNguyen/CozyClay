@@ -16,7 +16,7 @@ import {
 	objectBlockerId,
 	characterBlockerId,
 	blockerCharacterId,
-} from "../../src/ardy/collision-blockers.js";
+} from "../../src/motion/collision-blockers.js";
 import { OBJECT_LIBRARY, createSceneObject, createCutoutObject, CUTOUT_THICKNESS } from "../../src/scene-objects.js";
 
 let failures = 0;

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import * as THREE from "three";
-import { supportDiagnostics, supportMotion, solveSupportForces } from "../../src/ardy/physics-support.js";
+import { supportDiagnostics, supportMotion, solveSupportForces } from "../../src/motion/physics-support.js";
 
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 function rows({ frames = 48, fps = 24, height = () => .3, centerX = 0, site = "leftFoot" } = {}) {

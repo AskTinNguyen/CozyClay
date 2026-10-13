@@ -1,8 +1,8 @@
 import * as THREE from "three";
 import { createHash } from "node:crypto";
-import { resolveIkRig, createIkState, ikEvaluate, ikTouch, solveIk, correctionWeight } from "../../src/ardy/ik.js";
-import { bakeIkDragKey } from "../../src/ardy/ik-drag.js";
-import { ikKeyJson, ikTrackKeyFromJson } from "../../src/ardy/ik-key-json.js";
+import { resolveIkRig, createIkState, ikEvaluate, ikTouch, solveIk, correctionWeight } from "../../src/motion/ik.js";
+import { bakeIkDragKey } from "../../src/motion/ik-drag.js";
+import { ikKeyJson, ikTrackKeyFromJson } from "../../src/motion/ik-key-json.js";
 import { objectTransformAt } from "../../src/object-path.js";
 import { studioActionDeclaration } from "../../src/studio-actions.js";
 import { validateStudioSchema } from "../../src/studio-agent-protocol.js";
@@ -12,7 +12,7 @@ import {
 	normalizeRangePin,
 	rangePinTargetWorld,
 	removeRangePinKeys,
-} from "../../src/ardy/range-pin.js";
+} from "../../src/motion/range-pin.js";
 
 /* A range pin holds one limb on a target for every frame of a range, as delta
  * IK keys over the motion tagged with the pin id. Inside the range the

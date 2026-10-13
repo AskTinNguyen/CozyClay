@@ -275,7 +275,7 @@ ok("a stroke is not capped at the old five points", STROKE_MAX_POINTS === MAX_PA
 
 /* --- the strip loads the selected subject -------------------------------- */
 
-const timelineSource = readFileSync(new URL("../src/ardy/timeline.jsx", import.meta.url), "utf8");
+const timelineSource = readFileSync(new URL("../src/motion/timeline.jsx", import.meta.url), "utf8");
 // The studio source spans App.jsx and app-stage.jsx (module-level extraction); pin against both.
 const appSource = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8")
 	+ readFileSync(new URL("../src/app-stage.jsx", import.meta.url), "utf8")
@@ -339,7 +339,7 @@ ok(
 ok(
 	"the gestures are taught once (the first-selection toast) and by tooltip, not as a running caption",
 	!travelTrackSource.includes("선을 더블클릭하면 점 추가 · 끌면 휨") &&
-	readFileSync(new URL("../src/ardy/timeline.jsx", import.meta.url), "utf8").includes('title={ko("Drag the curve') &&
+	readFileSync(new URL("../src/motion/timeline.jsx", import.meta.url), "utf8").includes('title={ko("Drag the curve') &&
 	readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8").includes("선을 더블클릭하면 점이 추가돼요"),
 );
 

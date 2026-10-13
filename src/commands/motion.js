@@ -4,10 +4,8 @@ import { fail, characterOf } from "./shared.js";
 import { elementSetSchema, registerElementSet } from './elements.js';
 import './elements/motion.js';
 import './elements/character.js';
-import { createMotionEdit, trimMotionEdit, splitMotionEdit, setMotionSegmentSpeed, removeMotionSegment } from '../ardy/motion-edit.js';
 const id = { type: 'string', minLength: 1 }, frame = { type: 'integer', minimum: 0 };
 const input = (properties, required = Object.keys(properties)) => ({ type: 'object', properties, required, additionalProperties: false });
-const drop = { oneOf: [{ type: 'null' }, input({ from_s: { type: 'number', minimum: 0 }, to_s: { type: 'number', exclusiveMinimum: 0 }, meters: { type: 'number', exclusiveMinimum: 0, maximum: 30 } })] };
 const mutation = (id, label, properties, required) => ({ id, label, description: label, kind: 'mutation', undoDomain: 'motion', input: input(properties, required) });
 const setInput = elementSetSchema('motion');
 // A collection transaction has no single native character target. Normalize
@@ -22,24 +20,8 @@ const rangePins = [
 	mutation('motion.rangePin.apply', 'Apply range pin', { characterId: id, pin: rangePin, replaceExisting: { type: 'boolean', default: false } }, ['characterId', 'pin']),
 	mutation('motion.rangePin.remove', 'Remove range pin', { characterId: id, pinId: id }),
 ];
-const edits = [
-	{ ...mutation('motion.set', 'Set take fields', {}), input: setInput },
-	mutation('motion.trim', 'Trim motion', { characterId: id, start: frame, end: frame }),
-	mutation('motion.resetTrim', 'Restore full take', { characterId: id }),
-	mutation('motion.cut', 'Cut motion segment', { characterId: id, frame }),
-	mutation('motion.setSegmentSpeed', 'Set segment speed', { characterId: id, id, speed: { type: 'number', minimum: 0.05, maximum: 8 } }),
-	mutation('motion.removeSegment', 'Remove motion segment', { characterId: id, id }),
-];
-const prepared = { ...mutation('motion.applyPrepared', 'Apply prepared motion edit', { characterId: id, token: id }), exposure: 'ui-only' };
-const loads = [
-	{ id: 'motion.replace', label: 'Replace take', input: input({ characterId: id, url: id, prompt: { type: 'string', default: '' },
-		blocks: { type: 'array', maxItems: 120, items: input({ startFrame: frame, endFrame: { ...frame, minimum: 1 }, prompt: { type: 'string' } }) },
-		drop,
-	}, ['characterId', 'url']) },
-	{ id: 'motion.loadVersion', label: 'Restore take version', input: input({ characterId: id, motionUrl: id }) },
-].map(entry => ({ ...entry, description: entry.label, kind: 'job', domain: 'motion' }));
+const edits = [{ ...mutation('motion.set', 'Set take fields', {}), input: setInput }];
 const tools = [
-	mutation('motion.editTrail', 'Edit motion trail', { characterId: id, track: { type: 'string', enum: ['hips', 'leftFoot', 'rightFoot', 'leftHand', 'rightHand', 'head'], default: 'hips' }, grabFrame: frame, radiusFrames: { ...frame, minimum: 1 }, delta: input({ x: { type: 'number' }, y: { type: 'number' }, z: { type: 'number' } }) }, ['characterId', 'grabFrame', 'radiusFrames', 'delta']),
 	mutation('ik.applyPose', 'Key full-body pose', { characterId: id, frame, pose: { type: 'object', properties: { bones: { type: 'object', properties: {}, required: [], additionalProperties: true }, rootY: { type: 'number' } }, required: ['bones'], additionalProperties: true } }),
 ];
 // These only queue the existing editor producers. Their eventual take
@@ -47,30 +29,19 @@ const tools = [
 const legacyIk = ['character.setIkKey', 'character.removeIkKey', 'character.clearIkKeys'].map(studioActionDeclaration);
 const ik = legacyIk.map((entry, index) => ({ ...entry, id: ['ik.setKey', 'ik.removeKey', 'ik.clearKeys'][index] }));
 
-const clear = { id: 'motion.clear', label: 'Clear motion', description: 'Clear the active take, its corrections, prompt blocks and take-owned cast fields.',
+const clear = { id: 'motion.clear', label: 'Clear motion', description: 'Clear the character\'s compiled take and its IK corrections.',
 	kind: 'mutation', undoDomain: 'motion', input: { type: 'object', properties: { characterId: { type: 'string' } }, required: ['characterId'], additionalProperties: false } };
-export const declarations = Object.freeze([prepared, ...loads, ...tools, ...rangePins, ...edits, ...legacyIk, ...ik, clear]);
+export const declarations = Object.freeze([...tools, ...rangePins, ...edits, ...legacyIk, ...ik, clear]);
 
 export function register(registry, ports) {
 	const owner = () => ports.storeDomain('motion');
 	const mounted = () => Boolean(ports.storeDomain?.('motion')) || 'The motion owner is not mounted.';
 	const take = characterId => { characterOf(ports, characterId); return owner().motionFor(characterId) ?? fail('TARGET_NOT_READY', 'Load a take for this character first.'); };
-	registry.register({ ...prepared, available: mounted, run({ characterId, token }) {
-		characterOf(ports, characterId); const result = owner().applyPrepared(token);
-		return { affectedIds: result?.affectedIds ?? [characterId], summary: prepared.label };
-	} });
-	for (const declaration of loads) registry.register({ ...declaration, available: mounted, target: args => args.characterId, async run(args, context) {
-		characterOf(ports, args.characterId); await owner().loadRemote(args, context);
-		return { affectedIds: [args.characterId], summary: declaration.label };
-	} });
 	for (const declaration of tools) registry.register({ ...declaration, available: mounted, run(args) {
 		characterOf(ports, args.characterId);
-		if (declaration.id === 'motion.editTrail') owner().editTrail(args.characterId, args);
-		else {
-			if (args.frame >= ports.state().frameCount) fail('INVALID_RANGE', 'IK frame is outside the timeline.');
-			for (const angles of Object.values(args.pose.bones)) if (!Array.isArray(angles) || angles.length !== 3 || !angles.every(Number.isFinite)) fail('INVALID_ARGUMENT', 'Pose bones require three finite rotation angles.');
-			owner().keyPose(args.characterId, args.frame, args.pose);
-		}
+		if (args.frame >= ports.state().frameCount) fail('INVALID_RANGE', 'IK frame is outside the timeline.');
+		for (const angles of Object.values(args.pose.bones)) if (!Array.isArray(angles) || angles.length !== 3 || !angles.every(Number.isFinite)) fail('INVALID_ARGUMENT', 'Pose bones require three finite rotation angles.');
+		owner().keyPose(args.characterId, args.frame, args.pose);
 		return { affectedIds: [args.characterId], summary: declaration.label };
 	} });
 	for (const declaration of rangePins) registry.register({ ...declaration, available: mounted, run(args) {
@@ -84,20 +55,6 @@ export function register(registry, ports) {
 		for (const op of args.ops ?? [args]) take(op.id);
 		return entry.run(args);
 	} }); } }, ports, edits[0]);
-	for (const declaration of edits.slice(1)) registry.register({ ...declaration, available: mounted, run(args) {
-		const { characterId } = args; characterOf(ports, characterId);
-		const current = take(characterId), full = owner().fullMotionFor(characterId);
-		let segments = current.editSegments;
-		if (declaration.id === 'motion.trim') {
-			if (args.start > args.end || args.end >= current.frames) fail('INVALID_RANGE', 'Trim range is outside the take.');
-			segments = trimMotionEdit(segments, args.start, args.end);
-		} else if (declaration.id === 'motion.resetTrim') segments = createMotionEdit(full.frames);
-		else if (declaration.id === 'motion.cut') segments = splitMotionEdit(segments, args.frame);
-		else if (declaration.id === 'motion.setSegmentSpeed') segments = setMotionSegmentSpeed(segments, args.id, args.speed);
-		else { if (segments.length <= 1) fail('INVALID_ARGUMENT', 'Use motion.clear to remove the final segment.'); segments = removeMotionSegment(segments, args.id); }
-		if (segments !== current.editSegments) owner().editSegments(characterId, segments);
-		return { affectedIds: [characterId], summary: declaration.label };
-	} });
 	for (const [index, declaration] of [...legacyIk, ...ik].entries()) registry.register({ ...declaration,
 		available: state => state.characters.length > 0 || 'There are no characters in this scene.', run(args) {
 			const character = characterOf(ports, args.characterId), kind = index % 3;
@@ -124,6 +81,6 @@ export function register(registry, ports) {
 				if (ports.state().activeCharacterId !== characterId) fail('TARGET_NOT_READY', 'Select this character before clearing its take.');
 				ports.clearMotionNative();
 			}
-			return { affectedIds: [characterId], summary: 'Cleared motion and prompt blocks.' };
+			return { affectedIds: [characterId], summary: 'Cleared motion.' };
 		} });
 }

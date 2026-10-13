@@ -9,8 +9,7 @@ import { createCharacterEntry, CHARACTER_KIND_IDS, POSTURES, PROXY_FIGURE_MODEL,
 import { KIND_FIXED_REFUSAL } from '../character-kind.js';
 import { track } from '../analytics.js';
 import { DEFAULT_POSE } from '../poses.js';
-import { createStableItemId, updateStableItem, removeStableItem } from '../stable-items.js';
-import { movePromptClipFrames } from '../ardy/prompt-clips.js';
+import { createStableItemId } from '../stable-items.js';
 import { STUDIO_TOOL_SCHEMAS, StudioSchemas } from '../studio-agent-protocol.js';
 
 const id = StudioSchemas.TargetGuard.properties.targetId;
@@ -21,7 +20,7 @@ const record = { type: 'object', properties: {}, additionalProperties: true };
 const newCharacter = { ...record, properties: { model: { type: 'string', enum: [...CHARACTER_KIND_IDS] }, posture: { type: 'string', enum: [...POSTURES] } }, required: [] };
 const characterPatch = { ...record, properties: { posture: { type: 'string', description: `One of ${POSTURES.join(', ')}; anything else stands.` } }, required: [] };
 const mutation = (id, label, schema, exposure = 'open') => ({ id, label, description: label, kind: 'mutation', undoDomain: 'cast', input: schema, exposure });
-const blocks = elementSetSchema('character').properties.set.properties.layer.properties.promptClips;
+
 const semantic = [
 	mutation('character.set', 'Set character fields', elementSetSchema('character')),
 	mutation('character.add', 'Add character', input({ character: newCharacter })),
@@ -29,7 +28,7 @@ const semantic = [
 	mutation('character.update', 'Update character', input({ characterId: id, patch: characterPatch })),
 	studioActionDeclaration('character.move'),
 	mutation('character.setPose', 'Set character pose', input({ characterId: id, pose: { oneOf: [id, record, { type: 'null' }] }, clearMotion: { type: 'boolean' } }, ['characterId', 'pose'])),
-	mutation('character.setPromptBlocks', 'Set prompt blocks', input({ characterId: id, blocks })),
+	
 	mutation('characters.arrange', 'Arrange characters', STUDIO_TOOL_SCHEMAS.arrange_characters),
 	mutation('cast.replace', 'Replace cast', input({ characters: { type: 'array', items: record, minItems: 1 } }), 'ui-only'),
 	mutation('cast.setCustomPoses', 'Set pose library', input({ poses: { type: 'array', items: record } }), 'ui-only'),
@@ -37,9 +36,6 @@ const semantic = [
 	mutation('cast.removePose', 'Remove saved pose', input({ id }), 'ui-only'),
 	mutation('cast.showExtras', 'Show extra subjects', input({ show: { type: 'boolean' } }), 'ui-only'),
 	mutation('cast.setLayer', 'Set character layer', input({ characterId: id, layer: record }), 'ui-only'),
-	...['add', 'move', 'resize', 'change', 'remove'].map(verb => mutation(`character.${verb}PromptBlock`, `${verb} prompt block`,
-		input({ characterId: id, id, frame: { type: 'number' }, edge: { type: 'string', enum: ['start', 'end'] }, text: { type: 'string', maxLength: 2000 } },
-			verb === 'add' ? ['characterId', 'frame'] : verb === 'remove' ? ['characterId', 'id'] : verb === 'change' ? ['characterId', 'id', 'text'] : verb === 'resize' ? ['characterId', 'id', 'edge', 'frame'] : ['characterId', 'id', 'frame']), 'ui-only')),
 ];
 export const declarations = Object.freeze([...semantic, ...["character.addWaypoint", "character.moveWaypoint", "character.removeWaypoint", "character.clearWaypoints"].map(studioActionDeclaration)]);
 
@@ -56,29 +52,6 @@ export function register(registry, ports) {
 		const object = ports.state().objects.find(row => row.id === value) ?? fail('STALE_TARGET', `Object ${value} is not in this scene.`);
 		if (object.attach) fail('INVALID_ARGUMENT', 'A character cannot be grouped under an object that a character carries.');
 	};
-	function promptEdit(command, args) {
-		const before = character(args.characterId), clips = before.layer.promptClips;
-		let next;
-		if (command === 'character.addPromptBlock') {
-			const snapped = Math.max(0, Math.round(args.frame / 48) * 48);
-			const blocked = clips.some(clip => snapped < clip.endFrame && snapped + 48 > clip.startFrame);
-			const startFrame = blocked ? Math.max(snapped, ...clips.map(clip => clip.endFrame)) : snapped;
-			next = [...clips, { id: createStableItemId('prompt-clip'), startFrame, endFrame: startFrame + 48, text: '' }];
-		} else if (command === 'character.removePromptBlock') next = removeStableItem(clips, args.id, 'promptClips');
-		else if (command === 'character.changePromptBlock') next = updateStableItem(clips, args.id, clip => ({ ...clip, text: args.text }), 'promptClips');
-		else if (command === 'character.movePromptBlock') next = movePromptClipFrames(clips, args.id, args.frame, 48);
-		else {
-			next = updateStableItem(clips, args.id, clip => {
-				const snapped = Math.max(0, Math.round(args.frame / 48) * 48);
-				return args.edge === 'start' ? { ...clip, startFrame: Math.min(Math.max(snapped, clip.endFrame - 120), clip.endFrame - 48) }
-					: { ...clip, endFrame: Math.min(Math.max(clip.startFrame + 48, snapped), clip.startFrame + 120) };
-			}, 'promptClips');
-			const resized = next.find(clip => clip.id === args.id);
-			if (next.some(clip => clip.id !== args.id && resized.startFrame < clip.endFrame && resized.endFrame > clip.startFrame)) return;
-		}
-		patch(args.characterId, { layer: { ...before.layer, promptClips: next } });
-		owner().extendTimeline(next.reduce((end, clip) => Math.max(end, clip.endFrame), 24));
-	}
 	const methods = {
 		'character.add': ({ character: value }) => {
 			const row = createCharacterEntry({ ...value, id: value.id ?? createStableItemId('character') }, owner().read().length);
@@ -94,9 +67,7 @@ export function register(registry, ports) {
 		},
 		'character.move': ({ characterId, ...value }) => patch(characterId, value),
 		'character.setPose': ({ characterId, pose: value, clearMotion }) => { character(characterId); owner().applyPose(characterId, pose(value), clearMotion); },
-		'character.setPromptBlocks': ({ characterId, blocks }) => {
-			const entry = character(characterId); patch(characterId, { layer: { ...entry.layer, promptClips: blocks } });
-		},
+		
 		'cast.replace': ({ characters }) => owner().write(characters),
 		'cast.setCustomPoses': ({ poses }) => owner().writeState(before => ({ ...before, customPoses: poses })),
 		'cast.savePose': ({ pose, characterId, clearMotion }) => {
@@ -127,7 +98,7 @@ export function register(registry, ports) {
 	for (const declaration of semantic.slice(1)) registry.register({ ...declaration, available: mounted, run(args, context) {
 		if (declaration.id === 'characters.arrange') { const plan = owner().arrange(args); return { affectedIds: plan.affectedIds, summary: 'Arranged characters.', checks: plan.checks, warnings: plan.warnings }; }
 		const before = owner().read();
-		if (declaration.id.endsWith('PromptBlock')) promptEdit(declaration.id, args); else methods[declaration.id](args);
+		methods[declaration.id](args);
 		// The Assets tile and the MCP live path report themselves; this is the agent and
 		// any other non-UI bus caller adding a capsule figure.
 		if (declaration.id === 'character.add' && context?.origin && context.origin !== 'ui' && isProxyFigure(owner().read().find(row => !before.some(prior => prior.id === row.id)))) track('cast:proxy_added', { surface: 'agent' });

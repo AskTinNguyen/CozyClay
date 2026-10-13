@@ -112,21 +112,14 @@ console.log("PASS pending sample fetch cannot overwrite edits or a switched proj
 // loader. The arm-time epoch must survive both asynchronous gaps.
 const startEntry = app.slice(app.indexOf("async function startCameraTutorial("), app.indexOf("startCameraTutorialRef.current ="));
 const markEntry = app.slice(app.indexOf("const markSemanticEdit ="), app.indexOf("const craftActionTrackedRef"));
-const seedEnd = "}, [tutorialSeedPending, activeRig, motionBusy]);";
+const seedEnd = "}, [tutorialSeedPending, activeRig]);";
 const seedEntry = app.slice(app.indexOf("\tuseEffect(() => {", app.indexOf("// The camera tutorial's seed (#209)")), app.indexOf(seedEnd) + seedEnd.length);
-const { motionFixture, seedMotion } = await import('./bus/motion-fixture.mjs');
-const { motionArraysToNpzMembers, writeNpz } = await import('../tools/ardy/npz.mjs');
-const { mkdtempSync, rmSync } = await import('node:fs');
-const { tmpdir } = await import('node:os');
-const { join } = await import('node:path');
-const dir = mkdtempSync(join(tmpdir(), 'handoff-motion-'));
-let bytes;
-try { const file = join(dir, 'seed.npz'); writeNpz(file, motionArraysToNpzMembers(seedMotion(432))); bytes = readFileSync(file); }
-finally { rmSync(dir, { recursive: true, force: true }); }
-for (const timing of ["before-rig", "during-load", "unchanged"]) {
-	let effect, loading, release;
-	const calls = [];
-	const f = motionFixture(), previousFetch = globalThis.fetch;
+const { motionFixture } = await import('./bus/motion-fixture.mjs');
+const { tutorialWalkSpec } = await import('../src/tutorial-walk.js');
+for (const timing of ["before-rig", "unchanged"]) {
+	let effect;
+	const compiles = [];
+	const f = motionFixture();
 	const character = f.scope.activeChar, rig = f.scope.activeRig;
 	const context = f.scope;
 	Object.assign(context, {
@@ -136,48 +129,41 @@ for (const timing of ["before-rig", "during-load", "unchanged"]) {
 		tutorialInitialSnapshotRef: { current: "initial" }, collectProjectSnapshot: () => "initial",
 		tutorialProjectEpochRef: { current: 2 }, tutorialSeedEpochRef: { current: null },
 		firstEditRef: { current: () => true }, tutorialSeedPending: false,
-		activeRig: null, motionBusy: false, frame: 0, frameCount: 72, motion: null,
-		demoSeeded: { current: false },
-		DEMO_MOTION_URL: "/demo/walk-then-stop.npz", DEMO_MOTION_PROMPT: "walk", TIMELINE_FPS: 24, isKo: false,
+		activeRig: null, frame: 0, frameCount: 72, motion: null, isKo: false,
+		tutorialWalkSpec,
+		runStudioAction(id, args) { compiles.push(id); const receipt = f.run(id, args); return receipt.ok ? receipt : null; },
 		openStarterScene: async () => true, exitPreview() {}, setProjectStartupOpen() {}, setFirstSuccessGuideOpen() {},
 		setCameraTutorialHandoff() {}, createFirstShotHandoff: () => ({}),
 		cameraTutorialAnalytics: { current: null }, createTutorialAnalytics: () => ({}),
 		setCameraTutorialAttempt() {}, setCameraTutorial() {}, cameraTutorialCompletedRef: { current: false },
 		setTutorialSeedPending(value) { context.tutorialSeedPending = value; },
-		useEffect(callback) { effect = callback; }, setMotionBusy(value) { context.motionBusy = value; },
-		setTlFrameCount(value) { context.frameCount = value; },
-		setTlFrame(value) { context.frame = value; }, setTlFps() {}, setTlPlaying() {},
-		setCommittedIkEdits() {}, setToast() {}, ko: (en) => en,
+		useEffect(callback) { effect = callback; },
+		setTlFrame(value) { context.frame = value; }, setTlPlaying() {}, setToast() {}, ko: (en) => en,
 	});
-	globalThis.fetch = async url => {
-		assert.equal(url, context.DEMO_MOTION_URL);
-		return new Promise(resolve => { release = () => resolve(new Response(bytes)); });
-	};
 	try {
-	await runInNewContext(`(${startEntry})()`, context);
-	const actualLoad = f.motion.loadMotion;
-	const edit = runInNewContext(`${markEntry}; markSemanticEdit`, context);
-	context.loadMotion = (...args) => { calls.push(args[6].tutorialEpoch); loading = actualLoad(...args); return loading; };
-	runInNewContext(seedEntry, context);
-	effect();
-	assert.equal(calls.length, 0, "no seed while the rig is absent");
-	if (timing === "before-rig") edit("shots", [], [{ id: "user-shot" }]);
-	context.frame = 90;
-	context.activeRig = rig;
-	runInNewContext(seedEntry, context);
-	effect();
-	if (timing === "during-load") edit("shots", [], [{ id: "user-shot" }]);
-	if (loading) { release(); await loading; }
-	if (timing === "unchanged") {
-		assert.deepEqual(calls, [2]);
-		assert.equal(context.frame, 0);
-		assert.equal(f.motion.motionFor(character.id).frames, 432);
-	} else {
-		assert.equal(context.frame, 90, `${timing}: stale seed must preserve the user's playhead`);
-		assert.equal(context.frameCount, 72, `${timing}: stale seed must preserve the authored duration`);
-		assert.equal(f.motion.motionFor(character.id), null, `${timing}: stale seed must not replace the motion`);
-	}
-	} finally { globalThis.fetch = previousFetch; f.dispose(); }
+		await runInNewContext(`(${startEntry})()`, context);
+		const edit = runInNewContext(`${markEntry}; markSemanticEdit`, context);
+		runInNewContext(seedEntry, context);
+		effect();
+		assert.equal(compiles.length, 0, "no seed while the rig is absent");
+		if (timing === "before-rig") edit("shots", [], [{ id: "user-shot" }]);
+		context.frame = 90;
+		context.activeRig = rig;
+		runInNewContext(seedEntry, context);
+		effect();
+		if (timing === "unchanged") {
+			assert.deepEqual(compiles, ["motion.compile"]);
+			assert.equal(context.frame, 0);
+			// Installed by the time the effect returns: nothing can land in between.
+			assert.equal(f.motion.motionFor(character.id)?.schema, "cozyclay.take.v3");
+			assert.equal(f.motion.motionFor(character.id).frames, 216);
+		} else {
+			assert.equal(compiles.length, 0, `${timing}: a stale seed compiles nothing`);
+			assert.equal(context.frame, 90, `${timing}: stale seed must preserve the user's playhead`);
+			assert.equal(f.motion.motionFor(character.id), null, `${timing}: stale seed must not replace the motion`);
+		}
+		assert.equal(context.tutorialSeedPending, false, `${timing}: the seed flag is consumed once`);
+	} finally { f.dispose(); }
 }
-console.log("PASS seed authorization survives rig-readiness and motion-load interleavings");
+console.log("PASS seed authorization survives rig readiness; the compiled walk installs synchronously");
 console.log("all first-shot handoff checks PASS");

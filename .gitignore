@@ -6,7 +6,6 @@ artifacts/
 # Generated motion archives are large binaries produced by the remote box, not
 # source. Keep only the explicitly listed demo and test fixtures below.
 *.npz
-tools/ardy/out/
 # Exceptions: the hosted demo seed clip ships with the build; test-only clips
 # stay tracked as fixtures but are never copied into production output.
 !public/demo/*.npz
@@ -19,8 +18,6 @@ public/demo/qa-h3-*.npz
 *.log
 __pycache__/
 *.pyc
-tools/track/**/*.npz
-tools/track/**/*.pt
 
 # MCP server local install
 mcp/node_modules/

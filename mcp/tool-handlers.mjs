@@ -506,8 +506,7 @@ function sceneReport({ characterCursor = 0, objectCursor = 0, limit = 50 } = {})
 				`${c.pose ? " posed" : ""}${c.hidden ? " hidden" : ""}` +
 				`${c === framed ? "  <- framed" : ""}`,
 			`    model: ${c.model}  kind: ${isProxyFigure(c) ? "proxy" : "rig"}${isProxyFigure(c) ? `  posture: ${c.posture ?? "stand"}` : ""}  pose: ${JSON.stringify(c.pose ?? null)}  tint: ${c.tint ?? null}  scale: ${c.scale ?? 1}`,
-			`    motionRef: ${JSON.stringify(c.motionRef ?? null)}`,
-			`    layer: ${JSON.stringify({ waypoints: c.layer?.waypoints ?? [], promptClips: c.layer?.promptClips ?? [] })}`,
+						`    layer: ${JSON.stringify({ waypoints: c.layer?.waypoints ?? [] })}`,
 		);
 	}
 

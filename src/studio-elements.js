@@ -31,9 +31,7 @@ const entries = [
 	{ path: "character.identityImage", type: "image", persisted: true, undoDomain: "cast", normalizer: "createCharacterEntry", note: "data:image only" },
 	{ path: "character.pose", type: "id", persisted: true, undoDomain: "cast", normalizer: "createCharacterEntry" },
 	{ path: "character.waypoints", type: "array", persisted: true, undoDomain: "cast", normalizer: "createCharacterEntry", actions: ["character.addWaypoint", "character.moveWaypoint", "character.removeWaypoint", "character.clearWaypoints"], note: "root path pins, addressed by frame" },
-	{ path: "character.promptBlocks", type: "array", persisted: true, undoDomain: "cast", normalizer: "createCharacterEntry", note: "stored at layer.promptClips" },
-	{ path: "character.motionRef.url", type: "string", persisted: true, undoDomain: "cast", normalizer: "createCharacterEntry" },
-	{ path: "character.motionRef.motionId", type: "id", persisted: true, undoDomain: "cast", normalizer: "createCharacterEntry" },
+	
 	{ path: "character.sessionMotion", type: "array", persisted: false, undoDomain: "cast", normalizer: "createCharacterEntry", note: "dropped by createCharacterEntry" },
 	{ path: "character.ikKeys", type: "array", persisted: false, undoDomain: "cast", normalizer: "createCharacterEntry", actions: ["character.setIkKey", "character.removeIkKey", "character.clearIkKeys"], note: "dropped by createCharacterEntry; keys travel as JSON quaternions/positions" },
 	{ path: "object.renderer", type: "enum", persisted: true, undoDomain: "objects", normalizer: "normalizeSceneObject", enum: ["cube", "sphere", "capsule", "cylinder", "cone", "plane", "chair", "car", "small-plane", "empty"] },

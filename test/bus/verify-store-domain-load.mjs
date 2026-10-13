@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createSceneStage } from '../../src/scenes.js';
 import { createSceneHistoryStore } from '../../src/document-store.js';
 import { withCommandHistory } from '../../src/command-bus.js';
-import { createIkState } from '../../src/ardy/ik.js';
+import { createIkState } from '../../src/motion/ik.js';
 import { stageFixture } from './stage-fixture.mjs';
 import { readStudioFunction } from './verify-domain-modules.mjs';
 const f = stageFixture(), app = f.scope.appContext;

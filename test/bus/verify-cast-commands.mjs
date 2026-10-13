@@ -6,13 +6,12 @@ import { createCharacterEntry } from '../../src/scenes.js';
 
 const ok = receipt => { assert.equal(receipt.ok, true, JSON.stringify(receipt)); return receipt; };
 const owned = f => assert.ok(f.cast.documentStore?.owns('cast'), 'useCast owns its document slice');
-const block = { id: 'block-a', startFrame: 0, endFrame: 24, text: 'Walk' };
+const waypoint = { id: 'waypoint-a', frame: 12, x: 1, z: 2 };
 const cases = {
   'character.add': { character: { id: 'actor-c', subject: 'Third actor' } },
   'character.remove': { characterId: 'actor-b' },
   'character.update': { characterId: 'actor-a', patch: { x: 1 } },
   'character.setPose': { characterId: 'actor-a', pose: 'pose-wave' },
-  'character.setPromptBlocks': { characterId: 'actor-a', blocks: [block] },
   'character.set': { id: 'actor-a', set: { subject: 'Changed' } },
   'character.addWaypoint': { characterId: 'actor-a', frame: 24, position: { x: 1, z: 0 } },
   'character.moveWaypoint': { characterId: 'actor-a', frame: 24, position: { x: 0.8, z: 0 } },
@@ -61,32 +60,16 @@ test('cast: every exposed mutation and origin exercises receipt, undo, expiry, c
   }
 });
 
-test('cast: prompt drag has one retained entry and agent prompt replacement restores deeply', () => {
-  const f = castFixture();
-  try {
-    owned(f); ok(f.run('character.setPromptBlocks', { characterId: 'actor-a', blocks: [block] }));
-    const before = f.snapshot(), depth = f.cast.documentStore.depths().past;
-    const tx = ok(f.run('run.begin', { id: 'character.movePromptBlock', args: { characterId: 'actor-a', id: block.id, frame: 0 } }));
-    for (const frame of [48, 96, 144]) ok(f.run('run.update', { txId: tx.txId, args: { characterId: 'actor-a', id: block.id, frame } }));
-    const committed = ok(f.run('run.commit', { txId: tx.txId }));
-    assert.equal(committed.undo.entries, 1); assert.equal(f.cast.documentStore.depths().past, depth + 1);
-    assert.equal(f.cast.read()[0].layer.promptClips[0].startFrame, 144);
-    ok(f.run('edit.undo', { receiptId: committed.receiptId })); assert.deepEqual(f.snapshot(), before);
-    const replaced = ok(f.run('character.setPromptBlocks', { characterId: 'actor-a', blocks: [] }, 'agent'));
-    ok(f.run('edit.undo', { receiptId: replaced.receiptId }, 'agent')); assert.deepEqual(f.snapshot(), before);
-  } finally { f.dispose(); }
-});
-
 test('cast: selection changes only the layer projection, never the inspected document', async () => {
   const f = castFixture();
   try {
-    owned(f); ok(f.run('character.setPromptBlocks', { characterId: 'actor-a', blocks: [block] }));
-    ok(f.run('character.setPromptBlocks', { characterId: 'actor-b', blocks: [{ ...block, id: 'block-b', text: 'Wait' }] }));
+    owned(f); ok(f.run('character.addWaypoint', { characterId: 'actor-a', frame: 24, position: { x: 1, z: 0 } }));
+    ok(f.run('character.addWaypoint', { characterId: 'actor-b', frame: 36, position: { x: 6, z: 0 } }));
     const before = await f.call('inspect_studio', { scope: 'document' });
     const depth = f.cast.documentStore.depths().past;
     f.cast.setActiveCharacterId('actor-b'); f.cast.switchActiveCharacterLayer();
     assert.equal(f.scope.loadedLayerCharRef.current, 'actor-b');
-    assert.equal(f.buffer.current.promptClips[0].text, 'Wait');
+    assert.equal(f.buffer.current.waypoints[0].frame, 36);
     const after = await f.call('inspect_studio', { scope: 'document' });
     assert.deepEqual(after.document, before.document);
     assert.equal(f.cast.documentStore.depths().past, depth);
@@ -97,7 +80,7 @@ test('cast: selection changes only the layer projection, never the inspected doc
 test('cast: every patchable path matches patch_elements normalization and field receipts', async () => {
   const values = { position: { x: 500, y: -3, z: 2 }, rot: 380, scale: 8, subject: 'A lead', hidden: true,
     model: 'x-bot-tpose', posture: 'lie', tint: '#123456', identityImage: 'data:image/png;base64,QQ==', pose: 'pose-wave',
-    promptBlocks: [block], 'motionRef.url': '/ardy/motions/123456-abcdef', 'motionRef.motionId': 'a'.repeat(64), parent: 'car' };
+    parent: 'car' };
   assert.deepEqual(Object.keys(values).map(key => `character.${key}`).sort(), [...STUDIO_PATCHABLE_PATHS.character].sort());
   for (const [path, value] of Object.entries(values)) {
     const a = castFixture(), b = castFixture();
@@ -105,8 +88,7 @@ test('cast: every patchable path matches patch_elements normalization and field 
       owned(a); owned(b);
       // A character groups under an object that exists (#655).
       if (path === 'parent') for (const f of [a, b]) ok(f.run('object.add', { kind: 'car' }));
-      const storedPath = path === 'promptBlocks' ? 'layer.promptClips' : path;
-      const set = storedPath.split('.').reduceRight((value, key) => ({ [key]: value }), value);
+      const set = path.split('.').reduceRight((value, key) => ({ [key]: value }), value);
       const direct = ok(a.run('character.set', { id: 'actor-a', set }, 'agent'));
       const alias = ok(await b.call('patch_elements', b.request('patch_elements', { ops: [{ target: { kind: 'character', id: 'actor-a' }, set: { [path]: value } }] })));
       assert.deepEqual(a.cast.read(), b.cast.read(), path);
@@ -158,10 +140,10 @@ test('cast: raw setters are guarded and scene load resets history without author
     owned(f); assert.equal(f.cast.setCharacters, undefined, 'the raw hook setter is retired');
     assert.throws(() => f.cast.write([]), /requires a bus run/);
     ok(f.run('character.update', { characterId: 'actor-a', patch: { x: 1 } }));
-    const incoming = [createCharacterEntry({ id: 'loaded', layer: { waypoints: [], promptClips: [block] } })];
+    const incoming = [createCharacterEntry({ id: 'loaded', layer: { waypoints: [waypoint] } })];
     f.scope.appContext.loadStoreDomains({ cast: incoming, objects: f.store.current.objects,
       stage: f.live.current.stage, shot: f.scope.shotsDomain.state() });
     assert.deepEqual(f.cast.read(), incoming); assert.equal(f.cast.documentStore.depths().past, 0);
-    assert.deepEqual(f.buffer.current.promptClips, [block]);
+    assert.deepEqual(f.buffer.current.waypoints, incoming[0].layer.waypoints);
   } finally { f.dispose(); }
 });
