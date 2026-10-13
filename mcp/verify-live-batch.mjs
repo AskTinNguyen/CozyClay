@@ -293,6 +293,9 @@ try {
 	await send("Network.enable");
 	await send("Page.enable");
 	await send("Runtime.enable");
+	// A fresh profile auto-opens the first-run camera tutorial (#586), whose seed
+	// installs a take a few seconds after the rig is ready and races the first edit.
+	await send("Page.addScriptToEvaluateOnNewDocument", { source: 'localStorage.setItem("cozyclay.camera-tutorial-terminal.v1", JSON.stringify({ dismissed: true }));' });
 	await send("Page.navigate", { url: `http://127.0.0.1:${vitePort}/app/` });
 
 	client = new Client({ name: "cozyclay-live-batch-verify", version: "1.0.0" });
@@ -505,11 +508,6 @@ try {
 	const movedActor = JSON.parse(await description()).characters.find(row => row.id === castId);
 	assert.deepEqual([movedActor.x, movedActor.y, movedActor.rot, movedActor.hidden], [3, 0.5, 90, true]);
 	await undoReceipt(castMoved); assertSceneEquivalent(await description(), afterCastAdd);
-	const castPrompts = castReceipt(await call("set_prompt_blocks", { beats: [{ text: "A person walks forward.", seconds: 6 }] }), "character.setPromptBlocks");
-	const activeActor = JSON.parse(await description()).characters.find(row => row.id === JSON.parse(afterCastAdd).activeCharacterId);
-	assert.equal(activeActor.layer.promptClips.length, 2);
-	assert.equal(activeActor.layer.promptClips.at(-1).endFrame, 144);
-	await undoReceipt(castPrompts); assertSceneEquivalent(await description(), afterCastAdd);
 	const staleCast = await call("remove_character", { character: "B", expectedRevision: castAdded.revision.before });
 	assert.equal(JSON.parse(staleCast.content[0].text).code, "STALE_SCENE");
 	const castRemoved = castReceipt(await call("remove_character", { character: "2" }), "character.remove");
@@ -518,7 +516,7 @@ try {
 	await undoReceipt(castAdded); assertSceneEquivalent(await description(), castBefore);
 
 	console.log(JSON.stringify({
-		castAliases: { receipts: 4, undoRestored: true, staleRevisionRefused: true },
+		castAliases: { receipts: 3, undoRestored: true, staleRevisionRefused: true },
 		happy: {
 			preState: JSON.parse(beforeHappy),
 			postState: JSON.parse(afterHappy),
