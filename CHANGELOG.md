@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 2.1.1 - 2026-10-13
+
+- Include the sampled framing fix, embedded composition-guide controls, and
+  playground guide coverage merged after the 2.1.0 package was published.
+
 ## 2.1.0 - 2026-10-12
 
 Storyboard and Animation modes. A project is now either a storyboard (a row of
