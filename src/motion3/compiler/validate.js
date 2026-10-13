@@ -12,7 +12,7 @@ const MAX_ERRORS = 12;
 /** Channels other than the body's own: hinge channels, channels a check names, *_vis switches, spec.channels. */
 function customChannels(spec) {
 	const out = new Set(spec.channels ?? []);
-	for (const o of Object.values(spec.objects ?? {})) if (o?.channel) out.add(o.channel);
+	for (const o of Object.values(spec.objects ?? {})) for (const ch of [o?.channel, o?.visible]) if (ch) out.add(ch);
 	const c = spec.checks ?? {};
 	for (const list of [c.contacts, c.orient, c.below, c.clearance]) for (const k of list ?? []) if (typeof k.when === "string") out.add(k.when);
 	for (const k of c.appear ?? []) out.add(k.channel);

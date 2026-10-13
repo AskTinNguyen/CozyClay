@@ -6,6 +6,7 @@
 // world space.
 import { toLocal } from "./compiler/skeleton.js";
 import { sub, apply, ry, quatFromMat, mul } from "./compiler/math.js";
+import { isCarried, carriedPose } from "./carried.js";
 
 const TAKE_SCHEMA = "cozyclay.take.v3";
 
@@ -22,10 +23,16 @@ export function bakeTake(sk, out, placement = { position: [0, 0, 0], yaw: 0 }, m
 		hips.set(h, f * 3);
 	}
 	const objects = {};
-	for (const id of Object.keys(out.ctx.spec.objects ?? {})) {
-		const pos = new Float32Array(F * 3), quat = new Float32Array(F * 4);
-		for (let f = 0; f < F; f++) { const o = out.objectsAt(f)[id]; if (!o) continue; pos.set(o.pos, f * 3); quat.set(quatFromMat(o.R), f * 4); }
-		objects[id] = { pos, quat };
+	for (const [id, spec] of Object.entries(out.ctx.spec.objects ?? {})) {
+		const pos = new Float32Array(F * 3), quat = new Float32Array(F * 4), carried = isCarried(spec);
+		const vis = carried && spec.visible ? new Uint8Array(F) : null;
+		for (let f = 0; f < F; f++) {
+			const o = carried ? carriedPose(sk, out.ctx.spec, out.frames[f].s, spec) : out.objectsAt(f)[id];
+			if (!o) continue;
+			pos.set(o.pos, f * 3); quat.set(quatFromMat(o.R), f * 4);
+			if (vis) vis[f] = (out.baked?.[spec.visible]?.[f + (out.f0 ?? 0)] ?? 0) > 0.5 ? 1 : 0;
+		}
+		objects[id] = vis ? { pos, quat, vis } : { pos, quat };
 	}
 	return { schema: TAKE_SCHEMA, fps: out.fps, frameCount: F, rig: sk.model, bones: sk.names.slice(), rot, hips, objects, placement, ...meta };
 }

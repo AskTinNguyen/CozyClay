@@ -12,7 +12,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 import { objectTransformAt } from "./object-path.js";
-import { sceneObjectCarryMatrixAt, sceneObjectTravelMatrixAt, travelPose } from "./object-travel.js";
+import { sceneObjectCarryMatrixAt, sceneObjectTravelMatrixAt, trackShown, travelPose } from "./object-travel.js";
 import * as THREE from "three";
 import { GIZMO_LAYER } from "./dualview.jsx";
 import { CUTOUT_KIND, MESH_KIND, EMPTY_KIND, EMPTY_MARKER_SIZE, SCULPT_KIND } from "./scene-objects.js";
@@ -575,7 +575,7 @@ function SceneObject({ object, selected, frameRef = null, take = null, attachFra
 		const travelled = frameRef && !attach && travelLookupRef?.current
 			? sceneObjectTravelMatrixAt(travelLookupRef.current, object.id, frame, take ?? {}, placeWorld)
 			: null;
-		if (travelled) {
+		if ((group.visible = trackShown(object.id, frame, take)) && travelled) {
 			travelled.decompose(group.position, group.quaternion, group.scale);
 		} else if (attach || object.path) {
 			// The authored numbers first. While attached they are the prop's LOCAL

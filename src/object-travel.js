@@ -77,6 +77,12 @@ function trackMatrix(object, frame, take, out) {
 	return out.compose(scratchPos, scratchQuat, scratchScale);
 }
 
+/** False while a compiled take carries the record out of sight (a cigarette still in the pocket). */
+export function trackShown(id, frame, take) {
+	const track = take?.objectTracks?.get?.(id);
+	return !track?.vis || track.vis[Math.max(0, Math.min(track.frameCount - 1, Math.round(frame) || 0))] === 1;
+}
+
 /** The record's own route sample (or compiled track) as a matrix, or null when it does not travel. */
 function ownTravelMatrix(object, frame, take, out) {
 	const tracked = trackMatrix(object, frame, take, out);
@@ -218,7 +224,8 @@ export function sceneObjectsAt(objects, frame, take = {}) {
 		}
 		return next;
 	};
-	return objects.map((object) => {
+	return objects.map((object) => { const record = placedAt(object); return trackShown(record.id, frame, take) ? record : { ...record, hidden: true }; });
+	function placedAt(object) {
 		if (object.attach || (!ancestorsOf(lookup, object).some((ancestor) => ancestor.path) && !ridden(lookup, object))) {
 			// Nothing above it travels (and nothing below carries it): the route
 			// sample alone, exactly as before the hierarchy carry — for a carried
@@ -233,5 +240,5 @@ export function sceneObjectsAt(objects, frame, take = {}) {
 		}
 		if (!sceneObjectTravelMatrixAt(lookup, object.id, frame, take, matrix)) return object;
 		return recordAt(object, matrix);
-	});
+	}
 }

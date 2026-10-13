@@ -26,6 +26,7 @@ function objectTracks(spec, scene, baked) {
 		const out = {};
 		for (const [id, o] of Object.entries(scene?.objects ?? {})) {
 			const hinge = spec.objects?.[id];
+			if (hinge?.prop !== undefined) continue; // carried by a hand: not an obstacle (carried.js)
 			if (!hinge) { out[id] = o; continue; }
 			const ang = baked[hinge.channel]?.[f] ?? 0, R = axisRot(hinge.axis ?? [0, 1, 0], ang);
 			out[id] = { ...o, pos: add(hinge.pivot, apply(R, sub(o.pos, hinge.pivot))), R: mul(R, o.R ?? I3()), angle: ang };

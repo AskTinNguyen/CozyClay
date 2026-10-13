@@ -113,6 +113,7 @@ A channel is interpolated (monotone cubic) only through the keys that set it, so
 - Props are points carried by a hand, given along the palm axes [finger d, knuckle line l, palm normal n].
 - Fits move the wrist until an effector (a prop point or fingertips) sits exactly on an anchor while that anchor's weight is on.
 - Objects: `objects: { id: { pivot, axis, channel } }` hinges a scene object by a keyed angle channel. Use it for doors.
+- Carried objects: `objects: { id: { prop, at, along, visible } }` puts a scene object (a small cylinder, cone or box you placed) on a held prop every frame. `at` is its base along the palm axes [d, l, n] from the prop origin, `along` the palm direction its +Y takes, and `visible` a channel that shows it above 0.5 (step it on when the hand leaves the pocket). Carried objects are not obstacles for QA.
 
 ## Generators
 
