@@ -128,8 +128,6 @@ export {
 	preserveLimbLabel,
 	preserveTracksSummary,
 	lineTrackLabel,
-	MULTIMODEL_REASONS,
-	MULTIMODEL_SAMPLE_FPS,
 } from "./ardy-bridge-contract.js";
 
 /* ------------------------------------------------------------------ 3D --- */

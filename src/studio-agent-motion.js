@@ -7,7 +7,7 @@ import { applyMotionFrame } from './ardy/playback.js';
 import { resolveIkRig, createIkState, ikEvaluate, findBone, hasBindPose } from './ardy/ik.js';
 import { PHYSICS_LIMITS, createSupportSampler, copyPhysicsKeys, supportIntervals, physicsMetrics } from './ardy/physics-review.js';
 import { createDynamicsSampler, supportDiagnostics } from './ardy/physics-support.js';
-import { computeCenterOfMass } from './ardy/auto-physics.js';
+import { computeCenterOfMass } from './ardy/center-of-mass.js';
 import { buildCollisionCapsules, detectPenetrations, supportsCollisionCleanup } from './ardy/fix-collisions.js';
 import { collisionBlockers, blockerSummary } from './ardy/collision-blockers.js';
 import { createGroundSampler } from './ardy/ground.js';

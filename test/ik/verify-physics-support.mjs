@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import * as THREE from "three";
-import { inferSupportAlignment, supportDiagnostics, supportMotion, solveSupportForces } from "../../src/ardy/physics-support.js";
+import { supportDiagnostics, supportMotion, solveSupportForces } from "../../src/ardy/physics-support.js";
 
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 function rows({ frames = 48, fps = 24, height = () => .3, centerX = 0, site = "leftFoot" } = {}) {
@@ -20,38 +20,24 @@ function shiftRows(source, shifts) {
 	});
 }
 for (const site of ["leftFoot", "leftHand", "leftKnee", "chest", "pelvis"]) {
-	const input = rows({ site }), before = supportDiagnostics(input, 24), inferred = inferSupportAlignment(input, 24);
+	const input = rows({ site }), before = supportDiagnostics(input, 24);
 	assert.equal(before.unsupportedFrames, 48, "no detected contact must not hide hovering");
-	assert(inferred.shifts.every((v) => Math.abs(v + .298) < 1e-6), `${site} discovers a floor alignment without action labels`);
-	const after = supportDiagnostics(shiftRows(input, inferred.shifts), 24);
+	const after = supportDiagnostics(shiftRows(input, input.map(() => -.298)), 24);
 	assert.equal(after.unsupportedFrames, 0); assert(after.forceResidual < .02); assert(after.momentResidual < .02);
 }
-console.log("PASS force-supported alignment works for feet, hands, knees, torso and pelvis; absent contacts never mean zero error");
+console.log("PASS grounded feet, hands, knees, torso and pelvis are supported; absent contacts never mean zero error");
 {
 	const input = rows({ height: (t) => 1 + 3 * t - .5 * 9.81 * t * t, frames: 20 });
-	const motion = supportMotion(input, 24), result = inferSupportAlignment(input, 24);
+	const motion = supportMotion(input, 24);
 	assert(motion.every((m) => m.force.length() < 1e-9));
-	assert.equal(result.flight.size, 20); assert(result.shifts.every((v) => v === 0));
 	assert.equal(supportDiagnostics(input, 24).unsupportedFrames, 0);
 }
-console.log("PASS quadratic free flight including apex is not snapped to floor");
+console.log("PASS quadratic free flight including apex needs no support");
 {
 	const input = rows({ centerX: 1 });
-	assert(inferSupportAlignment(input, 24).shifts.every((v) => v === 0), "contact under the wrong side of the body cannot supply required moment");
 	const demand = supportMotion(input, 24)[0];
 	const fit = solveSupportForces(input[0], demand, Object.entries(input[0].support));
 	assert(fit.momentResidual > .1 || fit.forceResidual > .22);
 }
 console.log("PASS force-only false support rejected by moment balance");
-{
-	const input = rows();
-	const free = inferSupportAlignment(input, 24, { overrides: [{ site: "leftFoot", mode: "free", start: 0, end: 47 }] });
-	assert(free.shifts.every((v) => v === 0));
-	const protectedResult = inferSupportAlignment(input, 24, { protectedFrames: [24] });
-	assert.equal(protectedResult.shifts[24], 0); assert(Math.abs(protectedResult.shifts[23]) < Math.abs(protectedResult.shifts[10]));
-	assert(inferSupportAlignment(input, 24, { strength: 0 }).shifts.every((v) => v === 0));
-	assert(inferSupportAlignment(rows({ frames: 3 }), 24).shifts.every((v) => v === 0));
-	assert(inferSupportAlignment(rows({ height: () => 1 }), 24).shifts.every((v) => v === 0), "out of correction bounds stays unresolved");
-}
-console.log("PASS free/protected/zero strength and short/ambiguous spans stay safe");
 console.log("all pass");

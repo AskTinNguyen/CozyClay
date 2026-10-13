@@ -22,10 +22,6 @@ const rangePins = [
 	mutation('motion.rangePin.apply', 'Apply range pin', { characterId: id, pin: rangePin, replaceExisting: { type: 'boolean', default: false } }, ['characterId', 'pin']),
 	mutation('motion.rangePin.remove', 'Remove range pin', { characterId: id, pinId: id }),
 ];
-const platformFit = [
-	{ id: 'motion.platformFit.run', label: 'Fit motion to platforms', description: 'Analyse scene platforms and prepare or apply an IK correction.', kind: 'job', domain: 'motion', timeoutMs: 300000, input: input({ characterId: id, preview: { type: 'boolean', default: false } }, ['characterId']) },
-	{ id: 'motion.platformFit.remove', label: 'Remove platform fit', description: 'Apply or remove the reviewed platform-fit correction.', kind: 'job', domain: 'motion', timeoutMs: 300000, input: input({ characterId: id, apply: { type: 'boolean', default: false } }, ['characterId']) },
-];
 const edits = [
 	{ ...mutation('motion.set', 'Set take fields', {}), input: setInput },
 	mutation('motion.trim', 'Trim motion', { characterId: id, start: frame, end: frame }),
@@ -33,7 +29,6 @@ const edits = [
 	mutation('motion.cut', 'Cut motion segment', { characterId: id, frame }),
 	mutation('motion.setSegmentSpeed', 'Set segment speed', { characterId: id, id, speed: { type: 'number', minimum: 0.05, maximum: 8 } }),
 	mutation('motion.removeSegment', 'Remove motion segment', { characterId: id, id }),
-	mutation('motion.fixCollisions', 'Fix body collisions', { characterId: id, scope: { type: 'string', enum: ['frame', 'clip'], default: 'frame' } }, ['characterId']),
 ];
 const prepared = { ...mutation('motion.applyPrepared', 'Apply prepared motion edit', { characterId: id, token: id }), exposure: 'ui-only' };
 const loads = [
@@ -44,17 +39,9 @@ const loads = [
 	{ id: 'motion.loadVersion', label: 'Restore take version', input: input({ characterId: id, motionUrl: id }) },
 ].map(entry => ({ ...entry, description: entry.label, kind: 'job', domain: 'motion' }));
 const tools = [
-	mutation('motion.applyPhysics', 'Apply reviewed physics', { characterId: id }),
 	mutation('motion.editTrail', 'Edit motion trail', { characterId: id, track: { type: 'string', enum: ['hips', 'leftFoot', 'rightFoot', 'leftHand', 'rightHand', 'head'], default: 'hips' }, grabFrame: frame, radiusFrames: { ...frame, minimum: 1 }, delta: input({ x: { type: 'number' }, y: { type: 'number' }, z: { type: 'number' } }) }, ['characterId', 'grabFrame', 'radiusFrames', 'delta']),
 	mutation('ik.applyPose', 'Key full-body pose', { characterId: id, frame, pose: { type: 'object', properties: { bones: { type: 'object', properties: {}, required: [], additionalProperties: true }, rootY: { type: 'number' } }, required: ['bones'], additionalProperties: true } }),
 ];
-const physics = { id: 'motion.autoPhysics', label: 'Review motion physics', description: 'Analyse real rig motion and optionally apply one retained correction.', kind: 'job', domain: 'motion',
-	input: input({ characterId: id, apply: { type: 'boolean', default: true }, strength: { type: 'number', minimum: 0, maximum: 1, default: 1 },
-		protectedFrames: { type: 'array', items: frame, default: [] }, overrides: { type: 'array', default: [], items: input({
-			site: { type: 'string', enum: ['leftFoot', 'rightFoot', 'leftHand', 'rightHand', 'leftKnee', 'rightKnee'] }, start: frame, end: frame,
-			mode: { type: 'string', enum: ['plant', 'free'] },
-		}) },
-	}, ['characterId']) };
 // These only queue the existing editor producers. Their eventual take
 // publication is owned above; generation-pipeline unification remains #444.
 const legacyIk = ['character.setIkKey', 'character.removeIkKey', 'character.clearIkKeys'].map(studioActionDeclaration);
@@ -62,7 +49,7 @@ const ik = legacyIk.map((entry, index) => ({ ...entry, id: ['ik.setKey', 'ik.rem
 
 const clear = { id: 'motion.clear', label: 'Clear motion', description: 'Clear the active take, its corrections, prompt blocks and take-owned cast fields.',
 	kind: 'mutation', undoDomain: 'motion', input: { type: 'object', properties: { characterId: { type: 'string' } }, required: ['characterId'], additionalProperties: false } };
-export const declarations = Object.freeze([prepared, ...loads, physics, ...tools, ...rangePins, ...platformFit, ...edits, ...legacyIk, ...ik, clear]);
+export const declarations = Object.freeze([prepared, ...loads, ...tools, ...rangePins, ...edits, ...legacyIk, ...ik, clear]);
 
 export function register(registry, ports) {
 	const owner = () => ports.storeDomain('motion');
@@ -76,14 +63,9 @@ export function register(registry, ports) {
 		characterOf(ports, args.characterId); await owner().loadRemote(args, context);
 		return { affectedIds: [args.characterId], summary: declaration.label };
 	} });
-	registry.register({ ...physics, available: mounted, target: args => args.characterId, async run(args, context) {
-		characterOf(ports, args.characterId);
-		return { affectedIds: [args.characterId], summary: physics.label, output: await owner().autoPhysics(args.characterId, args, context) };
-	} });
 	for (const declaration of tools) registry.register({ ...declaration, available: mounted, run(args) {
 		characterOf(ports, args.characterId);
-		if (declaration.id === 'motion.applyPhysics') owner().applyPhysics(args.characterId);
-		else if (declaration.id === 'motion.editTrail') owner().editTrail(args.characterId, args);
+		if (declaration.id === 'motion.editTrail') owner().editTrail(args.characterId, args);
 		else {
 			if (args.frame >= ports.state().frameCount) fail('INVALID_RANGE', 'IK frame is outside the timeline.');
 			for (const angles of Object.values(args.pose.bones)) if (!Array.isArray(angles) || angles.length !== 3 || !angles.every(Number.isFinite)) fail('INVALID_ARGUMENT', 'Pose bones require three finite rotation angles.');
@@ -98,35 +80,22 @@ export function register(registry, ports) {
 			: owner().removePin(args.characterId, args.pinId);
 		return { affectedIds: [args.characterId], summary: declaration.label, ...(output ? { output } : {}) };
 	} });
-	registry.register({ ...platformFit[0], available: mounted, target: args => args.characterId, async run(args, context) {
-		characterOf(ports, args.characterId);
-		const output = await owner().platformFitRun(args.characterId, context, { preview: args.preview === true });
-		return { affectedIds: [args.characterId], summary: platformFit[0].label, output };
-	} });
-	registry.register({ ...platformFit[1], available: mounted, target: args => args.characterId, run(args, context) {
-		characterOf(ports, args.characterId);
-		const output = owner().platformFitRemove(args.characterId, context, { apply: args.apply === true });
-		return { affectedIds: [args.characterId], summary: platformFit[1].label, ...(output ? { output } : {}) };
-	} });
 	registerElementSet({ register(entry) { registry.register({ ...entry, available: mounted, run(args) {
 		for (const op of args.ops ?? [args]) take(op.id);
 		return entry.run(args);
 	} }); } }, ports, edits[0]);
 	for (const declaration of edits.slice(1)) registry.register({ ...declaration, available: mounted, run(args) {
 		const { characterId } = args; characterOf(ports, characterId);
-		if (declaration.id === 'motion.fixCollisions') owner().fix(characterId, args.scope);
-		else {
-			const current = take(characterId), full = owner().fullMotionFor(characterId);
-			let segments = current.editSegments;
-			if (declaration.id === 'motion.trim') {
-				if (args.start > args.end || args.end >= current.frames) fail('INVALID_RANGE', 'Trim range is outside the take.');
-				segments = trimMotionEdit(segments, args.start, args.end);
-			} else if (declaration.id === 'motion.resetTrim') segments = createMotionEdit(full.frames);
-			else if (declaration.id === 'motion.cut') segments = splitMotionEdit(segments, args.frame);
-			else if (declaration.id === 'motion.setSegmentSpeed') segments = setMotionSegmentSpeed(segments, args.id, args.speed);
-			else { if (segments.length <= 1) fail('INVALID_ARGUMENT', 'Use motion.clear to remove the final segment.'); segments = removeMotionSegment(segments, args.id); }
-			if (segments !== current.editSegments) owner().editSegments(characterId, segments);
-		}
+		const current = take(characterId), full = owner().fullMotionFor(characterId);
+		let segments = current.editSegments;
+		if (declaration.id === 'motion.trim') {
+			if (args.start > args.end || args.end >= current.frames) fail('INVALID_RANGE', 'Trim range is outside the take.');
+			segments = trimMotionEdit(segments, args.start, args.end);
+		} else if (declaration.id === 'motion.resetTrim') segments = createMotionEdit(full.frames);
+		else if (declaration.id === 'motion.cut') segments = splitMotionEdit(segments, args.frame);
+		else if (declaration.id === 'motion.setSegmentSpeed') segments = setMotionSegmentSpeed(segments, args.id, args.speed);
+		else { if (segments.length <= 1) fail('INVALID_ARGUMENT', 'Use motion.clear to remove the final segment.'); segments = removeMotionSegment(segments, args.id); }
+		if (segments !== current.editSegments) owner().editSegments(characterId, segments);
 		return { affectedIds: [characterId], summary: declaration.label };
 	} });
 	for (const [index, declaration] of [...legacyIk, ...ik].entries()) registry.register({ ...declaration,

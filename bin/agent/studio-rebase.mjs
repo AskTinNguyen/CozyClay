@@ -228,7 +228,7 @@ const sleepUnlessAborted = (ms, signal) => new Promise(resolve => {
 
 /**
  * The recovery wrapper around one admission attempt (`attempt(name, args, scratch)`
- * in studio-tools.mjs, which fills `scratch.fresh`, `.refusedRevision`, `.generation`).
+ * in studio-tools.mjs, which fills `scratch.fresh`, `.refusedRevision`).
  * Exactly one re-send per call, whichever refusal: a second one is the model's.
  */
 export function createRebaser({ session, liveHub, workspaceHandle, mutationNames, attempt }) {
@@ -272,7 +272,7 @@ export function createRebaser({ session, liveHub, workspaceHandle, mutationNames
     try { return await attempt(name, args, scratch); }
     catch (error) {
       const refused = error?.receipt?.mutated === undefined || error.receipt.mutated === false; // nothing applied, provably
-      if (!admission || !mutationNames.has(name) || name === "verify_result" || !refused || scratch.generation) throw error;
+      if (!admission || !mutationNames.has(name) || name === "verify_result" || !refused) throw error;
       const targetIds = () => [...referencedStrings(args)].filter(id => seen.known.has(id));
       if (error?.code === "TARGET_BUSY") {
         const waitedMs = session.busyWaitMs ?? BUSY_WAIT_MS;

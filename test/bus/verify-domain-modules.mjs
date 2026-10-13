@@ -142,7 +142,7 @@ function verify() {
       objects: ['addSceneObject', 'importCutout', 'importMesh', 'spawnCutoutAt', 'spawnMeshAt'],
       shots: ['addCameraKeyframe', 'moveCameraKeyframe', 'removeCameraKeyframe'],
       cast: ['updateCharacterAt', 'removeCharacter', 'addPromptClip', 'changePromptClip', 'removePromptClip'],
-      motion: ['loadMotion', 'clearMotion', 'runFixCollisions', 'runAutoPhysics'],
+      motion: ['loadMotion', 'clearMotion', 'toggleIkMode', 'ikAddKeyframe'],
     };
     const functions = tree => {
       const names = [];

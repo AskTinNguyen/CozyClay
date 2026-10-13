@@ -24,7 +24,6 @@ import { startWorkflowExecution } from "../execution-telemetry.js";
 import { createCanvasCommands } from "./canvas-commands.js";
 import { applyMotionToActiveScene, importImageIntoActiveScene, readStoredSceneDocument } from "./scene-asset-sync.js";
 import { createHttpTransport } from "./agent-client.js";
-import { fetchVideoOutputBlob, requestBridgeExtract } from "../multimodel-ingest.js";
 import { canvasTakesPaste, fileToDataUrl, imageFileFromTransfer, pastedImageNodeData } from "./clipboard-image.js";
 import { appendVersion, compareIndex, pinnedInputs, selectVersion, versionLabel, versionState } from "./image-versions.js";
 import { normalizeVideoForm, videoFormContract } from "./video-contract.js";
@@ -214,10 +213,8 @@ function VideoNode({ id, data }) {
 			<label>Motion prompt</label><textarea className="workflow-textarea" value={form.prompt ?? data.prompt ?? ""} onChange={(event) => update("prompt", event.target.value)} placeholder="Motion prompt" />
 			<label>Duration (seconds)</label><input type="number" min={contract.minDuration} max={contract.maxDuration} value={form.duration_seconds} onChange={(event) => update("duration_seconds", Number(event.target.value))} />
 			<label>Aspect</label>{contract.aspectFromImage ? <><div className="workflow-hint" data-testid="video-source-aspect">Matches input image · frame the full body in the source image</div><div className="workflow-warning" role="status" data-testid="mocap-framing-warning">Before generating: confirm the captured frame shows the head, hands, feet, and any needed objects. Cropped parts can break mocap alignment.</div></> : <select value={form.aspect} onChange={(event) => update("aspect", event.target.value)}>{contract.aspects.map((aspect) => <option key={aspect}>{aspect}</option>)}</select>}
-			<label className="workflow-schema-check"><input type="checkbox" checked={Boolean(form.extract_mocap)} onChange={(event) => update("extract_mocap", event.target.checked)} />Extract GVHMR motion into connected Motion Input</label>
 		</>}
 		{data.videoUrl && <video controls className="workflow-video-preview" src={data.videoUrl} />}
-		{generated && data.motionExtraction?.motionUrl && <div className="workflow-hint" data-testid="mocap-extraction-receipt">✓ GVHMR motion extracted{Number.isFinite(data.motionExtraction.frames) ? ` · ${data.motionExtraction.frames} frames` : ""}</div>}
 		{generated && data.preservation?.pass && <div className="workflow-hint workflow-preservation-ok" data-testid="h3-preservation-receipt">✓ H3 scene/camera lock verified{h3VerificationMetrics(data.preservation)}</div>}
 		{generated && data.preservation && !data.preservation.pass && <div className="workflow-error workflow-preservation-failed" data-testid="h3-preservation-failed">✕ H3 output rejected: background/camera drift{h3VerificationMetrics(data.preservation)}</div>}
 		{generated && data.isLoading && <div className="workflow-hint">Generating video…</div>}{generated && data.errorMsg && <div className="workflow-error">{data.errorMsg}</div>}
@@ -539,20 +536,8 @@ export default function WorkflowBuilder() {
 						const videoForm = normalizeVideoForm(provider, { ...form, duration_seconds: form.duration_seconds ?? current.data.duration_seconds, aspect: form.aspect || current.data.aspect }, falModel);
 						const output = await createHttpTransport().video({ provider, prompt: motionPrompt, imageDataUrl: frame, ...(lastFrameDataUrl ? { lastFrameDataUrl } : {}), durationSeconds: videoForm.duration_seconds, aspect: videoForm.aspect });
 						const videoUrl = output.dataUrl || output.url;
-						let motionExtraction = null;
-						const motionTargets = graph.edges.filter((edge) => edge.source === id).map((edge) => result.nodes.find((node) => node.id === edge.target)).filter((node) => node?.type === "motion-input");
-						if (videoForm.extract_mocap && motionTargets.length) {
-							const done = await requestBridgeExtract(await fetchVideoOutputBlob(videoUrl));
-							motionExtraction = done;
-							for (const target of motionTargets) {
-								const motionData = normalizeMotionInputData({ ...target.data, url: done.motionUrl, objectUrl: null, status: "ready", frames: done.frames, fps: done.fps, motionRef: done.motionRef || null });
-								const motionOutput = motionInputOutput(motionData);
-								values.set(target.id, motionOutput);
-								patchNode(target.id, { ...motionData, outputs: [{ value: motionOutput }] });
-							}
-						}
 						values.set(id, videoUrl);
-						patchNode(id, { isLoading: false, status: "complete", videoUrl, resultUrl: videoUrl, outputs: [{ value: videoUrl }], preservation: output.preservation || null, motionExtraction, errorMsg: null });
+						patchNode(id, { isLoading: false, status: "complete", videoUrl, resultUrl: videoUrl, outputs: [{ value: videoUrl }], preservation: output.preservation || null, errorMsg: null });
 						if (videoUrl) execution.apply();
 					}
 					catch (error) {

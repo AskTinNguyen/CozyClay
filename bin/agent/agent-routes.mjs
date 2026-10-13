@@ -396,8 +396,8 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 	const parseCookies = req => Object.fromEntries(String(req.headers.cookie || "").split(";").map(part => part.trim().split("=")).filter(([key, value]) => key && value).map(([key, value]) => [key, decodeURIComponent(value)]));
 	const pruneStudioSessions = () => {
 		const now = clock();
-		for (const [id, session] of studioSessions) if (!session.activeJobId && now - session.updatedAt > 600_000) { studioSessions.delete(id); studioOwnerTokens.delete(id); for (const turn of session.turns.keys()) studioEvents.delete(turn); }
-		const retired = [...studioSessions.entries()].filter(([, session]) => !session.activeJobId).sort((a, b) => a[1].updatedAt - b[1].updatedAt);
+		for (const [id, session] of studioSessions) if (now - session.updatedAt > 600_000) { studioSessions.delete(id); studioOwnerTokens.delete(id); for (const turn of session.turns.keys()) studioEvents.delete(turn); }
+		const retired = [...studioSessions.entries()].sort((a, b) => a[1].updatedAt - b[1].updatedAt);
 		while (studioSessions.size > 256 && retired.length) { const [id, session] = retired.shift(); studioSessions.delete(id); studioOwnerTokens.delete(id); for (const turn of session.turns.keys()) studioEvents.delete(turn); }
 	};
 	const studioOwner = (req, sessionId, create = false) => {
@@ -473,27 +473,12 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 		if (path === "/agent/stop") {
 			const session = studioSessions.get(value.sessionId);
 			if (!session || session.owner !== parseCookies(req).studio_owner || !session.turns.has(value.turnId)) throw new StudioProtocolError("AUTH_REQUIRED", "Studio stop is not owned by this session.");
-			const jobId = value.jobId ?? session.activeJobId;
-			// Explicit ids are checked against every motion job this session admitted.
-			// Retired ids remain in the set so a repeat Stop is idempotent, while an id
-			// admitted by another session is stale even when this session is idle.
-			if (value.jobId && !session.motionJobIds.has(value.jobId)) throw new StudioProtocolError("STALE_TARGET", "Stop does not own that motion job.");
-			// An owned retired id is still stale while another motion job is active:
-			// this Stop cannot acknowledge the current turn's different job.
-			if (value.jobId && session.activeJobId && value.jobId !== session.activeJobId) throw new StudioProtocolError("STALE_TARGET", "Stop does not target the active motion job.");
-			// Only this turn's held editor job can settle the tool quietly. A retired
-			// job from an earlier turn must never silence an unrelated turn's Stop.
-			const acknowledged = Boolean(session.activeJobId) && session.activeJobTurnId === value.turnId;
-			// The editor's outcome, not a sidecar abort, establishes application.
-			let outcome = null;
-			if (jobId) outcome = await session.controlJob('job.cancel', jobId);
-			if (jobId && session.activeJobId === jobId) { session.activeJobId = null; session.activeJobTurnId = null; }
-			// Let the acknowledged job settle its held tool with that outcome before
-			// aborting the model lane. Aborting the shared signal would interrupt the
-			// tool first and lose the editor's proof. Without a held job, abort both.
-			if (!acknowledged) session.controller?.abort();
-			await session.modelSession?.abort?.("studio stop", acknowledged ? { quiet: true } : undefined);
-			json(res, 200, { ok: true, status: jobId ? "stopped" : "detached", ...(outcome ? { outcome: { status: outcome.status ?? null, code: outcome.code ?? null, mutated: outcome.mutated ?? null } } : {}) }); return true;
+			// Studio turns hold no editor jobs since 3.0 (motion.compile answers
+			// synchronously), so a Stop names no job: it aborts the turn and the model lane.
+			if (value.jobId) throw new StudioProtocolError("STALE_TARGET", "Stop does not own that motion job.");
+			session.controller?.abort();
+			await session.modelSession?.abort?.("studio stop");
+			json(res, 200, { ok: true, status: "detached" }); return true;
 		}
 		if (!studioRuntime && !hub && hubDeps.hubPortBusy) throw new StudioProtocolError("CAPABILITY_MISSING", `The Studio live hub could not start: port ${hubDeps.hubPortBusy} is in use by another CozyClay or its dev server. Free that port and relaunch.`);
 		if (!studioRuntime && (!hub?.command || !hub?.workspaceId)) throw new StudioProtocolError("CAPABILITY_MISSING", "Studio execution is not installed.");
@@ -516,7 +501,7 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 			studioOwner(req, value.sessionId, true);
 			let persisted = null;
 			try { persisted = sessionStore.read(value.sessionId); } catch { /* an unreadable history starts the session fresh */ }
-			session = { owner: studioOwnerTokens.get(value.sessionId), history: persisted?.history ?? [], persistedItems: persisted?.history?.length ?? 0, meta: persisted?.meta ?? null, turns: new Map(), controller: null, activeJobId: null, activeJobTurnId: null, motionJobIds: new Set(Array.isArray(persisted?.meta?.motionJobIds) ? persisted.meta.motionJobIds.filter(id => typeof id === "string") : []), host: null, updatedAt: clock() };
+			session = { owner: studioOwnerTokens.get(value.sessionId), history: persisted?.history ?? [], persistedItems: persisted?.history?.length ?? 0, meta: persisted?.meta ?? null, turns: new Map(), controller: null, host: null, updatedAt: clock() };
 			studioSessions.set(value.sessionId, session);
 		}
 		session.updatedAt = clock();
@@ -562,36 +547,7 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 				return refreshed;
 			},
 		};
-		// A run_action job action declared generation "motion" takes the message's one generation slot
-		// (none are declared since 3.0: motion.compile is cheap and repeatable).
-		const generation = { used: false, failures: 0 };
-		// The editor's command index (authoritative context) declares each action's
-		// generation and hub timeout; no sidecar list of actions exists.
-		const controlJob = async (action, jobId) => {
-			await admission.refresh();
-			return hub.command('run_action', { name: 'run_action', args: { action, args: { jobId, ...(action === 'job.await' ? { timeoutMs: 300_000 } : {}) } },
-				commandId: randomUUID(), host: admission.host, expectedRevision: admission.revision }, value.context.host.workspaceHandle, { timeoutMs: 300_000 });
-		};
-		session.controlJob = controlJob;
-		const onJob = async started => {
-			const jobId = started.jobId;
-			session.motionJobIds.add(jobId);
-			persistenceMeta.motionJobIds = [...session.motionJobIds];
-			session.activeJobId = jobId; session.activeJobTurnId = value.turnId;
-			const cancel = () => { void controlJob('job.cancel', jobId).catch(error => send({ type: 'error', code: error.code ?? 'CANCEL_FAILED', message: error.message })); };
-			controller.signal.addEventListener('abort', cancel, { once: true });
-			if (controller.signal.aborted) cancel();
-			send({ type: 'job.state', jobId, commandId: started.commandId, state: 'generating', phase: 'generating' });
-			try {
-				const outcome = await controlJob('job.await', jobId);
-				send({ type: 'job.state', jobId, commandId: outcome.commandId, state: outcome.ok ? 'installed' : outcome.code === 'CANCELLED' ? 'cancelled' : 'failed', phase: 'complete' });
-				return outcome;
-			} finally {
-				controller.signal.removeEventListener('abort', cancel);
-				if (session.activeJobId === jobId) { session.activeJobId = null; session.activeJobTurnId = null; }
-			}
-		};
-		const tools = createStudioTools({ liveHub: hub, workspaceHandle: value.context.host.workspaceHandle, previsMode: value.context.scene?.previsMode, session: { signal: controller.signal, admission, generation, onJob, actionIndex: current?.actionIndex ?? [], baseline: value.context }, resolveImage: async (id, correlation) => hub.command("resolve_studio_image", { imageId: id, ...correlation }, value.context.host.workspaceHandle) });
+		const tools = createStudioTools({ liveHub: hub, workspaceHandle: value.context.host.workspaceHandle, previsMode: value.context.scene?.previsMode, session: { signal: controller.signal, admission, actionIndex: current?.actionIndex ?? [], baseline: value.context }, resolveImage: async (id, correlation) => hub.command("resolve_studio_image", { imageId: id, ...correlation }, value.context.host.workspaceHandle) });
 		const modelTools = tools.map(tool => ({
 			...tool,
 			handler: async args => {
@@ -671,7 +627,7 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 			}
 			send(frame);
 		};
-		const persistenceMeta = { sceneName: value.context?.scene?.name ?? value.context?.sceneName ?? null, firstText: value.text, motionJobIds: [...session.motionJobIds] };
+		const persistenceMeta = { sceneName: value.context?.scene?.name ?? value.context?.sceneName ?? null, firstText: value.text };
 		const modelKey = value.model || (fauxProvider ? `${fauxProvider.provider?.id || fauxProvider.provider || "faux"}/scripted` : "gpt-6-astra");
 		let runner = studioRunners.get(value.sessionId);
 		if (!runner) {

@@ -48,15 +48,13 @@ test('bus: motion.compile refuses a capsule figure and compiles for a rig', asyn
   } finally { f.dispose(); }
 });
 
-test('bus: IK keys, collisions, physics, trails and take loading refuse a capsule figure; the rig keeps them', async () => {
+test('bus: IK keys, trails and take loading refuse a capsule figure; the rig keeps them', async () => {
   const f = motionFixture({ proxy: true });
   try {
     const take = seedMotion();
     f.motion.load([{ id: 'actor-a', take, fullTake: take }, { id: 'actor-b' }, { id: PROXY_ID }]);
     const before = f.snapshot();
     for (const id of ['character.setIkKey', 'ik.setKey']) refused(f.run(id, { characterId: PROXY_ID, frame: 0, tracks }, 'agent'), 'ik');
-    refused(f.run('motion.fixCollisions', { characterId: PROXY_ID, scope: 'frame' }, 'agent'), 'collision');
-    refused(await f.run('motion.autoPhysics', { characterId: PROXY_ID, apply: false }, 'agent'), 'physics');
     refused(f.run('motion.editTrail', { characterId: PROXY_ID, grabFrame: 12, radiusFrames: 6, delta: { x: 0.2, y: 0, z: 0 } }, 'agent'), 'trails');
     refused(f.run('ik.applyPose', { characterId: PROXY_ID, frame: 0, pose: { bones: {}, rootY: 0 } }, 'agent'), 'pose');
     refused(await f.run('motion.replace', { characterId: PROXY_ID, url: '/ardy/motions/123456-abcdef' }, 'agent'), 'take');

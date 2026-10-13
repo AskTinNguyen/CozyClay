@@ -9,8 +9,7 @@ import { useBus } from '../app-context.js';
 export default function PosePanel({
 	isCharacterSelection, activeCharIndex,
 	selectablePoses, activeChar, ikMode, ikApplyPoseAsKey, motion,
-	setStudioPick, setToast, removePose, setPhotoPoseError, photoPoseFileRef,
-	photoPoseState, photoPoseError, activeRig, saveCurrentPose,
+	setStudioPick, setToast, removePose, activeRig, saveCurrentPose,
 }) {
 	const { run } = useBus();
 	return (
@@ -42,14 +41,8 @@ export default function PosePanel({
 								: ko("Pose applied", "포즈를 적용했어요"));
 						}}
 						onDelete={removePose}
-						onPhoto={() => {
-							setPhotoPoseError("");
-							photoPoseFileRef.current?.click();
-						}}
-						photoState={photoPoseState}
 						labelOf={poseLabelKo}
 					/>
-					{photoPoseError && <p className="studio-hint error" data-pose-photo-error role="status">{photoPoseError}</p>}
 					{/* Bottles whatever the viewport shows right now — a take frame,
 					    IK corrections included — without touching the character, so a
 					    good mid-clip moment becomes a reusable library pose. */}

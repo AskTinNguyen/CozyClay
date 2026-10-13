@@ -1,16 +1,13 @@
-import { useState, useEffect, useSyncExternalStore, useContext, useRef, useMemo } from "react";
-import { AppContext } from '../app-context.js';
+import { useState, useEffect, useSyncExternalStore, useRef, useMemo } from "react";
 import { createDocumentStore } from '../document-store.js';
 import { useDocumentDomain } from '../store/use-document-store.js';
-import { createPhysicsProgress } from "../ardy/physics-panel.jsx";
 import {
 	TIMELINE_FPS,
 	hierarchyIdForIkFocus,
 	REST_BONES,
 	ARDY_FPS,
 } from "../app-stage.jsx";
-import { copyPhysicsKeys, physicsKeyStamp, reviewAutoPhysics } from "../ardy/physics-review.js";
-import { fitPlatforms } from "../ardy/platform-fit.js";
+import { copyPhysicsKeys } from "../ardy/physics-review.js";
 import {
 	createIkState,
 	ikTouch,
@@ -37,7 +34,7 @@ import { StudioProtocolError } from "../studio-agent-protocol.js";
 import { restorePlaybackBones, snapshotPlaybackBones, applyMotionFrame } from "../ardy/playback.js";
 import { isKo, ko } from "../locale.js";
 import { characterScaleFor, loadMotionFromUrl } from "../ardy/npz.js";
-import { supportHeightForObject, OBJECT_LIBRARY } from "../scene-objects.js";
+import { supportHeightForObject } from "../scene-objects.js";
 import { applySupportRise, autoRoofDrop, applyAutoFall, applyRootDrop, normalizeRootDrop } from "../ardy/root-drop.js";
 import { isProxyFigure } from "../scenes.js";
 import { refuseRigOnly } from "../character-kind.js";
@@ -51,8 +48,6 @@ import {
 } from "../ardy/motion-edit.js";
 import { DEFAULT_POSE, restoreBindPositions, applyPose, applyHipsOffset } from "../poses.js";
 import { normalizeMotionCalibration, applyMotionCalibration } from "../ardy/motion-calibration.js";
-import { collisionBlockers } from "../ardy/collision-blockers.js";
-import { fixCollisions, fixCollisionsRange } from "../ardy/fix-collisions.js";
 import {
 	pushTakeVersion,
 	TAKE_VERSIONS_MAX,
@@ -278,28 +273,6 @@ export function createMotionDomain(appContext, characters) {
 			}) } }));
 		synchronizeTimeline();
 	}
-	function fix(id, scope = 'frame') {
-		rigOnly(id, 'collision');
-		const rig = rigFor(id), resolved = rig && resolveIkRig(rig);
-		if (!resolved) throw new StudioProtocolError('TARGET_NOT_READY', 'The character rig is not loaded.');
-		const state = appContext.shared.ikStatesRef.current.get(id) ?? { ...createIkState(), ...resolved };
-		const blockers = at => collisionBlockers({ rigs: appContext.shared.rigs, activeId: id, characterIds: appContext.live.characters,
-			sceneObjects: appContext.ports.read().objects, library: OBJECT_LIBRARY, frame: at, take: { frameCount: motionFor(id)?.frames ?? 1, fps: 24 } });
-		if (scope === 'clip') {
-			const take = motionFor(id); if (!take) throw new StudioProtocolError('TARGET_NOT_READY', 'Load a take first.');
-			const originals = rigSnapshots();
-			try {
-				fixCollisionsRange({ rig, ...resolved, ikState: state, startFrame: 0, endFrame: take.frames - 1,
-					applyFrame(at) { applyMotionFrame(rig, take, at); ikEvaluate(resolved.chains, state, at, resolved.fkJoints, 6); },
-					blockersAt(at) { for (const row of read()) if (row.id !== id && rigFor(row.id)) appContext.shared.poseMemberAtFrame(rigFor(row.id), motionFor(row.id), appContext.shared.ikStatesRef.current.get(row.id), at, 6); return blockers(at); } });
-			} finally { for (const snapshot of originals.values()) appContext.shared.restoreExportRig(snapshot); }
-		} else {
-			const result = fixCollisions(rig, resolved.chains, { ikState: state, fkJoints: resolved.fkJoints, blockers: blockers(frame()) });
-			if (!result.supported) throw new StudioProtocolError('TARGET_NOT_READY', 'This rig does not support collision cleanup.');
-			if (result.changed) ikBakeKeyframe(resolved.chains, state, frame(), resolved.fkJoints, result.touched, null, result.baseQuats);
-		}
-		setKeys(id, state.keys);
-	}
 	function bakeCurrentKey(id, at, dragIds = null) {
 		const rig = rigFor(id), resolved = rig && resolveIkRig(rig);
 		if (!resolved) return null;
@@ -336,44 +309,6 @@ export function createMotionDomain(appContext, characters) {
 		const edited = snapshotTake(applyTrailFalloffDelta(take, { track, grabFrame, radiusFrames, clipDelta }));
 		writeLayer(id, { take: edited });
 		castWrite(rows => rows.map(row => row.id === id ? { ...row, motionRef: { ...row.motionRef, trailEdits: edited.trailEdits } } : row));
-	}
-	const physicsReviews = new Map();
-	let physicsJob = 0;
-	const physicsStamp = id => JSON.stringify([layer(id), appContext.storeDomain('cast').read().find(row => row.id === id)]);
-	function applyPhysics(id) {
-		rigOnly(id, 'physics');
-		const preview = physicsReviews.get(id);
-		if (!preview || preview.stamp !== physicsStamp(id)) throw new StudioProtocolError('STALE_TARGET', 'Analyse this take again before applying corrections.');
-		setKeys(id, preview.result.candidate.keys);
-		domain.onPhysicsPreview?.(null);
-	}
-	async function autoPhysics(id, options, context) {
-		rigOnly(id, 'physics');
-		const rig = rigFor(id), resolved = rig && resolveIkRig(rig), take = motionFor(id);
-		if (!resolved || !take) throw new StudioProtocolError('TARGET_NOT_READY', 'Load a take and character rig first.');
-		const job = ++physicsJob, stamp = physicsStamp(id), original = appContext.shared.snapshotExportRig(rig);
-		let lastYield = performance.now();
-		const check = () => { context.check(); if (job !== physicsJob) throw new StudioProtocolError('STALE_TARGET', 'Physics analysis was superseded.'); };
-		domain.onPhysicsRunning?.(true); domain.onPhysicsPreview?.(null);
-		try {
-			check();
-			const result = await reviewAutoPhysics({ rig, ...resolved, motion: take, sourceKeys: decodeMotionKeys(layer(id).ikKeys),
-				applyRaw: at => applyMotionFrame(rig, take, at), sceneObjects: appContext.ports.read().objects,
-				...options, cache: appContext.shared.physicsSourceCacheRef.current, onProgress: value => domain.onPhysicsProgress?.(value),
-				yieldFrame: async () => {
-					check(); if (performance.now() - lastYield < 16) return;
-					appContext.shared.restoreExportRig(original);
-					await new Promise(resolve => { const channel = new MessageChannel(); channel.port1.onmessage = () => { channel.port1.close(); channel.port2.close(); resolve(); }; channel.port2.postMessage(0); });
-					lastYield = performance.now(); check();
-				},
-			});
-			appContext.shared.restoreExportRig(original); check();
-			physicsReviews.set(id, { result, stamp });
-			if (options.apply) context.commit(() => applyPhysics(id)); else domain.onPhysicsPreview?.(result);
-			return { before: result.before, after: result.after, changedFrames: result.changedFrames.length, warnings: result.warnings, unresolved: result.unresolved };
-		} finally {
-			if (job === physicsJob) { if (stamp === physicsStamp(id)) appContext.shared.restoreExportRig(original); domain.onPhysicsRunning?.(false); }
-		}
 	}
 	function runPrepared(characterId, apply) {
 		if (running) return apply();
@@ -420,8 +355,8 @@ export function createMotionDomain(appContext, characters) {
 		return run('run.update', { txId: gesture.txId, args });
 	}
 	const domain = { documentStore, read, write, layer, writeLayer, motionFor, fullMotionFor, visibleMotion, snapshotTake, project,
-		setKeys, setRangePinState, bakeRangePin, removePin, editKeys, setKey, replace, clear, editSegments, fix, castWrite, run, edit, beginGesture, finishGesture, beginAction, runPrepared, persistTake,
-		insideAction: () => running > 0, bakeCurrentKey, keyPose, editTrail, autoPhysics, applyPhysics,
+		setKeys, setRangePinState, bakeRangePin, removePin, editKeys, setKey, replace, clear, editSegments, castWrite, run, edit, beginGesture, finishGesture, beginAction, runPrepared, persistTake,
+		insideAction: () => running > 0, bakeCurrentKey, keyPose, editTrail,
 		applyPrepared(token) { const apply = prepared.get(token); if (!apply) throw new StudioProtocolError('STALE_TARGET', 'Prepared motion is no longer available.'); return apply(); },
 		bindRender(context) { appContext = context; },
 		viewRevision: () => viewRevision, canUndo: id => documentStore.canUndo(id),
@@ -456,11 +391,6 @@ export function createMotionDomain(appContext, characters) {
 	};
 	const unregister = appContext.registerStoreDomain('motion', domain);
 	return domain;
-}
-
-export function useMotionCommands() {
-	const app = useContext(AppContext), owner = app.storeDomain('motion');
-	return { run: (id, args = {}) => owner.run(id, { characterId: app.storeDomain('cast').activeId, ...args }) };
 }
 
 export function useMotion(appContext) {
@@ -507,26 +437,6 @@ export function useMotion(appContext) {
 	// outside its keyed range. 6 frames @ 24 fps = 0.25 s — long enough to
 	// hide the seam, short enough that a mid-clip fix stays visibly local.
 	const IK_CORRECTION_BLEND_FRAMES = 6;
-
-	const [autoPhysicsRunning, setAutoPhysicsRunning] = useState(false);
-
-	const [physicsPreview, setPhysicsPreview] = useState(null);
-
-	const [physicsShow, setPhysicsShow] = useState(true);
-
-	const [physicsProgress] = useState(createPhysicsProgress);
-
-	const setPhysicsProgress = physicsProgress.set;
-
-	const [physicsOptions, setPhysicsOptions] = useState({ overrides: [], protectedFrames: [], strength: 1 });
-
-	const [platformFitRunning, setPlatformFitRunning] = useState(false);
-	const [platformFitLast, setPlatformFitLast] = useState(null);
-	const [platformFitProgress] = useState(createPhysicsProgress);
-	const platformFitProgressSet = platformFitProgress.set;
-	const platformFitJobRef = useRef(0);
-	const platformFitAppliedRef = useRef(null);
-	const [platformFitApplied, setPlatformFitApplied] = useState(false);
 
 	const [ikTick, setIkTick] = useState(0);
 
@@ -802,19 +712,6 @@ export function useMotion(appContext) {
 	}, [appContext.shared.activeChar.id, appContext.shared.activeRig, motion, pinLayer, ikMode, ikEditTool]);
 	const rangePinRebuildRef = useRef(null);
 	const rangePinSourceStamp = JSON.stringify([pinLayer.take, appContext.shared.activeChar.id]);
-	// A fit is invalidated by a different take, trim or preview, not by key
-	// writes: every layer write re-snapshots the take descriptor, so the decoded
-	// `motion` object is new after the fit's own commit even though the take is
-	// unchanged. Key the reset on the descriptor's content instead.
-	const platformFitPreview = motion === domain.motionFor(appContext.shared.activeChar.id) ? null : motion;
-	useEffect(() => {
-		platformFitJobRef.current += 1;
-		setPlatformFitRunning(false);
-		setPlatformFitLast(null);
-		platformFitProgressSet(0);
-		platformFitAppliedRef.current = null;
-		setPlatformFitApplied(false);
-	}, [rangePinSourceStamp, platformFitPreview, appContext.shared.activeRig]);
 	// Object-bound pins follow edited prop transforms and paths, as in the
 	// source branch. Rebuilding derived keys must not create an undo entry.
 	useEffect(() => {
@@ -1080,11 +977,7 @@ export function useMotion(appContext) {
 	}
 
 	// Everyone EXCEPT the active character, posed at an absolute frame from
-	// their own session clips and their STORED IK corrections (#77). Factored
-	// out of the effect below because the whole-clip Fix Collisions pass needs
-	// the same thing: the other bodies are static blockers, and a blocker
-	// sampled from a rig still standing at the playhead would block the wrong
-	// volume on every other frame of the walk.
+	// their own session clips and their STORED IK corrections (#77).
 	const poseOtherCastMembers = (frame) => {
 		for (const entry of appContext.shared.characters) {
 			if (entry.id === appContext.shared.activeChar.id || isProxyFigure(entry)) continue;
@@ -1303,283 +1196,6 @@ export function useMotion(appContext) {
 		appContext.notify(isKo ? `${appContext.shared.tlFrame}프레임에 전신 IK 키를 추가했어요` : `Full-body IK key at frame ${appContext.shared.tlFrame}`);
 	}
 
-	// Self-collision cleanup: push interpenetrating body parts apart with the
-	// IK solver, then bake the fix as an ordinary IK correction key so it
-	// survives scrubs, undo, and blends back into the clip outside its range.
-	//
-	// The result has THREE outcomes, not two, and each gets its own sentence.
-	// "supported: false" means the rig has no capsule proxies to build at all
-	// — a non-Mixamo skeleton — and reporting that as "no collisions" would
-	// be a lie the user cannot act on: they would keep clicking a button that
-	// silently does nothing. The buttons below are disabled in that case, so
-	// this branch is the belt to that suspenders (a rig can be swapped under
-	// a stale render).
-	/**
-	 * Everything OUTSIDE the active character that a limb has to stay out of:
-	 * the other cast members' bodies (capsules, built from the rigs AS THEY ARE
-	 * POSED at the moment of the call) and every scene object (an upright box
-	 * on its footprint). Ids are namespaced `char:<id>:<capsule>` / `obj:<id>`,
-	 * so a penetration label names the thing that was hit.
-	 *
-	 * `frame` re-samples travel paths — a prop walking a route stands somewhere
-	 * else on every frame — but the CAST is read live from the scene graph, so
-	 * a caller walking a clip must pose the others at that frame first (see
-	 * runFixCollisionsRange's blockersAt).
-	 */
-	const externalBlockers = (frame = appContext.shared.tlFrame) => collisionBlockers({
-		rigs: appContext.shared.rigs,
-		activeId: appContext.shared.activeChar.id,
-		// The CAST is the authority on who is on stage, not the rig map: undo can
-		// put the cast list back to one subject while the rig mounted for the
-		// removed one is still in `rigs`, and a ghost body would go on blocking
-		// limbs that pass through empty space.
-		characterIds: appContext.shared.characters,
-		sceneObjects: appContext.shared.sceneObjects,
-		library: OBJECT_LIBRARY,
-		frame,
-		take: { frameCount: appContext.shared.tlFrameCount, fps: appContext.shared.tlFps },
-	});
-
-	function runFixCollisions() {
-		if (appContext.storeDomain('motion')) return appContext.storeDomain('motion').run('motion.fixCollisions', { characterId: appContext.shared.activeChar.id, scope: 'frame' });
-		if (!ikChains || !appContext.shared.activeRig) return;
-		// A rig swap leaves one render where ikChains still describes the old
-		// skeleton; solving the new rig with them would push the wrong bones.
-		if (appContext.shared.ikStateRef.current.rig !== appContext.shared.activeRig) return;
-		// The set as it stands right now: the other bodies at this frame's pose
-		// and the props at this frame's placement.
-		const result = fixCollisions(appContext.shared.activeRig, ikChains, { ikState: appContext.shared.ikStateRef.current, fkJoints: ikFkJoints, blockers: externalBlockers(appContext.shared.tlFrame) });
-		if (!result.supported) {
-			appContext.notify(ko("This rig doesn't support collision cleanup", "이 리그는 신체 관통 정리를 지원하지 않아요"));
-			return;
-		}
-		if (!result.changed) {
-			appContext.notify(ko("No body collisions at this frame", "이 프레임에는 신체 관통이 없어요"));
-			return;
-		}
-		editIkKeys(() => ikBakeKeyframe(ikChains, appContext.shared.ikStateRef.current, appContext.shared.tlFrame, ikFkJoints, result.touched, null, result.baseQuats));
-		setIkTick((n) => n + 1);
-		appContext.notify(result.residual > 1e-4
-			? ko(`Collisions reduced (residual ${(result.residual * 100).toFixed(1)} cm)`, `관통을 줄였어요 (잔여 ${(result.residual * 100).toFixed(1)} cm)`)
-			: ko(`Collisions fixed at frame ${appContext.shared.tlFrame}`, `프레임 ${appContext.shared.tlFrame}의 관통을 정리했어요`));
-	}
-
-	// Whole-clip variant: walk the motion frame by frame, clean each pose and
-	// key ONLY the frames that changed, so a clean clip stays keyless.
-	function runFixCollisionsRange() {
-		if (appContext.storeDomain('motion')) return appContext.storeDomain('motion').run('motion.fixCollisions', { characterId: appContext.shared.activeChar.id, scope: 'clip' });
-		if (!ikChains || !appContext.shared.activeRig || !motion) return;
-		if (appContext.shared.ikStateRef.current.rig !== appContext.shared.activeRig) return;
-		// Screened before the undo entry: an unsupported rig would record an
-		// undo step for a walk that keys nothing, leaving a no-op in history.
-		if (!appContext.shared.collisionCleanupSupported) {
-			appContext.notify(ko("This rig doesn't support collision cleanup", "이 리그는 신체 관통 정리를 지원하지 않아요"));
-			return;
-		}
-		const currentFrame = appContext.shared.tlFrame;
-		const applyFrame = (frame) => {
-			applyMotionFrame(appContext.shared.activeRig, motion, frame);
-			ikEvaluate(ikChains, appContext.shared.ikStateRef.current, frame, ikFkJoints, IK_CORRECTION_BLEND_FRAMES);
-		};
-		// The other bodies move too. blockersAt runs AFTER applyFrame(frame), so
-		// it poses the rest of the cast at that same frame — their own clips and
-		// their own stored IK layers, the very pass the viewport renders with —
-		// and only then samples their capsules. Without this the blockers would
-		// describe everyone frozen at the playhead, which is a wrong obstacle on
-		// every frame but one.
-		const blockersAt = (frame) => {
-			poseOtherCastMembers(frame);
-			return externalBlockers(frame);
-		};
-		let keyed = [];
-		let unresolved = [];
-		try {
-			const walked = editIkKeys(() => fixCollisionsRange({
-				rig: appContext.shared.activeRig,
-				chains: ikChains,
-				ikState: appContext.shared.ikStateRef.current,
-				fkJoints: ikFkJoints,
-				startFrame: 0,
-				endFrame: motion.frames - 1,
-				applyFrame,
-				blockersAt,
-			}));
-			// The frames the walk keyed. `unresolved` — the frames whose residual
-			// survived every pass — is ADDITIVE: read it defensively off either
-			// shape so this keeps working before and after the driver grows it.
-			keyed = Array.isArray(walked) ? walked : walked?.keyed ?? [];
-			unresolved = (Array.isArray(walked) ? walked.unresolved : walked?.unresolved) ?? [];
-		} finally {
-			// The restore is the pass's CLEANUP, not its epilogue: a throw mid-walk
-			// would otherwise leave the active rig and the rest of the cast frozen
-			// at whatever frame it died on, which is a wrong-looking set the user
-			// cannot scrub out of without touching the playhead.
-			applyFrame(currentFrame);
-			poseOtherCastMembers(currentFrame);
-			setIkTick((n) => n + 1);
-		}
-		// Residual is worth saying out loud: a limb pinned between two blockers
-		// (another body and a prop, say) can come out of the walk still touching,
-		// and silence would read as "all clean".
-		const stillPenetrating = unresolved.length
-			? ko(` · ${unresolved.length} frame(s) still penetrate`, ` · ${unresolved.length}개 프레임은 남아 있어요`)
-			: "";
-		// "No body collisions" must never share a sentence with "still
-		// penetrate": a converged pass over an unfixable clip has nothing more
-		// to do, which is a different statement from the clip being clean.
-		appContext.notify((keyed.length
-			? ko(`Fixed collisions on ${keyed.length} frame(s)`, `${keyed.length}개 프레임의 관통을 정리했어요`)
-			: unresolved.length
-				? ko("Nothing more to fix", "더 고칠 수 있는 게 없어요")
-				: ko("No body collisions in the clip", "클립에 신체 관통이 없어요")) + stillPenetrating);
-	}
-
-	function changePhysicsOptions(next) {
-		setPhysicsOptions(next); setPhysicsPreview(null); setIkTick((n) => n + 1);
-	}
-
-	function showPhysicsPreview(show) { setPhysicsShow(show); setIkTick((n) => n + 1); }
-
-	function cancelPhysicsPreview() { setPhysicsPreview(null); setIkTick((n) => n + 1); }
-
-	function applyPhysicsPreview() {
-		if (appContext.storeDomain('motion')) return appContext.storeDomain('motion').run('motion.applyPhysics', { characterId: appContext.shared.activeChar.id });
-		if (!physicsPreview || physicsPreview.sourceStamp !== physicsKeyStamp(appContext.shared.ikStateRef.current.keys)) return;
-		editIkKeys(() => { appContext.shared.ikStateRef.current.keys = copyPhysicsKeys(physicsPreview.candidate.keys); });
-		appContext.shared.ikStateRef.current.tracked = new Set(physicsPreview.candidate.tracked);
-		appContext.shared.autoPhysicsRunRef.current = { motion, rig: appContext.shared.activeRig, stamp: physicsKeyStamp(appContext.shared.ikStateRef.current.keys) };
-		setPhysicsPreview(null); setIkTick((n) => n + 1);
-		appContext.notify(ko("AutoPhysics applied · Undo restores the original", "오토피직스를 적용했어요 · 실행 취소로 원본 복구"));
-	}
-
-	async function runAutoPhysics() {
-		if (appContext.storeDomain('motion')) return appContext.storeDomain('motion').run('motion.autoPhysics', { characterId: appContext.shared.activeChar.id, ...physicsOptions, apply: false });
-		if (autoPhysicsRunning || !ikChains || !appContext.shared.activeRig || !motion || appContext.shared.ikStateRef.current.rig !== appContext.shared.activeRig) return null;
-		const previous = appContext.shared.autoPhysicsRunRef.current;
-		if (previous?.motion === motion && previous.rig === appContext.shared.activeRig && previous.stamp === physicsKeyStamp(appContext.shared.ikStateRef.current.keys)) {
-			appContext.notify(ko("Already applied. Undo to review this correction again.", "이미 적용했어요. 실행 취소 후 다시 비교할 수 있어요.")); return null;
-		}
-		const job = ++appContext.shared.physicsJobRef.current, frame = appContext.shared.tlFrame;
-		const sourceKeys = copyPhysicsKeys(appContext.shared.ikStateRef.current.keys), stamp = physicsKeyStamp(sourceKeys);
-		let lastYieldAt = Date.now(), yieldWaitMs = 0, yieldCount = 0;
-		const restore = () => { appContext.shared.poseMemberAtFrame(appContext.shared.activeRig, motion, appContext.shared.ikStateRef.current, frame, IK_CORRECTION_BLEND_FRAMES); };
-		appContext.shared.setTlPlaying(false); setAutoPhysicsRunning(true); setPhysicsProgress(0); setPhysicsPreview(null);
-		try {
-			const result = await reviewAutoPhysics({ rig: appContext.shared.activeRig, motion, chains: ikChains, fkJoints: ikFkJoints, sourceKeys,
-				applyRaw: (f) => appContext.shared.poseMemberAtFrame(appContext.shared.activeRig, motion, null, f), sceneObjects: appContext.shared.sceneObjects, ...physicsOptions,
-				cache: appContext.shared.physicsSourceCacheRef.current,
-				onProgress: setPhysicsProgress,
-				yieldFrame: async () => {
-					if (appContext.shared.physicsJobRef.current !== job) throw new Error("Analysis cancelled after changing the character or motion");
-					// A batch is a cancellation checkpoint, not necessarily a paint/
-					// event-loop boundary. Yield on a time budget, not every 12 frames.
-					if (Date.now() - lastYieldAt < 16) return;
-					restore();
-					const queuedAt = Date.now();
-					// Yield CPU work without waiting for a paint. requestAnimationFrame
-					// can be throttled/paused in an occluded tab, stretching a seconds-
-					// long solve into minutes. MessageChannel also lets input run.
-					await new Promise((resolve) => {
-						const channel = new MessageChannel();
-						channel.port1.onmessage = () => { channel.port1.close(); channel.port2.close(); resolve(); };
-						channel.port2.postMessage(0);
-					});
-					lastYieldAt = Date.now(); yieldWaitMs += lastYieldAt - queuedAt; yieldCount += 1;
-					if (appContext.shared.physicsJobRef.current !== job) throw new Error("Analysis cancelled after changing the character or motion");
-				},
-			});
-			Object.assign(result.performance, { yieldWaitMs, yieldCount });
-			if (appContext.shared.physicsJobRef.current !== job || physicsKeyStamp(appContext.shared.ikStateRef.current.keys) !== stamp) return null;
-			setPhysicsPreview(result); setPhysicsShow(true);
-			return { before: result.before, after: result.after, warnings: result.warnings, unresolved: result.unresolved, contacts: result.contacts.spans };
-		} catch (error) {
-			if (appContext.shared.physicsJobRef.current === job) appContext.notify(ko(`AutoPhysics: ${error.message}`, `오토피직스: ${error.message}`));
-			return null;
-		} finally {
-			if (appContext.shared.physicsJobRef.current === job) { restore(); setAutoPhysicsRunning(false); setIkTick((n) => n + 1); }
-		}
-	}
-
-	async function platformFitRun(id, context, { removal = false, preview = false } = {}) {
-		const rig = appContext.shared.rigs[id], resolved = rig && resolveIkRig(rig), take = domain.motionFor(id);
-		if (!resolved || !take) throw new StudioProtocolError('TARGET_NOT_READY', 'Load a take and character rig first.');
-		if (platformFitRunning) throw new StudioProtocolError('TARGET_BUSY', 'A platform fit is already running.');
-		const job = ++platformFitJobRef.current;
-		const sourceKeys = copyPhysicsKeys(decodeMotionKeys(domain.layer(id).ikKeys));
-		const sourceTracked = new Set([...sourceKeys.values()].flatMap(entry => [...entry.keys()]));
-		const stamp = physicsKeyStamp(sourceKeys);
-		const prior = platformFitAppliedRef.current;
-		const stacked = prior && prior.id === id && prior.stamp === stamp ? prior : null;
-		const frame = appContext.shared.tlFrame;
-		const restore = () => appContext.shared.poseMemberAtFrame(rig, take, appContext.shared.ikStatesRef.current.get(id), frame, 6);
-		let lastYield = performance.now();
-		const check = () => { context?.check?.(); if (platformFitJobRef.current !== job) throw new StudioProtocolError('STALE_TARGET', 'Platform fit was superseded.'); };
-		setPlatformFitRunning(true); platformFitProgressSet(0); setPlatformFitLast(null);
-		try {
-			const result = await fitPlatforms({
-				rig: rig, motion: take, chains: resolved.chains, fkJoints: resolved.fkJoints, sourceKeys,
-				applyRaw: at => appContext.shared.poseMemberAtFrame(rig, take, null, at),
-				sceneObjects: removal ? [] : (appContext.ports.read?.().objects ?? appContext.shared.sceneObjects),
-				onProgress: platformFitProgressSet,
-				yieldFrame: async () => {
-					check(); if (performance.now() - lastYield < 16) return;
-					restore();
-					await new Promise(resolve => { const channel = new MessageChannel(); channel.port1.onmessage = () => { channel.port1.close(); channel.port2.close(); resolve(); }; channel.port2.postMessage(0); });
-					lastYield = performance.now(); check();
-				},
-			});
-			check();
-			const last = { summary: result.summary, steps: result.steps, changedFrames: result.changedFrames };
-			if (removal) {
-				setPlatformFitLast(last);
-				if (result.changedFrames.length) context.commit(() => domain.setKeys(id, result.candidate.keys));
-				platformFitAppliedRef.current = null; setPlatformFitApplied(false); setPlatformFitLast(null);
-				return { ...last, removed: result.changedFrames.length > 0 };
-			}
-			if (!preview) {
-				if (result.changedFrames.length) context.commit(() => domain.setKeys(id, result.candidate.keys));
-				platformFitAppliedRef.current = { id, before: stacked?.before ?? sourceKeys, tracked: stacked?.tracked ?? sourceTracked, stamp: physicsKeyStamp(decodeMotionKeys(domain.layer(id).ikKeys)) };
-				setPlatformFitLast(last); setPlatformFitApplied(true);
-				return last;
-			}
-			platformFitAppliedRef.current = { preview: { id, sourceStamp: stamp, sourceKeys, sourceTracked, candidate: result.candidate, last }, before: stacked?.before ?? sourceKeys, tracked: stacked?.tracked ?? sourceTracked, stamp };
-			setPlatformFitLast({ ...last, candidate: result.candidate });
-			setPlatformFitApplied(false);
-			return last;
-		} finally {
-			if (platformFitJobRef.current === job) { restore(); setPlatformFitRunning(false); }
-		}
-	}
-
-	function platformFitApply(id, context) {
-		const preview = platformFitAppliedRef.current?.preview;
-		if (!preview || preview.id !== id || platformFitRunning) return { applied: false };
-		const current = physicsKeyStamp(decodeMotionKeys(domain.layer(id).ikKeys));
-		if (current !== preview.sourceStamp) throw new StudioProtocolError('STALE_TARGET', 'The platform preview is out of date. Analyse this take again before applying.');
-		context.commit(() => domain.setKeys(id, copyPhysicsKeys(preview.candidate.keys)));
-		platformFitAppliedRef.current = { id, before: preview.sourceKeys, tracked: preview.sourceTracked, stamp: physicsKeyStamp(decodeMotionKeys(domain.layer(id).ikKeys)) };
-		setPlatformFitApplied(true);
-		setPlatformFitLast({ ...preview.last, candidate: undefined });
-		return { applied: true, changedFrames: preview.last.changedFrames };
-	}
-
-	function platformFitRemove(id, context, { apply = false } = {}) {
-		if (apply) return platformFitApply(id, context);
-		const applied = platformFitAppliedRef.current;
-		if (applied?.preview?.id === id) {
-			platformFitAppliedRef.current = null; setPlatformFitLast(null); setPlatformFitApplied(false);
-			return { removed: false, cancelled: true };
-		}
-		if (!applied || applied.id !== id || platformFitRunning) return { removed: false };
-		const current = physicsKeyStamp(decodeMotionKeys(domain.layer(id).ikKeys));
-		if (current === applied.stamp) {
-			context.commit(() => domain.setKeys(id, copyPhysicsKeys(applied.before)));
-			platformFitAppliedRef.current = null; setPlatformFitApplied(false); setPlatformFitLast(null);
-			return { removed: true };
-		}
-		return platformFitRun(id, context, { removal: true });
-	}
-
 	function ikDeleteKeyframe(frame) {
 		if (!appContext.shared.ikStateRef.current.keys.has(frame)) return;
 		appContext.shared.runStudioAction("character.removeIkKey", { characterId: appContext.shared.activeChar.id, frame });
@@ -1755,11 +1371,6 @@ export function useMotion(appContext) {
 		}
 	}
 
-	domain.onPhysicsRunning = setAutoPhysicsRunning;
-	domain.onPhysicsProgress = setPhysicsProgress;
-	domain.onPhysicsPreview = result => { setPhysicsPreview(result); setPhysicsShow(true); setIkTick(value => value + 1); };
-	domain.platformFitRun = platformFitRun;
-	domain.platformFitRemove = platformFitRemove;
 	domain.beginPlayback = id => { const rig = appContext.shared.rigs[id]; if (rig) beginPlaybackOn(rig); };
 	domain.loadRemote = async (args, context) => {
 		const entry = domain.layer(args.characterId).takeVersions.find(version => version.motionUrl === args.motionUrl);
@@ -1783,8 +1394,7 @@ export function useMotion(appContext) {
 	return {
 		...domain,
 		ikMode, ikChains, setIkChains, ikFkJoints, setIkFkJoints, ikFocus, setIkFocus, footSnap, setFootSnap,
-		bodyContact, setBodyContact, IK_CORRECTION_BLEND_FRAMES, autoPhysicsRunning, setAutoPhysicsRunning,
-		physicsPreview, setPhysicsPreview, physicsShow, physicsProgress, physicsOptions, setPhysicsOptions,
+		bodyContact, setBodyContact, IK_CORRECTION_BLEND_FRAMES,
 		ikTick, setIkTick, committedIkEdits, setCommittedIkEdits, trailFalloffS, setTrailFalloffS, showTrails,
 		setShowTrails, ikEditTool, setIkEditTool, trailEdit, trailTrackFocus, selectTrailTrack, clearTrailTrackFocus, trailFalloffFrames, focusIkHandle, snapshotIkKeys,
 		pendingIkEdit, applyPendingIkEdit, cancelPendingIkEdit,
@@ -1797,9 +1407,7 @@ export function useMotion(appContext) {
 		advanceFrame, stepFrame,
 		leaveIkMode, beginPlaybackOn, loadMotion, clearMotion: () => appContext.bus.run('motion.clear', { characterId: appContext.shared.activeChar.id }), clearMotionNative: clearMotion, applyMotionTrim, resetMotionTrim, cutMotionAtPlayhead,
 		changeMotionSegmentSpeed, removeMotionSegmentById, poseOtherCastMembers, toggleIkMode, ikSolve,
-		ikDragEnd, ikAddKeyframe, externalBlockers, runFixCollisions, runFixCollisionsRange,
-		changePhysicsOptions, showPhysicsPreview, cancelPhysicsPreview, applyPhysicsPreview, runAutoPhysics,
-		platformFitRun, platformFitApply, platformFitRemove, platformFitRunning, platformFitLast, platformFitProgress, platformFitApplied,
+		ikDragEnd, ikAddKeyframe,
 		ikDeleteKeyframe, ikApplyPoseAsKey, onTrailDragStart, onTrailDragPreview, onTrailDragEnd, restoreMotionRefs,
 	};
 }

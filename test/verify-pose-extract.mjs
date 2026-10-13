@@ -5,9 +5,9 @@ import { canonicalCskel27Reference, poseToCskel27 } from "../src/ardy/to-cskel27
 import {
 	bakeExtractedTake,
 	collectLandmarkTrack,
+	fitLandmarksToPose,
 	normalizeLandmarkSample,
 	selectMostConfidentPerson,
-	videoLandmarksToPoseKeys,
 } from "../src/pose-extract/index.js";
 
 const rest = JSON.parse(readFileSync(new URL("../public/ardy/cskel27-rest.json", import.meta.url), "utf8"));
@@ -57,14 +57,6 @@ assert.equal(normalized.valid, true);
 assert.ok(near(normalized.landmarks[23].position[1] + normalized.landmarks[24].position[1], 0));
 pass("coordinates are hip-centred, torso-scaled and Y-up");
 
-const result = videoLandmarksToPoseKeys({ samples: raw, rest, fps: 20, maxKeys: 5, minSpacingS: 0.2 });
-assert.ok(result.keys.length >= 3);
-assert.deepEqual(result.keys.map((key) => key.frame).slice(0, 1), [0]);
-assert.equal(result.keys.at(-1).frame, 20);
-assert.ok(result.diagnostics.some((entry) => entry.sampleIndex === 2));
-assert.ok(result.keys.every((key) => key.pose.schema === "cozyclay.pose.v1"));
-assert.ok(result.keys.every((key) => Object.keys(key.pose.bones).length === 19));
-pass("pose-change peak selection emits ordinary frame/pose keys on the 20 fps grid");
 
 function determinant(m) {
 	return m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
@@ -72,8 +64,10 @@ function determinant(m) {
 		+ m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
 }
 
-const raisedEntry = result.keys[result.diagnostics.findIndex((entry) => entry.sampleIndex === 2)];
-const fitted = poseToCskel27({ pose: raisedEntry.pose, rest });
+const raisedFit = fitLandmarksToPose({ sample: normalizeLandmarkSample(raw[2]), rest });
+assert.equal(raisedFit.pose.schema, "cozyclay.pose.v1");
+assert.equal(Object.keys(raisedFit.pose.bones).length, 19);
+const fitted = poseToCskel27({ pose: raisedFit.pose, rest });
 for (const matrix of fitted.local_rot_mats) {
 	for (let row = 0; row < 3; row += 1) {
 		const length = Math.hypot(...matrix[row]);
@@ -99,9 +93,9 @@ assert.ok(fitted.posed_joints[indexOf.LeftForeArm][1] > fitted.posed_joints[inde
 pass("fitting preserves cskel27 limb lengths and follows the raised-arm direction");
 
 const hidden = landmarkFrame(0, 0, [15, 17, 19]);
-const hiddenResult = videoLandmarksToPoseKeys({ samples: [hidden], rest, maxKeys: 1 });
-assert.ok(hiddenResult.diagnostics[0].releasedBones.includes("LeftForeArm"));
-assert.ok(hiddenResult.diagnostics[0].releasedBones.includes("LeftHand"));
+const hiddenFit = fitLandmarksToPose({ sample: normalizeLandmarkSample(hidden), rest });
+assert.ok(hiddenFit.releasedBones.includes("LeftForeArm"));
+assert.ok(hiddenFit.releasedBones.includes("LeftHand"));
 pass("low-visibility landmarks release their affected limb targets");
 
 const personLow = landmarkFrame(0, 0).landmarks.map((point) => ({ ...point, visibility: 0.2 }));
@@ -164,4 +158,4 @@ const noPerson = (() => {
 assert.equal(noPerson, "no-usable-pose");
 pass("a track with no fittable sample is refused by name");
 
-console.log("all video-to-pose-key checks PASS");
+console.log("all landmark-to-pose checks PASS");

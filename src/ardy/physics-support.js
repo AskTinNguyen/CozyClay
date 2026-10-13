@@ -1,10 +1,9 @@
 import * as THREE from "three";
 import { findBone } from "./ik.js";
-import { SEGMENT_MASSES } from "./auto-physics.js";
+import { SEGMENT_MASSES } from "./center-of-mass.js";
 
 const G = 9.81;
 const V = () => new THREE.Vector3();
-const smooth = (t) => { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); };
 const SUPPORT_LIMITS = Object.freeze({ gap: .025, force: .22, moment: .10, maxDrop: .60, friction: .6 });
 
 /** Cached bone lookup and an explicit approximate segmented physical body.
@@ -119,80 +118,6 @@ export function solveSupportForces(row, demand, patches, { friction = SUPPORT_LI
 function patchesAt(row, floorY, shift = 0, overrides = [], frame = 0) {
 	return Object.entries(row.support).filter(([id, p]) => p.vertices > 0 && p.floor + shift <= floorY + SUPPORT_LIMITS.gap && p.floor + shift >= floorY - .03
 		&& !overrides.some((o) => o.site === id && o.mode === "free" && frame >= o.start && frame <= o.end));
-}
-
-/** Joint hypothesis search over vertical body alignment and support patches.
- * The scene plane stays fixed. No action names, pose labels, or forced feet.
- * Flight is a temporal acceleration hypothesis, never 'low velocity'. */
-export function inferSupportAlignment(rows, fps, { floorY = 0, overrides = [], protectedFrames = [], strength = 1 } = {}) {
-	const motion = supportMotion(rows, fps), n = rows.length;
-	const shifts = new Float64Array(n), candidates = [], flight = new Set(), unknown = [];
-	const observed = rows.map((row) => Math.min(...Object.values(row.support).filter((p) => p.vertices > 0).map((p) => p.floor - floorY)));
-	for (let f = 0; f < n; f += 1) {
-		const demand = motion[f], row = rows[f];
-		const baseline = solveSupportForces(row, demand, patchesAt(row, floorY, 0, overrides, f));
-		// Preserve true ballistic motion, including nearby transition frames.
-		let ballistic = 0, tested = 0;
-		for (let i = Math.max(0, f - 2); i <= Math.min(n - 1, f + 2); i += 1) { tested += 1; if (motion[i].force.length() < .28) ballistic += 1; }
-		if (ballistic >= Math.ceil(tested * .6)) { flight.add(f); candidates.push({ frame: f, mode: "flight", shift: 0, ...baseline }); continue; }
-		let shift = 0, selected = baseline, mode = baseline.forceResidual <= SUPPORT_LIMITS.force && baseline.momentResidual <= SUPPORT_LIMITS.moment ? "supported" : "unknown";
-		const gap = observed[f];
-		// Only a sustained support demand is eligible for automatic alignment.
-		// Fast/transient failure is left visible rather than flattened to floor.
-		const stableDemand = demand.force.y > .55 && demand.force.y < 1.5 && Math.hypot(demand.force.x, demand.force.z) < .55;
-		let hints = [];
-		if (mode === "unknown" && stableDemand && gap > -.12 && gap <= SUPPORT_LIMITS.maxDrop) {
-			let best = Infinity;
-			// Body translation and reachable limb contact are hypotheses together.
-			// A low foot may rise via IK while a hand/knee descends. Rigidly
-			// lowering everything to the single lowest vertex cannot solve this.
-			for (const proposed of [...new Set([0, .002 - gap, -.033 - gap, -.068 - gap, -.098 - gap])]) {
-				if (proposed > .12 || proposed < -SUPPORT_LIMITS.maxDrop) continue;
-				const movable = /^(left|right)(Foot|Hand|Knee)$/;
-				const rigid = Object.entries(row.support).filter(([id, p]) => !movable.test(id) && p.vertices > 0);
-				if (rigid.some(([, p]) => p.floor + proposed < floorY - .025)) continue;
-				const patches = []; let correction = 0;
-				for (const [id, p] of Object.entries(row.support)) {
-					if (!p.vertices || overrides.some((o) => o.site === id && o.mode === "free" && f >= o.start && f <= o.end)) continue;
-					const distance = p.floor + proposed - floorY;
-					if (Math.abs(distance) > (movable.test(id) ? .105 : .025)) continue;
-					const dy = floorY + .002 - proposed - p.floor;
-					patches.push([id, { ...p, patch: (p.patch?.length ? p.patch : [p.point ?? p.position]).map((v) => v.clone().add(new THREE.Vector3(0, dy, 0))) }]);
-					correction += Math.abs(dy);
-				}
-				const fit = solveSupportForces(row, demand, patches);
-				const cost = fit.residual + .08 * Math.abs(proposed) + .10 * correction / Math.max(1, patches.length);
-				if (fit.forceResidual < .16 && fit.momentResidual < .075 && fit.residual < baseline.residual * .55 && cost < best) {
-					best = cost; shift = proposed; selected = fit; mode = "align";
-					hints = patches.filter(([id]) => (fit.loads[id] ?? 0) > .03 && movable.test(id)).map(([id]) => id);
-				}
-			}
-		}
-		candidates.push({ frame: f, mode, shift, hints, ...selected });
-	}
-	// A one-frame lucky force solution must not turn into a root jump.
-	const minRun = Math.max(5, Math.ceil(fps * .25));
-	for (let a = 0; a < n;) {
-		if (candidates[a].mode !== "align") { a += 1; continue; }
-		let b = a + 1; while (b < n && candidates[b].mode === "align") b += 1;
-		if (b - a >= minRun) for (let f = a; f < b; f += 1) shifts[f] = candidates[f].shift;
-		else for (let f = a; f < b; f += 1) candidates[f].mode = "unknown";
-		a = b;
-	}
-	const radius = Math.max(3, Math.round(fps * .35)), filtered = new Float64Array(n);
-	for (let f = 0; f < n; f += 1) {
-		if (flight.has(f) || protectedFrames.includes(f)) continue;
-		let sum = 0, weight = 0;
-		for (let i = Math.max(0, f - radius); i <= Math.min(n - 1, f + radius); i += 1) { const w = radius + 1 - Math.abs(f - i); sum += shifts[i] * w; weight += w; }
-		let influence = strength;
-		for (const p of protectedFrames) influence *= smooth(Math.abs(f - p) / (radius + 1));
-		// Never push a lower unrelated surface through the ground.
-		// IK will resolve the limited limb penetration admitted by a candidate;
-		// rigid-body patches were checked above and remain protected.
-		filtered[f] = sum / weight * influence;
-		if (candidates[f].mode === "unknown") unknown.push(f);
-	}
-	return { shifts: filtered, frames: candidates, flight, unknown, motion };
 }
 
 /** Deliberately independent of detected contact masks: 'no contacts' is not a

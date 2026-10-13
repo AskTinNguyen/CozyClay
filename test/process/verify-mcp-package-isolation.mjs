@@ -160,7 +160,6 @@ try {
 	assert.equal(existsSync(rootLock), false, "MCP install must not create a root lockfile");
 	assert.match(first.stderr, /installing MCP server dependencies/, first.stderr);
 	const runtimeRoot = join(runtimeHome, ".cache", "cozyclay", "mcp-runtime", packageVersion);
-	assert.equal(existsSync(join(runtimeRoot, "bin", "agent", "motion-runtime.mjs")), true, "isolated MCP runtime must include the motion runtime import");
 	assert.equal(existsSync(join(runtimeRoot, "tools", "ardy", "bridge.mjs")), true, "isolated MCP runtime must include the motion bridge");
 	assert.equal(existsSync(join(runtimeRoot, "dist", "models", "x-bot-tpose.fbx")), true, "isolated MCP runtime must include the bridge's FBX rigs");
 

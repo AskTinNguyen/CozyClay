@@ -57,8 +57,8 @@ export function motionFixture({ proxy = false } = {}) {
   const f = castFixture(proxy ? appFixture({ characters: proxyCast() }) : undefined), scope = f.scope, app = scope.appContext;
   Object.assign(scope, { rigs: f.rigs, activeRig: f.rigs['actor-a'], activeChar: f.characterRef.current[0], characters: f.characterRef.current,
     takeRecipeRef: { current: null }, trailBaseMotionRef: { current: null }, trailPreviewMotionRef: { current: null },
-    physicsJobRef: { current: 0 }, physicsSourceCacheRef: { current: new Map() }, sceneObjects: [],
-    generationPendingRef: { current: false }, genRunningRef: { current: false }, collisionCleanupSupported: true,
+    sceneObjects: [],
+    generationPendingRef: { current: false }, genRunningRef: { current: false },
   });
   let motion;
   function renderMotion() {

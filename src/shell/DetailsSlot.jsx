@@ -14,7 +14,6 @@ import PoseImagePanel from "../panels/PoseImagePanel.jsx";
 import EnvironmentPanel from "../panels/EnvironmentPanel.jsx";
 import PropsPanel from "../panels/PropsPanel.jsx";
 import ObjectTransformPanel from "../panels/ObjectTransformPanel.jsx";
-import { ASSET_IMAGE_TYPES } from "../scene-assets.js";
 import { PoseStudioPanel } from "../posestudio.jsx";
 import { DEFAULT_POSE } from "../poses.js";
 import "../panels/details.css";
@@ -65,16 +64,10 @@ export default function DetailsSlot() {
 		posing, workflowMode, activeChar,
 		activeCharIndex,
 		selectablePoses, ikMode, ikApplyPoseAsKey, motion, setStudioPick,
-		appContext, removePose, setPhotoPoseError, photoPoseFileRef, photoPoseState,
-		photoPoseError, activeRig, saveCurrentPose,
-		
-		setTlFrame, 
+		appContext, removePose, activeRig, saveCurrentPose,
 		tlFrame,
-		isRigSelection, ikChains, ikFocus, footSnap, poseObjectOpacity, setPoseObjectOpacity, capturePoseImage, collisionCleanupSupported,
-		autoPhysicsRunning, physicsProgress, physicsPreview,
-		physicsShow, physicsOptions, platformFitRunning, platformFitProgress, platformFitLast,
-		platformFitApplied, changePhysicsOptions, runAutoPhysics, showPhysicsPreview, applyPhysicsPreview,
-		cancelPhysicsPreview, ikEditTool, setIkEditTool, showTrails, setShowTrails,
+		isRigSelection, ikChains, ikFocus, footSnap, poseObjectOpacity, setPoseObjectOpacity, capturePoseImage,
+		ikEditTool, setIkEditTool, showTrails, setShowTrails,
 		trailFalloffS, setTrailFalloffS, trailEdit, trailTrackFocus, selectTrailTrack, clearTrailTrackFocus,
 		pendingIkEdit, applyPendingIkEdit, cancelPendingIkEdit,
 		rangePins, rangePinResiduals, rangePinSelection, rangePinPartPick, rangePinPreview,
@@ -87,7 +80,7 @@ export default function DetailsSlot() {
 		matteTolerance, setMatteTolerance, matteBrush, setMatteBrush, matteShrink,
 		setMatteShrink, matteFeather, setMatteFeather, matteBusy,
 		autoColor, recentObjectColors, rememberSceneObjectColor, objectColorDraft, setObjectColorDraft,
-		posePhotoFile, posingIndex, posingChar, charA, allPoses,
+		posingIndex, posingChar, charA, allPoses,
 		studioPick, posingClosing, closeStudio, castDomain, setToast,
 		savePose, beginWorkspaceResize,
 	} = useStudioShell();
@@ -214,10 +207,6 @@ export default function DetailsSlot() {
 			setStudioPick={setStudioPick}
 			setToast={appContext.notify}
 			removePose={removePose}
-			setPhotoPoseError={setPhotoPoseError}
-			photoPoseFileRef={photoPoseFileRef}
-			photoPoseState={photoPoseState}
-			photoPoseError={photoPoseError}
 			activeRig={activeRig}
 			saveCurrentPose={saveCurrentPose}
 		/>
@@ -232,24 +221,8 @@ export default function DetailsSlot() {
 				poseObjectOpacity={poseObjectOpacity}
 				setPoseObjectOpacity={setPoseObjectOpacity}
 				ikMode={ikMode}
-				collisionCleanupSupported={collisionCleanupSupported}
 				motion={motion}
-				autoPhysicsRunning={autoPhysicsRunning}
-				physicsProgress={physicsProgress}
-				physicsPreview={physicsPreview}
-				physicsShow={physicsShow}
-				physicsOptions={physicsOptions}
-				platformFitRunning={platformFitRunning}
-				platformFitProgress={platformFitProgress}
-				platformFitLast={platformFitLast}
-				platformFitApplied={platformFitApplied}
 				tlFrame={tlFrame}
-				changePhysicsOptions={changePhysicsOptions}
-				runAutoPhysics={runAutoPhysics}
-				showPhysicsPreview={showPhysicsPreview}
-				applyPhysicsPreview={applyPhysicsPreview}
-				cancelPhysicsPreview={cancelPhysicsPreview}
-				setTlFrame={setTlFrame}
 				ikEditTool={ikEditTool}
 				setIkEditTool={setIkEditTool}
 				showTrails={showTrails}
@@ -372,20 +345,6 @@ export default function DetailsSlot() {
 					sceneName={scenes.find((entry) => entry.id === activeSceneId)?.name ?? ko("Untitled Scene", "제목 없는 씬")}
 					buildContext={buildStudioAgentContext} onReceipt={highlightAgentTargets} />
 			</div>}
-			{/* The reference-photo picker sits outside the panel so re-mounting
-			    the studio cannot cancel an in-flight read. */}
-			<input
-				ref={photoPoseFileRef}
-				className="multimodel-file-input"
-				type="file"
-				accept={ASSET_IMAGE_TYPES.join(",")}
-				data-pose-photo-input
-				onChange={(event) => {
-					const file = event.target.files?.[0];
-					event.target.value = ""; // the same photo must be re-pickable after an error
-					if (file) posePhotoFile(file);
-				}}
-			/>
 			{/* Pose Studio docks under the inspector instead of floating over
 			    the shot: the viewport keeps the posed character unobstructed. */}
 			{posing && (
@@ -422,12 +381,6 @@ export default function DetailsSlot() {
 						setToast(ko("Back to the default pose", "기본 포즈로 돌아왔어요"));
 					}}
 					onSave={savePose}
-					onPhoto={() => {
-						setPhotoPoseError("");
-						photoPoseFileRef.current?.click();
-					}}
-					photoState={photoPoseState}
-					photoError={photoPoseError}
 					onDelete={removePose}
 					onClose={closeStudio}
 				/>

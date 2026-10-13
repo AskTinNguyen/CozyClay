@@ -13,13 +13,11 @@ import {
 	saveCustomPoses,
 } from "../poses.js";
 import { createCharacterEntry, createCharacterLayer, isProxyFigure, PROXY_FIGURE_MODEL } from "../scenes.js";
-import { kindRefusal } from "../character-kind.js";
 import {
 	DEFAULT_SUBJECT,
 	DEFAULT_SUBJECT2,
 	nextCharacterId,
 	MAX_WAYPOINTS,
-	MULTIMODEL_REASONS,
 	TIMELINE_FPS,
 } from "../app-stage.jsx";
 import { ko, isKo } from "../locale.js";
@@ -29,9 +27,6 @@ import { StudioProtocolError } from "../studio-agent-protocol.js";
 import { studioActionRefusal } from "../studio-actions.js";
 import { createStableItemId, removeStableItem } from "../stable-items.js";
 import { track, trackFeature } from "../analytics.js";
-import { requestBridgeExtract } from "../multimodel-ingest.js";
-import { loadMotionFromUrl } from "../ardy/npz.js";
-import { snapshotPlaybackBones, applyMotionFrame, restorePlaybackBones } from "../ardy/playback.js";
 
 import { shotAtFrame } from "../cuts.js";
 
@@ -397,10 +392,6 @@ export function useCast(appContext) {
 
 	const [selectedPromptId, setSelectedPromptId] = useState(null);
 
-	const [photoPoseState, setPhotoPoseState] = useState("idle");
-
-	const [photoPoseError, setPhotoPoseError] = useState("");
-
 	// The library is the user's own material: poses read from photographs and
 	// poses saved off the rig, accumulating across sessions and projects. No
 	// presets ship in it — DEFAULT_POSE is the character's spawn state, not a
@@ -709,100 +700,6 @@ export function useCast(appContext) {
 		appContext.notify(ko("Pose saved", "포즈 저장됨"));
 	}
 
-	/**
-	 * Read a body pose out of one photograph.
-	 *
-	 * A still is the degenerate footage case, so it walks the same proven path:
-	 * landmarks -> one-frame take -> applyMotionFrame -> capturePose. Posing the
-	 * rig and reading it back is what makes the result an ordinary editable pose
-	 * rather than a motion layer — the IK handles keep working on it, and the
-	 * playback bones are restored so nothing about the take survives the read.
-	 *
-	 * Depth in a single frame is inferred, not measured, so this is a starting
-	 * pose to refine, which is why it lands in the studio instead of on the
-	 * character directly.
-	 */
-	async function posePhotoFile(file) {
-		if (!file || photoPoseState === "running") return;
-		// Reachable from the Inspector as well as the studio panel, and posedRig()
-		// only answers while the studio is open — fall back to the character the
-		// hierarchy has selected, which is the one the pose will be applied to.
-		const rig = posedRig() ?? activeRig;
-		let objectUrl = "";
-		setPhotoPoseState("running");
-		setPhotoPoseError("");
-		try {
-			// A capsule figure has no bones for a photo to pose.
-			if (isProxyFigure(posingChar ?? activeChar)) throw new StudioProtocolError("TARGET_NOT_READY", kindRefusal("photoPose", isKo));
-			if (!rig) throw new Error("rig-not-loaded");
-			objectUrl = URL.createObjectURL(file);
-			let bones = null;
-			let rootY = 0;
-			let gpuError = null;
-			// GVHMR on the box measures the body over the whole clip,
-			// which is more reliable than a single-frame depth estimate.
-			// The bridge wraps the still into a second of video and runs the exact
-			// GVHMR footage pipeline. A missing bridge or another backend is an error.
-			try {
-				const health = await fetch("/ardy/health", { signal: AbortSignal.timeout(2000) }).catch(() => null);
-				if (!health?.ok) throw new Error("extract-bridge-required");
-				const healthPayload = await health.json().catch(() => null);
-				if (healthPayload?.extractionBackend !== "gvhmr") throw new Error("extract-backend-unsupported");
-				const done = await requestBridgeExtract(file, {});
-				const take = await loadMotionFromUrl(done.motionUrl);
-				// The middle frame: the wrap's smoothing passes have settled
-				// there, while frame 0 can still carry filter warm-up.
-				const frame = Math.floor((take.frames - 1) / 2);
-				const snapshot = snapshotPlaybackBones(rig);
-				try {
-					applyMotionFrame(rig, { ...take, anchorFrame: frame }, frame);
-					bones = capturePose(rig);
-					// GVHMR measured the hips' true height — a crouch is a crouch
-					// because the hips came DOWN, not just because the knees bent.
-					rootY = captureHipsOffset(rig);
-				} finally {
-					restorePlaybackBones(rig, snapshot);
-				}
-			} catch (error) {
-				gpuError = error;
-				console.warn("photo pose: GVHMR extract failed", error);
-			}
-			if (!bones) throw new Error(gpuError?.message || "extract-run-failed");
-			const pose = {
-				id: `photo_${Date.now()}`,
-				label: isKo ? `사진 포즈 ${customPoses.length + 1}` : `Photo Pose ${customPoses.length + 1}`,
-				prompt: "in the exact body pose shown in the reference photograph",
-				bones,
-				rootY,
-				custom: true,
-			};
-			setStudioPick(pose.id);
-			// The studio poses whichever character it was opened on; the Inspector
-			// poses the selected one. Write the pose to whichever that is.
-			const poseTargetIndex = posingIndex >= 0 ? posingIndex : activeCharIndex;
-			// A running take drives the same bones a pose writes, so the read would
-			// land invisibly underneath it. Applying from a photo follows the same
-			// rule the Apply button already states: the motion goes first.
-			const hadMotion = Boolean(appContext.shared.motion);
-			domain.run('cast.savePose', { pose, characterId: characters[poseTargetIndex].id, clearMotion: hadMotion });
-			setPhotoPoseState("done");
-			// The pose is already saved and written by this point. GVHMR either
-			// returns a measured pose or the named error above reaches the user.
-			appContext.notify(hadMotion
-					? ko("Cleared the motion and posed from the photo — refine it with the handles", "모션을 지우고 사진으로 자세를 잡았어요 — 핸들로 다듬어 보세요")
-					: ko("Pose read from the photo — refine it with the handles", "사진에서 자세를 읽었어요 — 핸들로 다듬어 보세요"));
-		} catch (error) {
-			const code = error?.message ?? String(error);
-			// fitLandmarksToPose refuses a sample whose torso is not visible; that is
-			// a photograph problem, not an engine problem, so it is named as one.
-			const named = code.startsWith("fitLandmarksToPose:") ? "pose-partly-occluded" : code;
-			setPhotoPoseState("error");
-			setPhotoPoseError(MULTIMODEL_REASONS[named]?.[isKo ? 1 : 0] ?? named);
-		} finally {
-			if (objectUrl) URL.revokeObjectURL(objectUrl);
-		}
-	}
-
 	function removePose(id) {
 		domain.run('cast.removePose', { id });
 		if (studioPick === id) setStudioPick(DEFAULT_POSE.id);
@@ -1010,11 +907,11 @@ export function useCast(appContext) {
 		setHasCharSheet, promptBlocksReveal, setPromptBlocksReveal, revealPromptBlocks, waypointMode,
 		setWaypointMode, waypoints, setWaypoints, activeWaypointId, setActiveWaypointId, pendingWaypointFrame,
 		setPendingWaypointFrame, promptClips, setPromptClips, editPromptClips, selectedPromptId,
-		setSelectedPromptId, photoPoseState, photoPoseError, setPhotoPoseError, allPoses, selectablePoses,
+		setSelectedPromptId, allPoses, selectablePoses,
 		posingIndex, posingChar, posedRig, setPosed, rootStart, queueRootWaypointFrame, castMemberOf,
 		addCharacterWaypoint, moveCharacterWaypoint, removeCharacterWaypoint, clearCharacterWaypoints,
 		addFloorWaypoint, moveWaypoint, removeWaypoint, toggleWaypointMode, openStudio, closeStudio,
-		saveCurrentPose, savePose, posePhotoFile, removePose, addPromptClip, changePromptClip,
+		saveCurrentPose, savePose, removePose, addPromptClip, changePromptClip,
 		PROMPT_BLOCK_MAX_FRAMES, resizePromptClip, movePromptClip, removePromptClip,
 	};
 }

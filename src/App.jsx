@@ -204,18 +204,6 @@ import {
 	resolveIkRig,
 	shareContactMeasurements,
 } from "./ardy/ik.js";
-import {
-	buildCollisionCapsules,
-	detectPenetrations,
-	supportsCollisionCleanup,
-} from "./ardy/fix-collisions.js";
-import {
-	blockerSummary,
-} from "./ardy/collision-blockers.js";
-import { computeCenterOfMass, markerPositions } from "./ardy/auto-physics.js";
-import {
-	physicsKeyStamp,
-} from "./ardy/physics-review.js";
 
 import {
 	Toast,
@@ -325,10 +313,6 @@ function ShotGuideOverlay({ mode, aspect, className = "" }) {
 	);
 }
 
-// Below this the mean landmark visibility is too low to claim the fit measured
-// the photograph rather than guessed at it. Same number the fit diagnostics are
-// scaled on (0..1 visibility), so it reads as "less than half seen".
-const PHOTO_POSE_LOW_CONFIDENCE = 0.5;
 const CHARACTER_POSITION_BOUNDS = elementByPath("character.position").gizmo;
 const CHARACTER_SCALE_BOUNDS = elementByPath("character.scale");
 
@@ -360,42 +344,12 @@ function storyboardCaption(prompt) {
 		.join(" · "));
 }
 
-// cskel27 joint names are rig vocabulary — "RightForeArm" means nothing to
-// someone holding a photograph. Every joint collapses into one of six groups a
-// viewer can check against their own picture, ordered so the sentence always
-// reads limbs before body.
-const RELEASED_BONE_LABELS = [
-	["LeftArm", "left arm", "왼팔"],
-	["RightArm", "right arm", "오른팔"],
-	["LeftLeg", "left leg", "왼다리"],
-	["RightLeg", "right leg", "오른다리"],
-	["Torso", "torso", "몸통"],
-	["Head", "head", "머리"],
-];
-
-function releasedBoneGroup(name) {
-	const side = name.startsWith("Left") ? "Left" : name.startsWith("Right") ? "Right" : "";
-	const part = side ? name.slice(side.length) : name;
-	if (part === "UpLeg" || part === "Leg" || part === "Foot" || part === "ToeBase") return side + "Leg";
-	if (part === "Shoulder" || part === "Arm" || part === "ForeArm" || part === "Hand" || part === "HandEnd") return side + "Arm";
-	if (part === "Head" || part === "Neck") return "Head";
-	// Hips and the Spine chain are the only names left, and they are the torso.
-	return "Torso";
-}
-
-// 이/가 is fixed by the final syllable of the word it follows — 왼팔이 but
-// 왼다리가 — so it cannot be baked into the sentence template.
-function koSubjectParticle(word) {
-	const syllable = word.charCodeAt(word.length - 1) - 0xac00;
-	return syllable >= 0 && syllable < 11172 && syllable % 28 !== 0 ? "이" : "가";
-}
-
 /**
  * Pose ONE cast member's rig at an absolute timeline frame: its own clip first,
  * then its own IK correction layer on top. This is the single description of
  * "where is this character at frame N" — the viewport effect, the offscreen
- * recorder and the whole-clip collision pass all go through it, so a body used
- * as a collision blocker stands exactly where the render would draw it.
+ * recorder and the range-pin bake all go through it, so a body stands exactly
+ * where the render would draw it.
  *
  * Pure in the sense that matters here: it takes the rig, the clip and the layer
  * state and writes bones. No React, no refs, no knowledge of who is active — a
@@ -1116,11 +1070,10 @@ export default function App() {
 		snapshotCast, changeInspectorCharacter, hasCharSheet, setHasCharSheet, promptBlocksReveal,
 		setPromptBlocksReveal, revealPromptBlocks, waypointMode, setWaypointMode, waypoints, setWaypoints,
 		activeWaypointId, setActiveWaypointId, pendingWaypointFrame, setPendingWaypointFrame, promptClips,
-		setPromptClips, editPromptClips, selectedPromptId, setSelectedPromptId, photoPoseState, photoPoseError,
-		setPhotoPoseError, allPoses, selectablePoses, posingIndex, posingChar, posedRig, setPosed, rootStart, commitPosedPose,
+		setPromptClips, editPromptClips, selectedPromptId, setSelectedPromptId, allPoses, selectablePoses, posingIndex, posingChar, posedRig, setPosed, rootStart, commitPosedPose,
 		queueRootWaypointFrame, castMemberOf, addCharacterWaypoint, moveCharacterWaypoint,
 		removeCharacterWaypoint, clearCharacterWaypoints, addFloorWaypoint, moveWaypoint, removeWaypoint,
-		toggleWaypointMode, openStudio, closeStudio, saveCurrentPose, savePose, posePhotoFile, removePose,
+		toggleWaypointMode, openStudio, closeStudio, saveCurrentPose, savePose, removePose,
 		addPromptClip, changePromptClip, PROMPT_BLOCK_MAX_FRAMES, resizePromptClip, movePromptClip,
 		removePromptClip,
 	} = castDomain;
@@ -1193,14 +1146,12 @@ export default function App() {
 		get activeCharIndex() { return activeCharIndex; },
 		get activeRig() { return activeRig; },
 		get addPromptClip() { return addPromptClip; },
-		get autoPhysicsRunRef() { return autoPhysicsRunRef; },
 		get bufferRef() { return bufferRef; },
 		get cameraPreviewEndRef() { return cameraPreviewEndRef; },
 		get castDomain() { return castDomain; },
 		get castMemberOf() { return castMemberOf; },
 		get charA() { return charA; },
 		get characters() { return characters; },
-		get collisionCleanupSupported() { return collisionCleanupSupported; },
 		get fovDeg() { return fovDeg; },
 		get frameCountRef() { return frameCountRef; },
 		get ikBodyDragRef() { return ikBodyDragRef; },
@@ -1211,8 +1162,6 @@ export default function App() {
 		get look() { return look; },
 		get markSemanticEdit() { return markSemanticEdit; },
 		get motionFullRef() { return motionFullRef; },
-		get physicsJobRef() { return physicsJobRef; },
-		get physicsSourceCacheRef() { return physicsSourceCacheRef; },
 		get poseMemberAtFrame() { return poseMemberAtFrame; },
 		get posedRig() { return posedRig; },
 		get poserCamRef() { return poserCamRef; },
@@ -1266,8 +1215,7 @@ export default function App() {
 	}));
 	const {
 		ikMode, ikChains, setIkChains, ikFkJoints, setIkFkJoints, ikFocus, setIkFocus, footSnap, setFootSnap,
-		bodyContact, setBodyContact, IK_CORRECTION_BLEND_FRAMES, autoPhysicsRunning, setAutoPhysicsRunning,
-		physicsPreview, setPhysicsPreview, physicsShow, physicsProgress, physicsOptions, setPhysicsOptions,
+		bodyContact, setBodyContact, IK_CORRECTION_BLEND_FRAMES,
 		ikTick, setIkTick, committedIkEdits, setCommittedIkEdits, trailFalloffS, setTrailFalloffS, showTrails,
 		setShowTrails, ikEditTool, setIkEditTool, trailEdit, trailTrackFocus, selectTrailTrack, clearTrailTrackFocus, trailFalloffFrames, focusIkHandle, snapshotIkKeys,
 		pendingIkEdit, applyPendingIkEdit, cancelPendingIkEdit,
@@ -1277,9 +1225,7 @@ export default function App() {
 		advanceFrame, stepFrame,
 		leaveIkMode, beginPlaybackOn, loadMotion, clearMotion, applyMotionTrim, resetMotionTrim, cutMotionAtPlayhead,
 		changeMotionSegmentSpeed, removeMotionSegmentById, poseOtherCastMembers, toggleIkMode, ikSolve,
-		ikDragEnd, ikAddKeyframe, externalBlockers, runFixCollisions, runFixCollisionsRange,
-		changePhysicsOptions, showPhysicsPreview, cancelPhysicsPreview, applyPhysicsPreview, runAutoPhysics,
-		platformFitRunning, platformFitLast, platformFitProgress, platformFitApplied,
+		ikDragEnd, ikAddKeyframe,
 		ikDeleteKeyframe, ikApplyPoseAsKey,
 		onTrailDragStart, onTrailDragPreview, onTrailDragEnd, restoreMotionRefs,
 	} = motionDomain;
@@ -1567,10 +1513,6 @@ export default function App() {
 	const ikBodyDragRef = useRef(false); // true while a body drag is active
 
 	const ikStateRef = useRef(createIkState());
-	const autoPhysicsRunRef = useRef(null);
-
-	const physicsJobRef = useRef(0);
-	const physicsSourceCacheRef = useRef({ value: null });
 
 	// Sorted full-body key frames for the timeline markers. Derived from the
 	// ref state; ikTick re-derives after every key add/remove.
@@ -2837,7 +2779,6 @@ export default function App() {
 
 	 // idle | running | done | error
 
-	const photoPoseFileRef = useRef(null);
 
 	// Cast render props, memoized with Character itself (React.memo): during
 	// playback the playhead ticks 24 times a second, and a character whose
@@ -3966,32 +3907,6 @@ export default function App() {
 		if (!chains) leaveIkMode();
 	}, [activeRig, activeCapabilities.ik]);
 
-	// Whether the collision capsules can be built for this rig at all. Bone
-	// lookups only — no mesh measurement — so it is cheap enough to hang off
-	// the rig identity and read straight in the render. A rig that resolves
-	// for IK can still miss the toes/spine the capsule table needs, so this is
-	// a SEPARATE question from `ikChains`: the two collision buttons disable
-	// on it rather than offering a click whose only possible answer is "not
-	// supported".
-	const collisionCleanupSupported = useMemo(() => activeCapabilities.physics && supportsCollisionCleanup(activeRig), [activeRig, activeCapabilities.physics]);
-
-	//
-
-	useEffect(() => {
-		physicsJobRef.current += 1;
-		physicsSourceCacheRef.current.value = null;
-		setPhysicsPreview(null);
-		setPhysicsOptions({ overrides: [], protectedFrames: [], strength: 1 });
-		setAutoPhysicsRunning(false);
-		autoPhysicsRunRef.current = null;
-		return () => { physicsJobRef.current += 1; };
-	}, [activeRig, motion, activeChar.x, activeChar.y, activeChar.z, activeChar.rot, activeChar.scale]);
-	useEffect(() => {
-		if (physicsPreview && physicsPreview.sourceStamp !== physicsKeyStamp(ikStateRef.current.keys)) {
-			setPhysicsPreview(null);
-		}
-	}, [ikTick, physicsPreview]);
-
 	// Keyed-pose playback: the IK layer's keyed bone rotations apply at the
 	// current frame whether or not IK edit mode is on — IK-authored keys are
 	// the source of truth (the user designs first/end keys and ARDY in-
@@ -4010,12 +3925,11 @@ export default function App() {
 		// Preview changes may re-run this effect without a playhead change.
 		// Always re-establish the motion base before adding a correction.
 		if (motion) poseMemberAtFrame(activeRig, motion, null, tlFrame);
-		const layer = pendingIkEdit?.characterId === activeChar.id ? pendingIkEdit.candidate
-			: physicsPreview && physicsShow ? physicsPreview.candidate : ikStateRef.current;
+		const layer = pendingIkEdit?.characterId === activeChar.id ? pendingIkEdit.candidate : ikStateRef.current;
 		if (ikMode || layer.keys.size > 0) {
 			ikEvaluate(ikChains, layer, tlFrame, ikFkJoints, motion ? IK_CORRECTION_BLEND_FRAMES : 0);
 		}
-	}, [ikMode, ikChains, activeRig, motion, posing, tlFrame, ikTick, ikFkJoints, physicsPreview, physicsShow, pendingIkEdit, activeChar.id]);
+	}, [ikMode, ikChains, activeRig, motion, posing, tlFrame, ikTick, ikFkJoints, pendingIkEdit, activeChar.id]);
 
 	// Re-seat the handles on the keyed pose when the FRAME changes with IK
 	// on — scrubbing to frame 39 shows that frame's interpolated pose AND
@@ -4169,52 +4083,11 @@ export default function App() {
 				ikDragEnd();
 				return true;
 			},
-			// Fix-collisions QA surface: live penetration readout for headless
-			// checks; the fix itself runs through the buttons / runFixCollisions.
-			// null (not []) on an unsupported rig, so a check can tell "the tool
-			// cannot describe this skeleton" from "this pose is clean".
-			// EXTERNAL blockers ride this readout too, so a headless check can see
-			// `leftHand×obj:chair` / `leftHand×char:subject-2:torso` and not just
-			// self-collisions. A blocker hit has no `def` on its side of the pair
-			// — it is not a capsule of THIS rig — so the label falls back to the
-			// blocker's own namespaced id.
-			fcDetect: () => {
-				const capsules = activeRig ? buildCollisionCapsules(activeRig) : null;
-				if (!capsules) return null;
-				const label = (side) => side?.def?.id ?? side?.id ?? "?";
-				return detectPenetrations(capsules, { blockers: externalBlockers(tlFrame) })
-					.map((p) => ({ pair: `${label(p.a)}×${label(p.b)}`, depth: p.depth }));
-			},
-			// What those `obj:` / `char:` names stand for, as plain numbers: the
-			// boxes and capsules the fixer is being asked to keep the body out of.
-			fcBlockers: () => blockerSummary(externalBlockers(tlFrame)),
-			// AutoPhysics QA surface: the centre of mass of the CURRENT pose, so
-			// a headless check can sample the arc before/after the button press.
-			apCom: () => {
-				const com = activeRig ? computeCenterOfMass(activeRig) : null;
-				return com ? { x: com.x, y: com.y, z: com.z } : null;
-			},
-			apFeet: () => {
-				const points = activeRig ? markerPositions(activeRig) : null;
-				return points ? Object.fromEntries(Object.entries(points).map(([name, point]) => [name, { x: point.x, y: point.y, z: point.z }])) : null;
-			},
-			apRun: runAutoPhysics,
-			physics: { preview: physicsPreview, show: physicsShow, running: autoPhysicsRunning, options: physicsOptions },
-			platformFit: {
-				running: platformFitRunning, applied: platformFitApplied, last: platformFitLast,
-				run: () => Promise.resolve(motionDomain.run('motion.platformFit.run', { characterId: activeChar?.id })).then(receipt => receipt.output),
-				remove: () => Promise.resolve(motionDomain.run('motion.platformFit.remove', { characterId: activeChar?.id })).then(receipt => receipt.output),
-			},
-			apOptions: changePhysicsOptions,
 			preview,
 			pathDraw,
 		};
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-		// sceneObjects/rigs/characters ride the deps because fcDetect/fcBlockers
-		// close over them: a stale closure would report the set as it was two
-		// edits ago — and, after an undo that removes a subject, would keep
-		// reporting the ghost's capsules.
-	}, [activeRig, motion, tlFrame, tlFrameCount, ikMode, ikChains, ikFocus, ikTick, charA, rangePins, rangePinResiduals, committedIkEdits, waypoints, lookThroughShot, selectedSceneObject, sceneObjects, rigs, characters, pathPointIndex, preview, posing, playMode, pathDraw, trailEdit, trailTrackFocus, pendingIkEdit, trailFalloffFrames, trailFalloffS, ikEditTool, showTrails, physicsPreview, physicsShow, physicsOptions, autoPhysicsRunning, platformFitRunning, platformFitLast, platformFitApplied]);
+	}, [activeRig, motion, tlFrame, tlFrameCount, ikMode, ikChains, ikFocus, ikTick, charA, rangePins, rangePinResiduals, committedIkEdits, waypoints, lookThroughShot, selectedSceneObject, sceneObjects, rigs, characters, pathPointIndex, preview, posing, playMode, pathDraw, trailEdit, trailTrackFocus, pendingIkEdit, trailFalloffFrames, trailFalloffS, ikEditTool, showTrails]);
 	// QA hook (plan §6.5): exposes history depth and the present === objects
 	// invariant so the browser suite can assert undo entry counts directly.
 	// Reads live store state at call time; re-registered after every render.
@@ -4688,7 +4561,7 @@ export default function App() {
 		} : c);
 		const targets = new Map(list.map(c => [c.id, { rig: live.rigs[c.id], motion: c.sessionMotion ?? null,
 			ikState: c.id === loadedLayerCharRef.current ? ikStateRef.current : ikStatesRef.current.get(c.id),
-			calibration: c.sessionMotion?.sceneCalibration, protectedFrames: c.id === loadedLayerCharRef.current ? physicsOptions.protectedFrames : [],
+			calibration: c.sessionMotion?.sceneCalibration, protectedFrames: [],
 			preserveAuthoredMotion: Boolean(c.layer?.waypoints?.length) }]));
 		return { host: { workspaceId: liveWorkspaceIdRef.current, documentEpoch: studioDocumentEpochRef.current,
 				sceneId: activeSceneIdRef.current, sceneEpoch: studioSceneEpochRef.current }, workspaceHandle: liveWorkspaceHandleRef.current,
@@ -4697,7 +4570,7 @@ export default function App() {
 			selection: live.studioSelection, activeCharacterId: live.activeCharacterId, selectedShotId: live.studioShotId,
 			view: live.studioView, camera: live.studioCamera ?? readStudioCamera(), filmback: live.filmback, manual: manualCameraOverrideRef.current,
 			bridgeReady: false, busy: storeRef.current.present() !== storeRef.current.objects || Boolean(studioGestureRef.current ||
-				ikBodyDragRef.current || live.studioPhysicsRunning || recRef.current) };
+				ikBodyDragRef.current || recRef.current) };
 	}
 	function sampleStudioStateAt(frame, current = readStudioState()) {
 		const shot = shotAtFrame(current.shots ?? current.shotDocument?.shots ?? [], frame);
@@ -4847,7 +4720,6 @@ export default function App() {
 		studioSelection: selectedSceneObjectId ? { kind: "object", id: selectedSceneObjectId, hierarchyId: selectedHierarchyId } :
 			selectedStudioChar ? { kind: "character", id: selectedStudioChar, hierarchyId: selectedHierarchyId } : selectedHierarchyId === "camera" ? { kind: "camera", id: "camera" } : { kind: "scene", id: activeSceneId },
 		studioShotId: activeShot?.id ?? null,
-		studioPhysicsRunning: autoPhysicsRunning,
 		// The agent's mode vocabulary is four (studio-agent-protocol.js): the
 		// sculpt turntable is the Stage's scene seen in isolation.
 		studioView: { mode: sculptMode ? "scene" : workflowMode, frame: tlFrame, playing: tlPlaying, lookThrough: lookThroughShot, grid: gridView, autoColor },
@@ -5034,16 +4906,12 @@ export default function App() {
 		cameraKeys, activeShot, changeShotTargetModel, updateCharacterAt, openStudio,
 		posing, removeCharacter, setShowB, activeChar, changeInspectorCharacter,
 		selectablePoses, ikApplyPoseAsKey,
-		setStudioPick, appContext, removePose, setPhotoPoseError, photoPoseFileRef,
-		photoPoseState, photoPoseError, activeRig, saveCurrentPose,
+		setStudioPick, appContext, removePose, activeRig, saveCurrentPose,
 		promptBlocksReveal, promptClips, selectedPromptId,
 		setTlFrame, tlFrameCount, changePromptClip,
 		addPromptClip,
 		tlFrame, isRigSelection, ikChains, ikFocus, footSnap, poseObjectOpacity, setPoseObjectOpacity, capturePoseImage,
-		collisionCleanupSupported, runFixCollisions, runFixCollisionsRange, autoPhysicsRunning, physicsProgress,
-		physicsPreview, physicsShow, physicsOptions, platformFitRunning, platformFitProgress,
-		platformFitLast, platformFitApplied, changePhysicsOptions, runAutoPhysics, showPhysicsPreview,
-		applyPhysicsPreview, cancelPhysicsPreview, ikEditTool, setIkEditTool, showTrails,
+		ikEditTool, setIkEditTool, showTrails,
 		setShowTrails, trailFalloffS, setTrailFalloffS, trailEdit, trailTrackFocus, selectTrailTrack, clearTrailTrackFocus,
 		pendingIkEdit, applyPendingIkEdit, cancelPendingIkEdit,
 		rangePins, rangePinResiduals, rangePinSelection, rangePinPartPick,
@@ -5054,7 +4922,7 @@ export default function App() {
 		matteCanvasRef, matteStats, matteMode, setMatteMode, matteEditorRef,
 		matteTolerance, setMatteTolerance, matteBrush, setMatteBrush, matteShrink,
 		setMatteShrink, matteFeather, setMatteFeather, matteBusy, applyMatte,
-		recentObjectColors, rememberSceneObjectColor, objectColorDraft, setObjectColorDraft, posePhotoFile,
+		recentObjectColors, rememberSceneObjectColor, objectColorDraft, setObjectColorDraft,
 		posingIndex, posingChar, charA, allPoses, studioPick,
 		posingClosing, closeStudio, castDomain, setToast, savePose,
 		bottomTab, setBottomTab, beginAssetDrag, shelfImageIds, shelfMeshIds,
