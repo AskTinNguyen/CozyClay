@@ -29,8 +29,9 @@ const USAGE = `cclay live - drive a running CozyClay studio from a terminal
   cclay live frame-shot --subject <id> --exact px,py,pz,lx,ly,lz,focal
   cclay live operate [--select object:<id>] [--frame N] [--mode scene|camera|motion]
                                          [--play | --pause]
-  cclay live verify --receipt <id> --checks placement,framing
-                                         [--visual frame --out check.png]
+  cclay live verify (--receipt <id> | --targets a,b) --checks placement,framing
+                                         [--range whole_clip|start:end] [--strict]
+                                         [--visual frame|contact_sheet --out check.png]
   cclay live undo --receipt <id>
   cclay live commands [--ids a,b]        the commands the editor registers; ids add schemas
   cclay live run <id> [--args '<json>']  any command the editor registers, admitted like
@@ -49,7 +50,7 @@ Exit codes: 0 ok - 1 editor or receipt error - 2 usage - 3 no hub -
 
 class UsageError extends Error {}
 
-const BOOLEAN_FLAGS = new Set(["--pretty", "--wait", "--framing", "--play", "--pause"]);
+const BOOLEAN_FLAGS = new Set(["--pretty", "--wait", "--framing", "--play", "--pause", "--strict"]);
 const GLOBAL_FLAGS = ["--workspace", "--timeout", "--pretty", "--live-port"];
 const VERBS = new Map([
 	["status", { flags: ["--wait"] }],
@@ -61,7 +62,7 @@ const VERBS = new Map([
 	["patch", { flags: ["--target", "--set"], command: "patch_elements" }],
 	["frame-shot", { flags: ["--subject", "--size", "--view", "--level", "--side", "--focal", "--exact"] }],
 	["operate", { flags: ["--select", "--frame", "--mode", "--play", "--pause"] }],
-	["verify", { flags: ["--receipt", "--checks", "--visual", "--out"] }],
+	["verify", { flags: ["--receipt", "--targets", "--checks", "--range", "--strict", "--visual", "--out"] }],
 	["undo", { flags: ["--receipt"] }],
 	["commands", { flags: ["--ids"] }],
 	["run", { flags: ["--args"], argument: "command id" }],
@@ -184,6 +185,15 @@ const integerFlag = (flags, key) => {
 	const value = Number(flags.get(key));
 	if (!Number.isSafeInteger(value)) throw new UsageError(`${key} must be an integer`);
 	return value;
+};
+const frameRangeFlag = (flags, key) => {
+	const raw = String(flags.get(key));
+	if (raw === "whole_clip") return raw;
+	const match = /^(\d+):(\d+)$/.exec(raw);
+	if (!match) throw new UsageError(`${key} must be whole_clip or start:end`);
+	const startFrame = Number(match[1]), endFrameExclusive = Number(match[2]);
+	if (!Number.isSafeInteger(startFrame) || !Number.isSafeInteger(endFrameExclusive) || endFrameExclusive <= startFrame) throw new UsageError(`${key} must have a nonempty start:end range`);
+	return { startFrame, endFrameExclusive };
 };
 const jsonFlag = (flags, key) => {
 	let parsed;
@@ -411,11 +421,17 @@ async function runVerb({ client, verb, spec, name, flags }) {
 	if (verb === "operate") return admitted("operate_studio", operateArguments(flags));
 
 	if (verb === "verify") {
-		const args = { receiptId: required(flags, "--receipt", verb), checks: commaList(required(flags, "--checks", verb)) };
+		const hasReceipt = flags.has("--receipt"), hasTargets = flags.has("--targets");
+		if (hasReceipt === hasTargets) throw new UsageError("verify needs exactly one of --receipt or --targets");
+		const args = { checks: commaList(required(flags, "--checks", verb)), ...(hasReceipt ? { receiptId: required(flags, "--receipt", verb) } : { targets: commaList(required(flags, "--targets", verb)) }) };
+		if (flags.has("--range")) args.range = frameRangeFlag(flags, "--range");
 		const visual = flags.has("--visual") ? String(flags.get("--visual")) : "none";
 		if (visual !== "none") args.visual = visual;
 		const out = visual === "none" ? null : resolvePath(required(flags, "--out", verb));
 		const value = await admitted("verify_result", args);
+		if (flags.get("--strict") === true && value?.checks?.framing?.issueFrames?.length) {
+			throw new LiveCliError("VERIFICATION_FAILED", `Sampled framing found ${value.checks.framing.issueFrames.length} problematic frame(s).`, { details: value.checks.framing.issueFrames });
+		}
 		if (out === null) return value;
 		const written = [];
 		for (const [index, reference] of (value?.visualRefs ?? []).entries()) {

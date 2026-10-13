@@ -154,6 +154,29 @@ export async function openStudioClean(cdp, studioUrl) {
 	await loaded;
 }
 
+/** Load a portable project into the same Studio that a user opens. The project
+ * document is seeded before the app bundle runs, so this path exercises the
+ * real scene store and live-control connection instead of a test renderer. */
+export async function openStudioProject(cdp, studioUrl, project) {
+	const origin = new URL(studioUrl).origin;
+	if (!project?.scenesDocument || typeof project.scenesDocument !== "object") throw new Error("headless Studio needs a parsed project with scenesDocument");
+	await cdp.send("Page.enable");
+	await cdp.send("Storage.clearDataForOrigin", { origin, storageTypes: "all" });
+	const scenes = JSON.stringify(project.scenesDocument), name = String(project.name || "Headless Project");
+	const values = [
+		`localStorage.setItem('cozyclay.scenes.v5', ${JSON.stringify(scenes)})`,
+		`localStorage.setItem('cozyclay.project-session.v1', ${JSON.stringify(JSON.stringify({ name, previsMode: project.previsMode || "animation", updatedAt: Date.now() }))})`,
+		project.workflow ? `localStorage.setItem('cozyclay.workflow.v1', ${JSON.stringify(JSON.stringify(project.workflow))})` : null,
+		project.workspaceLayout ? `localStorage.setItem('cozyclay.workspace-layout.v1', ${JSON.stringify(JSON.stringify(project.workspaceLayout))})` : null,
+	].filter(Boolean);
+	const source = `${values.join("; ")};`;
+	await cdp.send("Page.addScriptToEvaluateOnNewDocument", { source });
+	const loaded = cdp.once("Page.loadEventFired");
+	await cdp.send("Page.navigate", { url: studioUrl });
+	await loaded;
+	await waitFor("Studio canvas", async () => cdp.evaluate("Boolean(document.querySelector('canvas'))"), { timeoutMs: 60000 });
+}
+
 export async function terminateAll(children) {
 	await Promise.allSettled(children.splice(0).reverse().map((child) => terminateOwned(child)));
 }

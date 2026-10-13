@@ -6856,6 +6856,25 @@ export default function App() {
 			bridgeReady: Boolean(bridge?.ok), busy: storeRef.current.present() !== storeRef.current.objects || Boolean(studioGestureRef.current ||
 				ikBodyDragRef.current || lineDragRef.current || lineDrawRef.current || linePinDragRef.current || live.studioPhysicsRunning || recRef.current) };
 	}
+	function sampleStudioStateAt(frame, current = readStudioState()) {
+		const shot = shotAtFrame(current.shots ?? current.shotDocument?.shots ?? [], frame);
+		const sampledPlayback = sampleAt(playbackScene, shot, frame);
+		const sampledSubject = sampledPlayback.subject;
+		const primaryId = current.activeCharacterId ?? current.characters[0]?.id;
+		const characters = sampledSubject && primaryId
+			? current.characters.map(character => character.id === primaryId ? { ...character, x: sampledSubject.x, z: sampledSubject.z } : character)
+			: current.characters;
+		const sampled = sampledPlayback.camera;
+		if (!sampled) return { ...current, frame, characters, view: { ...current.view, frame } };
+		const position = { x: sampled.pos.x, y: sampled.pos.y, z: sampled.pos.z };
+		const direction = forwardFrom(sampled.yaw, sampled.pitch);
+		return { ...current, frame, characters, view: { ...current.view, frame }, camera: {
+			position,
+			lookAt: { x: position.x + direction.x, y: position.y + direction.y, z: position.z + direction.z },
+			focalMm: fovToFocalMm(sampled.fovDeg * Math.PI / 180, current.filmback.sensorId, current.filmback.aspectRatio),
+			sensorId: current.filmback.sensorId,
+		} };
+	}
 
 	/** The authored stage envelope (key light, environment, filmback) published
 	 * as one body: the live read model first, so the next synchronous read sees
@@ -6993,6 +7012,7 @@ export default function App() {
 	appContext.updatePorts({
 		read: readStudioState, revision: sceneRevisionRef, bounds: studioBounds, commit: commitStudioDraft,
 		operate: operateStudio, undo: () => stepStudioHistory(false), redo: () => stepStudioHistory(true),
+		sampleStateAt: sampleStudioStateAt,
 		history: redo => appContext.historyEntry(redo), finishHistoryGesture: finishStudioHistoryGesture,
 		stepHistory: stepStudioHistory, capture: () => liveQueries.capture_framing_png({}), capturePlan: () => liveQueries.capture_plan_png({}),
 		// One shot frame as raw read-back pixels (rows bottom-up), from the export
