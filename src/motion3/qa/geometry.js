@@ -52,3 +52,15 @@ export function solePoints(sk, s, side) {
 	const heelLocal = apply(T(sk.restWorldRot[foot]), sub(heelRest, P[foot]));
 	return { heel: bonePoint(s, foot, heelLocal), ball: s.P[I[`${side}ToeBase`]], tip: s.P[toeEnd] };
 }
+
+/** Outward unit normal of a box at p (the nearest face from inside, the closest direction from outside). */
+export function boxNormal(p, box) {
+	const q = apply(T(box.R), sub(p, box.pos));
+	q[1] -= box.half[1];
+	const d = q.map((v, i) => Math.abs(v) - box.half[i]);
+	let n;
+	if (Math.max(...d) < 0) { const i = d.indexOf(Math.max(...d)); n = [0, 0, 0]; n[i] = Math.sign(q[i]) || 1; }
+	else n = q.map((v, i) => (d[i] > 0 ? Math.sign(v) * d[i] : 0));
+	const l = len(n);
+	return apply(box.R, l > 1e-12 ? scale(n, 1 / l) : [0, 1, 0]);
+}

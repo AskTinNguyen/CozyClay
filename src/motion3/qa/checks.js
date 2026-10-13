@@ -5,17 +5,19 @@ import { add, sub, scale, apply, len, dist, cross, norm, dot, angle } from "../c
 import { CAPSULES, segPoints, sdBox, segDist, headDepth, solePoints } from "./geometry.js";
 import { contactChecks } from "./contact-checks.js";
 
-const DEF = { allow: 0.005, groundAllow: 0.01, reach: 0.01, slide: 0.0015, plantH: 0.012,
+export const QA_LIMITS = { allow: 0.005, groundAllow: 0.01, reach: 0.01, slide: 0.0015, plantH: 0.012,
 	speedCore: 0.04, speedLimb: 0.16, accCore: 0.015, accLimb: 0.05, flip: 60, knee: 150, headAllow: 0.003, self: 0,
 	body: 0.005, hands: 0.01, object: 0.005 };
 
-const allowance = (allow, part, obj) => {
+export const allowance = (allow, part, obj) => {
 	for (const a of allow ?? []) if (part.startsWith(a.part) && (a.object === obj || (a.object.endsWith("*") && obj.startsWith(a.object.slice(0, -1))))) return a.depth;
 	return null;
 };
 
+export const SPEED_JOINTS = ["Hips", "Head", "LeftHand", "RightHand", "LeftFoot", "RightFoot", "LeftLeg", "RightLeg", "LeftForeArm", "RightForeArm"];
+
 export function generalChecks(sk, out, opts = {}) {
-	const L = { ...DEF, ...opts.limits }, issues = [], I = sk.index, F = out.frames, n = F.length;
+	const L = { ...QA_LIMITS, ...opts.limits }, issues = [], I = sk.index, F = out.frames, n = F.length;
 	const push = (kind, msg, f, value, limit) => issues.push({ kind, msg, frame: f, value: +value.toFixed(4), limit });
 	for (let f = 0; f < n; f++) {
 		const { s, diag } = F[f], objs = out.objectsAt(f);
@@ -73,8 +75,7 @@ export function generalChecks(sk, out, opts = {}) {
 		const drift = Math.max(...F.map(fr => Math.abs(dist(fr.s.P[j], fr.s.P[p]) - L0)));
 		if (drift > 0.001) push("LENGTH", `${sk.names[p]}-${sk.names[j]}`, 0, drift, 0.001);
 	}
-	const J = ["Hips", "Head", "LeftHand", "RightHand", "LeftFoot", "RightFoot", "LeftLeg", "RightLeg", "LeftForeArm", "RightForeArm"];
-	for (const j of J) {
+	for (const j of SPEED_JOINTS) {
 		const core = j === "Hips" || j === "Head";
 		const X = F.map(fr => fr.s.P[I[j]]);
 		for (let f = 1; f < n; f++) {

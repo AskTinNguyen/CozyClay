@@ -1,0 +1,77 @@
+#!/usr/bin/env node
+// Skill library: the car-exit fixture rebuilt from four skills (sitInSeat, exitCar, walkTo,
+// smokeCigarette) compiles to QA 0 and matches the hand-written fixture; the car skills follow
+// the car when it is moved, turned or mirrored (side "r"); standIdle, walkTo { to } and
+// reachGrip work on their own; the agent's own keys win over a skill's.
+import { EXITCAR_SPEC, SCENE_OBJECTS } from "./fixtures/exitcar-scene.mjs";
+import { compileSpec } from "../../src/motion3/pipeline.js";
+import { compileMotion } from "../../src/motion3/compiler/compile.js";
+import { expandUse } from "../../src/motion3/skills/index.js";
+import { motionScene } from "../../src/motion3/scene.js";
+import { skeletonFor } from "../../src/motion3/rigs/index.js";
+import { dist, add, apply, mul, ry } from "../../src/motion3/compiler/math.js";
+
+let failures = 0;
+function expect(name, condition, detail = "") {
+	console.log(`${condition ? "PASS" : "FAIL"} ${name}${condition ? "" : ` — ${detail}`}`);
+	if (!condition) failures += 1;
+}
+const sk = skeletonFor("x-bot-tpose"), I = sk.index, car = motionScene(SCENE_OBJECTS);
+const exitcar = (side = "l", sg = 1, yaw = 0) => ({ schema: "cozyclay.motion-spec.v1", fps: 24, frames: 730, label: "Get out of the convertible and smoke", use: [
+	{ skill: "sitInSeat", f0: 0, args: { car: "Car", offset: [-0.06 * sg, 0.17, 0.023] } },
+	{ skill: "exitCar", f0: 0, args: { car: "Car", side } },
+	{ skill: "walkTo", f0: 246, args: { heading: [125 * sg + yaw, 150 * sg + yaw], steps: 8, step: 0.5, halfWidth: 0.1, lift: 0.08, turnDistance: 0.4, firstStep: 0.4 } },
+	{ skill: "smokeCigarette", f0: 440 },
+] });
+
+// 1. The fixture from skills.
+const spec = exitcar();
+console.log(`  skill spec: ${JSON.stringify(spec).length} bytes vs the hand-written fixture ${JSON.stringify(EXITCAR_SPEC).length} bytes`);
+const r = compileSpec(spec, { sk, scene: car });
+console.log(`  compiled from skills: QA ${r.qa.total}, skills ${JSON.stringify(r.used)}, fixed ${JSON.stringify(r.fixed)}, ${JSON.stringify(r.ms)}`);
+expect("the exitcar scene rebuilt from skills compiles to QA 0", r.qa.ok, JSON.stringify(r.qa.groups.slice(0, 3)));
+expect("the skills report where each ends", JSON.stringify(r.used.map(u => u.end)) === "[0,246,440,729]", JSON.stringify(r.used));
+for (const part of ["anchors", "props", "fits", "objects"]) expect(`same ${part} as the fixture`, JSON.stringify(r.expanded[part]) === JSON.stringify(EXITCAR_SPEC[part]), JSON.stringify(r.expanded[part]).slice(0, 200));
+const ref = compileMotion(JSON.parse(JSON.stringify(EXITCAR_SPEC)), { sk, scene: car });
+let worst = 0;
+for (let f = 0; f < 730; f++) for (let j = 0; j < sk.names.length; j++) worst = Math.max(worst, dist(ref.frames[f].s.P[j], r.out.frames[f].s.P[j]));
+console.log(`  largest joint difference to the fixture over 730 frames: ${(worst * 1000).toFixed(1)} mm (the skills use the rig's ankle height 0.0873 m, the fixture 0.087)`);
+expect("every joint within 1 cm of the hand-written fixture", worst < 0.01, worst);
+
+// 2. The same car moved and turned 40 deg, and mirrored with the driver door on the right.
+const place = (yaw, mirror) => {
+	const swap = id => id.replace(/_(L|R)$/, m => (m === "_L" ? "_R" : "_L")).replace(/_(F|R)(L|R)$/, (m, a, b) => `_${a}${b === "L" ? "R" : "L"}`);
+	const base = motionScene(SCENE_OBJECTS.map(o => (mirror ? { ...o, id: swap(o.id), x: -o.x, rot: -o.rot, rotZ: -o.rotZ } : o))), Ry = ry(yaw), out = { objects: {} };
+	for (const [id, b] of Object.entries(base.objects)) out.objects[id] = { ...b, pos: add(apply(Ry, b.pos), [3, 0, -1]), R: mul(Ry, b.R) };
+	return out;
+};
+for (const [label, yaw, mirror] of [["moved and turned 40 deg", 40, false], ["mirrored, side r", 0, true], ["mirrored and turned -70 deg", -70, true]]) {
+	const sg = mirror ? -1 : 1, rr = compileSpec(exitcar(mirror ? "r" : "l", sg, yaw), { sk, scene: place(yaw, mirror) });
+	console.log(`  ${label}: QA ${rr.qa.total} (${rr.ms.total} ms)`);
+	expect(`exitCar follows the car: ${label}, QA 0`, rr.qa.ok, JSON.stringify(rr.qa.groups.slice(0, 2).map(g => [g.kind, g.subject, g.hint])));
+	if (mirror) expect(`  ${label}: the right hand grips the handle`, rr.expanded.fits[0].side === "r" && rr.expanded.checks.contacts[0].when === "w_handle_r");
+}
+
+// 3. Basic skills on their own: stand, walk to a point, reach and grip.
+const empty = { objects: {} };
+const walkTo = compileSpec({ schema: "cozyclay.motion-spec.v1", fps: 24, frames: 260,
+	use: [{ skill: "standIdle", f0: 0, args: { at: [0, 0], heading: 0 } }, { skill: "walkTo", f0: 10, args: { to: [2, 3] } }] }, { sk, scene: empty });
+const end = walkTo.out.frames[259].s.P[I.Hips];
+console.log(`  walkTo { to: [2, 3] }: QA ${walkTo.qa.total}, hips end at ${end.map(v => v.toFixed(2))}, ${JSON.stringify(walkTo.used)}`);
+expect("walkTo { to } walks clean and ends within 0.35 m of the point", walkTo.qa.ok && Math.hypot(end[0] - 2, end[2] - 3) < 0.35, JSON.stringify(walkTo.qa.groups.slice(0, 2)));
+const grip = compileSpec({ schema: "cozyclay.motion-spec.v1", fps: 24, frames: 100,
+	use: [{ skill: "standIdle", f0: 0, args: { at: [0, 0] } }, { skill: "reachGrip", f0: 10, args: { anchor: "bar", side: "r", define: { kind: "world", p: [-0.2, 1.2, 0.33] }, elbow: [-0.5, -1, -0.3] } }] }, { sk, scene: empty });
+const held = grip.out.frames.filter(fr => fr.c.w_bar_r > 0.99);
+console.log(`  reachGrip: QA ${grip.qa.total}, ${held.length} frames on the bar`);
+expect("reachGrip: the fingers hold the bar with QA 0 (contact check included)", grip.qa.ok && held.length >= 20 && grip.expanded.checks.contacts.length === 1, JSON.stringify(grip.qa.groups.slice(0, 2)));
+
+// 4. The agent's own key at a skill's frame wins; a skill error names the skill.
+const own = expandUse({ ...exitcar(), keys: [{ f: 84, set: { door: -60 } }] }, { sk, scene: car }).spec;
+const door = compileMotion(JSON.parse(JSON.stringify(own)), { sk, scene: car }, { fixes: false }).baked.door[84];
+expect("an agent key overrides the skill's value on the same frame", door === -60, door);
+let msg = "";
+try { compileSpec({ ...exitcar(), use: [{ skill: "exitCar", f0: 0, args: { seat: "Nope" } }] }, { sk, scene: car }); } catch (error) { msg = error.message; }
+expect("a skill names its bad argument", msg.includes("use[0] exitCar: args.seat \"Nope\" is not a scene object"), msg);
+
+if (failures) { console.error(`${failures} motion3 skills check(s) failed`); process.exit(1); }
+console.log("motion3 skills: all checks passed");

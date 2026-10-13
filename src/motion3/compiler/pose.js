@@ -2,7 +2,7 @@
 // Conventions (CozyClay): metres, +Y up, yaw 0 faces +Z, positive yaw turns toward +X,
 // the character's left is +X at yaw 0. Body-frame vectors (poles, body-local targets) are
 // rotated by the root yaw only.
-import { add, sub, scale, norm, apply, mul, rx, ry, rz } from "./math.js";
+import { add, sub, scale, norm, len, apply, mul, rx, ry, rz } from "./math.js";
 import { restState, rotateSubtree } from "./skeleton.js";
 import { twoBone, orientFoot, wrist, fingers } from "./limbs.js";
 
@@ -21,9 +21,25 @@ function spread(sk, s, bones, yaw, pitch, roll) {
 	}
 }
 
+// Soft reach (spec.fix.reach): a wrist target up to 5 cm beyond the arm's reach is pulled onto
+// the reach sphere through a C1 soft knee, so the arm never snaps straight; the overshoot is
+// recorded. Farther targets are staging errors and stay for QA (REACH).
+const SOFT_KNEE = 0.99, SOFT_MAX = 0.9995;
+export const REACH_FIX_MAX = 0.05;
+function softReach(sk, s, a, fa, h, target, diag, k) {
+	const R = len(sub(s.P[fa], s.P[a])) + len(sub(s.P[h], s.P[fa])), v = sub(target, s.P[a]), d = len(v);
+	const k0 = SOFT_KNEE * R, w = (SOFT_MAX - SOFT_KNEE) * R;
+	if (d <= k0 || d - SOFT_MAX * R > REACH_FIX_MAX) return target;
+	const dc = k0 + w * (1 - Math.exp(-(d - k0) / w));
+	diag[`reach_over_${k}`] = Math.max(0, d - SOFT_MAX * R);
+	return add(s.P[a], scale(v, dc / d));
+}
+
 /**
  * hooks.handTarget(side, s) -> { target:[x,y,z] } world wrist target before the FK/IK blend
  * hooks.afterArm(side, s, diag) lets the caller measure props carried by that hand.
+ * hooks.push(side) -> [x,y,z] | undefined, a world offset added to the IK target (auto-fix).
+ * hooks.softReach clamps unreachable wrist targets smoothly (auto-fix).
  */
 export function pose(sk, c, hooks = {}) {
 	const s = restState(sk);
@@ -64,7 +80,10 @@ export function pose(sk, c, hooks = {}) {
 		if (w > 1e-4 && hooks.handTarget) {
 			const fkHand = s.P[h].slice();
 			const goal = hooks.handTarget(k, s, diag) ?? fkHand;
-			const target = add(fkHand, scale(sub(goal, fkHand), w));
+			let target = add(fkHand, scale(sub(goal, fkHand), w));
+			const push = hooks.push?.(k);
+			if (push) target = add(target, push);
+			if (hooks.softReach) target = softReach(sk, s, a, fa, h, target, diag, k);
 			const poleFk = norm(sub(s.P[fa], scale(add(s.P[a], fkHand), 0.5)));
 			const poleIk = norm(apply(body, v3(c[`elbow_${k}`], [0, -1, -0.3])));
 			const pole = add(scale(poleFk, 1 - w), scale(poleIk, w));

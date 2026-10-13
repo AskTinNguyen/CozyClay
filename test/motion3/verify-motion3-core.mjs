@@ -57,9 +57,9 @@ expect("QA catches walking into an object", kinds.has("COLLIDE"), [...kinds]);
 const slideSpec = { ...walkSpec, frames: 30, generators: [], keys: [walkSpec.keys[0], { f: 29, set: { foot_l: [0.2, ank, -0.03], root: [0.05, P[I.Hips][1] - 0.01, 0] } }] };
 const slideQa = runMotionQa(sk, compileMotion(slideSpec, { sk, scene: { objects: {} } }), slideSpec);
 expect("QA catches a planted foot sliding", slideQa.groups.some(g => g.kind === "SLIDE"), JSON.stringify(slideQa.groups.map(g => g.kind)));
-const reachSpec = { ...walkSpec, frames: 2, generators: [], keys: [{ f: 0, set: { ...walkSpec.keys[0].set, foot_l: [0.09, ank - 0.4, 0.5] } }] };
+const reachSpec = { ...walkSpec, frames: 2, generators: [], fix: { reach: false }, keys: [{ f: 0, set: { ...walkSpec.keys[0].set, foot_l: [0.09, ank - 0.4, 0.5] } }] };
 const reachQa = runMotionQa(sk, compileMotion(reachSpec, { sk, scene: { objects: {} } }), reachSpec);
-expect("QA catches an unreachable foot target", reachQa.groups.some(g => g.kind === "REACH"));
+expect("QA catches an unreachable foot target (reach fix off)", reachQa.groups.some(g => g.kind === "REACH"));
 
 // Contact checks ported from the car-exit QA, the knee check on a lifted knee, prop anchor offsets.
 const one = (set, extra = {}) => ({ ...walkSpec, frames: 1, generators: [], keys: [{ f: 0, set: { ...walkSpec.keys[0].set, ...set } }], ...extra });

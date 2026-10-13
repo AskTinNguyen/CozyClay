@@ -8,12 +8,14 @@
 //               moves the wrist so the effector lands on the anchor whenever that weight is on
 //   objects:    { id: { pivot: [x,y,z], axis: [x,y,z], channel: "door" } }  hinge angle in degrees
 //   generators: [{ type: "walk", f0, ... }]  (walk.js)
+//   fix:        { reach, slide, penetration, retime }  deterministic auto-fixes (../fix/)
 // ctx = { sk, scene: { objects: { id: { pos, R, half, shape } } } }
 import { add, sub, scale, norm, len, dot, apply, mul, axisRot, I3 } from "./math.js";
 import { pose } from "./pose.js";
 import { bakeChannels, channelsAt } from "./channels.js";
 import { resolveAnchor, measureProps } from "./anchors.js";
 import { expandGenerators } from "./walk.js";
+import { fixOptions, applyFixes } from "../fix/index.js";
 
 const smooth = x => x * x * (3 - 2 * x);
 
@@ -39,9 +41,12 @@ function effectorPoint(sk, s, diag, eff) {
 	return scale(js.map(j => s.P[sk.index[j]]).reduce((a, p) => add(a, p), [0, 0, 0]), 1 / js.length);
 }
 
-function hooksFor(ctx, c, f) {
+function hooksFor(ctx, c, f, inFit = false) {
 	const { sk } = ctx;
 	return {
+		softReach: ctx.softReach,
+		// auto-fix offsets ride on the final pose only, so a fit never cancels them
+		push: inFit ? undefined : k => ctx.push?.[k]?.get(f),
 		handTarget(k, s, diag) {
 			diag.frame = f;
 			const fkHand = s.P[sk.index[k === "l" ? "LeftHand" : "RightHand"]];
@@ -74,7 +79,7 @@ function hooksFor(ctx, c, f) {
 }
 
 /** One frame with every active fit solved (fits run in spec order). */
-function solveFrame(ctx, c0, f) {
+export function solveFrame(ctx, c0, f) {
 	const c = { ...c0 };
 	for (const fit of ctx.spec.fits ?? []) {
 		const wch = `w_${fit.anchor}_${fit.side}`;
@@ -84,7 +89,7 @@ function solveFrame(ctx, c0, f) {
 		let corr = [0, 0, 0];
 		for (let i = 0; i < 6; i++) {
 			full[`fit_${fit.anchor}_${fit.side}`] = corr;
-			const { s, diag } = pose(ctx.sk, full, hooksFor(ctx, full, f));
+			const { s, diag } = pose(ctx.sk, full, hooksFor(ctx, full, f, true));
 			const eff = effectorPoint(ctx.sk, s, diag, fit.effector);
 			const goal = add(resolveAnchor(ctx, fit.anchor, s, diag, full), fit.offset ?? [0, 0, 0]);
 			if (!eff) break;
@@ -96,15 +101,30 @@ function solveFrame(ctx, c0, f) {
 	return { s, diag, c };
 }
 
-export function compileMotion(spec, { sk, scene }) {
+/**
+ * opts.window = [a, b] solves only frames a..b (out.f0 = a, out.frames[i] is frame a + i);
+ * opts.keys replaces the generator expansion; opts.fixes = false skips the auto-fix pass.
+ */
+export function compileMotion(spec, { sk, scene }, opts = {}) {
 	if (spec?.schema !== "cozyclay.motion-spec.v1") throw new Error("MOTION_SPEC_INVALID: schema must be cozyclay.motion-spec.v1");
 	const frameCount = Math.round(spec.frames);
 	if (!(frameCount >= 1 && frameCount <= 20000)) throw new Error("MOTION_SPEC_INVALID: frames must be 1..20000");
-	const keys = expandGenerators(spec, sk);
-	const baked = bakeChannels(keys, frameCount);
-	const objectsAt = objectTracks(spec, scene, baked);
-	const ctx = { sk, spec, objectsAt };
-	const frames = [];
-	for (let f = 0; f < frameCount; f++) frames.push(solveFrame(ctx, channelsAt(baked, f), f));
-	return { frames, baked, objectsAt, ctx, fps: spec.fps ?? 30, frameCount };
+	const fix = fixOptions(spec.fix);
+	const [a, b] = opts.window ? [Math.max(0, opts.window[0]), Math.min(frameCount - 1, opts.window[1])] : [0, frameCount - 1];
+	const ctx = { sk, spec, softReach: fix.reach, push: { l: new Map(), r: new Map() } };
+	const out = { ctx, fps: spec.fps ?? 30, frameCount, f0: a, frames: [] };
+	const engine = {
+		rebake(keys) {
+			out.keys = keys;
+			out.baked = bakeChannels(keys, frameCount);
+			ctx.objectsAt = objectTracks(spec, scene, out.baked);
+			out.objectsAt = a ? f => ctx.objectsAt(f + a) : ctx.objectsAt;
+		},
+		solve(frames) { for (const f of frames) if (f >= a && f <= b) out.frames[f - a] = solveFrame(ctx, channelsAt(out.baked, f), f); },
+		all: () => Array.from({ length: b - a + 1 }, (_, i) => a + i),
+	};
+	engine.rebake(opts.keys ?? expandGenerators(spec, sk));
+	engine.solve(engine.all());
+	out.fixed = opts.fixes === false ? {} : applyFixes(out, fix, engine, { whole: !opts.window });
+	return out;
 }

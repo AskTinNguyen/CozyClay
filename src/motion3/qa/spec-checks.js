@@ -6,12 +6,13 @@
 //   appear:    [{ name, channel, joint, anchor, tol }]    a visibility switch happens with joint at anchor
 //   supports:  [{ object, part, tol }]                     frames where `part` rests on `object` skip balance
 // point/from/to: "joint:Name" | "prop:name.point" | "anchor:name"; when: weight channel (> 0.99) or [f0, f1].
+// f below indexes out.frames (frame out.f0 + f when the compile was windowed).
 import { add, sub, scale, dot, norm, len } from "../compiler/math.js";
 import { carried } from "../compiler/limbs.js";
 import { resolveAnchor } from "../compiler/anchors.js";
 import { CAPSULES, segPoints, sdBox, solePoints } from "./geometry.js";
 
-function pointOf(out, f, ref) {
+export function pointOf(out, f, ref) {
 	const { s, diag, c } = out.frames[f], [kind, rest] = ref.split(/:(.*)/s);
 	if (kind === "joint") return s.P[out.ctx.sk.index[rest]];
 	if (kind === "prop") { const [p, pt] = rest.split("."); return diag.props?.[p]?.[pt] ?? null; }
@@ -19,7 +20,7 @@ function pointOf(out, f, ref) {
 	throw new Error(`MOTION_SPEC_INVALID: check point "${ref}"`);
 }
 
-const active = (out, f, when) => (Array.isArray(when) ? f >= when[0] && f <= when[1] : when ? (out.frames[f].c[when] ?? 0) > 0.99 : true);
+const active = (out, f, when) => (Array.isArray(when) ? f + (out.f0 ?? 0) >= when[0] && f + (out.f0 ?? 0) <= when[1] : when ? (out.frames[f].c[when] ?? 0) > 0.99 : true);
 
 function alongDir(out, f, along) {
 	if (along === "up") return [0, 1, 0];

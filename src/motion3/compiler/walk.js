@@ -12,14 +12,16 @@ const leftOf = h => apply(ry(h), [1, 0, 0]);
 const smoothstep = x => { const t = Math.min(1, Math.max(0, x)); return t * t * (3 - 2 * t); };
 
 /** Last keyed value of every channel at or before frame f. */
-function stateAt(keys, f) {
+export function stateAt(keys, f) {
 	const st = {};
 	for (const k of [...keys].sort((a, b) => a.f - b.f)) if (k.f <= f) Object.assign(st, k.set);
 	return st;
 }
 
-function walk(gen, keys, sk) {
-	const out = [], at = (f, set) => out.push({ f, set });
+/** gen -> keys; every key carries src (tag + step number) so QA can name the step it came from. */
+export function walk(gen, keys, sk, tag = "walk") {
+	let src = `${tag} start`;
+	const out = [], at = (f, set) => out.push({ f, set, src });
 	const st = stateAt(keys, gen.f0);
 	if (!st.foot_l || !st.foot_r || !st.root) throw new Error("MOTION_SPEC_INVALID: walk needs foot_l, foot_r and root keyed before f0");
 	const I = sk.index, P = sk.restWorldPos;
@@ -44,6 +46,7 @@ function walk(gen, keys, sk) {
 	at(gen.f0, Object.fromEntries(holdAll.map(ch => [ch, st[ch] ?? state[ch] ?? (ch === "yaw" ? h0 : 0)])));
 	let sLast = stance.r;
 	for (let i = 0; i < W.steps; i++) {
+		src = `${tag} step ${i + 1}`;
 		const k = i % 2 === 0 ? "l" : "r", other = k === "l" ? "r" : "l", last = i === W.steps - 1;
 		const sNew = last ? sLast : sLast + (i === 0 ? W.firstStep : W.step);
 		const ts = gen.f0 + 16 + i * W.period, tl = ts + W.swing, tm = ts + Math.floor(W.swing / 2);
@@ -73,15 +76,16 @@ function walk(gen, keys, sk) {
 		sLast = sNew;
 	}
 	const tend = gen.f0 + 16 + W.steps * W.period + 18;
+	src = `${tag} end`;
 	at(tend, stateAt(out, tend));
 	return out;
 }
 
 export function expandGenerators(spec, sk) {
-	let keys = [...(spec.keys ?? [])];
-	for (const gen of spec.generators ?? []) {
-		if (gen.type !== "walk") throw new Error(`MOTION_SPEC_INVALID: unknown generator "${gen.type}"`);
-		keys = keys.concat(walk(gen, keys, sk));
-	}
+	let keys = (spec.keys ?? []).map((k, i) => (k.src ? k : { ...k, src: `keys[${i}]` }));
+	(spec.generators ?? []).forEach((gen, i) => {
+		if (gen.type !== "walk") throw new Error(`MOTION_SPEC_INVALID: generators[${i}] has unknown type "${gen.type}" (only "walk")`);
+		keys = keys.concat(walk(gen, keys, sk, `generators[${i}] walk`));
+	});
 	return keys;
 }
