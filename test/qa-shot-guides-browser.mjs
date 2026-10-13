@@ -108,6 +108,12 @@ const embeddedOverlay = "document.querySelector('.shot-guides.lookthrough')";
 expect("embed exposes the guide button", await waitFor(`!!${embedGuide}?.checkVisibility()`, 8000));
 expect("embed guide starts off", await evaluate(`${embedGuide}?.getAttribute("aria-pressed") === "false"`));
 expect("embed guide click shows thirds", await waitFor(`${embeddedOverlay}?.dataset.guideMode === "thirds"`, 8000, `${embedGuide}.click()`));
+await send("Page.navigate", { url: `${origin}/app/?embed=playground` });
+expect("playground app returns", await waitFor("!!document.querySelector('.v2-outliner .v2-outliner-search')", 30000));
+expect("playground exposes the guide button", await waitFor(`!!${embedGuide}?.checkVisibility()`, 8000));
+await send("Page.navigate", { url: `${origin}/app/?embed=playground` });
+expect("playground app returns", await waitFor("!!document.querySelector('.v2-outliner .v2-outliner-search')", 30000));
+expect("playground exposes the guide button", await waitFor(`!!${embedGuide}?.checkVisibility()`, 8000));
 
 // --- export wiring pin ----------------------------------------------------
 const fs = await import("node:fs");

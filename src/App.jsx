@@ -7253,7 +7253,7 @@ export default function App() {
 						}
 					}}>
 				<ViewportToolbar />
-				{embedMode && <CompositionGuideButton guideMode={guideMode} onCycle={(mode) => runStudioAction("view.setGuideMode", { mode })} />}
+				{(embedMode || playgroundMode) && <CompositionGuideButton guideMode={guideMode} onCycle={(mode) => runStudioAction("view.setGuideMode", { mode })} />}
 				{sculptMode && !sculptTarget && (
 					<div className="vp-sculpt-hint" role="status" data-testid="sculpt-empty">
 						<strong>{ko("New sculpt", "새 조형물")}</strong>
