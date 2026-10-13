@@ -178,7 +178,6 @@ const COMMAND_INPUTS = {
 	'character.changePromptBlock': { characterId: 'actor', id: 'block', text: 'Changed' },
 	'character.removePromptBlock': { characterId: 'actor', id: 'block' },
 	'motion.clear': { characterId: 'actor' },
-	'motion.setVideoDraft': { instruction: 'Draft', duration: 10 },
 	"character.addWaypoint": { characterId: "actor", position: { x: 0, z: 2 }, frame: 40 },
 	"character.moveWaypoint": { characterId: "actor", position: { x: 0, z: 1.1 }, frame: 24 },
 	"character.removeWaypoint": { characterId: "actor", frame: 24 }, "character.clearWaypoints": { characterId: "actor" },
@@ -347,7 +346,7 @@ const cases = {
 	},
 	async "transient and document actions never open an undo entry"() {
 		const outside = Object.values(COMMAND_MODULES).flatMap(module => module.declarations).filter(entry => ["transient", "document"].includes(entry.kind));
-		assert.deepEqual(outside.map(entry => entry.id).sort(), Object.keys(COMMAND_INPUTS).filter(id => (/^(view|timeline|scene|project)\./.test(id) || ['load_scenes', 'motion.commitLineEdit', 'motion.regenerateTrail', 'motion.setVideoDraft'].includes(id)) && !['scene.set', 'scene.rename', 'scene.reorder', 'project.rename'].includes(id)).sort());
+		assert.deepEqual(outside.map(entry => entry.id).sort(), Object.keys(COMMAND_INPUTS).filter(id => (/^(view|timeline|scene|project)\./.test(id) || ['load_scenes'].includes(id)) && !['scene.set', 'scene.rename', 'scene.reorder', 'project.rename'].includes(id)).sort());
 		for (const declaration of outside) {
 			const f = commandFixture(), [name] = Object.entries(COMMAND_MODULES).find(([, module]) => module.declarations.includes(declaration));
 			const receipt = await f.bus(f.registries[name]).run(declaration.id, COMMAND_INPUTS[declaration.id]);

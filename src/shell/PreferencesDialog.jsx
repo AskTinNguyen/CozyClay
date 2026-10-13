@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { getAnalyticsOptOut, setAnalyticsOptOut } from "../analytics.js";
 import { loadAutoColor, saveAutoColor } from "../auto-color.js";
-import { motionReadinessMessage } from "../motion-readiness-ui.jsx";
 import { ko, LOCALE, setLocale } from "../locale.js";
 import { readStoredGridView, writeStoredGridView } from "../grid-view.js";
 import { readTheme, saveTheme } from "../theme.js";
@@ -26,7 +25,6 @@ const NAV_GROUPS = [
 	{
 		label: ko("Motion", "모션"),
 		items: [
-			{ id: "ARDY Connection", label: ko("ARDY Connection", "ARDY 연결") },
 			{ id: "IK Correction", label: ko("IK Correction", "IK 보정") },
 		],
 	},
@@ -170,40 +168,6 @@ function ReadonlyHotkeys() {
 	);
 }
 
-function MotionConnection({ state, checking, onRetry }) {
-	const unavailable = state === "unavailable";
-	const retryLabel = checking
-		? ko("Checking…", "확인 중…")
-		: unavailable
-			? ko("Retry connection", "연결 다시 확인")
-			: ko("Check connection", "연결 확인");
-	return (
-		<div className="v2-preferences__motion-setup" data-testid="motion-setup" data-state={state}>
-			<div className="v2-preferences__motion-status" data-state={state} role="status" aria-busy={checking}>
-				<span className="v2-preferences__status-dot" aria-hidden="true" />
-				<span>{motionReadinessMessage(state)}</span>
-			</div>
-			<p>{ko(
-				"Motion generation is optional. Sample motion, camera editing and exports work without a connection.",
-				"모션 생성은 선택 사항이에요. 연결 없이도 샘플 모션, 카메라 편집, 내보내기를 쓸 수 있어요.",
-			)}</p>
-			<p>{ko(
-				"Retry checks the local motion bridge without changing the current scene.",
-				"다시 확인해도 현재 씬은 바뀌지 않고 로컬 모션 브리지 상태만 확인해요.",
-			)}</p>
-			<button
-				type="button"
-				className="v2-preferences__primary-button"
-				data-testid="motion-health-retry"
-				disabled={checking}
-				onClick={() => onRetry?.()}
-			>
-				{retryLabel}
-			</button>
-		</div>
-	);
-}
-
 function ThemeControls() {
 	const [theme, setTheme] = useState(readTheme);
 	const options = [
@@ -236,7 +200,7 @@ function preferenceSection(section, props) {
 		ctrlSnap, setCtrlSnap, footLock, setFootLock, bodyContact, setBodyContact,
 		shading, setShading, gridSize, setGridSize, rotationStep, setRotationStep,
 		units, setUnits, frameRate, setFrameRate, autosave, setAutosave,
-		motionState, motionChecking, onRetry, cameraTutorial,
+		cameraTutorial,
 	} = props;
 	const languageControls = (
 		<div className="v2-preferences__language-controls">
@@ -338,17 +302,6 @@ function preferenceSection(section, props) {
 					<ReadonlyHotkeys />
 				</PreferenceSection>
 			);
-		case "ARDY Connection":
-			return (
-				<PreferenceSection title={ko("ARDY Connection", "ARDY 연결")}>
-					<PreferenceRow title={ko("Motion setup", "모션 설정")} description={ko("Check today's motion generation route.", "현재 모션 생성 경로를 확인해요.")}>
-						<span className="v2-preferences__value">{motionReadinessMessage(motionState)}</span>
-					</PreferenceRow>
-					<div className="v2-preferences__row v2-preferences__row--full">
-						<MotionConnection state={motionState} checking={motionChecking} onRetry={onRetry} />
-					</div>
-				</PreferenceSection>
-			);
 		case "IK Correction":
 			return (
 				<PreferenceSection title={ko("IK Correction", "IK 보정")}>
@@ -398,7 +351,7 @@ function preferenceSection(section, props) {
 	}
 }
 
-export default function PreferencesDialog({ open, onClose, motionSetup, initialSection = "Input & Camera", cameraTutorial }) {
+export default function PreferencesDialog({ open, onClose, initialSection = "Input & Camera", cameraTutorial }) {
 	const dialogRef = useRef(null);
 	const searchRef = useRef(null);
 	const closeRef = useRef(onClose);
@@ -422,10 +375,6 @@ export default function PreferencesDialog({ open, onClose, motionSetup, initialS
 	const [units, setUnits] = useState(() => ko("Centimeters", "센티미터"));
 	const [frameRate, setFrameRate] = useState("24 fps");
 	const [autosave, setAutosave] = useState(() => readFlag(PREFERENCE_KEYS.autosave, true));
-	const setupProps = motionSetup?.props ?? {};
-	const motionState = setupProps.state ?? "unavailable";
-	const motionChecking = setupProps.checking === true;
-	const onRetry = setupProps.onRetry;
 
 	const filteredGroups = useMemo(() => {
 		const term = query.trim().toLocaleLowerCase();
@@ -476,7 +425,7 @@ export default function PreferencesDialog({ open, onClose, motionSetup, initialS
 		ctrlSnap, setCtrlSnap, footLock, setFootLock, bodyContact, setBodyContact,
 		shading, setShading, gridSize, setGridSize, rotationStep, setRotationStep,
 		units, setUnits, frameRate, setFrameRate, autosave, setAutosave,
-		motionState, motionChecking, onRetry, cameraTutorial,
+		cameraTutorial,
 	};
 
 	return createPortal(

@@ -33,7 +33,6 @@ const NODE_FILES = [
 	"test/ardy/verify-motion-calibration.mjs",
 	"test/ardy/verify-palette-segmentation.mjs",
 	"test/verify-motion-stabilize.mjs",
-	"test/verify-i2v-motion-prompt.mjs",
 	"test/verify-facing-marks.mjs",
 	"test/verify-pose-fade.mjs",
 	"test/verify-pose-gizmo.mjs",
@@ -67,7 +66,6 @@ const NODE_FILES = [
 	"test/ardy/verify-playback-skinning.mjs",
 	"test/ardy/verify-playback-clock.mjs",
 	"test/ardy/verify-pose-export.mjs",
-	"test/ardy/verify-pose-pin.mjs",
 	"test/ardy/verify-pose-shape.mjs",
 	"test/ardy/verify-prompt-move.mjs",
 	"test/ardy/verify-rest.mjs",
@@ -80,7 +78,6 @@ const NODE_FILES = [
 	"test/verify-tokens.mjs",
 	"test/demo/verify-demo-pages.mjs",
 	"test/demo/verify-motion-api.mjs",
-	"test/demo/verify-motion-url-allowlist.mjs",
 	"test/demo/verify-queue-policy.mjs",
 	"test/demo/verify-queue-concurrency.mjs",
 	"test/demo/verify-ops.mjs",
@@ -192,7 +189,6 @@ const NODE_FILES = [
 	"test/verify-trail-pick.mjs",
 	"test/verify-trail-rendered-geometry.mjs",
 	"test/verify-motion-trail-overreach.mjs",
-	"test/verify-motion-trail-persistence.mjs",
 	"test/verify-kimodo-waypoints.mjs",
 	"test/verify-keyframe-pack.mjs",
 	"test/verify-keyframe-pack-request.mjs",
@@ -200,8 +196,6 @@ const NODE_FILES = [
 	"test/verify-label-tooltips.mjs",
 	"test/verify-layout.mjs",
 	"test/verify-beginner-screen.mjs",
-	"test/verify-line-edit-draw.mjs",
-	"test/verify-line-edit-pins.mjs",
 	"test/verify-live-agent-commands.mjs",
 	"test/verify-live-cli.mjs",
 	"test/verify-live-control.mjs",
@@ -213,9 +207,6 @@ const NODE_FILES = [
 	"test/verify-bench-metrics.mjs",
 	"test/verify-mcp-invariants.mjs",
 	"test/verify-motion-edit.mjs",
-	"test/verify-motion-readiness.mjs",
-	"test/verify-demo-seed.mjs",
-	"test/verify-motion-readiness-ui.mjs",
 	"test/verify-multimodel-ingest.mjs",
 	"test/verify-offscreen-export.mjs",
 	"test/verify-export-capture.mjs",
@@ -297,12 +288,10 @@ const NODE_FILES = [
 	"mcp/verify-http-origin.mjs",
 	"mcp/verify-live.mjs",
 	"mcp/verify-live-proxy-frame.mjs",
-	"mcp/verify-live-motion-job.mjs",
 	"mcp/verify-live-p0.mjs",
 	"mcp/verify-live-port.mjs",
 	"mcp/verify-live-controller.mjs",
 	"mcp/verify-live-routing.mjs",
-	"mcp/verify-prompts.mjs",
 	"mcp/verify-protocol-version.mjs",
 	"mcp/verify-tool-annotations.mjs",
 	"mcp/verify-import-mesh.mjs",
@@ -328,7 +317,6 @@ const BROWSER_FILES = [
 	"test/qa-storyboard-export-browser.mjs",
 	"test/qa-proxy-figure-browser.mjs",
 	"test/qa-rail-lean-browser.mjs",
-	"test/qa-motion-readiness-browser.mjs",
 	"test/qa-export-recovery-browser.mjs",
 	"test/verify-camera-mode-browser.mjs",
 	"test/verify-camera-rail-browser.mjs",
@@ -375,7 +363,7 @@ const BROWSER_FILES = [
 // The inventory sweep only picks up `verify*.mjs`; a browser suite named for
 // the QA runner it needs is listed here so it still shows up in the manifest
 // (as an EXCLUDE with its reason) instead of going unmentioned.
-const EXTRA_INVENTORY = ["test/ik/translation-step.mjs", "test/qa-scenes-v5-migration-browser.mjs", "test/qa-studio-agent-browser.mjs", "test/qa-agent-scenarios-browser.mjs", "test/qa-execution-outcomes-browser.mjs", "test/qa-motion-readiness-browser.mjs", "test/qa-export-recovery-browser.mjs", "test/qa-agent-view-toggle-browser.mjs", "test/qa-camera-tutorial-browser.mjs", "test/qa-first-shot-handoff-browser.mjs", "test/qa-tutorial-analytics-browser.mjs", "test/qa-camera-pointer-lock-browser.mjs", "test/qa-first-edit-browser.mjs", "test/qa-ia-tail-browser.mjs", "test/qa-keyframe-pack-browser.mjs", "test/qa-preview-browser.mjs", "test/qa-project-resources-browser.mjs", "test/qa-reference-slots-browser.mjs", "test/qa-scene-playback-browser.mjs", "test/qa-scene-switcher-browser.mjs", "test/qa-send-to-ai-browser.mjs", "test/qa-view-menu-browser.mjs", "test/qa-agent-activity-browser.mjs", "test/qa-live-reconnect-browser.mjs", "test/qa-platform-fit-browser.mjs", "test/qa-clipboard-paste-browser.mjs", "test/qa-rail-lean-browser.mjs", "test/qa-rail-reach-browser.mjs", "test/qa-rail-ring-browser.mjs", "test/qa-speed-graph-browser.mjs"];
+const EXTRA_INVENTORY = ["test/ik/translation-step.mjs", "test/qa-scenes-v5-migration-browser.mjs", "test/qa-studio-agent-browser.mjs", "test/qa-agent-scenarios-browser.mjs", "test/qa-execution-outcomes-browser.mjs", "test/qa-export-recovery-browser.mjs", "test/qa-agent-view-toggle-browser.mjs", "test/qa-camera-tutorial-browser.mjs", "test/qa-first-shot-handoff-browser.mjs", "test/qa-tutorial-analytics-browser.mjs", "test/qa-camera-pointer-lock-browser.mjs", "test/qa-first-edit-browser.mjs", "test/qa-ia-tail-browser.mjs", "test/qa-keyframe-pack-browser.mjs", "test/qa-preview-browser.mjs", "test/qa-project-resources-browser.mjs", "test/qa-reference-slots-browser.mjs", "test/qa-scene-playback-browser.mjs", "test/qa-scene-switcher-browser.mjs", "test/qa-send-to-ai-browser.mjs", "test/qa-view-menu-browser.mjs", "test/qa-agent-activity-browser.mjs", "test/qa-live-reconnect-browser.mjs", "test/qa-platform-fit-browser.mjs", "test/qa-clipboard-paste-browser.mjs", "test/qa-rail-lean-browser.mjs", "test/qa-rail-reach-browser.mjs", "test/qa-rail-ring-browser.mjs", "test/qa-speed-graph-browser.mjs"];
 
 EXTRA_INVENTORY.push("test/qa-proxy-figure-browser.mjs");
 EXTRA_INVENTORY.push("test/qa-proxy-entry-browser.mjs");
@@ -469,7 +457,6 @@ const SERIAL_ONLY = new Set([
 	"test/process/verify-bridge-launch.mjs",
 	"mcp/verify-http-origin.mjs",
 	"mcp/verify-live-controller.mjs",
-	"mcp/verify-live-motion-job.mjs",
 	"mcp/verify-live-p0.mjs",
 	"mcp/verify-live-port.mjs",
 	"mcp/verify-live-routing.mjs",

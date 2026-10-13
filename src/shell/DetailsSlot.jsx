@@ -9,8 +9,6 @@ import CharacterTransformPanel from "../panels/CharacterTransformPanel.jsx";
 import RigPanel from "../panels/RigPanel.jsx";
 import ProxyFigurePanel from "../panels/ProxyFigurePanel.jsx";
 import PosePanel from "../panels/PosePanel.jsx";
-import VideoCapturePanel from "../panels/VideoCapturePanel.jsx";
-import PromptBlocksPanel from "../panels/PromptBlocksPanel.jsx";
 import RigControlPanel from "../panels/RigControlPanel.jsx";
 import PoseImagePanel from "../panels/PoseImagePanel.jsx";
 import EnvironmentPanel from "../panels/EnvironmentPanel.jsx";
@@ -59,35 +57,25 @@ export default function DetailsSlot() {
 	const {
 		sculptPanel, selectedHierarchyId, sceneSaveError, studioAgentError, embedMode, studioAgentMode,
 		setStudioAgentMode, AgentPanel, setAgentCollapsed, scenes, activeSceneId,
-		buildStudioAgentContext, highlightAgentTargets, generateI2vMotionFromUi, selectedSceneObject, rigSelection,
+		buildStudioAgentContext, highlightAgentTargets, selectedSceneObject, rigSelection,
 		inspectorActionsOpen, setInspectorActionsOpen, runStudioAction, deleteSelectedSceneObject, inspectorHasContent,
 		keyLightSelected, keyLight, isCameraSelection,
 		shot, moveSequence, cameraKeys, activeShot,
 		isCharacterSelection, showB, characters, openStudio,
 		posing, workflowMode, activeChar,
-		activeCharIndex, i2vMotionModel, i2vMotionActions, setI2vMotionStudioOpen,
+		activeCharIndex,
 		selectablePoses, ikMode, ikApplyPoseAsKey, motion, setStudioPick,
 		appContext, removePose, setPhotoPoseError, photoPoseFileRef, photoPoseState,
-		photoPoseError, activeRig, saveCurrentPose, multiModelStatus, multiModelStage,
-		multiModelFileRef, chooseMultiModelFile, multiModelSource, multiModelUrl, setMultiModelUrl,
-		useMultiModelUrl, pasteMultiModelUrl, multiModelProgress, multiModelError, multiModelFootage,
-		extractMultiModelMotion, multiModelExtract, multiModelTake, multiModelExtractProgress, multiModelExtractError,
-		bridge, promptBlocksReveal, promptClips, selectedPromptId, setSelectedPromptId,
-		setArdyPrompt, setTlFrame, tlFrameCount, ardySeed,
-		changeArdySeed, lineEditMode, toggleLineEditMode, linePreviewUrl, lineCurve,
-		lineDrifted, lineTrack, setLineTrack, linePinMode, setLinePinMode,
-		linePins, lineClipFrames, lineEditRange, setLineRange, lineRadius,
-		changeLineRadius, lineCurveDirty, lineEditFrom, lineEditTo, lineCurvePointCount,
-		lineDriftHint, lineCurveHidden, linePreviewBusy, linePreviewMs, linePreviewError,
-		generationBusy, bridgeChecking, lineReadinessState, runLineEdit, openMotionSetup,
-		recheckMotionHealth, resetLineCurve, exitLineEditMode, readinessState, ardyRunning,
-		cancelArdy, ardyStatus, ardyOutcome, tlFrame,
+		photoPoseError, activeRig, saveCurrentPose,
+		
+		setTlFrame, 
+		tlFrame,
 		isRigSelection, ikChains, ikFocus, footSnap, poseObjectOpacity, setPoseObjectOpacity, capturePoseImage, collisionCleanupSupported,
 		autoPhysicsRunning, physicsProgress, physicsPreview,
 		physicsShow, physicsOptions, platformFitRunning, platformFitProgress, platformFitLast,
 		platformFitApplied, changePhysicsOptions, runAutoPhysics, showPhysicsPreview, applyPhysicsPreview,
 		cancelPhysicsPreview, ikEditTool, setIkEditTool, showTrails, setShowTrails,
-		trailFalloffS, setTrailFalloffS, trailEdit, trailTrackFocus, selectTrailTrack, clearTrailTrackFocus, runTrailRegeneration, trailReadinessState,
+		trailFalloffS, setTrailFalloffS, trailEdit, trailTrackFocus, selectTrailTrack, clearTrailTrackFocus,
 		pendingIkEdit, applyPendingIkEdit, cancelPendingIkEdit,
 		rangePins, rangePinResiduals, rangePinSelection, rangePinPartPick, rangePinPreview,
 		sceneObjects, setRangePinSelection, setRangePinPartPick, previewRangePinDraft, applyRangePinDraft,
@@ -218,9 +206,6 @@ export default function DetailsSlot() {
 		<PosePanel
 			isCharacterSelection={isCharacterSelection}
 			activeCharIndex={activeCharIndex}
-			i2vMotionModel={i2vMotionModel}
-			i2vMotionActions={i2vMotionActions}
-			setI2vMotionStudioOpen={setI2vMotionStudioOpen}
 			selectablePoses={selectablePoses}
 			activeChar={activeChar}
 			ikMode={ikMode}
@@ -237,79 +222,6 @@ export default function DetailsSlot() {
 			saveCurrentPose={saveCurrentPose}
 		/>
 
-		<VideoCapturePanel
-			isCharacterSelection={isCharacterSelection}
-			multiModelStatus={multiModelStatus}
-			multiModelStage={multiModelStage}
-			multiModelFileRef={multiModelFileRef}
-			chooseMultiModelFile={chooseMultiModelFile}
-			multiModelSource={multiModelSource}
-			multiModelUrl={multiModelUrl}
-			setMultiModelUrl={setMultiModelUrl}
-			useMultiModelUrl={useMultiModelUrl}
-			pasteMultiModelUrl={pasteMultiModelUrl}
-			multiModelProgress={multiModelProgress}
-			multiModelError={multiModelError}
-			multiModelFootage={multiModelFootage}
-			extractMultiModelMotion={extractMultiModelMotion}
-			multiModelExtract={multiModelExtract}
-			multiModelTake={multiModelTake}
-			multiModelExtractProgress={multiModelExtractProgress}
-			multiModelExtractError={multiModelExtractError}
-			activeChar={activeChar}
-			bridge={bridge}
-		/>
-		<PromptBlocksPanel
-			isCharacterSelection={isCharacterSelection}
-			promptBlocksReveal={promptBlocksReveal}
-			promptClips={promptClips}
-			selectedPromptId={selectedPromptId}
-			setSelectedPromptId={setSelectedPromptId}
-			setArdyPrompt={setArdyPrompt}
-			setTlFrame={setTlFrame}
-			tlFrameCount={tlFrameCount}
-			ardySeed={ardySeed}
-			changeArdySeed={changeArdySeed}
-			motion={motion}
-			lineEditMode={lineEditMode}
-			toggleLineEditMode={toggleLineEditMode}
-			linePreviewUrl={linePreviewUrl}
-			lineCurve={lineCurve}
-			lineDrifted={lineDrifted}
-			lineTrack={lineTrack}
-			setLineTrack={setLineTrack}
-			linePinMode={linePinMode}
-			setLinePinMode={setLinePinMode}
-			linePins={linePins}
-			lineClipFrames={lineClipFrames}
-			lineEditRange={lineEditRange}
-			setLineRange={setLineRange}
-			lineRadius={lineRadius}
-			changeLineRadius={changeLineRadius}
-			lineCurveDirty={lineCurveDirty}
-			lineEditFrom={lineEditFrom}
-			lineEditTo={lineEditTo}
-			lineCurvePointCount={lineCurvePointCount}
-			lineDriftHint={lineDriftHint}
-			lineCurveHidden={lineCurveHidden}
-			linePreviewBusy={linePreviewBusy}
-			linePreviewMs={linePreviewMs}
-			linePreviewError={linePreviewError}
-			generationBusy={generationBusy}
-			bridgeChecking={bridgeChecking}
-			bridge={bridge}
-			lineReadinessState={lineReadinessState}
-			runLineEdit={runLineEdit}
-			openMotionSetup={openMotionSetup}
-			recheckMotionHealth={recheckMotionHealth}
-			resetLineCurve={resetLineCurve}
-			exitLineEditMode={exitLineEditMode}
-			readinessState={readinessState}
-			ardyRunning={ardyRunning}
-			cancelArdy={cancelArdy}
-			ardyStatus={ardyStatus}
-			ardyOutcome={ardyOutcome}
-		/>
 
 			<RigControlPanel
 				isRigSelection={isRigSelection}
@@ -351,13 +263,6 @@ export default function DetailsSlot() {
 				pendingIkEdit={pendingIkEdit}
 				applyPendingIkEdit={applyPendingIkEdit}
 				cancelPendingIkEdit={cancelPendingIkEdit}
-				generationBusy={generationBusy}
-				bridgeChecking={bridgeChecking}
-				bridge={bridge}
-				runTrailRegeneration={runTrailRegeneration}
-				trailReadinessState={trailReadinessState}
-				openMotionSetup={openMotionSetup}
-				recheckMotionHealth={recheckMotionHealth}
 				rangePins={rangePins}
 				rangePinResiduals={rangePinResiduals}
 				rangePinSelection={rangePinSelection}
@@ -465,8 +370,7 @@ export default function DetailsSlot() {
 				</button>
 				<AgentPanel embedded hidden={!studioAgentMode} surface="studio" defaultCollapsed onCollapsedChange={setAgentCollapsed}
 					sceneName={scenes.find((entry) => entry.id === activeSceneId)?.name ?? ko("Untitled Scene", "제목 없는 씬")}
-					buildContext={buildStudioAgentContext} onReceipt={highlightAgentTargets}
-					onI2vAction={(instruction) => void generateI2vMotionFromUi(instruction)} />
+					buildContext={buildStudioAgentContext} onReceipt={highlightAgentTargets} />
 			</div>}
 			{/* The reference-photo picker sits outside the panel so re-mounting
 			    the studio cannot cancel an in-flight read. */}

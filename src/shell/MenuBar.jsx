@@ -74,7 +74,7 @@ function useFirstItemFocus(ref, box, autoFocus, onAutoFocused) {
 /** One portaled menu. Outside presses, Escape and window resizes dismiss it;
  * arrow keys walk its items. `keepOpen` reports a nested flyout that owns
  * Escape first (App closes the Export flyout on the same key). */
-export function MenuPopover({ anchorRef, ignoreRef, onClose, align = "start", label, className = "", keepOpen, onKeyDown, autoFocus, onAutoFocused, children, menuRef: externalRef, ...props }) {
+function MenuPopover({ anchorRef, ignoreRef, onClose, align = "start", label, className = "", keepOpen, onKeyDown, autoFocus, onAutoFocused, children, menuRef: externalRef, ...props }) {
 	const ownRef = useRef(null);
 	const menuRef = externalRef ?? ownRef;
 	const box = usePlacement(anchorRef, menuRef, "below", align, true);

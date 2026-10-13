@@ -314,37 +314,6 @@ export function motionBones(rig) {
 	return prepOf(rig).bones;
 }
 
-/** Recover the current ARDY-space root from the live retargeted rig.
- *
- * Positional skinning writes each mapped bone as
- *   bone = scale * root + globalRotation * bindOffset
- * in rig space. Inverting that equation captures generated root motion plus
- * any IK hips translation, so pose constraints never borrow placement from an
- * unrelated reference clip. */
-export function captureArdyRoot(rig) {
-	const prep = prepOf(rig);
-	const rootIndex = CSKEL27_JOINTS.indexOf("Hips");
-	const bone = prep.bones[rootIndex];
-	if (!bone) throw new Error("captureArdyRoot: mapped Hips bone is unavailable");
-
-	rig.updateMatrixWorld(true);
-	const rigInverse = new THREE.Matrix4().copy(rig.matrixWorld).invert();
-	const boneInRig = new THREE.Matrix4().multiplyMatrices(rigInverse, bone.matrixWorld);
-	const position = new THREE.Vector3();
-	const boneRotation = new THREE.Quaternion();
-	boneInRig.decompose(position, boneRotation, new THREE.Vector3());
-
-	const globalRotation = boneRotation.multiply(prep.bindQuat[rootIndex].clone().invert()).normalize();
-	const bindOffset = prep.offsets[rootIndex].clone().applyQuaternion(globalRotation);
-	// The scale the last applyMotionFrame used (1 for a performer-sized take).
-	const s = prep.lastScale ?? prep.scale;
-	return [
-		(position.x - bindOffset.x) / s,
-		(position.y - bindOffset.y) / s,
-		(position.z - bindOffset.z) / s,
-	];
-}
-
 /** Bind offsets against the canonical neutral grown by a take's bone
  *  factors: neutral joint j = parent + boneScale[j] * (neutral[j] - neutral[parent]),
  *  floor-shifted the same way prepOf does, in rig units via prep.scale.

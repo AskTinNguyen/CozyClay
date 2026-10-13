@@ -1,15 +1,13 @@
 import Foldout from "./Foldout.jsx";
 import { ko, isKo } from "../locale.js";
-import { I2vMotionCaptureCard } from "../i2v-motion-studio.jsx";
 import { PoseTileGrid } from "../posestudio.jsx";
 import { DEFAULT_POSE } from "../poses.js";
 import { poseLabelKo } from "../app-stage.jsx";
 import ReferenceImageField from "./ReferenceImageField.jsx";
 import { useBus } from '../app-context.js';
-import { trackFeature } from "../analytics.js";
 
 export default function PosePanel({
-	isCharacterSelection, activeCharIndex, i2vMotionModel, i2vMotionActions, setI2vMotionStudioOpen,
+	isCharacterSelection, activeCharIndex,
 	selectablePoses, activeChar, ikMode, ikApplyPoseAsKey, motion,
 	setStudioPick, setToast, removePose, setPhotoPoseError, photoPoseFileRef,
 	photoPoseState, photoPoseError, activeRig, saveCurrentPose,
@@ -24,12 +22,6 @@ export default function PosePanel({
 					<p className="inspector-hint v2-details-hint">
 						{isKo ? `인물 ${activeCharIndex + 1}의 자세입니다.` : `The pose on Subject ${activeCharIndex + 1}.`}
 					</p>
-					<I2vMotionCaptureCard model={i2vMotionModel} actions={i2vMotionActions} onOpen={() => {
-						// While the route is locked its Generate button is disabled, so opening
-						// the authoring modal is the card's demand signal (#466).
-						trackFeature("fal_motion_open");
-						setI2vMotionStudioOpen(true);
-					}} />
 					<PoseTileGrid
 						poses={selectablePoses}
 						model={activeChar.model}

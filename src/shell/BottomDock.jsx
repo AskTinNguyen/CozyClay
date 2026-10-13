@@ -85,13 +85,13 @@ export default function BottomDock({ tab: requestedTab = "animation", onTabChang
 		setBodyContact, setToast, setFootSnap, setTlFrame, advanceFrame,
 		stepFrame, cameraPreviewEndRef, manualCameraOverrideRef, setTlPlaying, toggleWaypointMode,
 		setWaypointMode, selectActiveCharacterInHierarchy, setActiveWaypointId, setPendingWaypointFrame, removeWaypoint,
-		queueRootWaypointFrame, addPromptClip, revealPromptBlocks, setSelectedPromptId, setArdyPrompt,
+		queueRootWaypointFrame, addPromptClip, revealPromptBlocks, setSelectedPromptId,
 		changePromptClip, resizePromptClip, movePromptClip, removePromptClip, setSelectedHierarchyId,
 		selectWorkflowMode, addCameraKeyframe, moveCameraKeyframe, removeCameraKeyframe, syncActiveCameraFraming,
 		activeCamera, activeShotDuration, changeActiveCamera, cameraRail, previewCameraShot,
 		toggleCameraRailDraw, deleteCameraRail, selectTimelineShot, shotsDomain, runStudioAction,
-		clearMotion, subscribeToasts, exportStatus, exportPhaseLabel, ardyRunning, ardyStatus,
-		ardyOutcome, pathPointIndex, setPathPointIndex,
+		clearMotion, subscribeToasts, exportStatus, exportPhaseLabel,
+		pathPointIndex, setPathPointIndex,
 	} = useStudioShell();
 	const dockRef = useRef(null);
 	const [dockHeight, setDockHeight] = useState(readDockHeight);
@@ -160,20 +160,6 @@ export default function BottomDock({ tab: requestedTab = "animation", onTabChang
 	useEffect(() => subscribeToasts((toast) => logStore.push({ kind: "toast", text: toast.uiMessage })),
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 		[]);
-	const generationWasRunning = useRef(false);
-	useEffect(() => {
-		if (ardyRunning && !generationWasRunning.current) logStore.push({ kind: "generation", text: ko("Motion generation started", "모션 생성을 시작했어요") });
-		generationWasRunning.current = ardyRunning;
-	}, [ardyRunning]);
-	useEffect(() => {
-		if (ardyRunning && ardyStatus) logStore.push({ kind: "generation", key: "generation:status", text: ardyStatus });
-	}, [ardyRunning, ardyStatus]);
-	useEffect(() => {
-		if (!ardyOutcome) return;
-		logStore.push({ kind: "generation", text: ardyOutcome.ok
-			? ko("Motion generation finished", "모션 생성을 마쳤어요")
-			: ko(`Motion generation failed — ${ardyOutcome.message}`, `모션 생성 실패 — ${ardyOutcome.message}`) });
-	}, [ardyOutcome]);
 	const exportPhase = exportStatus?.phase, exportLabel = exportStatus?.label, exportMessage = exportStatus?.message;
 	const exportDone = exportStatus?.completedFrames, exportTotal = exportStatus?.frameCount;
 	useEffect(() => {
@@ -358,7 +344,6 @@ export default function BottomDock({ tab: requestedTab = "animation", onTabChang
 			}}
 			onPromptSelect={(id) => {
 				setSelectedPromptId(id);
-				setArdyPrompt(promptClips.find((clip) => clip.id === id)?.text ?? "");
 				selectActiveCharacterInHierarchy();
 				revealPromptBlocks();
 			}}

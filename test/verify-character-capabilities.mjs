@@ -33,18 +33,18 @@ test('kindRefusal: exact en/ko sentences', () => {
   assert.equal(refuseRigOnly(rigged, 'ik'), undefined);
 });
 
-test('bus: motion.generate refuses a capsule figure and reaches the readiness path for a rig', async () => {
+test('bus: motion.compile refuses a capsule figure and compiles for a rig', async () => {
   const f = motionFixture({ proxy: true });
   try {
     assert.equal(f.cast.read().find(row => row.id === PROXY_ID).model, PROXY_FIGURE_MODEL);
     const before = f.snapshot();
-    refused(await f.run('motion.generate', { characterId: PROXY_ID }, 'agent'), 'motion');
+    const spec = { schema: 'cozyclay.motion-spec.v1', fps: 24, frames: 24, keys: [] };
+    const proxyReceipt = await f.run('motion.compile', { characterId: PROXY_ID, spec, install: false }, 'agent');
+    assert.equal(proxyReceipt.ok, false, JSON.stringify(proxyReceipt));
+    assert.equal(proxyReceipt.code, 'TARGET_NOT_READY');
     assert.deepEqual(f.snapshot(), before);
-    // The rig target passes the kind gate and stops at the existing readiness
-    // checks of this bridge-less fixture instead.
-    const rig = await f.run('motion.generate', { characterId: 'actor-a' }, 'agent');
-    assert.equal(rig.code, 'INVALID_ARGUMENT', JSON.stringify(rig));
-    assert.match(rig.message, /^Motion prompt is required/);
+    const rig = await f.run('motion.compile', { characterId: 'actor-a', spec, install: false }, 'agent');
+    assert.equal(rig.ok, true, JSON.stringify(rig));
   } finally { f.dispose(); }
 });
 

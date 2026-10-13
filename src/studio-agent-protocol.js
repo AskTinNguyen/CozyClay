@@ -10,7 +10,7 @@ export const STUDIO_PROTOCOL_VERSION = "studio-agent-v1";
 export const STUDIO_CONTEXT_MAX_BYTES = 64 * 1024;
 export const STUDIO_CONTEXT_LIMITS = Object.freeze({ entities: 24, entityIndex: 400, shots: 8, assets: 48, recentReceipts: 3, jobs: 8 });
 export const STUDIO_TOOL_FAMILIES = Object.freeze(["inspect_studio", "run_action", "verify_result"]);
-export const STUDIO_TOOL_ALIASES = Object.freeze(["operate_studio", "arrange_objects", "arrange_characters", "patch_elements", "frame_shot", "generate_motion", "undo_edit"]);
+export const STUDIO_TOOL_ALIASES = Object.freeze(["operate_studio", "arrange_objects", "arrange_characters", "patch_elements", "frame_shot", "undo_edit"]);
 export const STUDIO_TOOL_LABELS = Object.freeze({
 	inspect_studio: "Read the scene",
 	operate_studio: "Selection and view",
@@ -18,7 +18,6 @@ export const STUDIO_TOOL_LABELS = Object.freeze({
 	arrange_characters: "Arrange characters",
 	patch_elements: "Edit properties",
 	frame_shot: "Frame the shot",
-	generate_motion: "Generate motion",
 	verify_result: "Verify the result",
 	undo_edit: "Undo an edit",
 	run_action: "Run an editor action",
@@ -114,9 +113,6 @@ const characterOp = union(
 	object({ op: literal("update"), characterId: id }, { position, facing, scale: positive, name, hidden: bool }),
 	object({ op: literal("remove"), characterId: id }),
 );
-export const BEAT_TEXT_MAX = 500;
-const generateSource = object({ kind: literal("generate"), beats: array(object({ text: { ...text(BEAT_TEXT_MAX), description: 'An English description of the body movement starting with "A person". The editor refuses prompts over 500 characters.' } }, { seconds: number(0.5, 60) }), 8, 1) }, { durationSeconds: number(2, 60), seed: integer(-2147483648, 2147483647) });
-const source = union(generateSource, object({ kind: literal("reuse"), artifactId: id }));
 
 /* ----------------------------------------------- element patches ----
  * The accepted fields of `patch_elements` are DERIVED from the element
@@ -204,7 +200,6 @@ const toolSchemas = {
 	arrange_characters: object({ ops: array(characterOp, 8, 1) }),
 	patch_elements: object({ ops: array(patchOp, 32, 1) }),
 	frame_shot: object({ subjectIds: ids(1), framing }, { shotId: id, caption: { type: "string", maxLength: 500 }, keyAtFrame: integer() }),
-	generate_motion: object({ characterId: id, source }, { repair: { ...choices(["bounded", "none"]), default: "bounded" } }),
 	verify_result: object({ checks: array(choices(["placement", "framing", "motion"]), 3, 1, true) }, { receiptId: id, targets: ids(), range: union(literal("whole_clip"), range), visual: { ...choices(["none", "frame", "contact_sheet", "plan"]), default: "none" } }),
 	undo_edit: object({ receiptId: id }),
 	run_action: object({ action: id }, { args: openObject, confirmationToken: id }),
@@ -321,7 +316,7 @@ const failureSchema = object({ ok: literal(false), commandId: id, host: identity
 // These are JSON Schema data, not validators with hidden browser dependencies.
 // x-studio-range is the sole relational schema annotation: end > start.
 export const StudioSchemas = freezeStudioData({ catalogue: STUDIO_CATALOGUE, variants: STUDIO_VARIANTS, Vec3: vec3, FrameRange: range, PositionSpec: position, FacingSpec: facing,
-	ObjectOp: objectOp, CharacterOp: characterOp, Framing: framing, GenerateSource: generateSource, Source: source, Identity: identity, Host: host, TargetGuard: guardSchema,
+	ObjectOp: objectOp, CharacterOp: characterOp, Framing: framing, Identity: identity, Host: host, TargetGuard: guardSchema,
 	Entity: entity, ShotSummary: shotSummary, StudioContextV1: contextSchema, StudioTurn: turnSchema, StudioStop: stopSchema, Receipt: receiptSchema, ReceiptVariants: receiptVariants, Failure: failureSchema, GeometryFacts: geometryFacts });
 
 /** Validate the closed JSON Schema subset used above; return a detached value
@@ -455,13 +450,6 @@ export function validateStudioContextFreshness(submitted, current) {
 }
 const pickIdentity = value => Object.fromEntries(Object.keys(identityFields).map(key => [key, value[key]]));
 
-function validateGenerationTiming(value) {
-	const timed = value.beats.filter(beat => beat.seconds !== undefined).length;
-	if ((value.durationSeconds !== undefined && timed !== 0) || (value.durationSeconds === undefined && timed !== value.beats.length)) fail("INVALID_ARGUMENT", "Use total duration or a duration for every beat, not mixed timing.");
-	const total = value.durationSeconds ?? value.beats.reduce((sum, beat) => sum + beat.seconds, 0);
-	if (total < 2 || total > 60 || total / value.beats.length < 0.5) fail("INVALID_ARGUMENT", "Generation must be 2-60 seconds with at least 0.5 seconds per beat.");
-	return total;
-}
 /** Unknown paths are answered with the paths that DO exist for that kind, so a
  * caller never has to guess the vocabulary from a rejection. */
 function validatePatchPaths(args) {
@@ -501,10 +489,6 @@ export function validateStudioCommand(command) {
 		// final batch is still checked for overlap.
 		if (args.collisionPolicy === "avoid" && !args.ops.some(op => ["create", "update"].includes(op.op) && op.position?.relativeTo)) fail("INVALID_ARGUMENT", "collisionPolicy avoid needs at least one op with position.relativeTo (it nudges outward from that reference); other ops are placed as given.");
 	}
-	if (command.name === "generate_motion" && args.source.kind === "generate") {
-		args.source.beats = args.source.beats.map(beat => ({ ...beat, text: beat.text.trim().replace(/\s+/g, " ") }));
-		validateGenerationTiming(args.source);
-	}
 	if (command.name === "frame_shot" && args.framing.exact && JSON.stringify(args.framing.exact.position) === JSON.stringify(args.framing.exact.lookAt)) fail("INVALID_ARGUMENT", "Camera position and aim cannot coincide.");
 	if (command.name === "patch_elements") {
 		for (const op of args.ops) if (!Object.keys(op.set).length) fail("INVALID_ARGUMENT", "Patch has no fields.");
@@ -517,22 +501,6 @@ export function validateStudioCommand(command) {
 		}
 	}
 	return { name: command.name, args };
-}
-export function compileStudioBeats(value) {
-	const source = validateStudioSchema(generateSource, value);
-	const totalSeconds = validateGenerationTiming(source);
-	const frameCount = Math.round(totalSeconds * 24);
-	const blocks = []; let cumulative = 0, startFrame = 0;
-	for (const [sourceBeat, beat] of source.beats.entries()) {
-		cumulative += beat.seconds ?? totalSeconds / source.beats.length;
-		const end = sourceBeat === source.beats.length - 1 ? frameCount : Math.round(cumulative * 24);
-		const pieces = Math.ceil((end - startFrame) / 120), start = startFrame;
-		for (let i = 0; i < pieces; i++) {
-			const endFrameExclusive = start + Math.round((end - start) * (i + 1) / pieces);
-			blocks.push({ sourceBeat, text: beat.text.trim().replace(/\s+/g, " "), startFrame, endFrameExclusive }); startFrame = endFrameExclusive;
-		}
-	}
-	return freezeStudioData({ fps: 24, frameCount, durationSeconds: frameCount / 24, blocks });
 }
 export function validateReceipt(value) {
 	if (value?.ok === false) {

@@ -39,7 +39,6 @@ import { createStudioAppActions, commandDeclarations } from '../src/commands/ind
 import { HISTORY_LIMIT } from '../src/history.js';
 import { focalMmToFov, fovToFocalMm, IMAGE_MODELS, CUSTOM_MOVE, SUBJECT_HEIGHT_M, composePrompt, deriveShot } from '../src/shot.js';
 import { PART_COLOURS } from '../src/part-colours.js';
-import { buildH3MotionPrompt } from '../src/i2v-motion-client.js';
 import { objectTransformAt } from '../src/object-path.js';
 import { dispatchLiveFrame } from '../src/live-control.js';
 import { CSKEL27_NEUTRAL } from '../src/ardy/cskel27-neutral.js';
@@ -49,7 +48,7 @@ import { createMotionEdit } from '../src/ardy/motion-edit.js';
 import { applyMotionCalibration, normalizeMotionCalibration } from '../src/ardy/motion-calibration.js';
 import { decodeMotionResource, encodeMotionResource, resolveMotionSource, sha256Hex } from '../src/motion-resources.js';
 
-const cases = ['previs-mode-and-character-kind', 'verify-plan-and-geometry', 'inspect-entity-transforms', 'targeted-commit-and-undo', 'stale-target-and-epoch', 'selected-B-while-A-generates', 'edit-during-generation', 'invalid-prepare', 'mid-gesture-target', 'lost-acknowledgement', 'camera-undo', 'still-frame-shot-camera-key', 'clip-frame-shot-camera-key', 'rail-camera-undo', 'rail-camera-undo-after-object-undo', 'stop-before-commit', 'explicit-unverified-acceptance', 'context-revisions', 'recreated-motion-read-and-verify', 'stale-receipt-undo', 'unverified-default-refusal', 'reverted-edit-invalidates-target', 'motion-preserves-playhead', 'patch-character-tint-and-undo', 'patch-stage-key-light-and-undo', 'patch-partial-drop', 'patch-during-gesture', 'patch-shot-and-prompt-blocks', 'patch-stage-environment-text-and-undo', 'run-action-shot-create-and-undo', 'run-action-object-duplicate-and-undo', 'generate-all-blocks-refusal-reason', 'run-action-refusals', 'run-action-character-waypoints-and-undo', 'run-action-character-ik-keys-and-undo', 'run-action-object-attach-and-undo', 'ui-refusals-localized-or-silent', 'run-action-shot-camera-rail-and-undo', 'run-action-view-toggles', 'context-entity-index', 'context-assets', 'inspect-scopes', 'cursor-survives-edit', 'agent-motion-survives-reload', 'motion-job-states', 'verify-stale-receipt', 'verify-result-targets', 'late-apply-inspect-patch', 'arrange-with-attached-prop', 'arrange-local-space', 'run-action-export-shot-video', 'run-action-scenes', 'run-action-project-save', 'run-action-asset-import-and-undo', 'run-action-ai-prepare-shot', 'run-action-motion-generate-from-video'];
+const cases = ['previs-mode-and-character-kind', 'verify-plan-and-geometry', 'inspect-entity-transforms', 'targeted-commit-and-undo', 'stale-target-and-epoch', 'mid-gesture-target', 'lost-acknowledgement', 'camera-undo', 'still-frame-shot-camera-key', 'clip-frame-shot-camera-key', 'rail-camera-undo', 'rail-camera-undo-after-object-undo', 'context-revisions', 'recreated-motion-read-and-verify', 'stale-receipt-undo', 'reverted-edit-invalidates-target', 'patch-character-tint-and-undo', 'patch-stage-key-light-and-undo', 'patch-partial-drop', 'patch-during-gesture', 'patch-shot-and-prompt-blocks', 'patch-stage-environment-text-and-undo', 'run-action-shot-create-and-undo', 'run-action-object-duplicate-and-undo', 'run-action-refusals', 'run-action-character-waypoints-and-undo', 'run-action-character-ik-keys-and-undo', 'run-action-object-attach-and-undo', 'ui-refusals-localized-or-silent', 'run-action-shot-camera-rail-and-undo', 'run-action-view-toggles', 'context-entity-index', 'context-assets', 'inspect-scopes', 'cursor-survives-edit', 'verify-stale-receipt', 'verify-result-targets', 'late-apply-inspect-patch', 'arrange-with-attached-prop', 'arrange-local-space', 'run-action-export-shot-video', 'run-action-scenes', 'run-action-project-save', 'run-action-asset-import-and-undo', 'run-action-ai-prepare-shot'];
 const argv = process.argv.slice(2);
 assert(!argv.length || (argv.length === 2 && argv[0] === '--case' && cases.includes(argv[1])), 'Unknown test arguments');
 import { readStudioSource } from './bus/verify-domain-modules.mjs';
@@ -119,13 +118,6 @@ function fixture(options={}) {
   cameraMove:'Static / locked-off',customMove:'',hasCharSheet:false,hasEnvSheet:false,partColoursEnabled:false,shotOutput:{label:'16:9',width:1920,height:1080},characters:chars,
   captureFramingPng:framing=>{captures.push(framing);return `data:image/png;base64,${btoa(JSON.stringify(framing.pos))}`;},captureRef:ref(null),bufferToPng:()=>null,
   navigator:{clipboard:{writeText:async text=>{clipboard.push(text);}}}};
- // The hosted AI-video (Fal) service and the footage ingest behind it, as
- // stand-ins; the pose capture answers the 480P still the Fal canvas renders.
- const falScope={buildH3MotionPrompt,I2V_MOTION_MIN_DURATION:5,startMotionRequest,
-  captureI2vStill:()=>{if(stand.captureError)throw new Error(stand.captureError);return {dataUrl:'data:image/png;base64,QQ==',width:1664,height:960,partColours:[{part:'head'}],framing:keyA};},
-  submitMotionJob:async request=>{stand.falSubmits.push(request);if(stand.falSubmitError)throw new Error(stand.falSubmitError);return {job:{id:'fal-job-1',status:'queued'},dailyRemaining:3};},
-  waitForMotionJob:async(id,{onUpdate})=>{onUpdate({id,status:'running'});return structuredClone(stand.falFinished);},
-  ingestFootage:async source=>{stand.ingested.push(source);return stand.ingestResult;}};
  const scope={THREE,cloneSkeleton,createCommandBus,HISTORY_LIMIT,...characterKind,isProxyFigure,placementAt,...protocol,...context,...commands,...objects,...ik,...playback,verifyInstalledTake:studioMotion.verifyInstalledTake,copyPhysicsKeys,physicsKeyStamp,sampleAt,shotAtFrame,focalMmToFov,fovToFocalMm,objectTransformAt,aimAt,forwardFrom,
  liveStateRef:live,sceneRevisionRef:revision,charactersRef:characterRef,loadedLayerCharRef:ref(a.id),bufferRef:buffer,ikStateRef:state,ikStatesRef:layers,storeRef:store,
  charHistoryRef:history,opClockRef:clock,lastObjectOpRef:lastObject,studioHistoryRef:studioHistory,studioActionGroupRef:ref(null),motionFullRef:ref(new Map()),
@@ -149,10 +141,6 @@ function fixture(options={}) {
  scope.setToast=value=>{values.setToast=studioActions.resolveStudioToast(value,Boolean(options.korean),scope.ko).uiMessage;};
  // App's render-time choice for the Send-to-AI package (its mode/imageModel state).
  Object.assign(scope,aiScope,{mode:'image',imageModel:'gpt_image_2'});
- // App's Fal state: locked for this account until a test enables it.
- Object.assign(scope,falScope,{i2vMotionEnabled:false,i2vMotion:{a:null,b:null,job:null,status:'idle',error:'',instruction:'',dailyRemaining:null}});
- for(const name of ['setMultiModelSource','setI2vMotionStudioOpen'])scope[name]=noPublish(name);
- scope.setI2vMotion=value=>{renderState.i2vMotion=typeof value==='function'?value(renderState.i2vMotion):value;};
  scope.setMotion=value=>{noPublish('setMotion')(value);for(const done of motionSet.splice(0))done(value);};
  scope.setScenes=noPublish('setScenes');
  scope.openScene=(scene,nextScenes)=>{scope.scenesRef.current=nextScenes;live.current.scenes=nextScenes;scope.activeSceneIdRef.current=scene.id;scope.studioSceneEpochRef.current=crypto.randomUUID();};
@@ -161,7 +149,7 @@ function fixture(options={}) {
   'validateWaypointAt','castMemberOf','readCharacterWaypoints','writeCharacterWaypoints','addCharacterWaypoint','moveCharacterWaypoint','removeCharacterWaypoint','clearCharacterWaypoints',
   'switchSceneDocument','addSceneDocument','duplicateSceneDocument','renameSceneDocument','deleteSceneDocument',
   'selectSceneDocument','createSceneDocumentFromUi','duplicateSceneDocumentFromUi','renameSceneDocumentFromUi','deleteSceneDocumentFromUi',
-  'generate','copyPrompt','framingDistance','showI2vMotionLock','generateI2vMotion','generateI2vMotionFromUi','i2vMotionUnavailable'];
+  'generate','copyPrompt'];
  // The extracted App functions now reach these same fixture-owned cells through the facade.
  scope.appContext=createAppContext({characters:characterRef,state:live,scenes:scope.scenesRef,getBus:()=>scope.studioBindingRef.current.bus,notify:(...args)=>scope.setToast(...args)}).forRender(scope);
  scope.stageDomain=scope;
@@ -176,8 +164,8 @@ function fixture(options={}) {
  Object.assign(scope,actual);
  // React re-renders App with the state it committed: these functions close
  // over render-time state, so every commit is a fresh evaluation of them.
- const renderNames=['generate','copyPrompt','framingDistance','showI2vMotionLock','generateI2vMotion','generateI2vMotionFromUi','i2vMotionUnavailable'];
- const renderState={mode:scope.mode,imageModel:scope.imageModel,i2vMotionEnabled:scope.i2vMotionEnabled,i2vMotion:scope.i2vMotion},committed={...renderState};
+ const renderNames=['generate','copyPrompt'];
+ const renderState={mode:scope.mode,imageModel:scope.imageModel},committed={...renderState};
  const renderApp=()=>{const s={...scope,...committed,runStudioAction:actual.runStudioAction};s.appContext=scope.appContext.forRender(s);return new Function(...Object.keys(s),renderNames.map(n=>declarations.get(n)).join('\n')+`\nreturn {${renderNames.join(',')}};`)(...Object.values(s));};
  let rendered=renderApp();
  let binding; const stamps=new Map();
@@ -198,9 +186,7 @@ function fixture(options={}) {
   state:()=>({shots:live.current.shots,objects:store.current.objects,characters:characterRef.current,frame:0,frameCount:48,selectedObjectId:null,activeCharacterId:'actor-a',promptBlockCount:stand.promptBlockCount,generating:false,motionReady:true,
    exporting:stand.exporting,canExportVideo:live.current.shots.length>0,
    scenes:scope.scenesRef.current.map(({id,name})=>({id,name})),activeSceneId:scope.activeSceneIdRef.current,project:{...stand.project},
-   aiShot:{mode:committed.mode,imageModel:committed.imageModel},
-   i2vMotion:{enabled:committed.i2vMotionEnabled,status:committed.i2vMotion.status,dailyRemaining:committed.i2vMotion.dailyRemaining}}),
-  generateI2vMotion:(...args)=>rendered.generateI2vMotion(...args),
+   aiShot:{mode:committed.mode,imageModel:committed.imageModel}}),
   setAiShotMode:value=>{renderState.mode=value;},setAiImageModel:value=>{renderState.imageModel=value;},generate:()=>rendered.generate(),
   saveProject:async saveAs=>{stand.saves.push(saveAs);return stand.saveOutcome;},
   projectFileGranted:async()=>stand.granted,
@@ -286,7 +272,6 @@ const stageEvidence = (patch = {}) => Object.entries({
  'stage.camera': {text:'16:9'}, 'stage.cameraPresetId': {text:null}, 'stage.sensorId': {text:'fullFrame'},
  ...patch,
 }).map(([path,value])=>({path,...value}));
-async function motionCase(name) { return (await import('./bus/motion-binding-cases.mjs')).runMotionBindingCase(name); }
 async function railCameraUndo(f, interleaveObject) {
  const shot=createShot('Rail shot',0,47,[],{mode:'rail',cameraRail:[{x:-2,z:4},{x:2,z:4}],railFollow:{mode:'range',startFrame:0,endFrame:47},followCam:{pitchOffsetDeg:4},craneHeight:{points:[{t:0,height:1.2},{t:1,height:2.4}]}});
  f.scope.setShots([shot]);f.live.current.shots=[shot];
@@ -429,8 +414,6 @@ const implementations={
   const refused=await f.call('verify_result',f.request('verify_result',{receiptId:shot.receiptId,checks:['framing'],visual:'plan'}));
   assert.equal(refused.code,'CAPABILITY_MISSING',JSON.stringify(refused));
  },
- async 'motion-job-states'(){ await motionCase('motion-job-states'); },
- async 'agent-motion-survives-reload'(){ await motionCase('agent-motion-survives-reload'); },
  async 'previs-mode-and-character-kind'(){
   const proxy=createCharacterEntry({id:'actor-cap',model:'proxy-figure',x:2,z:2,posture:'lie'});
   const g=fixture({previsMode:'storyboard',characters:[createCharacterEntry({id:'actor-a',model:'y-bot-tpose',x:0,z:0}),proxy]});
@@ -561,7 +544,6 @@ const implementations={
   assert.equal(rows.entities.find(e=>e.id===child).color,'#d94a4a');
   assert.equal(rows.entities.find(e=>e.id==='actor-a').tint,'#123456');assert.equal(rows.entities.find(e=>e.id==='actor-a').modelId,'y-bot-tpose');
  },
- async 'motion-preserves-playhead'(){ await motionCase('motion-preserves-playhead'); },
  async 'patch-character-tint-and-undo'(f){const before=f.binding.refresh().revision;const r=await f.call('patch_elements',f.request('patch_elements',{ops:[{target:{kind:'character',id:'actor-a'},set:{tint:'#123456',pose:'pose-wave'}}]}));assert.equal(r.status,'applied',JSON.stringify(r));assert.equal(r.revision.before,before);assert.equal(r.revision.after,before+1);assert.deepEqual(r.ops,[{index:0,status:'applied'}]);assert.deepEqual(r.delta,[{id:'actor-a',after:{patched:[{path:'character.tint',text:'#123456'},{path:'character.pose',text:'pose-wave'}]}}]);assert.equal(f.characterRef.current.find(c=>c.id==='actor-a').tint,'#123456');assert.equal(f.characterRef.current.find(c=>c.id==='actor-a').pose.id,'pose-wave');assert.equal(f.history.current.past.length,1);const undo=await f.call('undo_edit',f.request('undo_edit',{receiptId:r.receiptId}));assert.equal(undo.status,'undone',JSON.stringify(undo));assert.equal(f.characterRef.current.find(c=>c.id==='actor-a').tint,null);assert.equal(f.characterRef.current.find(c=>c.id==='actor-a').pose,null);},
  async 'patch-stage-key-light-and-undo'(f){const before=f.binding.refresh().revision;const r=await f.call('patch_elements',f.request('patch_elements',{ops:[{target:{kind:'stage'},set:{'keyLight.intensity':2.5,camera:'9:16'}}]}));assert.equal(r.status,'applied',JSON.stringify(r));assert.equal(r.revision.after,before+1);assert.deepEqual(r.affectedIds,['scene']);assert.deepEqual(r.delta[0].after.patched,stageEvidence({'stage.keyLight.intensity':{number:2.5},'stage.camera':{text:'9:16'}}));assert.equal(f.live.current.stage.keyLight.intensity,2.5);assert.equal(f.live.current.stage.shotAspect,'9:16');assert.equal(f.history.current.past.length,1);assert.equal(f.binding.refresh().revision,before+1,'one stage patch is one authored revision');const undo=await f.call('undo_edit',f.request('undo_edit',{receiptId:r.receiptId}));assert.equal(undo.status,'undone',JSON.stringify(undo));assert.equal(f.live.current.stage.keyLight.intensity,1.12);assert.equal(f.live.current.stage.shotAspect,'16:9');},
  async 'patch-partial-drop'(f){
@@ -588,7 +570,6 @@ const implementations={
   const [described]=(await f.call('inspect_studio',{scope:'actions',ids:['shot.create']})).actions;
   assert.deepEqual(described.input,studioActions.studioActionDeclaration('shot.create').input,'ids answer the schema');
   assert.equal(byId['shot.remove'].available,false);assert.equal(typeof byId['shot.remove'].reason,'string');
-  assert.equal(byId['motion.generateAllBlocks'].available,false,'there are no prompt blocks to generate');
   const before=f.binding.refresh().revision;
   const r=await f.call('run_action',f.request('run_action',{action:'shot.create',args:{}}));
   assert.equal(r.status,'applied',JSON.stringify(r));assert.equal(r.action,'shot.create');assert.equal(typeof r.summary,'string');
@@ -616,22 +597,11 @@ const implementations={
   const undo=await f.call('undo_edit',f.request('undo_edit',{receiptId:r.receiptId}));
   assert.equal(undo.status,'undone',JSON.stringify(undo));assert.deepEqual(f.store.current.objects.map(o=>o.id),[id]);
  },
- async 'generate-all-blocks-refusal-reason'(f){
-  // The editor starts the generation synchronously or refuses it with a toast
-  // (here: a root waypoint on the clip's last frame). The agent gets that
-  // reason, not only that nothing started.
-  f.stand.promptBlockCount=1;f.stand.generationToasts=['Root waypoint frames must stay inside 1..71'];
-  const r=await f.call('run_action',f.request('run_action',{action:'motion.generateAllBlocks'}));
-  assert.equal(r.ok,false,JSON.stringify(r));assert.equal(r.code,'TARGET_NOT_READY',JSON.stringify(r));assert.equal(r.mutated,false);
-  assert.match(r.message,/Root waypoint frames must stay inside 1\.\.71/,JSON.stringify(r));
-  assert.equal(f.stand.generationRuns,1,'the editor was asked once');
- },
  async 'run-action-refusals'(f){
   const refused=async(args,code)=>{const r=await f.call('run_action',f.request('run_action',args));assert.equal(r.ok,false,JSON.stringify(r));assert.equal(r.code,code,JSON.stringify(r));assert.equal(r.mutated,false);};
   await refused({action:'shot.teleport'},'INVALID_ARGUMENT');
   await refused({action:'shot.create',args:{frame:3}},'INVALID_ARGUMENT');
   await refused({action:'shot.remove',args:{shotId:'shot-missing'}},'TARGET_NOT_READY');
-  await refused({action:'motion.generateAllBlocks'},'TARGET_NOT_READY');
   await refused({action:'object.duplicate',args:{objectId:'missing'}},'TARGET_NOT_READY');
   const stale=f.request('run_action',{action:'shot.create'});stale.expectedRevision++;
   assert.equal((await f.call('run_action',stale)).code,'STALE_SCENE');
@@ -650,7 +620,7 @@ const implementations={
   assert.equal(added.status,'applied',JSON.stringify(added));assert.equal(added.action,'character.addWaypoint');
   assert.deepEqual(added.affectedIds,['actor-b']);assert.deepEqual(added.revision,{before,after:before+1});assert.match(added.summary,/frame 24/);
   assert.deepEqual(await path('actor-b'),[{frame:24,position:{x:5,y:0,z:0}}]);
-  assert.equal(f.stand.waypointMode,true,'an agent-added waypoint turns Waypoint mode on, so motion.generateAllBlocks follows the path');
+  assert.equal(f.stand.waypointMode,true,'an agent-added waypoint turns Waypoint mode on');
   assert.deepEqual(f.buffer.current.waypoints,[],'the active character keeps its own path');
   // Without a frame the pin is paced at a walk: 1.4 m from actor-a's spot is one second.
   const paced=await run('character.addWaypoint',{characterId:'actor-a',position:{x:1.4,z:0}});
@@ -1036,88 +1006,10 @@ const implementations={
   await refused({model:'midjourney'},'INVALID_ARGUMENT',/.+/);
   assert.strictEqual(shown(),last);
  },
- async 'run-action-motion-generate-from-video'(f){
-  const run=args=>f.call('run_action',f.request('run_action',{action:'motion.generateFromVideo',args}));
-  const listed=async()=>Object.fromEntries((await f.call('inspect_studio',{scope:'actions'})).actions.map(a=>[a.id,a]));
-  const refused=async(args,code,pattern)=>{const r=await run(args);assert.equal(r.ok,false,JSON.stringify(r));assert.equal(r.code,code,JSON.stringify(r));assert.equal(r.mutated,false);assert.match(r.message??'',pattern,JSON.stringify(r));assert(!/[\uac00-\ud7a3]/.test(r.message),`the model reads English: ${r.message}`);return r;};
-  const hangul=/[\uac00-\ud7a3]/;
-  // Locked for this account (as on the development host): unavailable with the
-  // reason, and nothing reaches the hosted model.
-  const locked=(await listed())['motion.generateFromVideo'];
-  assert.equal(locked?.available,false,JSON.stringify(locked));assert.match(locked.reason,/not enabled/);
-  await refused({instruction:'wave'},'TARGET_NOT_READY',/not enabled/);
-  // The agent panel's Generate motion chip dispatches the same action. Locked,
-  // it shows no toast, and the AI motion card shows the lock generateI2vMotion shows.
-  f.values.setToast=undefined;
-  assert.equal(f.rendered().generateI2vMotionFromUi('wave'),null);
-  assert.equal(f.values.setToast,undefined,'the chip stays toast-silent');
-  const shownLock={error:f.renderState.i2vMotion.error,status:f.renderState.i2vMotion.status};
-  f.render({i2vMotion:{...f.renderState.i2vMotion,error:'',status:'idle'}});
-  await f.rendered().generateI2vMotion('act','wave');
-  assert.deepEqual(shownLock,{error:f.renderState.i2vMotion.error,status:'error'},'the chip shows the same lock line as the AI motion card path');
-  assert.deepEqual(f.stand.falSubmits,[]);
-  // Enabled: the act path captures pose A itself, sends it with the
-  // instruction, waits for the clip and ingests it.
-  f.render({i2vMotionEnabled:true,i2vMotion:{...f.renderState.i2vMotion,error:'',status:'idle',dailyRemaining:3}});
-  assert.equal((await listed())['motion.generateFromVideo']?.available,true);
-  const before=f.binding.refresh().revision;
-  const done=await run({instruction:'wave both hands'});
-  assert.deepEqual({ok:done.ok,kind:done.kind,status:done.status,affectedIds:done.affectedIds},{ok:true,kind:'job',status:'completed',affectedIds:[]},JSON.stringify(done));
-  assert.deepEqual(done.output,{videoUrl:'https://cdn.example.test/fal-act.mp4',resolution:'480P',durationSeconds:5,ingested:true,frames:120,fps:24,dailyRemaining:2},JSON.stringify(done.output));
-  assert(!JSON.stringify(done).includes('data:image'),'the pose still stays in the Studio');
-  assert.equal(f.stand.falSubmits.length,1);
-  const sent=f.stand.falSubmits[0];
-  assert.deepEqual({kind:sent.kind,still:sent.still,duration:sent.duration},{kind:'act',still:'data:image/png;base64,QQ==',duration:5});
-  assert.equal(sent.prompt,buildH3MotionPrompt('wave both hands'));
-  assert.deepEqual(f.stand.ingested,[{kind:'url',url:'https://cdn.example.test/fal-act.mp4',name:'Fal H3 Max Turbo · 480P'}]);
-  assert.equal(f.values.setResultOpen,true);assert.equal(f.values.setResult.videoUrl,'https://cdn.example.test/fal-act.mp4');
-  assert.equal(f.renderState.i2vMotion.status,'done');assert.equal(f.renderState.i2vMotion.a?.dataUrl,'data:image/png;base64,QQ==');
-  assert.match(f.values.setToast,/AI video is ready/,'the success toast is the AI motion card\'s');
-  assert.equal(f.binding.refresh().revision,before,'nothing is authored');assert.equal(f.history.current.past.length,0);
-  // Busy, or out of today's quota: unavailable with the reason.
-  f.render({i2vMotion:{...f.renderState.i2vMotion,status:'queued'}});
-  assert.match((await listed())['motion.generateFromVideo'].reason,/already running/);
-  // The chip clears the typed instruction when clicked, so a refusal says why.
-  const submitsBusy=f.stand.falSubmits.length;f.values.setToast=undefined;
-  assert.equal(f.rendered().generateI2vMotionFromUi('wave again'),null);
-  assert.equal(f.values.setToast,'A generation is already running','a busy chip click says a generation is running');
-  assert.equal(f.renderState.i2vMotion.status,'queued','the running job keeps its status');
-  assert.equal(f.stand.falSubmits.length,submitsBusy,'a busy chip click sends nothing');
-  f.render({i2vMotion:{...f.renderState.i2vMotion,status:'done',dailyRemaining:0}});
-  assert.match((await listed())['motion.generateFromVideo'].reason,/daily/);
-  f.values.setToast=undefined;
-  assert.equal(f.rendered().generateI2vMotionFromUi('wave again'),null);
-  assert.equal(f.values.setToast,'No AI video motion generations left today','an out-of-quota chip click says so');
-  assert.equal(f.stand.falSubmits.length,submitsBusy,'an out-of-quota chip click sends nothing');
-  // Failures reach the model in English; the AI motion card keeps the line it showed.
-  f.render({i2vMotion:{...f.renderState.i2vMotion,a:null,status:'idle',dailyRemaining:2}});
-  f.stand.captureError='캡처할 수 없어요';
-  await refused({instruction:'jump'},'TARGET_NOT_READY',/pose frame/);
-  assert.deepEqual({error:f.renderState.i2vMotion.error,status:f.renderState.i2vMotion.status},{error:'캡처할 수 없어요',status:'error'});
-  f.stand.captureError=null;f.render();f.stand.falSubmitError='Daily motion limit reached.';
-  await refused({instruction:'jump'},'TARGET_NOT_READY',/Daily motion limit reached/);
-  assert.equal(f.renderState.i2vMotion.status,'error');
-  f.stand.falSubmitError=null;f.render({i2vMotion:{...f.renderState.i2vMotion,status:'idle'}});
-  f.stand.falFinished={job:{id:'fal-job-1',status:'failed',error:'content policy'},dailyRemaining:2};
-  await refused({instruction:'jump'},'TARGET_NOT_READY',/content policy/);
-  assert(!f.stand.falSubmits.slice(1).some(request=>hangul.test(request.prompt)));
-  await refused({instruction:''},'INVALID_ARGUMENT',/.+/);
-  // The chip, enabled, runs the action to its end like the agent.
-  f.stand.falFinished={job:{id:'fal-job-2',status:'done',video:{url:'https://cdn.example.test/fal-spin.mp4'},resolution:'480P',duration:5},dailyRemaining:1};
-  f.render({i2vMotion:{...f.renderState.i2vMotion,status:'idle'}});
-  const ui=f.rendered().generateI2vMotionFromUi('spin around');
-  assert.equal(typeof ui?.then,'function');
-  assert.equal((await ui).output.videoUrl,'https://cdn.example.test/fal-spin.mp4');
-  assert.equal(f.stand.falSubmits.at(-1).prompt,buildH3MotionPrompt('spin around'));
- },
  async 'stale-receipt-undo'(f){const first=await f.call('arrange_objects',f.request('arrange_objects',createArgs));await f.call('arrange_objects',f.request('arrange_objects',createArgs));const before=f.store.current.objects;const r=await f.call('undo_edit',f.request('undo_edit',{receiptId:first.receiptId}));assert.equal(r.code,'UNDO_CONFLICT');assert.strictEqual(f.store.current.objects,before);},
- async 'unverified-default-refusal'(){ await motionCase('unverified-default-refusal'); },
  async 'reverted-edit-invalidates-target'(f){const token=f.binding.guard('actor-a').token,original=f.characterRef.current;f.actual.publishStudioCharacters(original.map(c=>c.id==='actor-a'?{...c,x:1}:c),true);f.actual.publishStudioCharacters(original,true);assert.notEqual(f.binding.guard('actor-a').token,token,'editing and reverting must not revive an admitted target');},
  async 'targeted-commit-and-undo'(f){const before=f.store.current.objects;const r=await f.call('arrange_objects',f.request('arrange_objects',createArgs));assert.equal(r.ok,true,JSON.stringify(r));assert.equal(r.revision.after,1);assert.equal(f.store.current.depths().past,1);assert.equal(f.store.current.objects[0].x,2);assert.equal(f.scope.appContext.storeDomain('objects').documentStore.getSnapshot().revision,1);assert.equal(f.semantic.length,0,'objects no longer publish through the native semantic-state adapter');const undo=await f.call('undo_edit',f.request('undo_edit',{receiptId:r.receiptId}));assert.equal(undo.status,'undone',JSON.stringify(undo));assert.strictEqual(f.store.current.objects,before);},
  async 'stale-target-and-epoch'(f){const r=f.request('arrange_characters',{ops:[{op:'update',characterId:'actor-a',position:{world:{x:1,y:0,z:0}}}]});f.scope.studioSceneEpochRef.current='new-epoch';const result=await f.call('arrange_characters',r);assert.equal(result.code,'STALE_SCENE');assert.equal(f.history.current.past.length,0);},
- async 'selected-B-while-A-generates'(){ await motionCase('selected-B-while-A-generates'); },
- async 'edit-during-generation'(){ await motionCase('edit-during-generation'); },
- async 'invalid-prepare'(){ await motionCase('invalid-prepare'); },
  async 'mid-gesture-target'(f){f.scope.studioGestureRef.current=true;const r=await f.call('arrange_objects',f.request('arrange_objects',createArgs));assert.equal(r.code,'TARGET_BUSY');assert.equal(f.store.current.depths().past,0);},
  async 'lost-acknowledgement'(f){const request=f.request('arrange_objects',createArgs);const r=await f.call('arrange_objects',request);assert(r.ok);const replay=await f.call('reconcile_studio_command',{host:f.host(),commandId:request.commandId});assert.equal(replay.status,'applied');assert.deepEqual(replay.receipt,r);assert.deepEqual(await f.call('arrange_objects',request),r);assert.equal(f.store.current.depths().past,1);assert.equal((await f.call('reconcile_studio_command',{host:f.host(),commandId:'unknown'})).status,'unknown');},
  async 'camera-undo'(f){const before=f.actual.snapshotStudioDomain('shot');const r=await f.call('frame_shot',f.request('frame_shot',{subjectIds:['actor-a'],keyAtFrame:0,framing:{exact:{position:{x:0,y:1.6,z:5},lookAt:{x:0,y:1,z:0},focalMm:35}}}));assert.equal(r.ok,true,JSON.stringify(r));assert.equal(f.live.current.shots[0].cameraKeys.length,1);assert.equal(f.scope.shotsDomain.documentStore.depths().past,1);assert.equal(f.history.current.past.length,0);assert(f.actual.stepStudioHistory(false));assert.deepEqual(f.live.current.shots,before.shots);assert.deepEqual(f.scope.shotCamRef.current.position.toArray(),Object.values(before.camera.position));assert(Math.abs(f.scope.shotCamRef.current.fov-focalMmToFov(before.camera.focalMm,'fullFrame',16/9)*180/Math.PI)<1e-9);},
@@ -1150,8 +1042,6 @@ const implementations={
  },
  async 'rail-camera-undo'(f){await railCameraUndo(f,false);},
  async 'rail-camera-undo-after-object-undo'(f){await railCameraUndo(f,true);},
- async 'stop-before-commit'(){ await motionCase('stop-before-commit'); },
- async 'explicit-unverified-acceptance'(){ await motionCase('explicit-unverified-acceptance'); },
  async 'context-revisions'(f){const before=f.binding.context();assert.equal(before.host.workspaceHandle,'handle');f.binding.handlers.operate_studio(f.request('operate_studio',{frame:3}));const view=f.binding.context();assert.equal(view.revision.scene,before.revision.scene);assert.equal(view.revision.physics,before.revision.physics);assert(view.revision.view>before.revision.view);assert.equal(view.entities.find(e=>e.id==='actor-a').token,before.entities.find(e=>e.id==='actor-a').token);f.scope.ikStatesRef.current.set('actor-b',{...ik.createIkState(),keys:new Map([[1,new Map([['hips',{p:new THREE.Vector3(0,1,0),q:[new THREE.Quaternion()]}]])]])});const changed=f.binding.context();assert(changed.revision.physics>view.revision.physics);assert.notEqual(changed.entities.find(e=>e.id==='actor-b').token,view.entities.find(e=>e.id==='actor-b').token);},
  async 'recreated-motion-read-and-verify'(f){const baseline=f.binding.context();const equivalent=()=>({...clip(),studioTakeId:'equivalent-take'});f.buffer.current.motion=equivalent();const first=f.binding.context();assert.equal(first.revision.scene,baseline.revision.scene);assert.equal(first.recentReceipts.length,0);f.buffer.current.motion=equivalent();const second=f.binding.context();assert.equal(second.revision.scene,baseline.revision.scene);assert.equal(second.recentReceipts.length,0);const mutation=await f.call('arrange_objects',f.request('arrange_objects',createArgs));assert.equal(mutation.ok,true,JSON.stringify(mutation));assert.equal(mutation.revision.before,baseline.revision.scene);assert.equal(mutation.revision.after,baseline.revision.scene+1);const verified=await f.call('verify_result',f.request('verify_result',{receiptId:mutation.receiptId,checks:['placement'],visual:'none'}));assert.equal(verified.receiptId,mutation.receiptId);assert.equal(verified.revision,mutation.revision.after);assert.equal(verified.stale,false,'verify_result must not be stale after an immediate authored receipt');}
 };

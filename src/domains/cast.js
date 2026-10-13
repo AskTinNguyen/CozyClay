@@ -20,7 +20,6 @@ import {
 	nextCharacterId,
 	MAX_WAYPOINTS,
 	MULTIMODEL_REASONS,
-	ARDY_DURATION_MIN,
 	TIMELINE_FPS,
 } from "../app-stage.jsx";
 import { ko, isKo } from "../locale.js";
@@ -38,7 +37,7 @@ import { shotAtFrame } from "../cuts.js";
 
 const sameCastValue = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
-export function createCastDomain(appContext, initial, customPoses = []) {
+function createCastDomain(appContext, initial, customPoses = []) {
 	const normalize = value => ({ characters: (Array.isArray(value) ? value : value.characters).map(createCharacterEntry),
 		customPoses: Array.isArray(value) ? customPoses : value.customPoses ?? customPoses });
 	let native = createDocumentStore({ owned: { cast: normalize(initial) } });
@@ -625,7 +624,6 @@ export function useCast(appContext) {
 		const next = !waypointMode;
 		// Both modes want the viewport pointer; the last one switched on wins,
 		// the other stands down rather than fighting for pointerdown.
-		if (next && appContext.shared.lineEditMode) appContext.shared.exitLineEditMode();
 		setWaypointMode(next);
 		if (!next) {
 			setPendingWaypointFrame(null);
@@ -815,14 +813,12 @@ export function useCast(appContext) {
 		const receipt = domain.run('character.addPromptBlock', { characterId: domain.activeId, frame });
 		const clip = domain.read().find(entry => entry.id === domain.activeId).layer.promptClips.find(clip => !before.some(row => row.id === clip.id));
 		setSelectedPromptId(clip.id);
-		appContext.shared.setArdyDuration(Math.max(ARDY_DURATION_MIN, clip.endFrame / TIMELINE_FPS));
 		trackFeature('prompt_block_add'); return receipt;
 	}
 
 	function changePromptClip(id, text) {
 		domain.beginGesture();
 		const receipt = domain.edit('character.changePromptBlock', { characterId: domain.activeId, id, text });
-		if (id === selectedPromptId) appContext.shared.setArdyPrompt(text);
 		return receipt;
 	}
 
@@ -990,7 +986,7 @@ export function useCast(appContext) {
 		if (!shots) return;
 		const current = domain.projection(), active = current.find(entry => entry.id === domain.activeId) ?? current[0];
 		const extent = timelineContentExtent(current, active.id, appContext.shared.bufferRef.current.motion,
-			active.layer.promptClips, appContext.shared.motionDomain.multiModelFootage?.frames);
+			active.layer.promptClips, null);
 		domain.setTimeline(Math.max(24, timelineSpan(extent, shots.read(), shots.state().frameCount)));
 	};
 	domain.extendTimeline = domain.syncTimeline;

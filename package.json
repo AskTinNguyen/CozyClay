@@ -119,7 +119,6 @@
     "mcp/live-hub.mjs",
     "mcp/mesh-file.mjs",
     "mcp/image-file.mjs",
-    "mcp/ardy-prompts.mjs",
     "mcp/runtime",
     "mcp/package.json",
     "mcp/README.md",

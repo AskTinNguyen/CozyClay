@@ -4,10 +4,6 @@ import { fail, characterOf } from "./shared.js";
 import { elementSetSchema, registerElementSet } from './elements.js';
 import './elements/motion.js';
 import './elements/character.js';
-import { generationArgs } from '../motion/generation.js';
-import { applyRootDrop, normalizeRootDrop } from '../ardy/root-drop.js';
-import { characterScaleFor } from '../ardy/npz.js';
-import { I2V_MOTION_DURATIONS } from '../i2v-motion-client.js';
 import { createMotionEdit, trimMotionEdit, splitMotionEdit, setMotionSegmentSpeed, removeMotionSegment } from '../ardy/motion-edit.js';
 const id = { type: 'string', minLength: 1 }, frame = { type: 'integer', minimum: 0 };
 const input = (properties, required = Object.keys(properties)) => ({ type: 'object', properties, required, additionalProperties: false });
@@ -39,10 +35,6 @@ const edits = [
 	mutation('motion.removeSegment', 'Remove motion segment', { characterId: id, id }),
 	mutation('motion.fixCollisions', 'Fix body collisions', { characterId: id, scope: { type: 'string', enum: ['frame', 'clip'], default: 'frame' } }, ['characterId']),
 ];
-const generate = { id: 'motion.generate', label: 'Generate motion', description: 'Generate the named character through the editor pipeline, following its prompt blocks, root path, pose pins and take lineage.',
-	kind: 'job', domain: 'motion', generation: 'motion', background: true, timeoutMs: 1000,
-	input: input({ characterId: id, drop, blocks: elementSetSchema('character').properties.set.properties.layer.properties.promptClips,
-		durationSeconds: { type: 'number', minimum: 1, maximum: 1200 }, seed: { type: 'integer', minimum: 0, maximum: 2147483647 } }, ['characterId']) };
 const prepared = { ...mutation('motion.applyPrepared', 'Apply prepared motion edit', { characterId: id, token: id }), exposure: 'ui-only' };
 const loads = [
 	{ id: 'motion.replace', label: 'Replace take', input: input({ characterId: id, url: id, prompt: { type: 'string', default: '' },
@@ -65,48 +57,17 @@ const physics = { id: 'motion.autoPhysics', label: 'Review motion physics', desc
 	}, ['characterId']) };
 // These only queue the existing editor producers. Their eventual take
 // publication is owned above; generation-pipeline unification remains #444.
-const queued = ['motion.commitLineEdit', 'motion.regenerateTrail'].map(id => ({ id, label: id === 'motion.commitLineEdit' ? 'Commit line edit' : 'Regenerate trail edit',
-	description: 'Queue the current editor draft through the existing generation producer.', kind: 'transient', exposure: 'ui-only', input: input({ characterId: { type: 'string' } }) }));
 const legacyIk = ['character.setIkKey', 'character.removeIkKey', 'character.clearIkKeys'].map(studioActionDeclaration);
 const ik = legacyIk.map((entry, index) => ({ ...entry, id: ['ik.setKey', 'ik.removeKey', 'ik.clearKeys'][index] }));
 
 const clear = { id: 'motion.clear', label: 'Clear motion', description: 'Clear the active take, its corrections, prompt blocks and take-owned cast fields.',
 	kind: 'mutation', undoDomain: 'motion', input: { type: 'object', properties: { characterId: { type: 'string' } }, required: ['characterId'], additionalProperties: false } };
-const videoDraft = { id: 'motion.setVideoDraft', label: 'Set video motion draft', description: 'Set the uncommitted AI-video form without changing the project or its history.', kind: 'transient',
-	input: input({ instruction: { oneOf: [{ const: '' }, { type: 'string', maxLength: 3700 }] }, promptOverride: { oneOf: [{ const: '' }, { type: 'string', maxLength: 3700 }] }, duration: { oneOf: I2V_MOTION_DURATIONS.map(value => ({ const: value })) } }, []) };
-export const declarations = Object.freeze([videoDraft, generate, ...queued, prepared, ...loads, physics, ...tools, ...rangePins, ...platformFit, ...edits, ...legacyIk, ...ik, clear, ...["motion.generateAllBlocks", "motion.generateFromVideo"].map(studioActionDeclaration)]);
+export const declarations = Object.freeze([prepared, ...loads, physics, ...tools, ...rangePins, ...platformFit, ...edits, ...legacyIk, ...ik, clear]);
 
 export function register(registry, ports) {
 	const owner = () => ports.storeDomain('motion');
 	const mounted = () => Boolean(ports.storeDomain?.('motion')) || 'The motion owner is not mounted.';
 	const take = characterId => { characterOf(ports, characterId); return owner().motionFor(characterId) ?? fail('TARGET_NOT_READY', 'Load a take for this character first.'); };
-	registry.register({ ...videoDraft, available: mounted, run(args) {
-		owner().setVideoDraft(args);
-		return { affectedIds: [], summary: videoDraft.label };
-	} });
-	registry.registerToolAlias('generate_motion', generate.id, generationArgs);
-	registry.register({ ...generate, available: mounted, target: args => args.characterId, async run(args, context) {
-		characterOf(ports, args.characterId);
-		if (owner().isGenerating()) fail('TARGET_BUSY', 'A motion generation is already running.');
-		if (args.drop && !normalizeRootDrop(args.drop)) fail('INVALID_ARGUMENT', 'Invalid drop.');
-		if (args.blocks) context.run('character.setPromptBlocks', { characterId: args.characterId, blocks: args.blocks });
-		const generationContext = !args.drop ? context : { ...context, commit: apply => context.commit(() => {
-			const result = apply(), take = owner().motionFor(args.characterId), layer = owner().layer(args.characterId);
-			owner().replace(args.characterId, applyRootDrop(take, args.drop, { worldScale: characterScaleFor(take) }), {
-				recipe: layer.takeRecipe, versions: layer.takeVersions, ikKeys: layer.ikKeys,
-			});
-			owner().writeLayer(args.characterId, { committedIkEdits: layer.committedIkEdits });
-			return result;
-		}) };
-		await owner().generate(args, generationContext);
-		return { affectedIds: [args.characterId], summary: 'Generated motion.' };
-	} });
-	for (const declaration of queued) registry.register({ ...declaration, available: mounted, run({ characterId }) {
-		characterOf(ports, characterId);
-		if (ports.state().activeCharacterId !== characterId) fail('TARGET_NOT_READY', 'Select the character that owns this editor draft.');
-		if (declaration.id === 'motion.commitLineEdit') owner().requestLineEdit(); else owner().requestTrailRegeneration();
-		return { affectedIds: [], summary: declaration.label };
-	} });
 	registry.register({ ...prepared, available: mounted, run({ characterId, token }) {
 		characterOf(ports, characterId); const result = owner().applyPrepared(token);
 		return { affectedIds: result?.affectedIds ?? [characterId], summary: prepared.label };
@@ -195,37 +156,5 @@ export function register(registry, ports) {
 				ports.clearMotionNative();
 			}
 			return { affectedIds: [characterId], summary: 'Cleared motion and prompt blocks.' };
-		} });
-	registry.register({ ...studioActionDeclaration("motion.generateAllBlocks"), target: () => ports.state().activeCharacterId,
-		available: state => state.generating ? "A motion generation is already running."
-			: !state.motionReady ? "The motion backend is not ready."
-				: state.promptBlockCount === 0 ? "The active character has no prompt block with text; write them with patch_elements character.promptBlocks." : true,
-		run: (_args, context) => {
-			const { activeCharacterId, promptBlockCount } = ports.state();
-			const shown = ports.runAllPromptBlocks(context) ?? [];
-			if (shown?.then) return shown.then(() => ({ affectedIds: activeCharacterId ? [activeCharacterId] : [], summary: `Generated motion from ${promptBlockCount} prompt blocks.` }));
-			// The generation queues synchronously or not at all; when it does not,
-			// the editor's last toast names the refusal (rig not loaded, a root
-			// waypoint outside the clip, an over-long block, a line-edit draft).
-			if (!ports.state().generating) fail("TARGET_NOT_READY", shown.length ? `Generation not started: ${shown.at(-1)}` : "The editor did not start the generation; check the active character's rig and prompt blocks.");
-			return { affectedIds: activeCharacterId ? [activeCharacterId] : [], summary: `Started generating the active character's motion from ${promptBlockCount} prompt block${promptBlockCount === 1 ? "" : "s"}.` };
-		} });
-	// AI-video motion: the agent panel's Generate motion (generateI2vMotion
-	// "act"), awaited to its clip. The AI motion card shows every failure it meets, so
-	// a refusal is silent in the UI and tells the model the reason in English.
-	registry.register({ ...studioActionDeclaration("motion.generateFromVideo"), domain: "motion", target: () => ports.state().activeCharacterId,
-		available: ({ i2vMotion }) => !i2vMotion.enabled ? "AI video motion (Fal) is not enabled for this account."
-			: !["idle", "done", "error", "failed"].includes(i2vMotion.status) ? "An AI video motion generation is already running; wait for it to finish."
-				: i2vMotion.dailyRemaining === 0 ? "The account's daily AI video generations are used up." : true,
-		run: async ({ instruction }, context) => {
-			const outcome = await ports.generateI2vMotion("act", instruction, context);
-			if (outcome.failed) fail("TARGET_NOT_READY", outcome.failed);
-			const { job, footage, dailyRemaining } = outcome;
-			if (!job.video?.url) fail("TARGET_NOT_READY", "The AI video model finished without returning a video.");
-			return { affectedIds: [], output: { videoUrl: job.video.url, resolution: job.resolution ?? null, durationSeconds: job.resultDuration ?? job.duration ?? null,
-				ingested: Boolean(footage), frames: footage?.frames ?? null, fps: footage?.fps ?? null, dailyRemaining },
-			summary: footage
-				? `The AI video (${job.resolution}, ${footage.frames} frames at ${footage.fps} fps) is ingested as Video capture footage and the timeline now spans it; its motion becomes a take once GVHMR extraction runs in the Video capture panel.`
-				: `The AI video is ready at ${job.video.url}, but ingesting it as footage failed; the Video capture panel shows why.` };
 		} });
 }

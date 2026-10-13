@@ -37,7 +37,6 @@ const GOOD_FIXTURES = {
 	arrange_characters: { ops: [{ op: "remove", characterId: "char-alex" }] },
 	patch_elements: { ops: [{ target: { kind: "stage" }, set: {} }] },
 	frame_shot: { subjectIds: ["char-alex"], framing: { intent: { size: "close-up", view: "front", level: "eye", side: "left" } } },
-	generate_motion: { characterId: "char-alex", source: { kind: "generate", beats: [{ text: "walk" }] } },
 	verify_result: { checks: ["framing"] },
 	undo_edit: { receiptId: "receipt-1" },
 };

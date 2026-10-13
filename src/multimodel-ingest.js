@@ -80,7 +80,7 @@ export function normalizeSourceUrl(raw) {
 // and never dialled at all.
 const PLATFORM_PAGE_HOSTS = /(?:^|\.)(?:youtube\.com|youtu\.be|vimeo\.com|tiktok\.com|instagram\.com|facebook\.com|twitter\.com|x\.com|bilibili\.com|naver\.com|kakao\.com)$/i;
 
-export function isPlatformPageUrl(url) {
+function isPlatformPageUrl(url) {
 	if (typeof url !== "string") return false;
 	try {
 		return PLATFORM_PAGE_HOSTS.test(new URL(url).hostname);

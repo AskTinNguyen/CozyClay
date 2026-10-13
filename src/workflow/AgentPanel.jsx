@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { FiAlertTriangle, FiArrowUp, FiCheck, FiChevronRight, FiClock, FiDownload, FiFilm, FiImage, FiMoreHorizontal, FiPaperclip, FiPlus, FiRotateCw, FiX } from "react-icons/fi";
+import { FiAlertTriangle, FiArrowUp, FiCheck, FiChevronRight, FiClock, FiDownload, FiImage, FiMoreHorizontal, FiPaperclip, FiPlus, FiRotateCw, FiX } from "react-icons/fi";
 import {
 	ATTACHMENT_FAILED_NOTICE,
 	ATTACHMENT_LIMIT_NOTICE,
@@ -336,7 +336,6 @@ export default function AgentPanel({
 	surface = "workflow",
 	buildContext = null,
 	onImageAction = null,
-	onI2vAction = null,
 	onReceipt = null,
 }) {
 	// What this host shows around the shared conversation: labels, chips, the
@@ -427,8 +426,6 @@ export default function AgentPanel({
 	buildContextRef.current = buildContext;
 	const imageActionRef = useRef(onImageAction);
 	imageActionRef.current = onImageAction;
-	const i2vActionRef = useRef(onI2vAction);
-	i2vActionRef.current = onI2vAction;
 	const receiptRef = useRef(onReceipt);
 	receiptRef.current = onReceipt;
 
@@ -1062,17 +1059,6 @@ export default function AgentPanel({
 						</button>
 					)}
 					<span className="agent-composer-spacer" aria-hidden="true" />
-					{surface === "studio" && i2vActionRef.current && <button
-						type="button"
-						className="agent-attach-chip agent-i2v-action"
-						data-testid="i2v-agent-action"
-						aria-label="Generate motion"
-						title="Generate motion from this message"
-						disabled={composerDisabled || !draft.trim() || streaming}
-						onClick={() => { const instruction = draft.trim(); store.setDraft(""); i2vActionRef.current?.(instruction); }}
-					>
-						<FiFilm size={13} aria-hidden="true" />
-					</button>}
 					{/* While a turn runs, Stop is still the way out of it; on a surface
 					    that can be steered, Send becomes the way INTO it. */}
 					{streaming

@@ -261,19 +261,6 @@ try {
 	assert.deepEqual(lifecycle.map(({ event }) => event), ["mcp:tool_requested", "mcp:tool_executed", "mcp:result_applied"]);
 	assert.equal(lifecycle[1].props.outcome, "succeeded");
 
-	// Given an already-generated take
-	// When generate_motion aliases the registered replacement command
-	const motionJob = await call("generate_motion", {
-		phases: ["A person walks forward.", "A person stops."],
-		motion_url: "/ardy/motions/123456-abcdef",
-	});
-	// Then the server returns the editor's bus receipt, not its retired task id.
-	assert.equal(motionJob.isError, undefined, JSON.stringify(motionJob));
-	const motionReceipt = JSON.parse(motionJob.content[0].text);
-	assert.equal(motionReceipt.action, 'motion.replace'); assert.equal(motionReceipt.status, 'completed');
-	assert.equal(motionReceipt.undo.entries, 1);
-	assert.equal(editor.characters[0].motionRef.url, '/ardy/motions/123456-abcdef');
-
 	// Losing the command receipt is still uncertain even if the editor applied
 	// the mutation. Do not substitute a retry or a legacy describe handshake.
 	disconnectBeforeReceipt = true;
@@ -304,7 +291,6 @@ try {
 		rejected: { isError: rejected.isError === true },
 		committedDespiteLaterReadFailure: { isError: acknowledged.isError ?? false, laterReadFailed: failedRead.isError === true },
 		uncertainAfterDisconnect: { isError: disconnected.isError === true, doNotRetry: /do not retry/i.test(disconnected.content[0].text) },
-		loadMotion: { isError: motionJob.isError ?? false, timeoutMs: LiveHub.commandTimeoutMs("load_motion") },
 		defaultCommandTimeoutMs: LiveHub.commandTimeoutMs("describe"),
 		seededDescribe: seededReport,
 		emptyDescribe: emptyReport,

@@ -562,8 +562,8 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 				return refreshed;
 			},
 		};
-		// One motion generation per user message, whichever path starts it:
-		// generate_motion below and a run_action job action share this gate.
+		// A run_action job action declared generation "motion" takes the message's one generation slot
+		// (none are declared since 3.0: motion.compile is cheap and repeatable).
 		const generation = { used: false, failures: 0 };
 		// The editor's command index (authoritative context) declares each action's
 		// generation and hub timeout; no sidecar list of actions exists.
@@ -592,19 +592,10 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 			}
 		};
 		const tools = createStudioTools({ liveHub: hub, workspaceHandle: value.context.host.workspaceHandle, previsMode: value.context.scene?.previsMode, session: { signal: controller.signal, admission, generation, onJob, actionIndex: current?.actionIndex ?? [], baseline: value.context }, resolveImage: async (id, correlation) => hub.command("resolve_studio_image", { imageId: id, ...correlation }, value.context.host.workspaceHandle) });
-		const motion = async args => {
-			// Private artifact IDs belonged to the retired sidecar runtime. Reuse
-			// retained editor takes through motion.loadVersion, not another installer.
-			if (args.source.kind !== 'generate') throw new StudioProtocolError('CAPABILITY_MISSING', 'Private motion artifacts are no longer retained. Use motion.loadVersion for an editor take.');
-			await tools.internal.invoke('inspect_studio', { scope: 'motion', ids: [args.characterId] });
-			const receipt = await tools.internal.invoke('generate_motion', args);
-			if (receipt.ok && receipt.status === 'completed') send({ type: 'receipt', receipt });
-			return receipt;
-		};
 		const modelTools = tools.map(tool => ({
 			...tool,
 			handler: async args => {
-				const result = await (tool.name === "generate_motion" ? motion(args) : tool.handler(args));
+				const result = await tool.handler(args);
 				if (!result || !Array.isArray(result.visualRefs) || !result.visualRefs.length) return result;
 					const ref = result.visualRefs.find(item => item?.imageId || item?.id);
 				if (!ref) return result;

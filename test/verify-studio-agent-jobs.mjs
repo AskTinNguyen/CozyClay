@@ -1,11 +1,5 @@
 #!/usr/bin/env node
-// The private candidate state machine is retired. Its installation, Stop,
-// staleness and generation-gate regressions now exercise the shared editor jobs.
-import './bus/verify-motion-route-undo.mjs';
-import './bus/verify-motion-route-cancel.mjs';
-import './bus/verify-motion-concurrent.mjs';
-import './bus/verify-motion-job-lifecycle.mjs';
-import './bus/verify-motion-exposure-gate.mjs';
+// The retained MCP motion-stream decoder (bin/agent/motion-runtime.mjs).
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { extractNdjsonRecords, readMotionStream } from '../bin/agent/motion-runtime.mjs';

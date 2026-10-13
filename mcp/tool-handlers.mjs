@@ -33,8 +33,6 @@ import { readMeshFromPath } from "./mesh-file.mjs";
 import { encodePng, readImageFromPath } from "./image-file.mjs";
 import { rankingRow, scoreSculptAgainstReference } from "../src/sculpt-compare.js";
 import { DEFAULT_POSE } from "../src/poses.js";
-import { generationArgs } from '../src/motion/generation.js';
-import { BLOCK_MAX_SECONDS, PROMPT_GUIDE, normalizePhases, splitLongBeat, tileClipFrames } from "./ardy-prompts.mjs";
 
 import {
 	CAMERA_MOVES,
@@ -105,8 +103,8 @@ export const liveWorkspace = new AsyncLocalStorage();
 const liveWorkspaceTools = new Set([
 	"describe_scene", "describe_shot", "render_prompt", "mark_camera_move", "describe_camera_move", "save_project",
 	"set_camera", "frame_shot", "add_character", "place_character", "remove_character",
-	"focus_character", "place_object", "import_mesh", "sculpt_object", "compare_sculpt", "group_objects", "set_prompt_blocks", "generate_motion", "update_object",
-	"remove_object", "apply_batch", "add_scene", "switch_scene", "open_project", "capture_frame", "load_motion",
+	"focus_character", "place_object", "import_mesh", "sculpt_object", "compare_sculpt", "group_objects", "update_object",
+	"remove_object", "apply_batch", "add_scene", "switch_scene", "open_project", "capture_frame",
 	"studio_commands", "studio_run",
 ]);
 const MAX_CAPTURE_BYTES = 1_000_000;
@@ -114,7 +112,6 @@ const CAPTURE_ARTIFACT_TTL_MS = 10 * 60_000;
 const MAX_CAPTURE_ARTIFACTS = 20;
 const captureArtifacts = [];
 const captureArtifactPattern = /^cozyclay-capture-[0-9a-f-]+\.png$/;
-const motionUrlPattern = /^\/(ardy\/motions\/[0-9]+-[0-9a-f]{6}|ardy\/assembled\/[A-Za-z0-9._-]+\.npz)$/;
 export const cleanupCaptureArtifacts = () => {
 	for (const path of captureArtifacts.splice(0)) {
 		try { unlinkSync(path); } catch {}
@@ -164,9 +161,6 @@ const TOOL_ANNOTATIONS = Object.freeze({
 	sculpt_object: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
 	compare_sculpt: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
 	group_objects: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
-	set_prompt_blocks: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
-	load_motion: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
-	generate_motion: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
 	update_object: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
 	remove_object: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
 	apply_batch: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
@@ -242,8 +236,6 @@ const previsRefusal = (toolName, { feature, context, characterId } = {}) => {
 		: isProxyFigure(findCharacter(characterId ?? state.focus));
 	return proxy ? refusal("TARGET_NOT_READY", kindRefusal(feature)) : null;
 };
-/** The Studio context and one command's declaration, as executeStudioCommand admits it. */
-const inspectAction = (action) => liveHub.command("inspect_studio", { scope: "actions", ids: [action] }, liveWorkspace.getStore());
 
 const scene = () => activeScene(state.doc.scenes, state.doc.activeSceneId);
 const stage = () => scene().stage;
@@ -589,7 +581,7 @@ function shotReport() {
 const studioAliasTools = new Set([
 	"set_camera", "frame_shot", "place_object", "update_object", "remove_object",
 	"import_mesh", "sculpt_object", "group_objects", "add_scene", "switch_scene", "apply_batch", "open_project",
-	"add_character", "place_character", "remove_character", "set_prompt_blocks", "load_motion", "generate_motion",
+	"add_character", "place_character", "remove_character",
 ]);
 const studioAdmissionSchema = {
 	expectedRevision: z.number().int().min(0).optional().describe("scene revision to admit against; defaults to the inspected revision"),
@@ -1316,161 +1308,6 @@ export const createToolHandlers = ({ projectRootPromise } = {}) => {
 					(parent === null ? `Detached ${children.length} object(s).` : `Grouped ${children.length} object(s) under ${parent}.`) +
 						`\n\n${sceneReport()}`,
 				);
-			},
-		),
-
-		tool(
-			"set_prompt_blocks",
-			{
-				title: "Author the motion beats on the timeline",
-				description:
-					"Write Prompt Blocks onto the timeline WITHOUT generating — the beats and their frame " +
-					"ranges, so a schedule can be read and revised before any GPU time is spent. Hit " +
-					"the studio's top-bar Generate Motion button, or call generate_motion, when it reads right.\n\n" +
-					PROMPT_GUIDE,
-				inputSchema: {
-					beats: z
-						.array(
-							z.object({
-								text: z.string().min(3).describe("the beat, in ARDY's sentence shape"),
-								seconds: z
-									.number()
-									.min(0.5)
-									.max(20)
-									.optional()
-									.describe(`how long this beat holds; defaults to 3 s when omitted, and over ${BLOCK_MAX_SECONDS}s it becomes chained blocks`),
-							}),
-						)
-						.min(1)
-						.max(8)
-						.describe("beats in order; each one becomes a contiguous block"),
-				},
-			},
-			async ({ beats, ...admission }) => {
-				if (!liveHub?.connected) {
-					return previsRefusal("set_prompt_blocks") ?? text("Prompt Blocks live on the studio timeline — open the editor and try again.");
-				}
-				const normalized = normalizePhases(beats.map((b) => b.text));
-				// The timeline runs on a 24 fps production clock.
-				const TIMELINE_FPS = 24;
-				let cursor = 0;
-				const blocks = [];
-				for (const [i, textValue] of normalized.texts.entries()) {
-					const whole = beats[Math.min(normalized.sources[i], beats.length - 1)].seconds ?? 3;
-					const spans = splitLongBeat(whole);
-					for (const span of spans) {
-						const frames = Math.max(1, Math.round(span * TIMELINE_FPS));
-						blocks.push({ startFrame: cursor, endFrame: cursor + frames, text: textValue });
-						cursor += frames;
-					}
-				}
-				try {
-					const inspected = await inspectAction("character.setPromptBlocks");
-					return previsRefusal("set_prompt_blocks", { context: await contextOf(inspected) }) ??
-						await runStudioCommand({ ...admission, inspected, action: "character.setPromptBlocks", args: context => ({
-						characterId: context.activeCharacterId, blocks,
-					}) });
-				} catch (error) {
-					return liveError(error);
-				}
-			},
-		),
-
-		tool(
-			"load_motion",
-			{
-				title: "Load an existing motion take",
-				description:
-					"Unlike generate_motion, load_motion installs a previously generated or assembled motion take WITHOUT regenerating — " +
-					"re-using a completed /ardy/motions/<id> take or an /ardy/assembled/*.npz tile (the long-take recipe). " +
-					"It is synchronous and returns the editor's confirmation.",
-				inputSchema: {
-					url: z.string().describe("/ardy/motions/<id> or /ardy/assembled/<name>.npz"),
-					prompt: z.string().optional().describe("Label shown on the timeline block."),
-					character: z.string().optional().describe('which character receives the take — letter, slot number or id; defaults to the editor\u2019s active character'),
-				},
-			},
-			async (args) => {
-				if (!motionUrlPattern.test(args.url)) {
-					throw new Error(`Unsupported motion url "${args.url}". Use /ardy/motions/<id> or /ardy/assembled/<name>.npz.`);
-				}
-				const inspected = liveHub?.connected ? await inspectAction('motion.replace') : undefined;
-				const characterId = args.character === undefined ? inspected?.context?.activeCharacterId : await liveCharacterId(args.character);
-				const refused = previsRefusal("load_motion", { feature: "take", context: await contextOf(inspected), characterId });
-				if (refused) return refused;
-				return runStudioCommand({ ...args, inspected, action: 'motion.replace', args: context => ({
-					characterId: args.character === undefined ? context.activeCharacterId : characterId,
-					url: args.url, prompt: args.prompt ?? '',
-				}) });
-			},
-		),
-
-		tool(
-			"generate_motion",
-			{
-				title: "Generate character motion (Kimodo)",
-				description:
-					"Alias for motion.generate in the editor. Returns its bus receipt; started jobs carry jobId for studio_run job.await or job.cancel. " +
-					"The installed take is undoable with studio_run edit.undo.\n\n" +
-					PROMPT_GUIDE,
-				inputSchema: {
-					phases: z
-						.array(
-							z.union([
-								z.string().min(3),
-								z.object({
-									text: z.string().min(3),
-									seconds: z.number().min(0.5).max(30).describe("how long THIS beat holds"),
-								}),
-							]),
-						)
-						.min(1)
-						.max(8)
-						.describe(
-							"one beat per phase, in order. Follow the shared Kimodo prompt guide in this tool's " +
-								"description; it is the single source for prompt wording and phase guidance. Give a " +
-								"plain string to share the clip evenly, or { text, seconds } to hold a beat for a " +
-								"specific time.",
-						),
-					seconds: z
-						.number()
-						.min(2)
-						.max(60)
-						.default(9)
-						.describe("total clip length; ignored when every phase carries its own seconds"),
-					seed: z.number().int().optional().describe("generation seed"),
-					motion_url: z
-						.string()
-						.regex(motionUrlPattern)
-						.optional()
-						.describe("reuse an already-generated clip, or a curated clip staged under public/ardy/assembled/"),
-					drop: z
-						.object({
-							from_s: z.number().min(0).describe("clip time the plunge begins, seconds"),
-							to_s: z.number().positive().describe("clip time it lands, seconds; must be after from_s"),
-							meters: z.number().positive().max(30).describe("how far the body falls"),
-						})
-						.optional()
-						.describe(
-							"a vertical fall staged onto the clip — the whole body drops this many metres over " +
-								"[from_s, to_s] on a gravity curve. Stand the character on a roof with place_character's " +
-								"y, then drop them past its edge; ARDY itself only generates flat-ground motion.",
-						),
-				},
-			},
-			async ({ phases, seconds = 9, seed, motion_url, drop, ...admission }) => {
-				if (!liveHub?.connected) return previsRefusal("generate_motion", { feature: "motion" }) ?? text(noLiveEditor("Motion requires a connected CozyClay editor."));
-				const normalized = normalizePhases(phases.map(phase => typeof phase === 'string' ? phase : phase.text));
-				const beats = normalized.texts.map((text, index) => ({ text, seconds: phases[normalized.sources[index]]?.seconds ?? seconds / phases.length })).filter(beat => beat.text);
-				const action = motion_url ? 'motion.replace' : 'motion.generate', inspected = await inspectAction(action);
-				const refused = previsRefusal("generate_motion", { feature: "motion", context: await contextOf(inspected) });
-				if (refused) return refused;
-				return runStudioCommand({ ...admission, inspected, action, args: context => {
-					const generated = generationArgs({ characterId: context.activeCharacterId, source: { kind: 'generate', beats, ...(seed === undefined ? {} : { seed }) } });
-					return motion_url ? { characterId: generated.characterId, url: motion_url, prompt: beats.map(beat => beat.text).join(' '),
-						blocks: generated.blocks.map(({ startFrame, endFrame, text: prompt }) => ({ startFrame, endFrame, prompt })), ...(drop ? { drop } : {}) }
-						: { ...generated, ...(drop ? { drop } : {}) };
-				} });
 			},
 		),
 

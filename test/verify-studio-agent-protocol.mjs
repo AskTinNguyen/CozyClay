@@ -160,15 +160,12 @@ function registerTests() {
 			{ name: "arrange_objects", args: { ops: [{ op: "update", id: "a", facing: { yawDeg: 1 }, rotationDeg: point() }] } },
 			{ name: "arrange_characters", args: { ops: [{ op: "update", characterId: "a", modelId: "new-model" }] } },
 			{ name: "frame_shot", args: { subjectIds: ["a", "b"], framing: { exact: { position: point(), lookAt: point(), focalMm: 35 } } } },
-			{ name: "generate_motion", args: { characterId: "a", source: { kind: "generate", beats: [{ text: "walk", seconds: 3 }], durationSeconds: 3 } } },
-			{ name: "generate_motion", args: { characterId: "a", source: { kind: "generate", beats: [{ text: "walk" }] } } },
-			{ name: "generate_motion", args: { characterId: "a", source: { kind: "reuse", artifactId: "https://evil.test/take" } } },
 			{ name: "verify_result", args: { receiptId: "r", targets: ["a"], checks: ["placement"] } },
 			{ name: "undo_edit", args: {} },
 		];
 		for (const command of invalid) rejects(() => protocol.validateStudioCommand(command));
 	});
-	test("D3 all ten families have executable happy paths and stable defaults", () => {
+	test("D3 all nine families have executable happy paths and stable defaults", () => {
 		const commands = [
 			{ name: "inspect_studio", args: { scope: "entities" } },
 			{ name: "operate_studio", args: { selection: null, frame: 0, playing: false, view: { grid: true } } },
@@ -176,27 +173,15 @@ function registerTests() {
 			{ name: "arrange_characters", args: { ops: [{ op: "create", name: "Alex", position: { world: point() } }] } },
 			{ name: "patch_elements", args: { ops: [{ target: { kind: "character", id: "char-alex" }, set: { tint: "#a1b2c3" } }] } },
 			{ name: "frame_shot", args: { subjectIds: ["char-alex"], framing: { intent: { size: "medium shot", view: "front three-quarter", level: "eye", side: "left" } } } },
-			{ name: "generate_motion", args: { characterId: "char-alex", source: { kind: "generate", beats: [{ text: "walk" }, { text: "wave" }], durationSeconds: 6 } } },
 			{ name: "verify_result", args: { targets: ["char-alex"], checks: ["motion"] } },
 			{ name: "undo_edit", args: { receiptId: "r-1" } },
 			{ name: "run_action", args: { action: "shot.create" } },
 		];
 		assert.deepEqual(commands.map(command => command.name).sort(), [...protocol.STUDIO_TOOLS].sort());
 		const normalized = commands.map(command => protocol.validateStudioCommand(command));
-		assert.equal(normalized[0].args.limit, 12); assert.equal(normalized[2].args.collisionPolicy, "report"); assert.equal(normalized[6].args.repair, "bounded"); assert.equal(normalized[7].args.visual, "none"); assert.equal(normalized[7].args.range, "whole_clip");
+		assert.equal(normalized[0].args.limit, 12); assert.equal(normalized[2].args.collisionPolicy, "report"); assert.equal(normalized[6].args.visual, "none"); assert.equal(normalized[6].args.range, "whole_clip");
 		assert.equal(commands[0].args.limit, undefined, "normalization does not edit caller input");
 		rejects(() => protocol.validateStudioCommand({ name: "arrange_objects", args: { ops: [createOp("Same"), createOp("Same")] } }), "DUPLICATE_NAME");
-	});
-	test("D3 generate_motion beat text is capped and the refusal says how to write one", async () => {
-		const beat = text => ({ name: "generate_motion", args: { characterId: "a", source: { kind: "generate", beats: [{ text }], durationSeconds: 4 } } });
-		assert.equal(protocol.validateStudioCommand(beat("A person walks forward and waves with the right hand.")).args.source.beats[0].text, "A person walks forward and waves with the right hand.");
-		assert.doesNotThrow(() => protocol.validateStudioCommand(beat("A".repeat(protocol.BEAT_TEXT_MAX))));
-		assert.throws(() => protocol.validateStudioCommand(beat("A".repeat(protocol.BEAT_TEXT_MAX + 1))), e => e.code === "INVALID_ARGUMENT" && e.details?.path === "$.args.source.beats[0].text" && /Over 500 characters\..*starting with "A person"/.test(e.message));
-		assert.equal(protocol.STUDIO_TOOL_SCHEMAS.generate_motion.properties.source.oneOf[0].properties.beats.items.properties.text.maxLength, protocol.BEAT_TEXT_MAX);
-	});
-	test("D3 the Studio prompt teaches Kimodo beat writing", async () => {
-		const { STUDIO_SYSTEM_PROMPT } = await import("../bin/agent/studio-prompt.mjs");
-		for (const rule of [/motion\.generate or character\.setPromptBlocks/, /in English/, /starts with "A person"/, /not "Then the person stops"/, /Keep one whole movement inside one beat/, /leave out camera, scenery and story/]) assert.match(STUDIO_SYSTEM_PROMPT, rule);
 	});
 	test("D3 storyboard framing accepts a still shot id and optional caption", () => {
 		const command = protocol.validateStudioCommand({ name: "frame_shot", args: {
@@ -390,13 +375,8 @@ function registerTests() {
 		const viewChange = contextFixture(); viewChange.revision.view++; assert.equal(protocol.validateTargetGuard(guard(),guard()),true);
 		assert.equal(contextTools.studioCacheKey(viewChange),contextTools.studioCacheKey(contextFixture()));
 	});
-	test("D6 schemas are real frozen data, and generation compiles immutable half-open blocks", () => {
+	test("D6 schemas are real frozen data", () => {
 		for (const tool of protocol.STUDIO_CATALOGUE) { assert.equal(tool.parameters?.type,"object"); assert.equal(tool.parameters.additionalProperties,false); assert.ok(Object.isFrozen(tool.parameters)); }
-		assert.equal(typeof protocol.compileStudioBeats,"function");
-		const schedule = protocol.compileStudioBeats({kind:"generate",beats:[{text:"walk",seconds:5.5},{text:"wave",seconds:0.5}]});
-		assert.equal(schedule.frameCount,144); assert.equal(schedule.blocks[0].startFrame,0); assert.equal(schedule.blocks.at(-1).endFrameExclusive,144); assert.ok(schedule.blocks.every(b=>b.endFrameExclusive-b.startFrame<=120));
-		for(let i=1;i<schedule.blocks.length;i++) assert.equal(schedule.blocks[i-1].endFrameExclusive,schedule.blocks[i].startFrame);
-		assert.ok(Object.isFrozen(schedule.blocks[0]));
 	});
 	test("D6 shared physical projection includes inactive IK and path timing, excludes view/names/tints", () => {
 		assert.equal(typeof contextTools.physicsFingerprintInput,"function");
@@ -452,7 +432,6 @@ function registerTests() {
 		protocol.validateStudioCommand({name:"arrange_objects",args:{ops:[{...createOp(),position:{relativeTo:"a",basis:"world",side:"right",gapM:0.3,support:"floor"}}],collisionPolicy:"avoid"}});
 		for(const op of [{op:"update",characterId:"a",scale:1.5},{op:"remove",characterId:"a"}]) protocol.validateStudioCommand({name:"arrange_characters",args:{ops:[op]}});
 		protocol.validateStudioCommand({name:"frame_shot",args:{subjectIds:["a"],keyAtFrame:0,framing:{exact:{position:point(),lookAt:{x:0,y:0,z:0},focalMm:35}}}});
-		protocol.validateStudioCommand({name:"generate_motion",args:{characterId:"a",source:{kind:"reuse",artifactId:"artifact-1"}}});
 		for(const size of protocol.STUDIO_VARIANTS.framingSizes) for(const view of protocol.STUDIO_VARIANTS.framingViews) for(const level of protocol.STUDIO_VARIANTS.framingLevels) protocol.validateStudioCommand({name:"frame_shot",args:{subjectIds:["a"],framing:{intent:{size,view,level,side:"right"}}}});
 	});
 	test("D7 failure uncertainty and explicit unverified acceptance remain distinguishable", () => {

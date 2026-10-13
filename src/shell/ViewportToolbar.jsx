@@ -117,15 +117,14 @@ function MenuItem({ checked, role = "menuitemradio", className = "", children, .
 export default function ViewportToolbar() {
 	const {
 		workflowMode, selectWorkflowMode, poseRefusal, gizmoMode, setGizmoMode, snapEnabled,
-		setSnapEnabled, preset, applyPreset, cameraPresetId, i2vMotionCameraLocked,
+		setSnapEnabled, preset, applyPreset, cameraPresetId,
 		runStudioAction, shotAspectKey, fovDeg, shotsDomain, shot, shots, activeShot,
 		setNonce, workspaceLayout, viewMenuTriggerRef, viewMenuOpen,
 		setViewMenuOpen, viewLooksActive, gridView, setGridView, guideMode,
 		autoColor, setAutoColor, isCharacterSelection, partColoursChoice, embedMode,
 		agentCollapsed, addSceneObject, spawnCharacter, characters, flySpeed,
 		ikEditTool, setIkEditTool, showTrails, setShowTrails, motion, setRangePinPartPick,
-		trailFalloffS, setTrailFalloffS, lineEditMode, exitLineEditMode, enterRefineMode,
-		refineDisabledReason, previsMode, sculptView, requestSculptView,
+		trailFalloffS, setTrailFalloffS, previsMode, sculptView, requestSculptView,
 	} = useStudioShell();
 	const menu = useOverlayMenu();
 
@@ -136,7 +135,6 @@ export default function ViewportToolbar() {
 		setAutoColor(next);
 	};
 
-	const refineReason = lineEditMode ? null : refineDisabledReason();
 	const tools = {
 		scene: [
 			{ key: "W", id: "move", name: ko("Move", "이동"), active: gizmoMode === "move", pick: () => setGizmoMode("move") },
@@ -160,16 +158,8 @@ export default function ViewportToolbar() {
 			{ key: "W", id: "move", name: ko("Move camera", "카메라 이동"), active: gizmoMode === "move", pick: () => setGizmoMode("move") },
 			{ key: "E", id: "rotate", name: ko("Rotate camera", "카메라 회전"), active: gizmoMode === "rotate", pick: () => setGizmoMode("rotate") },
 		],
-		motion: [
-			{
-				key: "W", id: "blocks", name: ko("Blocks (select and move prompt blocks)", "블록 (프롬프트 블록 선택·이동)"), active: !lineEditMode,
-				pick: () => { if (lineEditMode) exitLineEditMode(); },
-			},
-			{
-				key: "E", id: "refine", name: ko("Refine (edit the path line)", "다듬기 (경로선 편집)"), active: lineEditMode,
-				refused: refineReason, pick: () => { if (!lineEditMode) enterRefineMode(); },
-			},
-		],
+		// Motion is compiled by the agent (motion.compile); the department has no tools of its own.
+		motion: [],
 		// Sculpt mode's W/E/R swing the turntable camera to a reference view.
 		sculpt: [
 			{ key: "W", id: "front", name: ko("Front view", "정면 보기"), active: sculptView?.view === "front", pick: () => requestSculptView("front") },
@@ -248,7 +238,6 @@ export default function ViewportToolbar() {
 								key={mm}
 								data-lens={mm}
 								checked={shot.focalMm === mm}
-								disabled={i2vMotionCameraLocked}
 								onClick={() => { shotsDomain.changeLens(fov); menu.close(); }}
 							>
 								{mm}mm
@@ -262,7 +251,6 @@ export default function ViewportToolbar() {
 								max={FOV_MAX}
 								step="1"
 								value={fovDeg}
-								disabled={i2vMotionCameraLocked}
 								onChange={(event) => shotsDomain.changeLens(Number(event.target.value))}
 							/>
 							<output>{Math.round(fovDeg)}°</output>
@@ -460,7 +448,6 @@ export default function ViewportToolbar() {
 									<select
 										aria-label={ko("Camera preset", "카메라 프리셋")}
 										value={cameraPresetId ?? ""}
-										disabled={i2vMotionCameraLocked}
 										onChange={(event) => {
 											const id = event.target.value;
 											if (!id) { runStudioAction("stage.setFilmback", { cameraPresetId: null }); return; }

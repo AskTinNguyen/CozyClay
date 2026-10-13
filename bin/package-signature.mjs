@@ -13,7 +13,6 @@ const CONTENT_ROOTS = [
 	"mcp/server.mjs",
 	"mcp/tool-handlers.mjs",
 	"mcp/live-hub.mjs",
-	"mcp/ardy-prompts.mjs",
 	"mcp/package.json",
 	"mcp/README.md",
 	"mcp/LIVE-PROTOCOL.md",

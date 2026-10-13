@@ -1,7 +1,6 @@
 import { useEffect, useRef } from "react";
 import { flushSync } from "react-dom";
 import SettingsMenu from "../settings-menu.jsx";
-import { MotionSetup } from "../motion-readiness-ui.jsx";
 import { useStudioShell } from "./studio-shell-context.js";
 
 // Temporary adapter until the Preferences region replaces SettingsMenu.
@@ -10,9 +9,7 @@ import { useStudioShell } from "./studio-shell-context.js";
 // the shell context, without mounting a second copy or changing SettingsMenu.
 export default function PreferencesSlot() {
 	const {
-		preferencesOpen, setPreferencesOpen, motionSetupReveal, motionSetupKind,
-		trailReadinessState, lineReadinessState, readinessState, bridgeChecking,
-		recheckMotionHealth,
+		preferencesOpen, setPreferencesOpen,
 	} = useStudioShell();
 	const hostRef = useRef(null);
 	useEffect(() => {
@@ -31,10 +28,7 @@ export default function PreferencesSlot() {
 	}, [preferencesOpen]);
 	return (
 		<div className="preferences-slot" ref={hostRef}>
-			<SettingsMenu
-				motionSetupReveal={motionSetupReveal}
-				motionSetup={<MotionSetup state={motionSetupKind === "trail" ? trailReadinessState : motionSetupKind === "line" ? lineReadinessState : readinessState} checking={bridgeChecking} onRetry={recheckMotionHealth} />}
-			/>
+			<SettingsMenu />
 		</div>
 	);
 }

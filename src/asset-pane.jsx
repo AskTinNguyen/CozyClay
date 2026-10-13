@@ -486,7 +486,7 @@ export function FolderGrid({ folder, query, ...props }) {
 					/>
 				);
 			});
-		if (!takeVersions.length) empty = ko("No takes for this character yet. Generate Motion creates one.", "이 인물의 테이크가 아직 없어요. Generate Motion으로 만들 수 있어요.");
+		if (!takeVersions.length) empty = ko("No takes for this character yet. Ask the agent to compile one.", "이 인물의 테이크가 아직 없어요. 에이전트에게 모션 컴파일을 요청하세요.");
 	} else if (folder === "poses") {
 		tiles = poses.map((pose, index) => ({ pose, index, label: pose?.name || pose?.label || ko(`Pose ${index + 1}`, `포즈 ${index + 1}`) }))
 			.filter(({ label }) => matchesQuery(label, query))

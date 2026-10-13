@@ -21,7 +21,7 @@ const sessionDir = mkdtempSync(join(tmpdir(), "cozyclay-agent-sessions-"));
 process.env.COZYCLAY_AGENT_SESSIONS_DIR = sessionDir;
 process.on("exit", () => rmSync(sessionDir, { recursive: true, force: true }));
 
-const CASES = new Set(["studio-tool-catalogue", "storyboard-tool-surface", "surface-context-and-images", "stale-host-and-post-install-rate-limit", "sse-disconnect-reconnect", "sequential-mutations-revision-chain", "external-revision-bump-refuses", "sequential-same-target-token-rotation", "rejection-receipt-surfaces-reason", "inspect-readmits-revision", "stale-scene-readmits-revision", "uncertain-apply-readmits-revision", "run-action-admission-and-generation-limit", "stale-scene-readmits-any-family", "run-action-job-timeout", "verify-motion-timeout", "non-generation-job-skips-generation-gate", "scene-change-readmits-host", "ai-video-motion-shares-generation-gate"]);
+const CASES = new Set(["studio-tool-catalogue", "storyboard-tool-surface", "surface-context-and-images", "stale-host-and-post-install-rate-limit", "sequential-mutations-revision-chain", "external-revision-bump-refuses", "sequential-same-target-token-rotation", "rejection-receipt-surfaces-reason", "inspect-readmits-revision", "stale-scene-readmits-revision", "uncertain-apply-readmits-revision", "run-action-admission", "stale-scene-readmits-any-family", "run-action-job-timeout", "verify-motion-timeout", "scene-change-readmits-host"]);
 const index = process.argv.indexOf("--case");
 const selected = index >= 0 ? process.argv[index + 1] : null;
 if (selected && !CASES.has(selected)) { console.error(`unknown --case ${selected}`); process.exit(2); }
@@ -156,7 +156,7 @@ if (shouldRun("stale-scene-readmits-any-family")) {
 
 if (shouldRun("studio-tool-catalogue")) {
   const { createStudioTools, studioToolSchemas } = await import("../bin/agent/studio-tools.mjs");
-  const families = ["inspect_studio", "operate_studio", "arrange_objects", "arrange_characters", "patch_elements", "frame_shot", "generate_motion", "verify_result", "undo_edit", "run_action"];
+  const families = ["inspect_studio", "operate_studio", "arrange_objects", "arrange_characters", "patch_elements", "frame_shot", "verify_result", "undo_edit", "run_action"];
   assert.deepEqual([...STUDIO_TOOL_FAMILIES], ["inspect_studio", "run_action", "verify_result"]);
   assert.deepEqual([...STUDIO_TOOLS], families, "the primary tools and compatibility aliases remain callable");
   assert.deepEqual(studioToolSchemas().map(tool => tool.name), families);
@@ -192,7 +192,7 @@ if (shouldRun("studio-tool-catalogue")) {
   assert.deepEqual(parsed.ops[0].droppedPaths, ["object.scale"]);
   assert.equal(parsed.delta[0].after.patched.find(p => p.path === "object.scale").vec.y, 0.1);
   assert.ok(rendered.length < 8000, "sanity: this fixture is far under the 8000-byte receipt cap");
-  console.log("PASS the Studio tool list is exactly the ten families and patch_elements is admitted");
+  console.log("PASS the Studio tool list is exactly the nine families and patch_elements is admitted");
 }
 
 if (shouldRun("storyboard-tool-surface")) {
@@ -203,16 +203,16 @@ if (shouldRun("storyboard-tool-surface")) {
   const session = { admission: { commandId: () => "cmd-1", host: host(), revision: 1, refresh: async () => {} } };
   const storyboardTools = createStudioTools({ liveHub, workspaceHandle: "handle-1", previsMode: "storyboard", session });
   const animationTools = createStudioTools({ liveHub, workspaceHandle: "handle-1", previsMode: "animation", session });
-  assert(!storyboardTools.some(tool => tool.name === "generate_motion"));
+  assert.deepEqual(storyboardTools.map(tool => tool.name), STUDIO_TOOLS);
   assert.deepEqual(animationTools.map(tool => tool.name), STUDIO_TOOLS);
   const storyboardActions = studioActionIndex(STUDIO_ACTIONS, { previsMode: "storyboard" });
   const animationActions = studioActionIndex(STUDIO_ACTIONS, { previsMode: "animation" });
   assert(!storyboardActions.some(action => action.generation === "motion" || action.id.startsWith("motion.")));
   assert.deepEqual(animationActions, studioActionIndex(STUDIO_ACTIONS));
-  console.log("PASS storyboard tools omit generate_motion and motion actions while animation remains unchanged");
+  console.log("PASS storyboard tools and actions match animation, with no motion actions in the catalogue");
 }
 
-if (shouldRun("run-action-admission-and-generation-limit")) {
+if (shouldRun("run-action-admission")) {
   const { createStudioTools } = await import("../bin/agent/studio-tools.mjs");
   const { LiveHub } = await import("../mcp/live-hub.mjs");
   // The hub treats a lost run_action acknowledgement as a possibly applied mutation.
@@ -222,7 +222,6 @@ if (shouldRun("run-action-admission-and-generation-limit")) {
   const admission = { commandId: () => `cmd-${++commandNumber}`, host: { workspaceId: "tab-7", documentEpoch: "doc-3", sceneId: "scene-main", sceneEpoch: "scene-open-4" }, revision: 4, refresh: async () => {} };
   const liveHub = { command: async (name, payload) => {
     sent.push({ name, payload });
-    if (payload.args?.action === "motion.generateAllBlocks") return { ok: true, commandId: payload.commandId, action: "motion.generateAllBlocks", kind: "job", status: "started", affectedIds: ["char-alex"], summary: "Started generating from 2 prompt blocks." };
     return { ok: true, commandId: payload.commandId, receiptId: `receipt-${commandNumber}`, status: "applied", action: payload.args.action, revision: { before: admission.revision, after: admission.revision + 1 } };
   } };
   const tools = createStudioTools({ liveHub, workspaceHandle: "handle-1", session: { admission, actionIndex: await declaredActionIndex() } });
@@ -235,17 +234,7 @@ if (shouldRun("run-action-admission-and-generation-limit")) {
   assert.equal(admission.revision, 5, "the receipt's revision admits the next command");
   await assert.rejects(run.handler({ action: "shot create" }), { code: "INVALID_ARGUMENT" });
   assert.equal(sent.length, 1, "a malformed action never reaches the editor");
-  // A job action is a generation: one per user message, like generate_motion.
-  const started = await run.handler({ action: "motion.generateAllBlocks" });
-  assert.equal(started.status, "started");
-  await assert.rejects(run.handler({ action: "motion.generateAllBlocks" }), { code: "GENERATION_LIMIT" });
-  assert.equal(sent.length, 2, "the second generation never reaches the editor");
-  await run.handler({ action: "shot.create" });
-  assert.equal(sent.length, 3, "other actions still run after a generation");
-  // A new turn builds new tools and may generate again.
-  const nextTurn = createStudioTools({ liveHub, workspaceHandle: "handle-1", session: { admission, actionIndex: await declaredActionIndex() } });
-  assert.equal((await nextTurn.find(tool => tool.name === "run_action").handler({ action: "motion.generateAllBlocks" })).status, "started");
-  console.log("PASS run_action is admitted as a mutation and a job action counts as the turn's generation");
+  console.log("PASS run_action is admitted as a mutation");
 }
 
 if (shouldRun("run-action-job-timeout")) {
@@ -288,74 +277,6 @@ if (shouldRun("verify-motion-timeout")) {
   await verify.handler({ targets: ["char-a"], checks: ["placement", "framing"] });
   assert.deepEqual(calls, [{ checks: ["motion"], options: [{ timeoutMs: MAX_COMMAND_TIMEOUT_MS }] }, { checks: ["placement", "framing"], options: [] }]);
   console.log("PASS a verify_result motion check waits under the hub ceiling");
-}
-
-if (shouldRun("non-generation-job-skips-generation-gate")) {
-  const { createStudioTools } = await import("../bin/agent/studio-tools.mjs");
-  const { STUDIO_ACTIONS } = await import("../src/studio-actions.js");
-  // Only a declared motion generation takes the message's one generation: an
-  // export is a job too, but neither consumes nor is blocked by that gate.
-  const sent = []; let commandNumber = 0;
-  const admission = { commandId: () => `cmd-${++commandNumber}`, host: { workspaceId: "tab-7", documentEpoch: "doc-3", sceneId: "scene-main", sceneEpoch: "scene-open-4" }, revision: 4, refresh: async () => {} };
-  const liveHub = { command: async (name, payload) => {
-    sent.push(payload.args.action);
-    return payload.args.action === "motion.generateAllBlocks"
-      ? { ok: true, commandId: payload.commandId, action: "motion.generateAllBlocks", kind: "job", status: "started", affectedIds: ["char-alex"], summary: "Started." }
-      : { ok: true, commandId: payload.commandId, action: payload.args.action, kind: "job", status: "completed", affectedIds: [], summary: "Exported.", output: { fileName: "cozyclay-shot.mp4", frameCount: 24 } };
-  } };
-  const actionIndex = await declaredActionIndex();
-  const tools = generation => createStudioTools({ liveHub, workspaceHandle: "handle-1", session: { admission, generation, actionIndex } }).find(tool => tool.name === "run_action");
-  const after = { used: false }, run = tools(after);
-  assert.equal((await run.handler({ action: "motion.generateAllBlocks" })).status, "started");
-  const exported = await run.handler({ action: "export.shotVideo" }).catch(error => error);
-  assert.equal(exported.status, "completed", `an export still runs after the generation: ${exported.code ?? ""} ${exported.message ?? ""}`);
-  await assert.rejects(run.handler({ action: "motion.generateAllBlocks" }), { code: "GENERATION_LIMIT" });
-  const before = { used: false }, first = tools(before);
-  assert.equal((await first.handler({ action: "export.shotVideo" })).status, "completed");
-  assert.equal(before.used, false, "an export does not take the message's generation");
-  assert.equal((await first.handler({ action: "motion.generateAllBlocks" })).status, "started");
-  assert.deepEqual(sent, ["motion.generateAllBlocks", "export.shotVideo", "export.shotVideo", "motion.generateAllBlocks"]);
-  // The gate reads the declaration's flag, carried by exactly one action.
-  assert.deepEqual(STUDIO_ACTIONS.filter(action => action.generation === "motion").map(action => action.id), ["motion.generateAllBlocks", "motion.generateFromVideo"]);
-  console.log("PASS a job that is not a motion generation neither takes nor is blocked by the generation gate");
-}
-
-if (shouldRun("ai-video-motion-shares-generation-gate")) {
-  const { createStudioTools } = await import("../bin/agent/studio-tools.mjs");
-  // AI-video motion spends the account's quota and is a motion generation: it
-  // shares the message's one generation with the prompt-block generation (and
-  // generate_motion, through the route's gate), and waits for its clip under
-  // its declared hub timeout. The Send-to-AI package calls no service and
-  // neither takes nor meets that gate.
-  const sent = []; let commandNumber = 0;
-  const admission = { commandId: () => `cmd-${++commandNumber}`, host: { workspaceId: "tab-7", documentEpoch: "doc-3", sceneId: "scene-main", sceneEpoch: "scene-open-4" }, revision: 4, refresh: async () => {} };
-  const answers = {
-    "motion.generateFromVideo": { kind: "job", status: "completed", affectedIds: [], summary: "Ingested.", output: { videoUrl: "https://cdn.example.test/fal-act.mp4" } },
-    "motion.generateAllBlocks": { kind: "job", status: "started", affectedIds: ["char-alex"], summary: "Started." },
-    "ai.prepareShot": { kind: "job", status: "completed", affectedIds: [], summary: "Prepared.", output: { prompt: "A still.", mode: "image" } },
-  };
-  const liveHub = { command: async (name, payload, handle, ...options) => {
-    sent.push({ action: payload.args.action, options });
-    return { ok: true, commandId: payload.commandId, action: payload.args.action, ...answers[payload.args.action] };
-  } };
-  const actionIndex = await declaredActionIndex();
-  const run = gate => createStudioTools({ liveHub, workspaceHandle: "handle-1", session: { admission, generation: gate, actionIndex } }).find(tool => tool.name === "run_action");
-  const video = { action: "motion.generateFromVideo", args: { instruction: "wave both hands" } };
-  const first = { used: false }, turn = run(first);
-  assert.equal((await turn.handler(video)).status, "completed");
-  assert.equal(first.used, true, "AI-video motion takes the message's generation");
-  await assert.rejects(turn.handler({ action: "motion.generateAllBlocks" }), { code: "GENERATION_LIMIT" });
-  await assert.rejects(turn.handler(video), { code: "GENERATION_LIMIT" });
-  assert.equal((await turn.handler({ action: "ai.prepareShot", args: { mode: "image" } })).status, "completed", "the Send-to-AI package still runs");
-  const second = { used: false }, next = run(second);
-  assert.equal((await next.handler({ action: "ai.prepareShot" })).status, "completed");
-  assert.equal(second.used, false, "the Send-to-AI package is not a generation");
-  assert.equal((await next.handler({ action: "motion.generateAllBlocks" })).status, "started");
-  await assert.rejects(next.handler(video), { code: "GENERATION_LIMIT" });
-  assert.deepEqual(sent.map(call => call.action), ["motion.generateFromVideo", "ai.prepareShot", "ai.prepareShot", "motion.generateAllBlocks"], "a refused generation never reaches the editor");
-  assert.deepEqual(sent[0].options, [{ timeoutMs: 300_000 }], "AI-video motion waits under its declared hub timeout");
-  assert.deepEqual(sent[1].options, [], "the Send-to-AI package keeps the default timeout");
-  console.log("PASS AI-video motion shares the message's one motion generation and carries its hub timeout");
 }
 
 if (shouldRun("scene-change-readmits-host")) {
@@ -433,19 +354,6 @@ if (shouldRun("sequential-mutations-revision-chain") || shouldRun("external-revi
   if (externalBump) { assert.ok(inputs[2].some(item => item.type === "function_call_output" && item.output.includes("STALE_SCENE"))); assert.equal(result.calls[1].args.expectedRevision, 2); } else { assert.ok(!result.text.includes("STALE_SCENE")); }
     await liveHttp.close(); await live.close(); console.log(`PASS ${externalBump ? "external revision bump refuses second mutation" : "sequential mutations chain receipt revision"}`);
   }
-}
-
-if (shouldRun("sse-disconnect-reconnect")) {
-  const arrived = deferred(), release = deferred(); let generations = 0; const bridge = createServer(async (req, res) => { if (req.url === "/ardy/health") { res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify({ ok: true, backend: "local_kimodo", host: "fixture", device: "cuda" })); return; } generations++; arrived.resolve(); await release.promise; res.writeHead(200, { "content-type": "application/x-ndjson" }); res.end('{"event":"done","motionUrl":"/ardy/motions/123456-abcdef"}\n'); }); bridge.listen(0, "127.0.0.1"); await once(bridge, "listening"); const bridgeOrigin = `http://127.0.0.1:${bridge.address().port}`;
-  const { agentJobHub } = await import('./bus/agent-job-hub.mjs');
-  const commands = []; let jobs;
-  const live = await liveFixture({ bridge, command: async (name, args) => { commands.push({ name, args }); return jobs.command(name, args); } });
-  jobs = agentJobHub({ command: async name => { throw new Error(`Unexpected editor command ${name}`); } }, bridgeOrigin, () => context(host(live.handle)));
-  const calls = []; const modelResponse = ({ input }) => { calls.push(input); if (calls.length === 1) return streamOf([{ type: "function_call", call_id: "motion-1", name: "generate_motion", arguments: JSON.stringify({ characterId: "char-alex", source: { kind: "generate", beats: [{ text: "walk", seconds: 2 }] }, repair: "none" }) }]); return streamOf([{ type: "message", role: "assistant", content: [{ type: "output_text", text: "installed" }] }]); };
-  const liveHttp = await httpFixture({ modelResponse, live, getBridgeOrigin: () => bridgeOrigin }); const turn = envelope(host(live.handle), "generate motion"); let firstObserver = true, cookie = null; const fetches = [];
-  const clientFetch = async (url, init = {}) => { const target = new URL(url, liveHttp.origin).href; fetches.push(target); const headers = { ...(init.headers || {}), origin: liveHttp.origin, ...(cookie ? { cookie } : {}) }; const response = await fetch(target, { ...init, headers }); cookie ||= response.headers.get("set-cookie")?.split(";")[0] ?? null; if (firstObserver && target.endsWith("/agent/turn")) { firstObserver = false; const reader = response.body.getReader(); let dropped = false; const body = new ReadableStream({ async pull(controller) { const part = await reader.read(); if (part.done) { controller.close(); return; } controller.enqueue(part.value); if (!dropped && new TextDecoder().decode(part.value).includes('"state":"generating"')) { dropped = true; await reader.cancel(); controller.error(new Error("observer disconnected")); } } }); return new Response(body, { status: response.status, headers: response.headers }); } return response; };
-  const transport = createHttpTransport({ fetchImpl: clientFetch, surface: "studio", capture: () => {} }); const seen = []; const turnPromise = transport.turn(turn, event => { seen.push(event); if (event.type === "job.state" && event.state === "generating") { arrived.promise.then(() => release.resolve()); } }); await bounded(Promise.race([arrived.promise, turnPromise.then(() => { throw new Error(`Generation ended before its request: ${JSON.stringify({ seen, commands })}`); })])); release.resolve(); await bounded(turnPromise); assert.equal(generations, 1); assert.equal(seen.filter(event => event.type === "receipt").length, 1); assert.ok(seen.some(event => event.type === "done")); assert.ok(fetches.some(url => /events\?after=[1-9]/.test(url))); assert.equal(commands.filter(command => command.name === 'run_action' && command.args.args.action === 'motion.generate').length, 1); assert.ok(commands.some(command => command.name === 'run_action' && command.args.args.action === 'job.await')); assert.equal(calls.length, 2);
-  jobs.dispose(); await liveHttp.close(); await live.close(); console.log("PASS pending-generation disconnect/reconnect uses landed HTTP client, real live hub/bridge, one generation and receipt");
 }
 
 if (shouldRun("sequential-same-target-token-rotation")) {

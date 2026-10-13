@@ -1,5 +1,4 @@
 import { ko, isKo } from "./locale.js";
-import { LINE_EDIT_TRACK_IDS, PINNED_CURVE_ENDS } from "./line-edit.js";
 import { FK_TRACKS, IK_TRACKS, MID_TRACKS } from "./ardy/ik.js";
 
 // Two clocks, one boundary. The app timeline runs the production 24 fps —
@@ -156,71 +155,11 @@ export function preserveTracksSummary(tracks) {
 	return isKo ? `${names.join("·")}만 다시 생성` : `regenerates ${names.join(" · ")} only`;
 }
 
-/* --------------------------- line editing (C6) ---------------------------
- * "Grab the joint's motion path and pull it; the joint follows the pulled path
- * exactly" (ProjFlow). The arithmetic lives in ./line-edit.js; what stays here
- * is the panel's own vocabulary and the one thing App owns that the pure module
- * cannot — the mapping from a track id to a HUMAN LABEL, which is read straight
- * out of ik.js's three tables so the picker can never drift from the pose
- * studio's own naming. An id in LINE_EDIT_TRACK_IDS with no entry in those
- * tables is a bug, and falling back to the raw id makes it visible instead of
- * silent. */
-export const LINE_EDIT_TRACK_OPTIONS = LINE_EDIT_TRACK_IDS.map((id) => ({
-	value: id,
-	label: [...IK_TRACKS, ...MID_TRACKS, ...FK_TRACKS].find((track) => track.id === id)?.label ?? id,
-}));
-/** The same human label, by id — what a version-strip chip says a refinement
- * touched ("Refine · Left Hand"). */
-export const lineTrackLabel = (id) => LINE_EDIT_TRACK_OPTIONS.find((option) => option.value === id)?.label ?? id;
-/** The default edited track: a wrist is the joint the paper's own demo draws
- * with, and the one whose screen trajectory a user can actually see. */
-export const LINE_EDIT_DEFAULT_TRACK = "leftHand";
-/** Draw a grab handle every Nth frame. Fewer would leave the curve looking
- * un-grabbable in the gaps; more turns a 200-frame range into a solid bead of
- * dots. The hit test tolerates CURVE_GRAB_RADIUS_PX regardless, so the handles
- * are an affordance rather than the actual geometry. */
-export const LINE_CURVE_MARKER_STRIDE = 4;
-/** The shortest curve with anything draggable in it: both ends are hard-pinned
- * to the original trajectory, so a range needs more than 2 x PINNED_CURVE_ENDS
- * frames before the middle can move at all. */
-export const MIN_CURVE_POINTS = PINNED_CURVE_ENDS * 2 + 1;
-/** How long a released drag has to sit still before it costs a preview. Long
- * enough that pull-pull-pull is one request instead of three, short enough that
- * the loop still feels like it answers the gesture — a preview round trip is
- * ~1 s on the warm service, so 150 ms is noise against it. */
-export const LINE_PREVIEW_DEBOUNCE_MS = 150;
-/** How often the line-edit capability is re-probed while the bridge is up and
- * the answer is still no.
- *
- * The bridge answers `capabilities.lineEdit` from a LAZY ssh probe of the
- * ProjFlow box behind a 5 s cache, so the very first /ardy/health of a session
- * can land on a cold cache and come back false — a box that is perfectly fine
- * two seconds later. Asking once per bridge-up transition therefore made the
- * whole mode dead until a reload (first boot broken, second boot fine, which is
- * exactly how it was reported). A capability is an ADVERTISEMENT, so it is
- * allowed to arrive late; what is not allowed is to assume it. 4 s sits just
- * under the bridge's own 5 s TTL, so a retry can actually see a new answer
- * rather than re-reading the same cached false. */
-export const LINE_CAPABILITY_RETRY_MS = 4000;
-/** Why a validateLineEdit code refused, said once, in the user's language.
- * Keyed by the pure module's stable codes so the copy and the check can never
- * disagree about which field was wrong. */
-export const LINE_EDIT_REFUSALS = {
-	sourceMotion: ["The current take has no bridge source — generate it once before editing a path", "현재 테이크에 브리지 원본이 없어요 — 궤적을 편집하기 전에 한 번 생성하세요"],
-	track: ["Pick a joint to edit first", "먼저 편집할 관절을 고르세요"],
-	frameRange: ["The frame range must sit inside the clip and span at least 2 frames", "프레임 구간은 클립 안에 있어야 하고 최소 2프레임이어야 해요"],
-	points: ["Pull a longer stretch of the path — a single point is not a path", "궤적을 좀 더 길게 잡아당겨 주세요 — 점 하나는 경로가 아니에요"],
-	camera: ["The camera could not be captured — nudge the view and try again", "카메라를 캡처하지 못했어요 — 뷰를 조금 움직인 뒤 다시 시도하세요"],
-	prompt: ["The motion prompt is not usable for a line edit", "모션 프롬프트를 라인 편집에 쓸 수 없어요"],
-	pins: ["The pinned moments could not be sent — try clearing them and pinning again", "찍은 순간을 보낼 수 없어요 — 지우고 다시 찍어 보세요"],
-	shape: ["The line edit could not be assembled", "라인 편집을 구성하지 못했어요"],
-};
-/** Why curveToPoints2d refused. Same shape, different stage: these are about
- * the CURVE, before there is a payload to validate. */
-export const LINE_CURVE_REFUSALS = {
-	empty: ["This joint is not visible over the chosen frames — frame it in view first", "선택한 구간에서 이 관절이 보이지 않아요 — 먼저 화면 안에 들어오도록 잡아 주세요"],
-	offscreen: ["The pulled path leaves the frame — keep it inside the dashed border", "잡아당긴 궤적이 화면을 벗어났어요 — 점선 테두리 안에 두세요"],
-};
+/** A track id's human label for the trail picker, read straight out of ik.js's three tables
+ * so the picker can never drift from the pose studio's own naming; an unknown id falls back
+ * to the raw id so the gap is visible. */
+const TRACK_LABELS = new Map([...IK_TRACKS, ...MID_TRACKS, ...FK_TRACKS].map((track) => [track.id, track.label]));
+export const lineTrackLabel = (id) => TRACK_LABELS.get(id) ?? id;
 
 // Named ingest failures, in both locales. A reason the user cannot act on is
 // not a message: each line says what was wrong with THIS source.

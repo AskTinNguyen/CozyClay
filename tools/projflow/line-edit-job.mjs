@@ -150,7 +150,7 @@ export function scaleFrameRange({ startFrame, endFrame }, genFrames, { appFps = 
  * arrive in ascending frame order, so "the later one wins" is the same rule the
  * app's own place-a-pin-twice behaviour follows.
  */
-export function scalePins(pins, genFrames, { appFps = APP_FPS, genFps = GEN_FPS } = {}) {
+function scalePins(pins, genFrames, { appFps = APP_FPS, genFps = GEN_FPS } = {}) {
 	if (!Array.isArray(pins) || pins.length === 0) {
 		throw new Error("scalePins: pins3d must be a non-empty array");
 	}

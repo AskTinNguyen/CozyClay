@@ -6,7 +6,6 @@ import { ko, isKo } from "../locale.js";
 import { HIERARCHY_INSPECTOR_TITLES, lineTrackLabel } from "../app-stage.jsx";
 import { PhysicsPanel } from "../ardy/physics-panel.jsx";
 import { Field } from "../ui.jsx";
-import { MotionReadiness } from "../motion-readiness-ui.jsx";
 import { RangePinPanel } from "../range-pin-panel.jsx";
 import { TRAIL_TRACKS } from "../motion-trail.js";
 import { PlatformFitPanel } from "../ardy/platform-fit-panel.jsx";
@@ -19,8 +18,7 @@ export default function RigControlPanel({
  physicsShow, physicsOptions, tlFrame, changePhysicsOptions, runAutoPhysics, showPhysicsPreview,
  applyPhysicsPreview, cancelPhysicsPreview, setTlFrame, platformFitRunning, platformFitProgress,
  platformFitLast, platformFitApplied, ikEditTool, setIkEditTool, showTrails, setShowTrails,
- trailFalloffS, setTrailFalloffS, trailEdit, trailTrackFocus = null, selectTrailTrack, clearTrailTrackFocus, pendingIkEdit = null, applyPendingIkEdit, cancelPendingIkEdit, generationBusy, bridgeChecking, bridge,
- runTrailRegeneration, trailReadinessState, openMotionSetup, recheckMotionHealth,
+ trailFalloffS, setTrailFalloffS, trailTrackFocus = null, selectTrailTrack, clearTrailTrackFocus, pendingIkEdit = null, applyPendingIkEdit, cancelPendingIkEdit,
  rangePins = [], rangePinResiduals = new Map(), rangePinSelection = null, rangePinPartPick = null,
  rangePinPreview = null, objects = [], setRangePinSelection, setRangePinPartPick,
  previewRangePinDraft, applyRangePinDraft, deleteRangePin,
@@ -83,8 +81,6 @@ export default function RigControlPanel({
      </select></label>
      {trailTrackFocus && <button type="button" className="btn full" data-testid="trail-show-all" onClick={clearTrailTrackFocus}>{ko("Show all lines", "모든 라인 보기")}</button>}
      <Field label={ko("Falloff", "영향 범위")}><div className="trail-falloff-row"><input type="range" min={0.1} max={2} step={0.1} value={trailFalloffS} onChange={(event) => setTrailFalloffS(Number(event.target.value))} /><span className="trail-falloff-value">{trailFalloffS.toFixed(1)}s</span></div></Field>
-     <button type="button" className="btn primary full" disabled={!trailEdit || !motion?.url || generationBusy || bridgeChecking || bridge === null} onClick={runTrailRegeneration}>{ko("Regenerate", "재생성")}</button>
-     <MotionReadiness state={trailReadinessState} checking={bridgeChecking} onSetup={() => openMotionSetup("trail")} onRetry={recheckMotionHealth} />
     </>}
     {ikEditTool === "ik" && <p className="inspector-hint">{ko("Grab a hand, foot, elbow or knee handle in the viewport.", "뷰포트에서 손·발·팔꿈치·무릎 핸들을 잡으세요.")}</p>}
    </section>}

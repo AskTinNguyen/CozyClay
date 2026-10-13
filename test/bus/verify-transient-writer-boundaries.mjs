@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { TRANSIENT_WRITERS } from './verify-bus-coverage.mjs';
 import { projectFixture, ok } from './project-fixture.mjs';
-import { motionFixture } from './motion-fixture.mjs';
 
 const f = projectFixture();
 try {
@@ -34,19 +33,3 @@ try {
   console.log('PASS #496 transient writer names and state are absent from the saved project');
 } finally { f.dispose(); }
 
-const m = motionFixture();
-try {
-  const app = m.scope.appContext, before = m.snapshot(), clock = app.undoClock;
-  const patches = [], owner = app.storeDomain('motion'), apply = owner.setVideoDraft;
-  owner.setVideoDraft = patch => { patches.push(patch); return apply(patch); };
-  const patch = { instruction: 'Uncommitted draft', promptOverride: 'Draft override', duration: 10 };
-  const receipt = ok(m.run('motion.setVideoDraft', patch, 'agent'));
-  assert.deepEqual(patches, [patch], 'the agent reaches the real hook setter');
-  assert.equal(receipt.status, 'transient');
-  assert.equal(receipt.authored, false); assert.equal(receipt.undo, null);
-  assert.equal(receipt.revision.before, receipt.revision.after);
-  assert.deepEqual(m.snapshot(), before); assert.equal(app.undoClock, clock);
-  assert.equal(m.run('motion.setVideoDraft', { duration: 3 }, 'agent').ok, false);
-  assert.equal(m.run('motion.setVideoDraft', { job: {} }, 'agent').ok, false, 'job output is not an editable draft field');
-  console.log('PASS #496 video draft is a schema-checked transient command without document history');
-} finally { m.dispose(); }
