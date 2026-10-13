@@ -277,7 +277,7 @@ const readback = object({}, { position: vec3, yawDeg: number(), rotationDeg: vec
 const CAMERA_SIDES = ["left", "right", "on-axis"];
 const checks = object({ coverage: name }, { relationSatisfied: bool, overlapIds: ids(100, 0), actualGapM: number(), requestedGapM: number(0), maximumFootprintOverlapM: number(0),
 	basis: choices(STUDIO_VARIANTS.positionBases), clipped: bool, occluded: bool, behindCamera: bool, screenFraction: number(0), derivedSize: choices(STUDIO_VARIANTS.framingSizes), support: name, baseY: number(), facesTargetId: id,
-	cameraSide: choices(CAMERA_SIDES), axisConsistent: bool });
+	cameraSide: choices(CAMERA_SIDES), axisConsistent: bool, evaluatedFrames: integer(1), sampledFrames: array(integer(), 64, 1), sampledChecks: array(object({ frame: integer(), screenFraction: number(), clipped: bool, behindCamera: bool, occluded: bool }), 64, 1), issueFrames: array(object({ frame: integer(), codes: array(name, 4, 1), screenFraction: number() }), 64, 0) });
 // Code-computed shot geometry verify_result carries beside a framing check
 // (src/studio-geometry-facts.js): bounded to 8 shots and 24 subjects.
 const geometryFacts = object({
@@ -511,7 +511,10 @@ export function validateStudioCommand(command) {
 	}
 	if (command.name === "verify_result") {
 		if (Boolean(args.receiptId) === Boolean(args.targets)) fail("INVALID_ARGUMENT", "Exactly one of receiptId or targets is required.");
-		if (args.checks.includes("motion") && args.range === undefined) args.range = "whole_clip";
+		if (args.checks.includes("motion") && args.range === undefined) {
+			args.range = "whole_clip";
+			Object.defineProperty(args, "rangeWasDefaulted", { value: true, enumerable: false });
+		}
 	}
 	return { name: command.name, args };
 }

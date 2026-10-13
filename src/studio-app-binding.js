@@ -8,7 +8,7 @@ import { shotAtFrame } from "./cuts.js";
 import { isProxyFigure } from "./scenes.js";
 import { CUTOUT_KIND, MESH_KIND, OBJECT_LIBRARY, supportHeightForObject } from "./scene-objects.js";
 import { buildStudioContext, physicsFingerprintInput, studioEntityCursor, validateStudioCursor } from "./studio-agent-context.js";
-import { createStudioCommandJournal, entityWorldBounds, framingChecks, localTransformReadback, placementChecks, studioObjectCatalogue } from "./studio-agent-commands.js";
+import { createStudioCommandJournal, entityWorldBounds, framingChecks, localTransformReadback, placementChecks, sampledFramingResult, studioObjectCatalogue } from "./studio-agent-commands.js";
 import { verifyInstalledTake } from "./studio-agent-motion.js";
 import { shotGeometryFacts } from "./studio-geometry-facts.js";
 import { STUDIO_TOOL_FAMILIES, StudioProtocolError, validateReceipt, validateStudioCommand, validateStudioIdentity } from "./studio-agent-protocol.js";
@@ -292,6 +292,10 @@ export function createStudioAppBinding(ports) {
 					if (!measured.length) { reasons[check] = "No target is an object or character in the current scene."; continue; }
 					try { result.checks[check] = check === "placement" ? placementChecks(measured, scene, { bounds: ports.bounds }) : framingChecks(measured, scene, { bounds: ports.bounds }); }
 					catch (error) { if (!(error instanceof StudioProtocolError)) throw error; reasons[check] = error.message; }
+				}
+				if (args.checks.includes("framing") && args.range !== undefined && !args.rangeWasDefaulted) {
+					const sampled = sampledFramingResult(args, scene, ports, s.frameCount, measured, receipt);
+					if (sampled.reason) reasons.framing = sampled.reason; else result.checks.framing = sampled;
 				}
 				if (args.checks.includes("motion") && !receipt?.verification) {
 					const subjects = args.targets ?? receipt.affectedIds.filter(id => s.characters.some(c => c.id === id));
