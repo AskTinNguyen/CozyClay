@@ -8,7 +8,7 @@
 //                       point along a segment; with reach, slides toward `from` until the arm reaches
 //   { kind: "object",   object: "Car_Door_L", local: [x,y,z] }  point fixed to an animated scene object
 //   { kind: "landmark", name: "mouth" }                     measured face landmark on the Head bone
-//   { kind: "prop",     prop: "cig", point: "tip" }         a point on a prop held by the other hand
+//   { kind: "prop",     prop: "cig", point: "tip", offset: [x,y,z] }  a point on a prop held by the other hand
 // spec.props = { name: { hand: "r", origin: ["RightHandIndex2", "RightHandMiddle2"],
 //                        points: { name: [d, l, n] } } }   offsets along the palm axes (m)
 import { add, sub, scale, len, apply, ry } from "./math.js";
@@ -47,7 +47,7 @@ export function resolveAnchor(ctx, name, s, diag, c) {
 		case "prop": {
 			const p = diag.props?.[a.prop]?.[a.point];
 			if (!p) throw new Error(`MOTION_SPEC_INVALID: anchor "${name}" needs prop ${a.prop}.${a.point}, which is held by an arm solved later`);
-			return p.slice();
+			return add(p, a.offset ?? [0, 0, 0]);
 		}
 		default: throw new Error(`MOTION_SPEC_INVALID: anchor "${name}" has unknown kind "${a.kind}"`);
 	}

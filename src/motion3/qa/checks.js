@@ -1,11 +1,13 @@
 // General motion checks (every take): scene collisions, ground, IK reach, planted-foot slide,
 // bone length, speed / pops, knee and elbow flips, knee hyper-extension, balance, self contact,
-// hands and held props entering the head.
-import { sub, len, dist, cross, norm, dot, angle } from "../compiler/math.js";
+// hands and held props entering the head (and the torso, contact-checks.js).
+import { add, sub, scale, apply, len, dist, cross, norm, dot, angle } from "../compiler/math.js";
 import { CAPSULES, segPoints, sdBox, segDist, headDepth, solePoints } from "./geometry.js";
+import { contactChecks } from "./contact-checks.js";
 
 const DEF = { allow: 0.005, groundAllow: 0.01, reach: 0.01, slide: 0.0015, plantH: 0.012,
-	speedCore: 0.04, speedLimb: 0.16, accCore: 0.015, accLimb: 0.05, flip: 60, knee: 150, headAllow: 0.003, self: 0 };
+	speedCore: 0.04, speedLimb: 0.16, accCore: 0.015, accLimb: 0.05, flip: 60, knee: 150, headAllow: 0.003, self: 0,
+	body: 0.005, hands: 0.01, object: 0.005 };
 
 const allowance = (allow, part, obj) => {
 	for (const a of allow ?? []) if (part.startsWith(a.part) && (a.object === obj || (a.object.endsWith("*") && obj.startsWith(a.object.slice(0, -1))))) return a.depth;
@@ -17,12 +19,17 @@ export function generalChecks(sk, out, opts = {}) {
 	const push = (kind, msg, f, value, limit) => issues.push({ kind, msg, frame: f, value: +value.toFixed(4), limit });
 	for (let f = 0; f < n; f++) {
 		const { s, diag } = F[f], objs = out.objectsAt(f);
+		// bounding spheres of the boxes: a capsule farther away than its own reach cannot touch one
+		const spheres = Object.entries(objs).filter(([, box]) => box.half && !box.ignore)
+			.map(([id, box]) => [id, box, add(box.pos, apply(box.R, [0, box.half[1], 0])), len(box.half)]);
 		for (const [part, a, b, r] of CAPSULES) {
-			const pts = segPoints(s.P[I[a]], s.P[I[b]]);
-			for (const [id, box] of Object.entries(objs)) {
-				if (!box.half || box.ignore) continue;
-				const pen = r - Math.min(...pts.map(p => sdBox(p, box)));
+			const A = s.P[I[a]], B = s.P[I[b]], mid = scale(add(A, B), 0.5), reach = r + dist(A, B) / 2;
+			let pts = null;
+			for (const [id, box, c, rb] of spheres) {
 				const lim = allowance(opts.allow, part, id) ?? L.allow;
+				if (reach - (dist(mid, c) - rb) <= lim) continue;
+				pts ??= segPoints(A, B);
+				const pen = r - Math.min(...pts.map(p => sdBox(p, box)));
 				if (pen > lim) push("COLLIDE", `${part} x ${id}`, f, pen, lim);
 			}
 		}
@@ -42,10 +49,13 @@ export function generalChecks(sk, out, opts = {}) {
 			const th = s.P[I[`${S}UpLeg`]], kn = s.P[I[`${S}Leg`]], an = s.P[I[`${S}Foot`]];
 			const bend = angle(sub(kn, th), sub(an, kn));
 			if (bend > L.knee) push("KNEE", `${S} knee bent ${bend.toFixed(0)}deg`, f, bend, L.knee);
-			const toeDir = sub(s.P[I[`${S}ToeBase`]], an), mid = sub(kn, [(th[0] + an[0]) / 2, (th[1] + an[1]) / 2, (th[2] + an[2]) / 2]);
+			// the foot's heading on the ground; the toe sits below the ankle, which must not count
+			const toeDir = sub(s.P[I[`${S}ToeBase`]], an); toeDir[1] = 0;
+			const mid = sub(kn, [(th[0] + an[0]) / 2, (th[1] + an[1]) / 2, (th[2] + an[2]) / 2]);
 			if (bend > 3 && dot(mid, toeDir) < -0.002) push("KNEE", `${S} knee bends backward`, f, bend, 0);
 		}
 	}
+	contactChecks(sk, out, L, push);
 	// temporal checks
 	for (const S of ["Left", "Right"]) {
 		for (let f = 1; f < n; f++) {

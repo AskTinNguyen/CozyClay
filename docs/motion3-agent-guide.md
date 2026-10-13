@@ -44,7 +44,7 @@ A channel is interpolated (monotone cubic) only through the keys that set it, so
   - `segment` — a point along a bone; with `reach`, it slides until the arm reaches
   - `object` — a point fixed to a scene object, including a hinged door
   - `landmark mouth` — the measured face point
-  - `prop` — a point on a prop held by the other hand
+  - `prop` — a point on a prop held by the other hand, plus an optional world `offset` (e.g. 2 cm under the cigarette tip)
 - Props are points carried by a hand, given along the palm axes [finger d, knuckle line l, palm normal n].
 - Fits move the wrist until an effector (a prop point or fingertips) sits exactly on an anchor while that anchor's weight is on. For example: the cigarette filter on the mouth, or the flame under the cigarette tip.
 - Objects: `objects: { id: { pivot, axis, channel } }` hinges a scene object by a keyed angle channel. Use it for doors.
@@ -63,7 +63,8 @@ Every take gets these checks:
 - Bone length
 - Speed and pops
 - Knee and elbow flips, knee hyper-extension
-- Hands and props entering the head
+- Hands and props entering the head or the torso, and the two hands overlapping
+- Hinged objects (`objects`, e.g. a door) passing through other scene boxes
 - Balance, and self contact
 
 Declare the task-specific checks in `spec.checks`:

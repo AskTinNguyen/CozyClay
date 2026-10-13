@@ -61,5 +61,29 @@ const reachSpec = { ...walkSpec, frames: 2, generators: [], keys: [{ f: 0, set: 
 const reachQa = runMotionQa(sk, compileMotion(reachSpec, { sk, scene: { objects: {} } }), reachSpec);
 expect("QA catches an unreachable foot target", reachQa.groups.some(g => g.kind === "REACH"));
 
+// Contact checks ported from the car-exit QA, the knee check on a lifted knee, prop anchor offsets.
+const one = (set, extra = {}) => ({ ...walkSpec, frames: 1, generators: [], keys: [{ f: 0, set: { ...walkSpec.keys[0].set, ...set } }], ...extra });
+const groupsOf = (spec, objects = {}) => runMotionQa(sk, compileMotion(spec, { sk, scene: { objects } }), spec).groups;
+const intoChest = groupsOf(one({ armw_r: 1, hand_r: [0, P[I.Spine2][1] - 0.04, 0.04] }));
+expect("QA catches a hand inside the torso", intoChest.some(g => g.kind === "BODY" && /hand_r into torso/.test(g.subject)), JSON.stringify(intoChest.map(g => g.subject)));
+const clasped = groupsOf(one({ armw_r: 1, armw_l: 1, hand_r: [0, 1.15, 0.4], hand_l: [0, 1.15, 0.4] }));
+expect("QA catches the two hands overlapping", clasped.some(g => g.kind === "SELF" && g.subject === "hands overlap"), JSON.stringify(clasped.map(g => g.subject)));
+const hinge = { schema: "cozyclay.motion-spec.v1", frames: 2, keys: [{ f: 0, set: { ...walkSpec.keys[0].set, door: 0 } }, { f: 1, set: { door: -90 } }],
+	objects: { Door: { pivot: [0.6, 0, 1], axis: [0, 1, 0], channel: "door" } } };
+const doorGroups = groupsOf(hinge, { Door: { pos: [1, 0, 1], R: I3(), half: [0.4, 0.5, 0.05] }, Post: { pos: [0.6, -0.1, 1.6], R: I3(), half: [0.2, 0.6, 0.3] } });
+const doorHit = doorGroups.find(g => g.kind === "OBJECT");
+expect("QA catches a hinged door swinging into another object (and not before)", doorHit?.subject === "Door into Post" && doorHit.first === 1, JSON.stringify(doorGroups));
+const lifted = groupsOf(one({ foot_l: [0.09, 0.78, 0.33], knee_l: [0, 0.8, 1] }));
+const liftedKnee = compileMotion(one({ foot_l: [0.09, 0.78, 0.33], knee_l: [0, 0.8, 1] }), { sk, scene: { objects: {} } }).frames[0].s.P[I.LeftLeg];
+expect("a knee lifted above the hip is not called backward", liftedKnee[1] > P[I.LeftUpLeg][1] && !lifted.some(g => g.kind === "KNEE"), JSON.stringify(lifted.map(g => g.subject)));
+const backward = groupsOf(one({ foot_l: [0.09, 0.25, 0.02], knee_l: [0, 0, -1] }));
+expect("QA catches a knee bending backward", backward.some(g => g.kind === "KNEE" && /backward/.test(g.subject)), JSON.stringify(backward.map(g => g.subject)));
+const lit = compileMotion(one({ armw_r: 1, armw_l: 1, hand_r: [0, 1.25, 0.3], w_under_l: 1 }, {
+	props: { cig: { hand: "r", origin: ["RightHandIndex2", "RightHandMiddle2"], points: { tip: [0, 0, 0.058] } },
+		lighter: { hand: "l", origin: ["LeftHand", "LeftHandMiddle1"], points: { flame: [0.01, 0.036, 0] } } },
+	anchors: { under: { kind: "prop", prop: "cig", point: "tip", offset: [0, -0.02, 0] } },
+	fits: [{ side: "l", anchor: "under", effector: { prop: "lighter", point: "flame" } }] }), { sk, scene: { objects: {} } }).frames[0].diag.props;
+expect("a prop anchor offset puts the flame 2 cm under the tip", dist(lit.lighter.flame, [lit.cig.tip[0], lit.cig.tip[1] - 0.02, lit.cig.tip[2]]) < 1e-3, dist(lit.lighter.flame, lit.cig.tip));
+
 if (failures) { console.error(`${failures} motion3 core check(s) failed`); process.exit(1); }
 console.log("motion3 core: all checks passed");
