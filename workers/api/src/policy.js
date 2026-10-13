@@ -3,7 +3,6 @@
  * this object rather than carrying copies of limits around.
  */
 export const POLICY = Object.freeze({
-  MOTION_DAILY_CAP: 10,
   OAUTH_STATE_TTL_MS: 10 * 60_000,
   SESSION_TTL_DAYS: 30,
 });
@@ -13,10 +12,6 @@ export const SITE_ORIGIN = Object.freeze({
 });
 
 
-
-export function utcDay(value = Date.now()) {
-  return new Date(value).toISOString().slice(0, 10);
-}
 
 export function environmentFor(env = {}, request = null) {
   if (env.ENVIRONMENT === "development" || env.ENVIRONMENT === "production") {

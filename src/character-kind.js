@@ -6,7 +6,7 @@ import { isProxyFigure } from "./scenes.js";
 import { isKo } from "./locale.js";
 import { StudioProtocolError } from "./studio-agent-protocol.js";
 
-export const CHARACTER_CAPABILITIES = Object.freeze(["rig", "ik", "pose", "motion", "mocap", "physics", "trails", "lineEdit"]);
+export const CHARACTER_CAPABILITIES = Object.freeze(["rig", "ik", "pose", "motion"]);
 const PROXY_BODY_RADIUS = 0.22;
 const PROXY_BODY_HEIGHT = 1.45;
 const PROXY_HEAD_RADIUS = 0.12;
@@ -36,7 +36,7 @@ export function proxyFigureBounds(character, placement = character) {
 	return { min, max };
 }
 
-/** `{ rig, ik, pose, motion, mocap, physics, trails, lineEdit }` - all false
+/** `{ rig, ik, pose, motion }` - all false
  * for a capsule figure, all true for a rigged character. */
 export function characterCapabilities(character) {
 	const rigged = !isProxyFigure(character);
@@ -48,10 +48,7 @@ const FEATURE_LABELS = {
 	rig: ["the rig", "리그"],
 	ik: ["IK", "IK"],
 	pose: ["Pose mode", "포즈 모드"],
-	motion: ["Motion generation", "모션 생성"],
-	mocap: ["Motion capture", "모션 캡처"],
-	trails: ["Motion trails", "궤적선"],
-	lineEdit: ["Line edit", "라인 편집"],
+	motion: ["Compiled motion", "모션 컴파일"],
 	take: ["Loading a take", "테이크 불러오기"],
 };
 

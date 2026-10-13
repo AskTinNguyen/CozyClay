@@ -1,7 +1,7 @@
 import { SCENES_STORAGE_KEY, readSceneDocument } from "../scenes.js";
 
 const MOTION_INPUT_NODE_TYPE = "motion-input";
-const MOTION_INPUT_NODE_VERSION = 1;
+const MOTION_INPUT_NODE_VERSION = 2;
 
 function text(value, fallback = "") {
 	return typeof value === "string" ? value : fallback;
@@ -13,27 +13,31 @@ function clone(value) {
 	return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, clone(item)]));
 }
 
-/** Normalize a Motion Input node's serializable state. Object URLs are kept
- * in `objectUrl` for this tab only; `url` remains the durable same-origin ref. */
+const SPEC_SCHEMA = "cozyclay.motion-spec.v1";
+const specOf = value => value && typeof value === "object" && !Array.isArray(value) && value.schema === SPEC_SCHEMA && Number.isFinite(value.frames) ? value : null;
+
+/** Normalize a Motion Input node's serializable state: a CozyClay 3 motion spec (the JSON an
+ * agent writes for motion.compile) and the character it drives. */
 export function normalizeMotionInputData(input = {}) {
 	const source = input && typeof input === "object" ? input : {};
-	const url = text(source.url || source.motionUrl);
-	const objectUrl = text(source.objectUrl);
+	const spec = specOf(source.spec);
 	const characterId = text(source.characterId || source.targetCharacterId, "");
 	return {
 		type: MOTION_INPUT_NODE_TYPE,
 		version: MOTION_INPUT_NODE_VERSION,
 		label: text(source.label, "Motion Input"),
-		url: url || objectUrl,
-		objectUrl: objectUrl || null,
 		fileName: text(source.fileName),
-		mimeType: text(source.mimeType, "application/octet-stream"),
 		characterId,
-		status: text(source.status, url || objectUrl ? "ready" : "idle"),
-		frames: Number.isFinite(Number(source.frames)) ? Math.max(0, Math.round(Number(source.frames))) : null,
-		fps: Number.isFinite(Number(source.fps)) ? Number(source.fps) : null,
-		motionRef: source.motionRef && typeof source.motionRef === "object" ? clone(source.motionRef) : null,
+		status: spec ? "ready" : text(source.status) === "error" ? "error" : "idle",
+		spec: spec ? clone(spec) : null,
+		frames: spec ? Math.round(spec.frames) : null,
+		fps: spec ? 24 : null,
 	};
+}
+
+/** Parse a motion spec file's text; null when it is not a cozyclay.motion-spec.v1. */
+export function parseMotionSpec(textValue) {
+	try { return specOf(JSON.parse(textValue)); } catch { return null; }
 }
 
 export function characterHandleId(characterId) {
@@ -51,29 +55,12 @@ export function motionInputOutput(input = {}) {
 	return {
 		type: MOTION_INPUT_NODE_TYPE,
 		version: MOTION_INPUT_NODE_VERSION,
-		url: data.url || null,
-		objectUrl: data.objectUrl,
 		fileName: data.fileName || null,
-		mimeType: data.mimeType,
 		characterId: data.characterId || null,
 		handle: data.characterId ? characterHandleId(data.characterId) : null,
 		frames: data.frames,
 		fps: data.fps,
-		motionRef: data.motionRef,
-	};
-}
-
-/** Build the Scene patch for a connected Motion Input output. */
-export function characterMotionPatch(characterId, input = {}) {
-	const data = normalizeMotionInputData({ ...input, characterId });
-	return {
-		characterId: data.characterId || null,
-		motionRef: {
-			...(data.motionRef ? clone(data.motionRef) : {}),
-			url: data.url || data.objectUrl || null,
-			fileName: data.fileName || null,
-			mimeType: data.mimeType,
-		},
+		spec: data.spec,
 	};
 }
 
@@ -84,7 +71,7 @@ export function activeSceneCharacters(storage = globalThis.localStorage) {
 		const result = readSceneDocument(raw);
 		const scene = result.document?.scenes?.find((entry) => entry.id === result.document.activeSceneId) || result.document?.scenes?.[0];
 		return Array.isArray(scene?.stage?.characters)
-			? scene.stage.characters.filter((entry) => entry && typeof entry.id === "string" && entry.id).map((entry, index) => ({ id: entry.id, name: entry.subject || `Character ${index + 1}`, model: entry.model || null, motionRef: entry.motionRef || null }))
+			? scene.stage.characters.filter((entry) => entry && typeof entry.id === "string" && entry.id).map((entry, index) => ({ id: entry.id, name: entry.subject || `Character ${index + 1}`, model: entry.model || null }))
 			: [];
 	} catch {
 		return [];

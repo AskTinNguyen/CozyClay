@@ -1,15 +1,15 @@
 # CozyClay API Worker
 
-The Cloudflare Worker behind `api.cozyclay.org`: Google sign-in and the hosted
-video-model route (`/v1/motion/*`). It lives in this repository under
+The Cloudflare Worker behind `api.cozyclay.org`: Google sign-in. It lives in this repository under
 `AGPL-3.0-or-later` like everything else.
 
 CozyClay 3 removed the hosted Kimodo motion queue (`/jobs`, `/r/:token.npz`,
 `/worker/*`), its composer and ticket pages (`demo/`, `d/`) and the GPU-box
-poller (`tools/demo-worker/`). Motion is compiled in the Studio now. The D1
-tables and the R2 results bucket the queue used are still declared in
-`migrations/` and `wrangler.toml`; retire them on the deployed Worker when it
-is convenient.
+poller (`tools/demo-worker/`), and the hosted video-model route (`/v1/motion/*`)
+whose Studio client went with AI video. Motion is compiled in the Studio now.
+`wrangler.toml` no longer binds the R2 results bucket. The queue's D1 tables stay
+in `migrations/` (applied migrations are history); drop them and delete the
+bucket on the deployed account when convenient.
 
 ## Routes
 
@@ -17,9 +17,6 @@ is convenient.
 | --- | --- |
 | `GET /auth/google/start`, `GET /auth/google/callback` | Google OAuth; sets the `__Host-cc_sess` session cookie |
 | `GET /me` | `{ signedIn, provider }` for the current session |
-| `GET /v1/motion/me` | the signed-in account's video-model quota and active job |
-| `POST /v1/motion/interpolate`, `POST /v1/motion/act` | submit a video-model job (disabled until `MOTION_GENERATION_ENABLED = "true"`) |
-| `GET /v1/motion/jobs/:id` | poll one video-model job |
 
 The scheduled handler (every five minutes) removes expired OAuth state.
 
@@ -58,10 +55,8 @@ Only non-secret identifiers and origins belong in `wrangler.toml`. Set these wit
 
 - `GOOGLE_CLIENT_SECRET` — Google OAuth client secret.
 - `SESSION_SIGNING_KEY` — HMAC key for `__Host-cc_sess` session tokens.
-- `FAL_KEY` — the video-model provider key used by `/v1/motion/*`.
 
-Public variables are `SITE_ORIGIN`, `API_ORIGIN`, `ENVIRONMENT`, `GOOGLE_CLIENT_ID`,
-`MOTION_GENERATION_ENABLED` and `FAL_CLIP_COST_USD`. The redirect URI is fixed by
+Public variables are `SITE_ORIGIN`, `API_ORIGIN`, `ENVIRONMENT` and `GOOGLE_CLIENT_ID`. The redirect URI is fixed by
 environment and is not assembled from the request host:
 
 - production: `https://api.cozyclay.org/auth/google/callback`

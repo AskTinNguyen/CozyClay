@@ -19,7 +19,7 @@ const refused = (receipt, feature) => {
 };
 
 test('capabilities: all false for a capsule figure, all true for a rigged character', () => {
-  assert.deepEqual(CHARACTER_CAPABILITIES, ['rig', 'ik', 'pose', 'motion', 'mocap', 'physics', 'trails', 'lineEdit']);
+  assert.deepEqual(CHARACTER_CAPABILITIES, ['rig', 'ik', 'pose', 'motion']);
   assert.deepEqual({ ...characterCapabilities(proxy) }, Object.fromEntries(CHARACTER_CAPABILITIES.map(name => [name, false])));
   assert.deepEqual({ ...characterCapabilities(rigged) }, Object.fromEntries(CHARACTER_CAPABILITIES.map(name => [name, true])));
 });
@@ -27,8 +27,8 @@ test('capabilities: all false for a capsule figure, all true for a rigged charac
 test('kindRefusal: exact en/ko sentences', () => {
   assert.equal(kindRefusal('Pose mode', false), 'Capsule figures have no rig - Pose mode works on rigged characters only.');
   assert.equal(kindRefusal('Pose mode', true), '캡슐 인물은 리그가 없어요 - Pose mode는 리그 캐릭터에서만 됩니다.');
-  assert.equal(kindRefusal('motion', false), 'Capsule figures have no rig - Motion generation works on rigged characters only.');
-  assert.equal(kindRefusal('motion', true), '캡슐 인물은 리그가 없어요 - 모션 생성는 리그 캐릭터에서만 됩니다.');
+  assert.equal(kindRefusal('motion', false), 'Capsule figures have no rig - Compiled motion works on rigged characters only.');
+  assert.equal(kindRefusal('motion', true), '캡슐 인물은 리그가 없어요 - 모션 컴파일는 리그 캐릭터에서만 됩니다.');
   assert.throws(() => refuseRigOnly(proxy, 'ik'), { code: 'TARGET_NOT_READY', message: kindRefusal('ik', false), uiMessage: kindRefusal('ik', isKo) });
   assert.equal(refuseRigOnly(rigged, 'ik'), undefined);
 });

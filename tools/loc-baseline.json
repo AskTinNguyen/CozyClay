@@ -15,7 +15,7 @@
 	"mcp/verify-live-controller.mjs": 340,
 	"mcp/verify-live-p0.mjs": 264,
 	"mcp/verify-live.mjs": 416,
-	"src/analytics.js": 1181,
+	"src/analytics.js": 1169,
 	"src/App.jsx": 4728,
 	"src/asset-pane.jsx": 648,
 	"src/camera-follow.js": 505,
@@ -67,11 +67,11 @@
 	"src/stage-editor-gizmos.jsx": 1116,
 	"src/studio-agent-commands.js": 492,
 	"src/studio-agent-protocol.js": 488,
-	"src/studio-app-binding.js": 363,
+	"src/studio-app-binding.js": 362,
 	"src/ui.jsx": 393,
 	"src/workflow/agent-client.js": 1386,
 	"src/workflow/AgentPanel.jsx": 880,
-	"src/workflow/WorkflowBuilder.jsx": 593,
+	"src/workflow/WorkflowBuilder.jsx": 592,
 	"tools/qa/css-rule-usage.mjs": 251,
 	"tools/run-tests.mjs": 448
 }

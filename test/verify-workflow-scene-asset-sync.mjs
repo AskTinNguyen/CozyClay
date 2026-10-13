@@ -40,11 +40,14 @@ expect(
 	appendAssetCutout(document, { id: `mesh-${"a".repeat(32)}` }).reason === "invalid-asset",
 );
 const motionDocument = createSceneDocument();
-const motionPatch = applyMotionToCharacter(motionDocument, "char-1", { url: "/ardy/motions/take.npz" });
+const spec = { schema: "cozyclay.motion-spec.v1", fps: 24, frames: 48, use: [{ skill: "standIdle", f0: 0 }] };
+const motionPatch = applyMotionToCharacter(motionDocument, "char-1", { spec });
 expect("motion patch rejects a missing character", !motionPatch.changed && motionPatch.reason === "character-not-found");
 const castDocument = { ...motionDocument, scenes: motionDocument.scenes.map((scene) => ({ ...scene, stage: { ...scene.stage, characters: [{ ...scene.stage.characters[0], id: "hero" }] } })) };
-const appliedMotion = applyMotionToCharacter(castDocument, "hero", { url: "/ardy/motions/take.npz", motionRef: { prompt: "walk" } });
-expect("motion patch updates only the selected character", appliedMotion.changed && appliedMotion.document.scenes[0].stage.characters[0].motionRef.url === "/ardy/motions/take.npz" && appliedMotion.document.scenes[0].stage.characters[0].layer);
+const appliedMotion = applyMotionToCharacter(castDocument, "hero", { spec });
+const hero = appliedMotion.document.scenes[0].stage.characters[0];
+expect("motion patch gives only the selected character a v3 take source", appliedMotion.changed && hero.motionTake?.schema === "cozyclay.take.v3" && hero.motionTake.spec === spec && Boolean(hero.layer));
+expect("motion patch refuses a missing spec", applyMotionToCharacter(castDocument, "hero", { url: "/x.npz" }).reason === "motion-spec-missing");
 
 const listeners = new Map();
 const target = {
