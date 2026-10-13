@@ -1,4 +1,17 @@
-# CozyClay 작업 규칙
+# CozyClay 3 작업 규칙 (이 저장소 전용)
+
+이 저장소(`HaD0Yun/cozyclay3`, 로컬 `~/CozyClay3`)는 NomaDamas/CozyClay 2.x와 분리된 3.0 개발용이다.
+
+- trunk는 `v3`. `main`/`dev` 브랜치는 이 저장소에 없다.
+- 모든 작업은 `v3`에서 브랜치를 따서 `v3`로 PR을 연다: `gh pr create --base v3`.
+- `upstream`(NomaDamas/CozyClay)은 fetch 전용이다. 이 저장소의 코드는 upstream으로 push하지 않는다.
+- 3.0 방향: ARDY/Kimodo를 전부 제거한다. 에이전트가 결정적 모션 컴파일러(`src/motion3/`)와 QA로 모션을 계산한다. 계획은 `docs/v3-plan.md`에 있다.
+- 구현은 컨트롤 세션이 직접 한다(Codex 워커와 워크트리 규칙은 아래 2.x 절에만 해당한다).
+- 아래 "CI 린트 래칫"과 "PR 기준"(테스트 통과, 250줄 래칫, knip)은 그대로 적용한다.
+
+---
+
+## (참고) 2.x 규칙
 
 ## 브랜치
 
