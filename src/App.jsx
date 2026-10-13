@@ -6,6 +6,7 @@ import { useScenes } from "./domains/scenes.js";
 import { useStage } from "./domains/stage.js";
 import StudioShell from "./shell/StudioShell.jsx";
 import ViewportToolbar from "./shell/ViewportToolbar.jsx";
+import CompositionGuideButton from "./shell/CompositionGuideButton.jsx";
 import { StudioShellContext } from "./shell/studio-shell-context.js";
 
 import {
@@ -7252,6 +7253,7 @@ export default function App() {
 						}
 					}}>
 				<ViewportToolbar />
+				{embedMode && <CompositionGuideButton guideMode={guideMode} onCycle={(mode) => runStudioAction("view.setGuideMode", { mode })} />}
 				{sculptMode && !sculptTarget && (
 					<div className="vp-sculpt-hint" role="status" data-testid="sculpt-empty">
 						<strong>{ko("New sculpt", "새 조형물")}</strong>
