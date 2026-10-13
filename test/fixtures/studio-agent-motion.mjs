@@ -22,11 +22,7 @@ const fixture = JSON.parse(readFileSync(new URL('./studio-agent-scene.json', imp
 export const sceneDocument = { version: SCENES_VERSION, activeSceneId: fixture.scene.id, scenes: [{ id: fixture.scene.id, name: fixture.scene.name, objects: fixture.objects,
   stage: createSceneStage({ characters: fixture.characters.map(c => ({ id:c.id,subject:c.name,model:c.model,...c.position,rot:c.yawDeg })) }),
   shotDocument: createShotAuthoringDocument({ frameCount: fixture.frameCount, waypoints: [], shots: fixture.shots.map(s => ({ ...createShot(s.name,s.range.startFrame,s.range.endFrameExclusive-1), id:s.id })) }) }] };
-export const bounded = (promise, label, ms = 60000) => {
-  let timer;
-  return Promise.race([promise, new Promise((_, reject) => { timer = setTimeout(() => reject(Error(`Deadline: ${label}`)), ms); })]).finally(() => clearTimeout(timer));
-};
-export async function released(port) {
+async function released(port) {
   const server = createPortProbe(); const ready = once(server, 'listening'); server.listen(port, '127.0.0.1');
   await ready; await new Promise(resolve => server.close(resolve)); return port;
 }

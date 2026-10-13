@@ -251,7 +251,7 @@ const fmtNum = (v) => {
 };
 
 /** Print the comparison table and a result line for humans. */
-export function printReport(aPath, bPath, report, { atol = 0, ignoreExtra = false } = {}) {
+function printReport(aPath, bPath, report, { atol = 0, ignoreExtra = false } = {}) {
 	const headers = ["array", "shapeA", "shapeB", "dtypeA", "dtypeB", "shape", "dtype", "maxAbsDiff", "meanAbsDiff", "identical", "pass"];
 	const rows = report.arrays.map((r) => [
 		r.name,

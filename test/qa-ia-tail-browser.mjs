@@ -1,11 +1,10 @@
 #!/usr/bin/env node
-// Browser QA for the last three controls docs/studio-ui-ia.md budgets against
-// (§1 R6, #189): the scene ROOT has no fold caret, the Characters GROUP row is
-// gone (the cast sits directly under the root), and Prompt Blocks never grows
-// its own "Generate all": since #550 the top-bar Generate Motion button and its
-// caret menu are the one home for generating and adding blocks. Drives the real
-// studio over CDP and screenshots both surfaces, because "the count went down"
-// and "the panel still reads right" are two claims.
+// Browser QA for the last controls docs/studio-ui-ia.md budgets against
+// (§1 R6, #189): the scene ROOT has no fold caret and the Characters GROUP row
+// is gone (the cast sits directly under the root). CozyClay 3 removed prompt
+// generation, so Motion mode carries no Prompt Blocks panel and the top bar no
+// Generate Motion. Drives the real studio over CDP and screenshots the tree,
+// because "the count went down" and "the panel still reads right" are two claims.
 //
 //   QA_URL=http://127.0.0.1:5196/app/ CDP_PORT=9256 node tools/qa-browser.mjs \
 //     -- node test/qa-ia-tail-browser.mjs
@@ -94,11 +93,6 @@ const clickMode = async (label) => {
 // The Prompt Blocks card, found by its heading rather than by index: the
 // inspector column reorders as foldouts show and hide.
 const PROMPT_CARD = `[...document.querySelectorAll(".card.foldout")].find((card) => !card.hidden && card.querySelector(".foldout-title")?.textContent.trim() === "Prompt Blocks")`;
-const generateAllLabels = () => evaluate(`(() => {
-	const card = ${PROMPT_CARD};
-	if (!card) return null;
-	return [...card.querySelectorAll("button")].map((node) => node.textContent.trim()).filter((text) => text.startsWith("Generate all"));
-})()`);
 
 /* --- a QA project with one character ----------------------------------------- */
 
@@ -147,26 +141,19 @@ expect(
 );
 expect("the hierarchy screenshot has bytes", (await shotOf("hierarchy-scene-mode", `document.querySelector(".hierarchy-tree")`)) > 2000);
 
-/* --- (c) Generate all waits for a block -------------------------------------- */
+/* --- (c) Motion mode has no generation surface ------------------------------ */
 
 expect("Motion mode opens", await clickMode("Motion"));
 // #201: entering Motion selects the active character's ROW, so the character
-// panels (Prompt Blocks among them) are the ones on screen.
+// panels are the ones on screen.
 expect("Motion lands on a character row, not the vanished group", await waitFor(`["characterA", "characterB"].some((id) => document.querySelector("[data-node-id='" + id + "']")?.classList.contains("selected"))`));
-expect("the Prompt Blocks panel is open", await waitFor(`!!(${PROMPT_CARD})?.querySelector(".foldout-body")`));
-expect("with no blocks there is no Generate all button", (await generateAllLabels())?.length === 0, JSON.stringify(await generateAllLabels()));
-expect("the empty Prompt Blocks screenshot has bytes", (await shotOf("prompt-blocks-zero", PROMPT_CARD)) > 2000);
-await evaluate(`document.querySelector("[data-testid=topbar-generate-menu]").click()`);
-expect("the next step is still spelled out, in the top-bar Generate menu", await waitFor(`document.querySelector("[data-generate-action=block]")?.textContent.trim().startsWith("Add block at frame")`));
+expect("there is no Prompt Blocks panel", await evaluate(`!(${PROMPT_CARD})`));
+expect("the top bar has no Generate Motion", await evaluate(`!document.querySelector("[data-testid=topbar-generate], [data-testid=topbar-generate-menu]")`));
+expect("the Motion-mode details screenshot has bytes", (await shotOf("motion-details", `document.querySelector(".hierarchy-sidebar") ?? document.body`)) > 2000);
 
-await evaluate(`document.querySelector("[data-generate-action=block]").click()`);
-expect("adding the first block leaves the top-bar Generate Motion as its action", await waitFor(`document.querySelectorAll(".tl-track.prompts .tl-chip-input").length === 1 && !!document.querySelector("[data-testid=topbar-generate]")`));
-const withBlock = await generateAllLabels();
-expect("the block's action is the top bar's, not a Details Generate all", withBlock?.length === 0, JSON.stringify(withBlock));
-
-writeFileSync(`${out}/summary.json`, JSON.stringify({ labels, cameraDepth, characterDepth, withBlock }, null, 2));
+writeFileSync(`${out}/summary.json`, JSON.stringify({ labels, cameraDepth, characterDepth }, null, 2));
 expect("browser run has no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
 
 ws.close();
 if (failures) { console.error(`${failures} FAILURES`); process.exit(1); }
-console.log(`PASS IA tail — no root caret, no Characters group row, generate lives in the top bar; evidence in ${out}`);
+console.log(`PASS IA tail — no root caret, no Characters group row, no generation surface in Motion; evidence in ${out}`);

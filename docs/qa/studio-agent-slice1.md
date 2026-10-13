@@ -8,6 +8,9 @@ Issue: [#320](https://github.com/NomaDamas/CozyClay/issues/320)
 
 Scope: the merged slice (#289–#296 via #297–#307, plus #309, #312, #314, #316, #319).
 
+CozyClay 3 note: this is a 2.x record. `test/qa-studio-agent-browser.mjs` was
+removed with ARDY motion generation, so the browser command below no longer runs.
+
 ## Which path each step used
 
 Both real services were probed before any QA was run. Raw results are in
