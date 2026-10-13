@@ -66,8 +66,21 @@ export function travelPose(object, at) {
 	};
 }
 
-/** The record's own route sample as a matrix, or null when it does not travel. */
+/** A compiled take's per-frame pose for the record (a hinged door), as a matrix, or null. */
+function trackMatrix(object, frame, take, out) {
+	const track = take?.objectTracks?.get?.(object.id);
+	if (!track) return null;
+	const f = Math.max(0, Math.min(track.frameCount - 1, Math.round(frame) || 0));
+	scratchPos.set(track.pos[f * 3], track.pos[f * 3 + 1], track.pos[f * 3 + 2]);
+	scratchQuat.set(track.quat[f * 4], track.quat[f * 4 + 1], track.quat[f * 4 + 2], track.quat[f * 4 + 3]);
+	scratchScale.set(object.scaleX ?? 1, object.scaleY ?? 1, object.scaleZ ?? 1);
+	return out.compose(scratchPos, scratchQuat, scratchScale);
+}
+
+/** The record's own route sample (or compiled track) as a matrix, or null when it does not travel. */
 function ownTravelMatrix(object, frame, take, out) {
+	const tracked = trackMatrix(object, frame, take, out);
+	if (tracked) return tracked;
 	if (!object.path) return null;
 	const at = objectTransformAt(object, frame, take);
 	if (!at) return null;
@@ -181,7 +194,7 @@ const wrapDegrees = (value) => {
  * records are returned as-is, and so is the list when nothing moves.
  */
 export function sceneObjectsAt(objects, frame, take = {}) {
-	if (!objects.some((object) => object.path)) return objects;
+	if (!objects.some((object) => object.path || take?.objectTracks?.has?.(object.id))) return objects;
 	const lookup = asLookup(objects);
 	const matrix = new Matrix4();
 	const position = new Vector3();

@@ -206,7 +206,7 @@ import {
 	pathMetrics,
 	strokeToPathPoints,
 } from "./object-path.js";
-import { carriedPointAt, sceneObjectsAt } from "./object-travel.js";
+import { carriedPointAt, sceneObjectsAt } from "./object-travel.js"; import { objectTracksOf } from "./motion3/object-tracks.js";
 import { routeOwnerFor } from "./route-owner.js";
 import {
 	analyticsActive,
@@ -2283,9 +2283,9 @@ export default function App() {
 	// is correct — the next render puts it back.
 	propFrameRef.current = tlFrame;
 	// Routed records and everything grouped under them (object-travel.js).
-	const animatedSceneObjects = useMemo(
-		() => sceneObjectsAt(sceneObjects, tlFrame, { frameCount: tlFrameCount, fps: tlFps }),
-		[sceneObjects, tlFrame, tlFrameCount, tlFps],
+	const objectTracks = objectTracksOf(appContext.storeDomain("motion"), appContext.live.characters), animatedSceneObjects = useMemo(
+		() => sceneObjectsAt(sceneObjects, tlFrame, { frameCount: tlFrameCount, fps: tlFps, objectTracks }),
+		[sceneObjects, tlFrame, tlFrameCount, tlFps, objectTracks],
 	);
 
 	// The selection as it is DRAWN at this frame, for the transform gizmo to sit
@@ -7371,7 +7371,7 @@ export default function App() {
 								authoredObjects={sceneObjects}
 								selectedId={selectedSceneObjectId}
 								frameRef={propFrameRef}
-								take={{ frameCount: tlFrameCount, fps: tlFps }}
+								take={{ frameCount: tlFrameCount, fps: tlFps, objectTracks }}
 								attachFrameRef={attachFrameRef}
 								syncRef={propSyncRef}
 								worldRef={propWorldRef}
@@ -7440,7 +7440,7 @@ export default function App() {
 									objectId={view.parent}
 									objectsRef={sceneObjectLookupRef}
 									frameRef={propFrameRef}
-									take={{ frameCount: tlFrameCount, fps: tlFps }}
+									take={{ frameCount: tlFrameCount, fps: tlFps, objectTracks }}
 									registryRef={carrierRegistryRef}
 								>
 									<Character
