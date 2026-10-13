@@ -14,7 +14,7 @@ if (!process.env.COZYCLAY_AGENT_SESSIONS_DIR) {
 }
 
 const NODE_FILES = [
-	"test/motion3/verify-motion3-core.mjs", "test/verify-proxy-figure.mjs",
+	"test/motion3/verify-motion3-core.mjs", "test/motion3/verify-motion3-commands.mjs", "test/verify-proxy-figure.mjs",
 	"test/verify-proxy-figure-bounds.mjs",
 	"test/verify-character-capabilities.mjs",
 	"test/verify-root-path.mjs",

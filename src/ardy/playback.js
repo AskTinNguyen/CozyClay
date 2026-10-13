@@ -45,7 +45,7 @@ import * as THREE from "three";
 import { CSKEL27_JOINTS, CSKEL27_PARENTS } from "./cskel27.js";
 import { CSKEL27_NEUTRAL } from "./cskel27-neutral.js";
 import { globalRotations } from "./convert.js";
-import { normalizeBoneName } from "../poses.js";
+import { normalizeBoneName } from "../poses.js"; import { isTakeV3, applyTakeFrame } from "../motion3/playback.js";
 
 /** cskel27 joint -> Mixamo bone name, mirroring the viser avatar's
  * _MIXAMO_TO_CORE (null = no bone is driven by this joint).
@@ -483,7 +483,7 @@ function trailReference(prep, { base, chains }, f) {
  * the Character group's `rot` carries it, exactly like before.
  */
 export function applyMotionFrame(rig, motion, frame) {
-	if (!rig || !motion) return;
+	if (!rig || !motion) return; if (isTakeV3(motion)) return applyTakeFrame(rig, motion, frame);
 	const f = Math.max(0, Math.min(Math.round(frame) || 0, motion.frames - 1));
 	const prep = prepOf(rig);
 	const joints = CSKEL27_JOINTS.length;
@@ -687,9 +687,8 @@ export function motionJointPositions(rig, motion) {
  * both) — so clearing a motion restores the prior CozyClay pose exactly.
  */
 export function snapshotPlaybackBones(rig) {
-	const out = [];
-	const prep = prepOf(rig);
-	for (const bone of [...prep.bones, ...prep.stretchedLeaves.map((leaf) => leaf.bone)]) {
+	const out = [], bones = []; rig.traverse((object) => { if (object.isBone) bones.push(object); });
+	for (const bone of bones) {
 		if (!bone) continue;
 		out.push([
 			bone,

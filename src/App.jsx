@@ -4412,7 +4412,7 @@ export default function App() {
 	// (tools/ardy/visual-qa.mjs). Harmless in normal use.
 	useEffect(() => {
 	window.__cozyclay = {
-			runStudioAction,
+			runStudioAction, setFrame: setTlFrame,
 			runArdy: (options) => appContext.live.state.runArdy(options),
 			rigA: activeRig, motion, tlFrame, frameCount: tlFrameCount, playing: tlPlaying, ikMode, ikChains, ikFocus, contactRadii: ikChains?.values().next().value?.contactRadii ?? null, ik: ikStateRef.current,
 			rangePins, rangePinResiduals,

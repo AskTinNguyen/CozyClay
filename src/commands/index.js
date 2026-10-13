@@ -8,6 +8,7 @@ import { createStudioActionRegistry, STUDIO_ACTIONS } from "../studio-actions.js
 import * as shot from "./shot.js";
 import * as cast from "./cast.js";
 import * as motion from "./motion.js";
+import * as motion3 from "./motion3.js";
 import * as objects from "./objects.js";
 import * as view from "./view.js";
 import * as scene from "./scene.js";
@@ -16,7 +17,7 @@ import * as exporting from "./export.js";
 import * as ai from "./ai.js";
 import * as stage from "./stage.js";
 
-export const COMMAND_MODULES = Object.freeze({ shot, cast, motion, objects, view, scene, project, export: exporting, ai, stage });
+export const COMMAND_MODULES = Object.freeze({ shot, cast, motion, motion3, objects, view, scene, project, export: exporting, ai, stage });
 
 export function commandDeclarations(modules = COMMAND_MODULES) {
 	return Object.values(modules).flatMap(module => module.declarations.map(declaration => ({

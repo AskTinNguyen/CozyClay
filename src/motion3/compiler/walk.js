@@ -46,7 +46,12 @@ function walk(gen, keys, sk) {
 	for (let i = 0; i < W.steps; i++) {
 		const k = i % 2 === 0 ? "l" : "r", other = k === "l" ? "r" : "l", last = i === W.steps - 1;
 		const sNew = last ? sLast : sLast + (i === 0 ? W.firstStep : W.step);
-		const ts = gen.f0 + 4 + i * W.period, tl = ts + W.swing, tm = ts + Math.floor(W.swing / 2);
+		const ts = gen.f0 + 16 + i * W.period, tl = ts + W.swing, tm = ts + Math.floor(W.swing / 2);
+		// gait initiation: move the weight over the stance foot before the first heel comes up
+		if (i === 0) {
+			const pre = add(C(stance[other]), scale(leftOf(h0), (other === "l" ? 1 : -1) * W.halfWidth * 0.75)); pre[1] = st.root[1];
+			at(ts - 4, { root: pre, yaw: h0 });
+		}
 		// toe-off: flat until just before lift, then roll the heel up about the toe
 		const ankle = state[`foot_${k}`], yw = state[`fyaw_${k}`];
 		const v = apply(ry(yw), footRest[k]), toe = add(ankle, v);
@@ -67,7 +72,7 @@ function walk(gen, keys, sk) {
 			aswing_r: W.armSwing * sg * swing, abend_l: 10 * swing, abend_r: 10 * swing, head_yaw: 0 });
 		sLast = sNew;
 	}
-	const tend = gen.f0 + 4 + W.steps * W.period + 18;
+	const tend = gen.f0 + 16 + W.steps * W.period + 18;
 	at(tend, stateAt(out, tend));
 	return out;
 }
