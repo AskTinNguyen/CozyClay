@@ -12,7 +12,7 @@ import { createStudioCommandJournal, entityWorldBounds, framingChecks, localTran
 import { verifyInstalledTake } from "./studio-agent-motion.js";
 import { shotGeometryFacts } from "./studio-geometry-facts.js";
 import { STUDIO_TOOL_FAMILIES, StudioProtocolError, validateReceipt, validateStudioCommand, validateStudioIdentity } from "./studio-agent-protocol.js";
-import { CONTACT_SHEET_LAYOUT, buildContactSheet, sampleContactSheetFrames } from "./studio-contact-sheet.js";
+import { studioVisual } from "./studio-motion-visual.js";
 
 // App-owned adapter: the shared command modules remain the only
 // planners and validators. Ports below publish through the native editor stores.
@@ -308,17 +308,7 @@ export function createStudioAppBinding(ports) {
 							.then(verification => { verified[index] = verification; }, error => { if (!(error instanceof StudioProtocolError)) throw error; skipped.push(`${name}: ${error.message}`); }));
 					});
 				}
-				// A frame is the shot camera's view; a plan is the Top View, the set from above
-				// with names and the shot camera's wedge.
-				if (args.visual !== "none") {
-					if (args.visual === "contact_sheet") {
-						// One image of frames across the range, each rendered through the export
-						// path, which puts the playhead pose, shot camera and props back.
-						const frames = sampleContactSheetFrames(args.range, s.frameCount), sheet = buildContactSheet(frames, ports.renderFrameBuffer), imageId = crypto.randomUUID();
-						images.set(imageId, { dataUrl: ports.encodePng(sheet.data, sheet), width: sheet.width, height: sheet.height, frames, layout: CONTACT_SHEET_LAYOUT, revision: s.revision, receiptId: result.receiptId });
-						result.visualRefs.push({ imageId, frames, layout: CONTACT_SHEET_LAYOUT });
-					} else { const capture = args.visual === "plan" ? (ports.capturePlan ?? (() => fail("CAPABILITY_MISSING", "This editor cannot render the top view.")))() : ports.capture(); const imageId = crypto.randomUUID(); images.set(imageId, { ...capture, revision: s.revision, receiptId: result.receiptId }); result.visualRefs.push({ imageId, ...(args.visual === "plan" ? { kind: "plan" } : {}) }); }
-				}
+				if (args.visual !== "none") studioVisual(args, { s, receipt, result, images, ports });
 				const finish = () => {
 					const computed = verified.filter(Boolean);
 					if (computed.length) result.verification = computed.length === 1 ? computed[0] : computed;

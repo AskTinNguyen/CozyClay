@@ -2,8 +2,9 @@
 // verify_result visual "contact_sheet": one image of 6 frames sampled across
 // the range, each shot frame box-downscaled and tiled 3x2 row-major. The pure
 // pieces live in src/studio-contact-sheet.js; the agent binding
-// (src/studio-app-binding.js) only wires the export render and the PNG
-// encoder, so its branch is pinned against the source.
+// (src/studio-app-binding.js) hands every visual to src/studio-motion-visual.js,
+// which wires the export render and the PNG encoder, so both are pinned
+// against the source.
 import { readFileSync } from "node:fs";
 
 let failures = 0;
@@ -75,7 +76,11 @@ check("binding verify_result branch", () => {
 	const branch = app.slice(start, app.indexOf("return result;", start));
 	expect("verify_result branch is found", start > 0 && branch.length > 0);
 	expect("verify_result no longer reports contact_sheet as unsupported", !branch.includes('unsupportedChecks.push("contact_sheet")'));
-	expect("verify_result builds the contact sheet through the module", branch.includes("buildContactSheet(") && branch.includes("sampleContactSheetFrames("));
+	expect("verify_result hands the visual to studio-motion-visual.js in one call", branch.includes("studioVisual(args,") && !branch.includes("buildContactSheet("));
+	const visual = readFileSync(new URL("../src/studio-motion-visual.js", import.meta.url), "utf8");
+	const sheetBranch = visual.slice(visual.indexOf('if (args.visual === "contact_sheet") {'), visual.indexOf('if (args.visual === "trace") {'));
+	expect("the visual module builds the contact sheet through the module", sheetBranch.includes("buildContactSheet(") && sheetBranch.includes("sampleContactSheetFrames("));
+	expect("even frames stay the default; beats only on frames: \"beats\"", sheetBranch.includes('if (args.frames === "beats")') && sheetBranch.includes("encodePng(sheet.data, sheet)"));
 });
 
 if (failures) process.exit(1);

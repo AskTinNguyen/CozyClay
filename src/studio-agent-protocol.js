@@ -200,7 +200,7 @@ const toolSchemas = {
 	arrange_characters: object({ ops: array(characterOp, 8, 1) }),
 	patch_elements: object({ ops: array(patchOp, 32, 1) }),
 	frame_shot: object({ subjectIds: ids(1), framing }, { shotId: id, caption: { type: "string", maxLength: 500 }, keyAtFrame: integer() }),
-	verify_result: object({ checks: array(choices(["placement", "framing", "motion"]), 3, 1, true) }, { receiptId: id, targets: ids(), range: union(literal("whole_clip"), range), visual: { ...choices(["none", "frame", "contact_sheet", "plan"]), default: "none" } }),
+	verify_result: object({ checks: array(choices(["placement", "framing", "motion"]), 3, 1, true) }, { receiptId: id, targets: ids(), range: union(literal("whole_clip"), range), visual: { ...choices(["none", "frame", "contact_sheet", "plan", "trace"]), default: "none" }, frames: { ...choices(["even", "beats"]), default: "even", description: "contact_sheet frames: even spacing, or beats (grab/release, beat starts, the worst QA frames, then even fill), answered in visualRefs[0].picks" } }),
 	undo_edit: object({ receiptId: id }),
 	run_action: object({ action: id }, { args: openObject, confirmationToken: id }),
 };

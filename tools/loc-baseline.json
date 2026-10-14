@@ -67,7 +67,7 @@
 	"src/stage-editor-gizmos.jsx": 1116,
 	"src/studio-agent-commands.js": 492,
 	"src/studio-agent-protocol.js": 488,
-	"src/studio-app-binding.js": 362,
+	"src/studio-app-binding.js": 356,
 	"src/ui.jsx": 393,
 	"src/workflow/agent-client.js": 1386,
 	"src/workflow/AgentPanel.jsx": 880,
