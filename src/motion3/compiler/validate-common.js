@@ -19,7 +19,7 @@ export function objectOk(err, scene, at, id, { groups = false } = {}) {
 	const parts = partsOf(scene, id);
 	if (parts.length && groups) return true;
 	if (parts.length) err(`${at} names "${id}", a group (Empty) with no body of its own; its parts are ${parts.join(", ")}. Name one part`);
-	else err(`${at} names object "${id}", which is not in the scene${didYouMean(String(id), [...new Set([...ids, ...ids.flatMap(k => scene.objects[k].ancestors ?? [])])])}`);
+	else err(`${at} names object "${id}", which is not in the scene${didYouMean(String(id), [...new Set([...ids, ...ids.flatMap(k => scene.objects[k].ancestors ?? []), ...Object.keys(scene.others ?? {})])])}`);
 	return false;
 }
 

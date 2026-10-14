@@ -54,7 +54,8 @@ function cupSpec({ objects, dip, offset } = {}) {
 const base = cupSpec();
 expect("a group id carries (objects.empty-2 with grab/release)", refusal(() => validateSpec(base, { sk, scene })) === "", refusal(() => validateSpec(base, { sk, scene })));
 const bad = objects => refusal(() => validateSpec({ ...base, objects }, { sk, scene }));
-expect("at/along on a group are refused", /objects\.empty-2\.at: "empty-2" is a group/.test(bad({ [CUP.group]: { prop: "grip", grab: 34, at: [0, 0, 0] } })));
+// C15 (kits): at/along on a group pin its root to the palm, as for a body
+expect("at/along on a group are accepted (C15: the root takes the fixed palm offset)", bad({ [CUP.group]: { prop: "grip", grab: 34, at: [0, 0, 0], along: [0, 1, 0] } }) === "");
 expect("grab must come before release", /objects\.empty-2: grab \(50\) must come before release \(40\)/.test(bad({ [CUP.group]: { prop: "grip", grab: 50, release: 40 } })));
 expect("grab and release are whole frames of the take", /objects\.empty-2\.release must be a whole frame 0\.\.99, got 100/.test(bad({ [CUP.group]: { prop: "grip", release: 100 } }))
 	&& /objects\.empty-2\.grab must be a whole frame/.test(bad({ [CUP.group]: { prop: "grip", grab: 3.5 } })));

@@ -22,8 +22,9 @@ export const EXAMPLES = {
 	props: { props: { cupGrip: GRIP }, anchors: { spot: SPOT }, fits: [{ side: "r", anchor: "spot", effector: { prop: "cupGrip", point: "fingers" } }] },
 	objects: { props: { cupGrip: GRIP },
 		objects: { cup: { prop: "cupGrip", grab: 20, release: 50 }, door: { pivot: [0.9, 0, 0.5], axis: [0, 1, 0], channel: "door" },
-			bat: { prop: "cupGrip", grab: 52, keys: [{ f: 54, pos: [0.3, 1.2, 0.2], rot: [0, 0, 0.38268, 0.92388] }, { f: 58, pos: [0.3, 1.1, 0.4], rot: [0.70711, 0, 0, 0.70711] }] } },
-		keys: [{ f: 0, set: { door: 0 } }, { f: 40, set: { door: -60 } }] },
+			bat: { prop: "cupGrip", grab: 52, keys: [{ f: 54, pos: [0.3, 1.2, 0.2], rot: [0, 0, 0.38268, 0.92388] }, { f: 58, pos: [0.3, 1.1, 0.4], rot: [0.70711, 0, 0, 0.70711] }] },
+			ember: { visible: "ember_vis", level: "ember" } },
+		keys: [{ f: 0, set: { door: 0, ember_vis: 0, ember: 0.6 } }, { f: 30, set: { ember_vis: 1, ember: 2 }, step: ["ember_vis"] }, { f: 40, set: { door: -60 } }] },
 	checks: { anchors: { spot: SPOT }, checks: {
 		contacts: [{ name: "right hand on the spot", point: "joint:RightHand", target: "anchor:spot", tol: 0.05, when: [30, 40] }],
 		clearance: [{ name: "hand off the cup", part: "hand_r", object: "cup", min: 0.01, frames: [0, 20] }],
@@ -69,7 +70,9 @@ export const NOTES = {
 	objects: ["A hinge turns the object (a body or a group) about pivot/axis by the angle channel your keys set (degrees).",
 		"A carry follows the prop's hand: before grab the scene pose, grab..release in the hand, after release frozen where it was let go.",
 		`No grab: in hand from frame 0; no release: to the end. ${NO_JUMP}`,
-		"A group (Empty) id moves all its parts; at/along are for bodies only. A carried object is an obstacle for the body and the scene.",
+		"A group (Empty) id moves all its parts; at/along pin a group's root to the palm too (an object.createKit kit). A carried object is an obstacle for the body and the scene.",
+		"A switch { visible?, level? } (no prop, no hinge field) moves nothing: it shows or hides any record (a part, a light, an effect) and sets its level, 0..4 light, glow and effect strength "
+			+ "(an unkeyed level reads 1). Hiding a group hides its parts. A carry takes level too.",
 		"keys pose a carried object in the world while it is in hand (grab <= f <= release): pos is its base (a group: its root), rot a quaternion [x, y, z, w]. "
 			+ `The object leads and the holding hand follows (arm IK, then the wrist within ${Object.entries(WRIST_LIMITS).map(([k, [lo, hi]]) => `${k} ${lo}..${hi}`).join(", ")} deg; dev + toward the thumb); `
 			+ `the hand eases in and out over ${KEY_BLEND} frames. A REACH group "<id>: n cm off its keys" is what the hand could not reach.`,

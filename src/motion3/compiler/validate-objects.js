@@ -1,11 +1,13 @@
 // Validation of spec.objects (C3): a hinge { pivot, axis?, channel } or a carry { prop, grab?,
-// release?, at?, along?, visible?, keys? }. Both take a body or a group (Empty) id; at/along are for
-// bodies only (a group keeps its grab-frame palm offset); keys (C14) pose a carried object while it
-// is in hand. Fields: schema/fields.js OBJECT_FIELDS, OBJECT_KEY_FIELDS. See validate.js.
+// release?, at?, along?, visible?, level?, keys? }. Both take a body or a group (Empty) id; at/along
+// pin the palm offset (a group: its root; without them a group keeps its grab-frame offset); keys
+// (C14) pose a carried object while it is in hand. A switch { visible?, level? } (C15: no prop, no
+// hinge field) takes any record, a light or an effect too, and moves nothing. Fields:
+// schema/fields.js OBJECT_FIELDS, OBJECT_KEY_FIELDS. See validate.js.
 import { isVec3, fmt, didYouMean } from "./vocab.js";
 import { objectOk } from "./validate-common.js";
 import { OBJECT_FIELDS, OBJECT_KEY_FIELDS } from "../schema/fields.js";
-import { groupsOf } from "../scene.js";
+import { isSwitch } from "../carried.js";
 
 const KEY = "{ f, pos: [x, y, z], rot: [x, y, z, w] }";
 const isQuat = q => Array.isArray(q) && q.length === 4 && q.every(Number.isFinite) && Math.abs(Math.hypot(...q) - 1) <= 0.01;
@@ -34,20 +36,27 @@ function frameOk(err, at, v, frames) {
 	return false;
 }
 
+/** visible and level name channels (C15): visible shows the record above 0.5, level scales its light, glow and effect rate. */
+function channelsOk(err, at, o) {
+	if (o.visible !== undefined && (typeof o.visible !== "string" || !o.visible)) err(`${at}.visible must name a channel (shown above 0.5)`);
+	if (o.level !== undefined && (typeof o.level !== "string" || !o.level)) err(`${at}.level must name a channel (the record's level 0..4: 0 dark, 1 as authored; it scales its light, glow and effect rate)`);
+}
+
 export function validateObjects(spec, err, { scene, frames = spec.frames, unknown = err }) {
 	for (const [id, o] of Object.entries(spec.objects ?? {})) {
-		const at = `objects.${id}`, group = !scene?.objects?.[id] && !!groupsOf(scene)[id];
-		objectOk(err, scene, at, id, { groups: true });
-		const kind = o?.prop !== undefined ? "carry" : "hinge", fields = OBJECT_FIELDS[kind];
+		const at = `objects.${id}`, kind = o?.prop !== undefined ? "carry" : isSwitch(o) ? "switch" : "hinge", fields = OBJECT_FIELDS[kind];
+		// a switch takes any record (a light, an effect); the others a body or a group
+		if (kind !== "switch" || !scene?.others?.[id]) objectOk(err, scene, at, id, { groups: true });
 		for (const f of Object.keys(o ?? {})) if (!fields.includes(f) && !(kind === "hinge" && f === "keys")) unknown(`${at} (${kind}) has unknown field "${f}"${didYouMean(f, fields)}; fields: ${fields.join(", ")}`);
+		if (kind === "switch") {
+			if (o.visible === undefined && o.level === undefined) err(`${at} needs visible or level (a channel): a switch shows, hides or dims "${id}" without moving it; a carry needs prop, a hinge pivot and channel`);
+			channelsOk(err, at, o);
+			continue;
+		}
 		if (kind === "carry") {
 			if (!spec.props?.[o.prop]) err(`${at}.prop "${o.prop}" is not in spec.props`);
-			for (const f of ["at", "along"]) {
-				if (o[f] === undefined) continue;
-				if (group) err(`${at}.${f}: "${id}" is a group; a group keeps the offset it has against the palm at grab (leave at/along out)`);
-				else if (!isVec3(o[f])) err(`${at}.${f} must be [d, l, n] along the palm axes, got ${fmt(o[f])}`);
-			}
-			if (o.visible !== undefined && (typeof o.visible !== "string" || !o.visible)) err(`${at}.visible must name a channel (shown above 0.5)`);
+			for (const f of ["at", "along"]) if (o[f] !== undefined && !isVec3(o[f])) err(`${at}.${f} must be [d, l, n] along the palm axes, got ${fmt(o[f])}`);
+			channelsOk(err, at, o);
 			if (frameOk(err, `${at}.grab`, o.grab, frames) && frameOk(err, `${at}.release`, o.release, frames)
 				&& o.grab !== undefined && o.release !== undefined && !(o.grab < o.release)) err(`${at}: grab (${o.grab}) must come before release (${o.release})`);
 			if (o.keys !== undefined) validateKeys(err, unknown, at, o, frames);

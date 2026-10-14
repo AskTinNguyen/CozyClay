@@ -12,8 +12,9 @@
 // "anchor:<a>" whose w_<a>_<k> > 0.5 (the largest). planted = heel and ball below
 // QA_LIMITS.plantH and still, for 3 frames or more (the first, the last and the longest others
 // when there are more than 4). Events: grab/release when an object enters or leaves a hand,
-// show/hide when a visibility channel (a carried object's `visible`, or any *_vis channel)
-// crosses 0.5; `object` is the object id, or the channel's name when no object owns it.
+// show/hide when a visibility channel (a carry's or a switch's `visible`, or any *_vis channel)
+// crosses 0.5; `object` is the object id (one event per object the channel shows), or the
+// channel's name when no object owns it.
 import { QA_LIMITS } from "./qa/checks.js";
 import { solePoints } from "./qa/geometry.js";
 import { inHandAt } from "./object-pose.js";
@@ -76,13 +77,15 @@ function eventsOf(out, spec) {
 		if (is && !was) events.push({ f, object: id, event: "grab" });
 		if (was && !is) events.push({ f: f - 1, object: id, event: "release" });
 	}
-	const owner = Object.fromEntries(objects.filter(([, o]) => typeof o?.visible === "string").map(([id, o]) => [o.visible, id]));
-	for (const ch of new Set([...Object.keys(owner), ...Object.keys(out.baked ?? {}).filter(c => c.endsWith("_vis"))])) {
+	// every object a channel shows (a carry's or a switch's visible) gets its own event
+	const owners = {};
+	for (const [id, o] of objects) if (typeof o?.visible === "string") (owners[o.visible] ??= []).push(id);
+	for (const ch of new Set([...Object.keys(owners), ...Object.keys(out.baked ?? {}).filter(c => c.endsWith("_vis"))])) {
 		const v = out.baked?.[ch];
 		if (!v) continue;
 		for (let f = 1; f < n; f++) {
 			const was = v[f - 1] > 0.5, is = v[f] > 0.5;
-			if (was !== is) events.push({ f, object: owner[ch] ?? ch, event: is ? "show" : "hide" });
+			if (was !== is) for (const object of owners[ch] ?? [ch]) events.push({ f, object, event: is ? "show" : "hide" });
 		}
 	}
 	return events.sort((x, y) => x.f - y.f);

@@ -160,17 +160,6 @@ export function flickerAt(id, frame, amount, fps = 24) {
 	return Math.max(0, 1 + depth * 0.65 * n);
 }
 
-/** The take's brightness level for a record at `frame`, 1 when the take carries
- * none. A baked `lvl` track (Float32, 0..4) scales a light's intensity and a
- * glow's strength and halo. Stand-in until object-travel.js exports the shared
- * reader; keep the signature so the import can be swapped. */
-export function trackLevel(id, frame, take) {
-	const track = take?.objectTracks?.get?.(id);
-	if (!track?.lvl) return 1;
-	const value = Number(track.lvl[Math.max(0, Math.min(track.frameCount - 1, Math.round(frame) || 0))]);
-	return Number.isFinite(value) ? clamp(value, 0, 4) : 1;
-}
-
 /**
  * Which shown lights that ask for a shadow get one: the first
  * PRACTICAL_SHADOW_CAP in record order. `capped` lists the rest by id.

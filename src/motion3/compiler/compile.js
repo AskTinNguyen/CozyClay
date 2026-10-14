@@ -9,12 +9,13 @@
 //   objects:    { id: { pivot: [x,y,z], axis: [x,y,z], channel: "door" } }  hinge angle in degrees
 //               { id: { prop, grab?, release?, at?, along?, visible?, keys? } }   carried (../object-pose.js);
 //               keys lead the holding hand (../object-keys.js, hold.js)
+//               { id: { visible?, level? } }   a switch: shown/hidden and dimmed, never moved (C15)
 //               id is a body or a group (Empty); a group moves every body under it
 //   generators: [{ type: "walk", f0, ... }]  (walk.js)
 //   fix:        { reach, slide, penetration, retime }  deterministic auto-fixes (../fix/)
 // ctx = { sk, scene: { objects: { id: { pos, R, half, ancestors } } } }; out.ctx.scene keeps the scene (object-pose.js)
 import { add, sub, scale, norm, len, dot, apply, axisRot } from "./math.js";
-import { isCarried, hingePose } from "../carried.js";
+import { isCarried, hingePose, movesRecord } from "../carried.js";
 import { pose } from "./pose.js";
 import { bakeChannels, channelsAt } from "./channels.js";
 import { resolveAnchor, measureProps } from "./anchors.js";
@@ -25,8 +26,8 @@ import { holdHook } from "../object-keys.js";
 const smooth = x => x * x * (3 - 2 * x);
 
 /**
- * Scene boxes by frame. A body moves with its own spec.objects entry or its nearest group's
- * (hinge: turned; carry: left at its scene pose and marked `carried` with the carrying id, for
+ * Scene boxes by frame. A body moves with its own spec.objects entry or its nearest group's (a
+ * switch entry moves nothing; hinge: turned; carry: left at its scene pose and marked `carried` with the carrying id, for
  * object anchors only). `obstacles` drops the carried ones: QA measures them at their real pose
  * (object-pose.js, qa/object-checks.js).
  */
@@ -36,7 +37,7 @@ function objectTracks(spec, scene, baked) {
 		if (cache.has(f)) return cache.get(f);
 		const out = {};
 		for (const [id, o] of Object.entries(scene?.objects ?? {})) {
-			const mover = [id, ...(o.ancestors ?? [])].find(k => spec.objects?.[k]), entry = spec.objects?.[mover];
+			const mover = [id, ...(o.ancestors ?? [])].find(k => movesRecord(spec.objects?.[k])), entry = spec.objects?.[mover];
 			if (!entry) out[id] = o;
 			else if (isCarried(entry)) out[id] = { ...o, carried: mover };
 			else out[id] = { ...o, ...hingePose(entry, o, baked, f) };

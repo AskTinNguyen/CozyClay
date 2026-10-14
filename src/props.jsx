@@ -315,7 +315,7 @@ function SceneObject({ object, selected, frameRef = null, take = null, attachFra
 		const travelled = frameRef && !attach && travelLookupRef?.current
 			? sceneObjectTravelMatrixAt(travelLookupRef.current, object.id, frame, take ?? {}, placeWorld)
 			: null;
-		if ((group.visible = trackShown(object.id, frame, take)) && travelled) {
+		if ((group.visible = trackShown(object.id, frame, take, travelLookupRef?.current)) && travelled) {
 			travelled.decompose(group.position, group.quaternion, group.scale);
 		} else if (attach || object.path) {
 			// The authored numbers first. While attached they are the prop's LOCAL

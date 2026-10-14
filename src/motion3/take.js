@@ -3,10 +3,11 @@
 // them straight onto the rig; the hips also carry a position. Everything is expressed in the
 // character's placement frame (its base position and yaw), in metres, so moving or turning
 // the character carries the take with it. Scene objects the motion animates ride along in
-// world space: one track per spec.objects key (a group: its root only).
+// world space: one track per spec.objects key (a group: its root only). A switch entry (C15)
+// bakes only vis and lvl, no pos/quat: its record keeps its own place (object-travel.js).
 import { toLocal } from "./compiler/skeleton.js";
 import { sub, apply, ry, quatFromMat, mul } from "./compiler/math.js";
-import { isCarried } from "./carried.js";
+import { isCarried, isSwitch } from "./carried.js";
 import { rootPoseAt, spanOf } from "./object-pose.js";
 
 const TAKE_SCHEMA = "cozyclay.take.v3";
@@ -25,20 +26,23 @@ export function bakeTake(sk, out, placement = { position: [0, 0, 0], yaw: 0 }, m
 	}
 	// one track per spec.objects key: a body, or a group root its parts ride (object-pose.js);
 	// `hold` marks the frames a carried record is in hand (world space: object-travel.js cuts the
-	// carry of its own parents there)
+	// carry of its own parents there); a switch bakes vis/lvl only (no pos/quat: it never moves)
 	const objects = {}, f0 = out.f0 ?? 0;
 	for (const [id, spec] of Object.entries(out.ctx.spec.objects ?? {})) {
-		const pos = new Float32Array(F * 3), quat = new Float32Array(F * 4), carried = isCarried(spec);
-		const vis = carried && spec.visible ? new Uint8Array(F) : null, hold = carried ? new Uint8Array(F) : null;
+		const carried = isCarried(spec), moves = !isSwitch(spec), pos = moves ? new Float32Array(F * 3) : null, quat = moves ? new Float32Array(F * 4) : null;
+		const vis = (carried || !moves) && spec.visible ? new Uint8Array(F) : null, hold = carried ? new Uint8Array(F) : null;
+		const lvl = (carried || !moves) && spec.level ? new Float32Array(F) : null;
 		const [grab, release] = carried ? spanOf(out, spec) : [0, 0];
 		for (let f = 0; f < F; f++) {
+			if (vis) vis[f] = (out.baked?.[spec.visible]?.[f + f0] ?? 0) > 0.5 ? 1 : 0;
+			if (lvl) lvl[f] = Math.max(0, Math.min(4, out.baked?.[spec.level]?.[f + f0] ?? 1));
+			if (!moves) continue;
 			const o = rootPoseAt(out, id, f + f0);
 			if (!o) continue;
 			pos.set(o.pos, f * 3); quat.set(quatFromMat(o.R), f * 4);
-			if (vis) vis[f] = (out.baked?.[spec.visible]?.[f + f0] ?? 0) > 0.5 ? 1 : 0;
 			if (hold) hold[f] = f + f0 >= grab && f + f0 <= release ? 1 : 0;
 		}
-		objects[id] = { pos, quat, ...(vis ? { vis } : {}), ...(hold ? { hold } : {}) };
+		objects[id] = { ...(moves ? { pos, quat } : {}), ...(vis ? { vis } : {}), ...(hold ? { hold } : {}), ...(lvl ? { lvl } : {}) };
 	}
 	return { schema: TAKE_SCHEMA, fps: out.fps, frameCount: F, rig: sk.model, bones: sk.names.slice(), rot, hips, objects, placement, ...meta };
 }

@@ -83,8 +83,8 @@ const OBJECT_KEY_TYPES = { f: int(), pos: ref("vec3"), rot: { type: "array", ite
 
 export const OBJECT_TYPES = {
 	pivot: ref("vec3", "world hinge point, m"), axis: ref("vec3", "hinge axis, default [0, 1, 0]"), channel: str("the angle channel (degrees) your keys set"),
-	prop: str("a spec.props name: the object follows that hand"), at: palm("fixed offset (bodies only):"), along: palm("fixed direction (bodies only):"),
-	visible: str("a channel: shown above 0.5"), grab: int("frame the hand takes it", { default: 0 }), release: int("frame it is put down (else the end)"),
+	prop: str("a spec.props name: the object follows that hand"), at: palm("fixed offset:"), along: palm("its +Y, fixed:"),
+	visible: str("a channel: shown above 0.5"), level: str("a channel: light, glow, effect strength 0..4 (1 as authored)"), grab: int("frame the hand takes it", { default: 0 }), release: int("frame it is put down (else the end)"),
 	keys: { type: "array", items: { type: "object", properties: Object.fromEntries(OBJECT_KEY_FIELDS.map(f => [f, OBJECT_KEY_TYPES[f]])), required: OBJECT_KEY_FIELDS, additionalProperties: false },
 		description: "world pose at frame f (a group: its root), grab..release; the hand follows" },
 };

@@ -27,7 +27,7 @@ export const SKILL_INFO = {
 	walkTo: {
 		args: { to: xz("[x, z] world m: the heading turns toward it and the steps cover the distance"), ...walkArgs,
 			heading: { oneOf: [num(), WALK_TYPES.heading], description: "degrees: h1, or [h0, h1]" } },
-		needs: "a standing pose keyed before f0 (standIdle or a skill that ends standing)", frames: "16 + steps * period + 18 (194 with steps 8, period 20)",
+		needs: "a standing pose keyed before f0", frames: "16 + steps * period + 18 (194 by default)",
 		adds: ["keys: a walk (the walk generator), feet together at the end"], example: { f0: 10, args: { to: [0.5, 1.5] } },
 		tune: { lift: 0.01, halfWidth: 0.01, firstStep: 0.01, step: 0.01 }, place: { firstStep: 0.03, step: 0.03 },
 	},
@@ -53,9 +53,12 @@ export const SKILL_INFO = {
 		example: { f0: 0, args: { car: "Car" } },
 	},
 	smokeCigarette: {
-		args: { until: int("hold to this frame; default the last frame") },
-		needs: "a standing pose (root) keyed before f0", frames: "265 (to args.until)",
-		adds: ["anchors lpocket, rpocket, hold, mouth, flame", "props cig, lighter", "channels cig_vis, lit_vis, flame_vis, ember_vis", "checks contacts, orient, below, appear, mouthPoints"],
+		args: { until: int("hold to this frame; default the last frame"),
+			kit: { type: "object", properties: { cig: str("the cigarette kit's rootId (object.createKit)"), lighter: str("the lighter kit's rootId"), exhale: str("an exhale effect at the mouth") },
+				required: ["cig", "lighter"], additionalProperties: false, description: "kits the skill carries and lights: it adds their spec.objects entries itself" } },
+		needs: "a pose keyed before f0: standing or squatting", frames: "265 (to args.until)",
+		adds: ["anchors lpocket, rpocket, hold, mouth, flame", "props cig, lighter", "channels cig_vis, lit_vis, flame_vis, ember_vis, exhale, ember",
+			"checks contacts, orient, below, appear, mouthPoints"],
 		example: { f0: 0, args: {} },
 	},
 };

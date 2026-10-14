@@ -11,7 +11,7 @@ import { studioAssetList } from "./studio-asset-list.js";
 import { buildStudioContext, physicsFingerprintInput, studioEntityCursor, validateStudioCursor } from "./studio-agent-context.js";
 import { createStudioCommandJournal, entityWorldBounds, framingChecks, localTransformReadback, placementChecks, sampledFramingResult, studioObjectCatalogue } from "./studio-agent-commands.js";
 import { verifyInstalledTake } from "./studio-agent-motion.js";
-import { shotGeometryFacts } from "./studio-geometry-facts.js";
+import { shotGeometryFacts } from "./studio-geometry-facts.js"; import { KIT_CATALOGUE } from "./kits/index.js";
 import { STUDIO_TOOL_FAMILIES, StudioProtocolError, validateReceipt, validateStudioCommand, validateStudioIdentity } from "./studio-agent-protocol.js";
 import { studioVisual, verifyLighting } from "./studio-motion-visual.js";
 import { withEffectState } from "./effects/state.js";
@@ -327,7 +327,7 @@ export function createStudioAppBinding(ports) {
 			// the model pays for): the revision is what the agent's next command is
 			// admitted at, so a scope without it leaves that admission stale.
 			const head = { revision: c.revision, host: (({ workspaceId, documentEpoch, sceneId, sceneEpoch }) => ({ workspaceId, documentEpoch, sceneId, sceneEpoch }))(c.host) };
-			if (command.args.scope === "catalogue") return { ...head, ...studioObjectCatalogue() };
+			if (command.args.scope === "catalogue") return { ...head, ...studioObjectCatalogue(), kits: KIT_CATALOGUE };
 			if (command.args.scope === "document") return { ...head, scope: "document",
 				...readElementDocument(refresh().document, command.args, c.host.sceneId) };
 			// Discovery for run_action: every registered action with its label, kind,

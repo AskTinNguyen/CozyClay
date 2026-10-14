@@ -2,7 +2,8 @@
 // limit } (frame indexes out.frames):
 //   GRAB     "<id>: hand 12.0 cm from it at grab", frame = grab, limit = checks.limits.grab
 //            (default 0.03 m); the distance runs from the prop origin to the part boxes' surface
-//            at their scene pose (where the hand finds them)
+//            at their scene pose (where the hand finds them). An object its visible channel shows
+//            only from grab on appears in the hand (a cigarette out of a pocket): nothing to pick up.
 //   COLLIDE  "<part> x <id>": a body capsule in a carried object (every part box of a group) at
 //            any frame it is shown, the holding hand and forearm excused (the fingers ride on the
 //            hand); "<id> x <other>": a carried object in another scene box from grab on, the
@@ -83,7 +84,7 @@ export function objectChecks(sk, out, spec) {
 	const lim = (parts, objs) => parts.reduce((v, p) => objs.reduce((w, x) => w ?? allowance(allow, p, x), v), null) ?? L.allow;
 	for (const [id, o] of carried) {
 		const [grab, release] = spanOf(out, o), k = spec.props?.[o.prop]?.hand, excused = new Set([`hand_${k}`, `farm_${k}`]);
-		if (o.grab !== undefined && out.frames[grab - f0]) {
+		if (o.grab !== undefined && out.frames[grab - f0] && shownAt(out, o, grab - 1)) {
 			const gap = grabGap(out, id, grab);
 			if (gap > L.grab) push("GRAB", `${id}: hand ${(gap * 100).toFixed(1)} cm from it at grab`, grab - f0, gap, L.grab);
 		}

@@ -13,8 +13,7 @@
  * emitter's own pose over the last `life` seconds instead.
  */
 import { emitterPoseAt, emitterShown, rotate } from "./emitter.js";
-// The take-level stand-in (K2); swap this import when object-travel.js exports trackLevel.
-import { trackLevel } from "../object-look.js";
+import { trackLevel } from "../object-travel.js";
 import { EFFECT_KIND, normalizeEffect } from "./effect-record.js";
 
 /** Live particles drawn per scene; beyond it every emitter is thinned evenly. */

@@ -7,7 +7,8 @@
  */
 
 import * as THREE from "three";
-import { LIGHT_INTENSITY_SCALE, flickerAt, trackLevel } from "./object-look.js";
+import { LIGHT_INTENSITY_SCALE, flickerAt } from "./object-look.js";
+import { trackLevel } from "./object-travel.js";
 import { hasGlow, placeObjectGlow } from "./object-glow.js";
 
 const DEG = Math.PI / 180;

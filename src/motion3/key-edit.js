@@ -7,7 +7,7 @@
 // An object a skill moves (exitCar's door hinge) is keyed the same way: a hinge through its channel,
 // a carry by copying the skill's entry into spec.objects with the keys (the spec's own entry wins).
 // Frames are the spec's (absolute). Errors carry the MOTION_SPEC_INVALID: prefix (INVALID_ARGUMENT).
-import { isCarried } from "./carried.js";
+import { isCarried, movesRecord } from "./carried.js";
 import { groupsOf } from "./scene.js";
 import { mul, T, norm, quatFromMat, matFromQuat } from "./compiler/math.js";
 
@@ -15,9 +15,9 @@ const bad = msg => { throw new Error(`MOTION_SPEC_INVALID: ${msg}`); };
 const round = (v, d) => Math.round(v * d) / d;
 const framesOf = list => (list.length ? list.map(f => `f${f}`).join(", ") : "none");
 
-/** The spec.objects key that moves scene body `id` (itself or its nearest group), or null. */
+/** The spec.objects key that moves scene body `id` (itself or its nearest group; a switch moves nothing), or null. */
 function moverOf(spec, scene, id) {
-	return [id, ...(scene?.objects?.[id]?.ancestors ?? [])].find(k => spec.objects?.[k]) ?? null;
+	return [id, ...(scene?.objects?.[id]?.ancestors ?? [])].find(k => movesRecord(spec.objects?.[k])) ?? null;
 }
 
 /** Degrees the world rotation `rot` turns about `axis` from the rest rotation (the twist, -180..180). */
@@ -63,7 +63,8 @@ function hingeKey(spec, scene, id, o, { frame, rot, angle, remove }) {
  * skillObjects are the spec.objects entries its skills add (skills/index.js expandUse).
  */
 export function keyObject(stored, scene, args, skillObjects = {}) {
-	const spec = structuredClone(stored), { objectId: id, frame } = args, o = spec.objects?.[id] ?? structuredClone(skillObjects[id]);
+	const spec = structuredClone(stored), { objectId: id, frame } = args, moves = x => (movesRecord(x) ? x : undefined);
+	const o = moves(spec.objects?.[id]) ?? structuredClone(moves(skillObjects[id]));
 	if (!o) {
 		const mover = moverOf({ objects: { ...skillObjects, ...spec.objects } }, scene, id);
 		bad(mover ? `"${id}" moves with "${mover}" (spec.objects.${mover}); key "${mover}" with its root pose`

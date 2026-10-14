@@ -3,6 +3,7 @@
 // (spec.objects, e.g. a door) passing through the rest of the scene. Corners only for objects.
 import { add, sub, scale, dot, len, apply, clamp } from "../compiler/math.js";
 import { CAPSULES, segPoints, sdBox, segDist } from "./geometry.js";
+import { movesRecord } from "../carried.js";
 
 const TORSO = CAPSULES.filter(c => c[0].startsWith("torso"));
 const HAND_R = CAPSULES.find(c => c[0] === "hand_l")[3];
@@ -21,7 +22,7 @@ function corners(o) {
 
 /** L: limits { body, hands, object } (m); push(kind, msg, frame, value, limit). */
 export function contactChecks(sk, out, L, push) {
-	const I = sk.index, hinged = Object.keys(out.ctx.spec.objects ?? {});
+	const I = sk.index, hinged = Object.entries(out.ctx.spec.objects ?? {}).filter(([, o]) => movesRecord(o)).map(([id]) => id);
 	for (let f = 0; f < out.frames.length; f++) {
 		const { s, diag } = out.frames[f], P = s.P;
 		const probes = [];

@@ -3,9 +3,10 @@
 // the practical shadow cap (src/object-look.js).
 import assert from "node:assert/strict";
 import {
-	LIGHT_KIND, LIGHT_MENU_ENTRIES, PRACTICAL_SHADOW_CAP, normalizeObjectLight, normalizeObjectGlow, flickerAt, trackLevel,
+	LIGHT_KIND, LIGHT_MENU_ENTRIES, PRACTICAL_SHADOW_CAP, normalizeObjectLight, normalizeObjectGlow, flickerAt,
 	practicalShadows, capPracticalShadows, withShadowCapWarnings,
 } from "../../src/object-look.js";
+import { trackLevel } from "../../src/object-travel.js";
 import { createSceneObject, normalizeSceneObject, updateSceneObject, objectPatchFields, isEmptyObject, dropToSurfacePatch, loadScene, serializeScene, OBJECT_MENU_ENTRIES } from "../../src/scene-objects.js";
 import { STUDIO_PATCH_SET_SCHEMAS, validateStudioSchema } from "../../src/studio-agent-protocol.js";
 import { studioObjectCatalogue } from "../../src/studio-agent-commands.js";

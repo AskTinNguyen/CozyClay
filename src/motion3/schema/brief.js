@@ -35,13 +35,16 @@ function sharedTail(d, earlier) {
 function objectLine(s, opts) {
 	const req = new Set(s.required ?? []), props = Object.entries(s.properties ?? {});
 	if (opts.depth === 0) return "object";
-	const inner = { ...opts, depth: opts.depth === undefined ? undefined : opts.depth - 1 };
+	const inner = { ...opts, depth: opts.depth === undefined ? undefined : opts.depth - 1, seen: undefined };
 	// a long table of optional numbers with defaults (checks.limits): the names only
 	if (props.length > 8 && !req.size && props.every(([, v]) => v.type === "number" && v.default !== undefined)) return `{ [${props.map(([k]) => k).join("|")}]: number }`;
 	const twinned = new Set(props.map(([, v]) => v.$ref?.match(/^#\/properties\/(.+)$/)?.[1]).filter(Boolean));
 	const said = [];
-	/** "(meaning)" once: a meaning that ends like an earlier field's says "as <that field>" instead of the tail. */
+	/** "(meaning)" once: a meaning that ends like an earlier field's says "as <that field>" instead of the tail;
+	 * a field a sibling choice already explained (`opts.seen`, a switch's visible after a carry's) says nothing. */
 	const mean = (name, d) => {
+		if (opts.seen?.has(`${name}\0${d}`)) return "";
+		opts.seen?.add(`${name}\0${d}`);
 		for (const [n, e] of said) { const tail = sharedTail(d, e); if (tail) return ` (${d.slice(0, -tail.length - 2)}, as ${n})`; }
 		said.push([name, d]);
 		return ` (${d})`;
@@ -70,7 +73,9 @@ export function briefType(s, opts = {}) {
 	if (s.oneOf) {
 		const shapes = s.oneOf.filter(o => !(Object.keys(o).length === 1 && o.required)), picks = s.oneOf.flatMap(o => (shapes.includes(o) ? [] : o.required));
 		const own = s.type === "object" || s.properties ? objectLine(s, opts) : "";
-		const choice = shapes.length && shapes.every(o => o.pattern && !o.type) ? `string: ${shapes.map(o => o.description ?? o.pattern).join("; ")}` : shapes.map(brief).join(" | ");
+		// the choices share what they explained: a field that reads the same in an earlier choice says nothing more
+		const seen = new Set(), choice = shapes.length && shapes.every(o => o.pattern && !o.type) ? `string: ${shapes.map(o => o.description ?? o.pattern).join("; ")}`
+			: shapes.map(x => briefType(x, { ...opts, seen })).join(" | ");
 		return [title + own, choice, picks.length ? `(one of ${picks.join("|")})` : ""].filter(Boolean).join(" ") + (own ? "" : dflt(s));
 	}
 	if (s.type === "array") {

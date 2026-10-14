@@ -1,6 +1,6 @@
 // Skill library: parameterised spec builders the agent calls with spec.use instead of writing
 // every key. use: [{ skill, args, f0 }] expands, in order, into keys, anchors, props, fits,
-// objects and checks before compile; each skill reads the pose the earlier keys leave at its
+// objects, checks and channels (the extra channels a skill keys) before compile; each skill reads the pose the earlier keys leave at its
 // f0. The agent's own keys come after the skill keys (a key of the agent wins on the same
 // frame), and the agent's own anchors/props/fits replace a skill's of the same name.
 import { stateAt } from "../compiler/walk.js";
@@ -49,7 +49,7 @@ export function expandUse(spec, { sk, scene, lenient = false, auto = false }) {
 	if (!spec.use?.length) return { spec, used: [] };
 	if (!Array.isArray(spec.use)) bad("spec.use must be an array of { skill, args, f0 }");
 	const own = (spec.keys ?? []).map((k, i) => ({ ...k, src: `keys[${i}]` }));
-	const merged = { anchors: {}, props: {}, objects: {}, fits: [], checks: {} }, skillKeys = [], used = [];
+	const merged = { anchors: {}, props: {}, objects: {}, fits: [], checks: {}, channels: [] }, skillKeys = [], used = [];
 	spec.use.forEach((u, i) => {
 		const tag = `use[${i}] ${u?.skill}`;
 		if (!SKILLS[u?.skill]) bad(`use[${i}].skill "${u?.skill}" is not a skill${didYouMean(String(u?.skill), SKILL_NAMES)} (skills: ${SKILL_NAMES.join(", ")})`);
@@ -65,11 +65,14 @@ export function expandUse(spec, { sk, scene, lenient = false, auto = false }) {
 		mergeNamed(merged.props, part.props, "props", tag);
 		mergeNamed(merged.objects, part.objects, "objects", tag);
 		for (const fit of part.fits ?? []) if (!merged.fits.some(x => same(x, fit))) merged.fits.push(fit);
+		for (const ch of part.channels ?? []) if (!merged.channels.includes(ch)) merged.channels.push(ch);
 		mergeChecks(merged.checks, part.checks);
 		used.push({ skill: u.skill, f0: u.f0, end: part.end });
 	});
 	const out = { ...spec, keys: [...skillKeys, ...own], anchors: { ...merged.anchors, ...spec.anchors }, props: { ...merged.props, ...spec.props },
 		objects: { ...merged.objects, ...spec.objects } };
+	const channels = [...new Set([...merged.channels, ...(Array.isArray(spec.channels) ? spec.channels : [])])];
+	if (channels.length) out.channels = channels;
 	const mine = spec.fits ?? [];
 	out.fits = [...merged.fits.filter(f => !mine.some(m => m.side === f.side && m.anchor === f.anchor)), ...mine];
 	mergeChecks(merged.checks, spec.checks);

@@ -22,6 +22,7 @@ The wave-0 PR (W0) wires every hot file once. After W0 these files are frozen fo
 | G | `compiler/validate-goals.js`, `qa/goals.js`, `qa/hints-goal.js` |
 | P | `bin/agent/studio-prompt.mjs`, `docs.js` (the words), supervisor default (off) |
 | J2 | C14: `object-keys.js`, `key-edit.js`, `compiler/hold.js`, `compiler/quat.js`, `qa/key-checks.js`, `motion.keyObject` in `src/commands/motion3.js` |
+| K4 | C15: switch entries and `level` (`compiler/validate-objects.js`, `take.js`, `src/object-travel.js` `trackShown`/`trackLevel`), `skills/smoke.js`, `skills/smoke-kit.js`, `src/kits/`, `object.createKit` in `src/commands/kits.js` |
 
 Paths without a folder are under `src/motion3/`. Every lane test is already registered in `tools/run-tests.mjs` as a placeholder that prints `pending (lane X)`.
 
@@ -70,7 +71,7 @@ spec.objects[id] =
 - `f < grab`: the scene pose. `grab <= f <= release`: the prop's hand. `f > release`: frozen at the release pose.
 - No `grab`: in hand from frame 0. No `release`: in hand to the end. This is the PR #14 behaviour.
 - `grab` without `at`/`along`: the object keeps the transform it had against the palm axes at the grab frame, so it does not jump.
-- `at`/`along`: a fixed palm offset. Bodies only, not groups.
+- `at`/`along`: a fixed palm offset. Bodies, and since C15 a group's root (a kit's grip).
 
 **Carried objects are obstacles (7.1).**
 
@@ -344,7 +345,72 @@ spec.objects[id] = { "prop": "batGrip", "grab": 30, "release": 90,
   - `"<id>" is not in this take's spec.objects (cylinder, cube): the take neither carries nor hinges it, so drag it as a scene object`
 - `TARGET_NOT_READY` when the character has no compiled take.
 
-## Pipeline (`pipeline.js` `compileSpec(spec, { sk, scene }, opts)`)
+## C15. Switch entries, levels, kits and smokeCigarette args.kit (lane K4)
+
+A take shows, hides and dims scene records, not only moves them. Kits are props built to be carried.
+
+### Switch entries and level
+
+```jsonc
+spec.objects[id] = { "visible": "flame_vis", "level": "flame" }        // switch: no prop, no pivot/axis/channel
+                 | { "prop": "cig", ..., "visible": "cig_vis", "level": "ember" }   // a carry takes level too
+```
+
+- **A switch moves nothing.** It names any record: a body, a group, or a record with no box (an Empty, a light, an effect). `motionScene` lists the box-less records in `scene.others` (`{ id: { renderer, ancestors } }`, kept by saved take sources) and marks a glowing body `glow: true`.
+- `visible` shows the record while the channel is above 0.5 (an unkeyed channel hides it). `level` is the record's strength, the channel value clamped 0..4: 0 dark, 1 as authored; it scales a light's intensity, a glow and an effect's birth rate (lanes K2, K3). An unkeyed level channel reads 1. Both channels count as declared channels (no `spec.channels` needed).
+- Validation (exact messages):
+  - `objects.<id> needs visible or level (a channel): a switch shows, hides or dims "<id>" without moving it; a carry needs prop, a hinge pivot and channel`
+  - `objects.<id> (switch) has unknown field "visibel"; did you mean "visible"?; fields: visible, level`
+  - `objects.<id>.level must name a channel (the record's level 0..4: 0 dark, 1 as authored; it scales its light, glow and effect rate)`
+  - an id the scene does not have: the C3 message, with the box-less records among the suggestions.
+  - Any of pivot, axis or channel makes the entry a hinge (C3 messages); prop makes it a carry.
+- **The take.** A switch bakes `vis` (Uint8) and `lvl` (Float32) only, no `pos`/`quat`. A carry with `level` adds `lvl`. A carry without `level` bakes exactly as before (the C14 hash stays).
+- **Motion.** A switch never moves its record: the movers (compile, `object-pose.js`, `key-edit.js`, the OBJECT check) skip it, and `src/object-travel.js` treats a track without `pos` as no motion of its own, so a parent's carry still applies to a switched part. `motion.keyObject` on a switched part answers the C14 "moves with" message for its carried group.
+- **`trackLevel(id, frame, take)`** (`src/object-travel.js`): the `lvl` value at the frame, else 1.
+- **Inherited visibility.** `trackShown(id, frame, take, records?)`: with the authored records (a Map by id or the list), the record is hidden while it or any ancestor has a `vis` track that hides it. `sceneObjectsAt` and the props renderer (`SceneObject.place()`) pass the records, so hiding a group hides its parts.
+- **Timeline.** A show/hide event per object a channel shows: `{ f, object: <id>, event: "show" | "hide" }` for every carry and switch on that channel.
+- **GRAB.** An object whose `visible` channel hides it the frame before `grab` appears in the hand (a cigarette out of a pocket): there is nothing to pick up, so no GRAB issue.
+
+### at/along on a group (amends C3)
+
+`at`/`along` now pin a group's root too: the root sits at the prop origin plus `at` (palm axes), its +Y along `along`, its +X toward the palm's d axis. A group without them keeps its grab-frame offset as before. Kits use this so the root (the grip) rides the prop origin.
+
+### Kits (`src/kits/`, `object.createKit`)
+
+```jsonc
+object.createKit { "kit": "cigarette", "name"?: "Smoke", "position"?: { "x": 0.5, "y": 0, "z": 0.4, "rot": 0 } }
+-> output { "rootId": "empty-3", "parts": { "body": "sculpt-2", "ember": "sphere", "smoke": "effect" },
+            "bind": { "empty-3": { "prop": "cig", "at": [0, 0, 0], "along": [0, 0, 1], "visible": "cig_vis" },
+                      "sphere": { "visible": "ember_vis", "level": "ember" }, "effect": { "visible": "ember_vis" } },
+            "skill": "smokeCigarette" }      // kits with no skill answer props (the grip prop) instead
+```
+
+- One job, one undo entry: an Empty root (the grip) and its parts parented to it. `y` is lifted so no part is under the floor. The answer's `bind` is the `spec.objects` snippet: the root's carry and the parts' switches.
+- `inspect_studio { scope: "catalogue" }` lists `kits: [{ kit, parts, prop, description }]`.
+
+| Kit | Parts (role) | Root, carry |
+|---|---|---|
+| cigarette | body (sculpt: filter, paper; 8.4 cm x 7.8 mm), ember (1 cm sphere, glow), light (faint point light; a glow lights nothing), smoke (effect at the tip) | prop `cig`: origin between RightHandIndex2/Middle2; +Y along the palm normal, filter at y -0.026, tip at y 0.058; at [0, 0, 0], along [0, 0, 1] |
+| lighter | body (sculpt: body, hood, wheel), flame (sphere, glow), light (point, flicker 0.6) | prop `lighter`: origin LeftHand/LeftHandMiddle1; +Y toward the thumb, flame at the prop point flame [0.01, 0.036, 0]; along [0, 1, 0] |
+| bat | body (sculpt: knob, handle, taper frustums, barrel, end cap; 0.84 m), trail (effect on the barrel, width 0.3 along it) | root at the knob, +Y along the bat; props.batGrip of the swing fixture, at -0.14 u, along u = [0, 0.5, 0.866] |
+| ball | body (7.4 cm sphere) | props.ballGrip |
+| sword | body (sculpt: pommel, grip, guard, blade, tip; 1 m), trail | root at the grip; props.swordGrip |
+| pistol | body (sculpt), flash (glow), light | root at the grip, barrel along +X; props.gunGrip; flash and light switch on `muzzle_vis` |
+
+A part whose kind the build does not have is left out and named in `skipped`.
+
+### smokeCigarette: args.kit, channels, any posture
+
+- `args.kit: { cig: <rootId>, lighter: <rootId>, exhale?: <effect id> }`. The skill adds the `spec.objects` entries itself: the cigarette root `{ prop: "cig", grab: f0+28, at: [0, 0, 0], along: [0, 0, 1], visible: "cig_vis" }`, the lighter root `{ prop: "lighter", grab: f0+35, release: f0+102, at: [0, 0, 0], along: [0, 1, 0], visible: "lit_vis" }`, and switches found by what the parts are: under the cigarette a glowing body and a light `{ visible: "ember_vis", level: "ember" }` and an effect `{ visible: "ember_vis" }`; under the lighter a glowing body and a light `{ visible: "flame_vis" }`; the exhale effect `{ visible: "exhale" }`.
+- The exhale emitter is an effect record the agent places at the mouth (a `landmark:mouth` probe at the exhale frames gives the point). It is not carried: an emitter attached to a bone emits only from the bone's current pose (effects lane), and a squatting or standing smoker's head barely moves while breathing out. It also allows the kits 3 cm (cigarette, right thigh) and 4.5 cm (lighter, left thigh) into the thigh their pocket is on.
+- Refusal: `use[i] smokeCigarette: args.kit.cig "<id>" is not a group in the scene; object.createKit { kit: "cigarette" } answers its rootId` (and for lighter, an unknown field, a missing exhale).
+- New channels (in `spec.channels` of the expanded spec): `exhale` (1 over f0+116..137 and f0+238..259) and `ember` (0 before f0+73, 1 when it catches, 2 on each drag f0+80..90 and f0+200..212, 0.6 between).
+- Any posture keyed before f0 (`needs: a pose keyed before f0: standing or squatting`):
+  - head_pitch keys are offsets from the head pitch keyed before f0 (standing: 0, unchanged);
+  - the right arm's elbow poles (to the lips, holding) turn with the torso lean, `pitch + spine_pitch`, so the reach to the lips comes from the body (the lighter arm stays upright);
+  - a squat (the hips below 0.7 of the rig's standing height) rests the cigarette hand over the right knee (`anchors.hold` from the knee joint at f0, pulled in to 0.88 of the arm's reach), moves the hand between the lips and the knee through `anchors.mouthOut` (20 cm straight ahead of the mouth), and brings the lighter back to the pocket over 20 frames instead of 16. The hand's detour circle around the torso (`detourRadius`) jumps where a path leaves it sideways, which a straight lips-to-knee move does over a leaning torso. The compiler is unchanged: standing takes compile bit for bit as before.
+
+
 
 1. `resolveFrames` (`skills/frames-auto.js`).
 2. Open parameters are searched (`search.js`).

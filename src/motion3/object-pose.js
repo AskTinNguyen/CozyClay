@@ -4,7 +4,8 @@
 // The group (an Empty) is the unit. spec.objects[id] may name a body or a group:
 //   hinge  { pivot, axis, channel }                        turns the record (a group: the whole group
 //                                                          about the group root) by a keyed angle
-//   carry  { prop, grab?, release?, at?, along?, visible? } the record rides prop `prop`'s hand
+//   carry  { prop, grab?, release?, at?, along?, visible?, level? } the record rides prop `prop`'s hand
+//   switch { visible?, level? }                            moves nothing: shows/hides and dims the record (C15)
 // A carried or hinged group gets ONE track, on the group root (take.objects[groupId]); its parts
 // follow through the parent carry that already exists in src/object-travel.js (ancestorsOf /
 // ownTravelMatrix). There are no per-part tracks. While the group is in hand (grab..release) its
@@ -12,13 +13,13 @@
 // is carried twice (the take's `hold` flags, object-travel.js).
 //   f < grab              the scene pose
 //   grab <= f <= release  follows the prop's hand; without at/along it keeps the transform it had
-//                         against the palm axes at grab (no jump); at/along (bodies only) pin an offset
+//                         against the palm axes at grab (no jump); at/along pin an offset (a group: its root, C15)
 //   f > release           frozen at the release pose
 //   no grab: in hand from frame 0; no release: in hand to the end (PR #14 behaviour)
 //   keys (C14, object-keys.js): the object leads and the hand follows; the object is still drawn
 //                         in the hand, so what the hand cannot reach shows as a residual (QA)
 // Carried objects are OBSTACLES at every frame, at their pose that frame (qa/object-checks.js).
-import { isCarried, carriedPose, compose, relative } from "./carried.js";
+import { isCarried, carriedPose, compose, relative, movesRecord } from "./carried.js";
 import { groupsOf } from "./scene.js";
 import { solveFrame } from "./compiler/compile.js";
 import { channelsAt } from "./compiler/channels.js";
@@ -46,9 +47,9 @@ function restPose(scene, id) {
 	return scene?.objects?.[id] ?? groupsOf(scene)[id] ?? null;
 }
 
-/** The spec.objects key that moves body `part`: itself or its nearest group with an entry, or null. */
+/** The spec.objects key that moves body `part`: itself or its nearest group with a carry or hinge entry (a switch moves nothing), or null. */
 function moverOf(spec, scene, part) {
-	return [part, ...(scene?.objects?.[part]?.ancestors ?? [])].find(id => spec.objects?.[id]) ?? null;
+	return [part, ...(scene?.objects?.[part]?.ancestors ?? [])].find(id => movesRecord(spec.objects?.[id])) ?? null;
 }
 
 /** [grab, release] of a carried entry in absolute frames of `out` (after a retime). */
@@ -57,8 +58,8 @@ export function spanOf(out, o) {
 	return [map(o.grab ?? 0), o.release === undefined ? out.frameCount - 1 : map(o.release)];
 }
 
-/** Without at/along a grabbed body, and always a group, keeps its grab-frame palm offset. */
-const keepsOffset = (scene, id, o) => (!scene?.objects?.[id] && !!groupsOf(scene)[id]) || (o.grab !== undefined && o.at === undefined && o.along === undefined);
+/** Without at/along a grabbed body, and a group, keeps its grab-frame palm offset; at/along pin one (a kit root, C15). */
+const keepsOffset = (scene, id, o) => o.at === undefined && o.along === undefined && ((!scene?.objects?.[id] && !!groupsOf(scene)[id]) || o.grab !== undefined);
 
 const solved = new WeakMap(), poses = new WeakMap();
 
@@ -97,7 +98,7 @@ function carriedAt(out, id, o, f) {
  * the same hinge) or still. null for an id the scene does not know.
  */
 export function rootPoseAt(out, id, f) {
-	const { spec, scene } = out.ctx, o = spec.objects?.[id], rest = restPose(scene, id);
+	const { spec, scene } = out.ctx, o = movesRecord(spec.objects?.[id]) ? spec.objects[id] : undefined, rest = restPose(scene, id);
 	if (isCarried(o) && (rest || !keepsOffset(scene, id, o))) {
 		const [grab, release] = spanOf(out, o);
 		return f < grab && rest ? { pos: rest.pos, R: rest.R } : carriedAt(out, id, o, Math.max(grab, Math.min(f, release)));

@@ -85,7 +85,7 @@ export function holdHook(ctx, out, solvePlain) {
 		const cache = attached.get(out.baked), o = spec.objects[id];
 		if (cache.has(id)) return cache.get(id);
 		const rest = scene?.objects?.[id] ?? groupsOf(scene)[id], group = !scene?.objects?.[id] && !!rest;
-		const keeps = group || (o.grab !== undefined && o.at === undefined && o.along === undefined);
+		const keeps = o.at === undefined && o.along === undefined && (group || o.grab !== undefined);
 		const s = keeps ? solvePlain(spanIn(out, o)[0]).s : restState(sk);
 		const a = relative(palmOf(o, s), keeps ? { pos: rest.pos, R: rest.R } : carriedPose(sk, spec, s, o));
 		cache.set(id, a);

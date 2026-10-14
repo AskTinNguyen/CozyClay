@@ -66,21 +66,43 @@ export function travelPose(object, at) {
 	};
 }
 
-/** A compiled take's per-frame pose for the record (a hinged door), as a matrix, or null. */
+const trackFrame = (track, frame) => Math.max(0, Math.min(track.frameCount - 1, Math.round(frame) || 0));
+
+// A compiled take's per-frame pose for the record (a hinged door), as a matrix, or null. A
+// switch track (vis/lvl only, no pos/quat: C15) is no motion of its own, so a parent's carry still applies.
 function trackMatrix(object, frame, take, out) {
 	const track = take?.objectTracks?.get?.(object.id);
-	if (!track) return null;
-	const f = Math.max(0, Math.min(track.frameCount - 1, Math.round(frame) || 0));
+	if (!track?.pos) return null;
+	const f = trackFrame(track, frame);
 	scratchPos.set(track.pos[f * 3], track.pos[f * 3 + 1], track.pos[f * 3 + 2]);
 	scratchQuat.set(track.quat[f * 4], track.quat[f * 4 + 1], track.quat[f * 4 + 2], track.quat[f * 4 + 3]);
 	scratchScale.set(object.scaleX ?? 1, object.scaleY ?? 1, object.scaleZ ?? 1);
 	return out.compose(scratchPos, scratchQuat, scratchScale);
 }
 
-/** False while a compiled take carries the record out of sight (a cigarette still in the pocket). */
-export function trackShown(id, frame, take) {
+const ownShown = (id, frame, take) => {
 	const track = take?.objectTracks?.get?.(id);
-	return !track?.vis || track.vis[Math.max(0, Math.min(track.frameCount - 1, Math.round(frame) || 0))] === 1;
+	return !track?.vis || track.vis[trackFrame(track, frame)] === 1;
+};
+
+// False while a compiled take carries the record out of sight (a cigarette still in the pocket),
+// or hides a record it is grouped under: with `objects` (the authored records, a Map by id or the
+// list) every ancestor's vis track counts too, so a group's visible channel hides its parts.
+export function trackShown(id, frame, take, objects = null) {
+	if (!ownShown(id, frame, take)) return false;
+	if (!objects || !take?.objectTracks?.size) return true;
+	const lookup = asLookup(objects), seen = new Set([id]);
+	for (let parent = lookup.get(id)?.parent; typeof parent === "string" && !seen.has(parent); parent = lookup.get(parent)?.parent) {
+		seen.add(parent);
+		if (!ownShown(parent, frame, take)) return false;
+	}
+	return true;
+}
+
+// The take's level of the record at `frame` (its lvl track: 0 dark, 1 as authored, up to 4; C15), else 1.
+export function trackLevel(id, frame, take) {
+	const track = take?.objectTracks?.get?.(id), value = track?.lvl ? Number(track.lvl[trackFrame(track, frame)]) : 1;
+	return Number.isFinite(value) ? Math.min(4, Math.max(0, value)) : 1;
 }
 
 /**
@@ -89,7 +111,7 @@ export function trackShown(id, frame, take) {
  */
 function held(id, frame, take) {
 	const track = take?.objectTracks?.get?.(id);
-	return track?.hold?.[Math.max(0, Math.min(track.frameCount - 1, Math.round(frame) || 0))] === 1;
+	return !!track?.hold && track.hold[trackFrame(track, frame)] === 1;
 }
 
 /** The record's own route sample (or compiled track) as a matrix, or null when it does not travel. */
@@ -236,10 +258,10 @@ export function sceneObjectsAt(objects, frame, take = {}) {
 		}
 		return next;
 	};
-	return objects.map((object) => { const record = placedAt(object); return trackShown(record.id, frame, take) ? record : { ...record, hidden: true }; });
+	return objects.map((object) => { const record = placedAt(object); return trackShown(record.id, frame, take, lookup) ? record : { ...record, hidden: true }; });
 	function placedAt(object) {
-		// A compiled track (a hinged door, a carried cup) on the record or above it places it too.
-		const tracked = (record) => take?.objectTracks?.has?.(record.id);
+		// A compiled track (a hinged door, a carried cup) on the record or above it places it too; a switch track moves nothing.
+		const tracked = (record) => !!take?.objectTracks?.get?.(record.id)?.pos;
 		if (object.attach || (!tracked(object) && !ancestorsOf(lookup, object).some((ancestor) => ancestor.path || tracked(ancestor)) && !ridden(lookup, object))) {
 			// Nothing above it travels (and nothing below carries it): the route
 			// sample alone, exactly as before the hierarchy carry — for a carried

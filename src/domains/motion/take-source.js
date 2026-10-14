@@ -28,9 +28,9 @@ export function normalizeTakeSource(value) {
 	if (!plain(value) || value.schema !== TAKE_SCHEMA || typeof value.rig !== "string") return null;
 	if (!plain(value.spec) || value.spec.schema !== SPEC_SCHEMA || !Number.isFinite(value.spec.frames)) return null;
 	if (!plain(value.placement) || !finite3(value.placement.position) || !Number.isFinite(value.placement.yaw)) return null;
-	const objects = plain(value.scene?.objects) ? value.scene.objects : {};
+	const objects = plain(value.scene?.objects) ? value.scene.objects : {}, others = plain(value.scene?.others) ? { others: value.scene.others } : {};
 	return structuredClone({ schema: TAKE_SCHEMA, rig: value.rig, spec: value.spec,
-		placement: { position: value.placement.position, yaw: value.placement.yaw }, scene: { objects },
+		placement: { position: value.placement.position, yaw: value.placement.yaw }, scene: { objects, ...others },
 		...(typeof value.takeId === "string" && value.takeId ? { takeId: value.takeId } : {}) });
 }
 
