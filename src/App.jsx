@@ -136,6 +136,7 @@ import { CameraTutorial } from "./camera-tutorial.jsx";
 import { createTutorialAnalytics } from "./tutorial-analytics.js";
 import { cameraTutorialSuppressed, createFirstShotHandoff, rememberCameraTutorialTerminal } from "./first-shot-handoff.js";
 import ObjectGizmo from "./object-gizmo.jsx";
+import { useHeldObjectEdit } from "./held-object-edit.jsx";
 
 import {
 	SaveBlockedDialog,
@@ -2076,8 +2077,10 @@ export default function App() {
 	// the export overwrites it per captured frame and restores nothing, which
 	// is correct — the next render puts it back.
 	propFrameRef.current = tlFrame;
+	// A held object's gizmo drag edits its motion; its live preview rides the take tracks (held-object-edit.jsx).
+	const heldEdit = useHeldObjectEdit({ selected: selectedSceneObject, objects: sceneObjects, tracks: objectTracksOf(appContext.storeDomain("motion"), appContext.live.characters), frame: tlFrame, frameCount: tlFrameCount, fps: tlFps, motion: appContext.storeDomain("motion"), run: runStudioAction });
 	// Routed records and everything grouped under them (object-travel.js).
-	const objectTracks = objectTracksOf(appContext.storeDomain("motion"), appContext.live.characters), animatedSceneObjects = useMemo(
+	const objectTracks = heldEdit.tracks, animatedSceneObjects = useMemo(
 		() => sceneObjectsAt(sceneObjects, tlFrame, { frameCount: tlFrameCount, fps: tlFps, objectTracks }),
 		[sceneObjects, tlFrame, tlFrameCount, tlFps, objectTracks],
 	);
@@ -2087,10 +2090,8 @@ export default function App() {
 	// routed descendant all stand away from their authored numbers while the
 	// playhead is off frame 0. Drags still read the authored records (the gizmo
 	// is handed those separately), so they stay delta-based on authored numbers.
-	const gizmoSceneObject = useMemo(
-		() => (selectedSceneObject ? animatedSceneObjects.find((object) => object.id === selectedSceneObject.id) ?? selectedSceneObject : null),
-		[selectedSceneObject, animatedSceneObjects],
-	);
+	// A take-drawn object also gets `heldEdit.gizmo`: the exact drawn centre and rotation.
+	const gizmoSceneObject = selectedSceneObject ? animatedSceneObjects.find((object) => object.id === selectedSceneObject.id) ?? selectedSceneObject : null;
 
 	// Auto color: Blender's viewport "Random" mode. A DISPLAY-ONLY marker rides
 	// each non-cutout object into the renderers; the authored `color`, the scene
@@ -5294,6 +5295,7 @@ export default function App() {
 							<ObjectGizmo
 								object={cameraGizmoObject ?? lightGizmoObject ?? (selectedSceneObject && !isEffectivelyHidden(selectedSceneObject, sceneObjects, characters) ? gizmoSceneObject : null)}
 								objects={sceneObjects}
+								held={cameraGizmoObject || lightGizmoObject ? null : heldEdit.gizmo}
 								mode={lightGizmoObject ? "move" : cameraGizmoObject ? (gizmoMode === "scale" ? "move" : gizmoMode) : gizmoMode}
 								snap={snapEnabled}
 								enabled={!planIsMain && !posing && !ikMode && !playMode && !sculptMode}
