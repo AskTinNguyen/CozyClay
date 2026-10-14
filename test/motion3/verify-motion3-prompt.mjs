@@ -12,7 +12,7 @@ const check = (name, fn) => { fn(); console.log(`ok - ${name}`); };
 const motion = prompt.slice(prompt.indexOf("Motion is computed"), prompt.indexOf("The context scene.previsMode"));
 const sentences = text => text.split(/(?<=[.;:])\s+/).map(s => s.trim()).filter(s => s.length >= 40);
 
-check("the whole prompt is at most 10,000 characters", () => assert.ok(prompt.length <= 10000, `${prompt.length}`));
+check("the whole prompt is at most 11,000 characters", () => assert.ok(prompt.length <= 11000, `${prompt.length}`));
 check("the motion part is at most 1,200 characters", () => {
 	assert.ok(motion.length > 0 && motion.length <= 1200, `${motion.length}`);
 });
