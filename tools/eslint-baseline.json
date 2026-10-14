@@ -14,7 +14,7 @@
 	"react-hooks/immutability": 88,
 	"react-hooks/preserve-manual-memoization": 31,
 	"react-hooks/purity": 5,
-	"react-hooks/refs": 113,
+	"react-hooks/refs": 111,
 	"react-hooks/rules-of-hooks": 2,
 	"react-hooks/set-state-in-effect": 30,
 	"react-hooks/use-memo": 1,

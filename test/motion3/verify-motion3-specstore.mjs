@@ -61,7 +61,7 @@ const many = Array.from({ length: 9 }, (_, i) => G("COLLIDE", `part${"abcdefghi"
 const dm = deltaOf(many, [], "b"), dn = deltaOf([], many, "b");
 expect("deltaOf: counts are complete, keys at most 6, most severe first", dm.resolved === 9 && dm.keys.resolved.length === 6 && dm.keys.resolved[0] === "COLLIDE parti x cube"
 	&& dn.new === 9 && dn.keys.new.length === 6 && dn.keys.new[5] === "COLLIDE partd x cube", JSON.stringify(dm.keys));
-const merged = deltaOf([G("COLLIDE", "thigh_r x cube-6", 4), G("COLLIDE", "thigh_r x cube-7", 4)], [G("COLLIDE", "thigh_r x cube-6", 4)], "b");
+const merged = deltaOf([G("SPEED", "RightHand 2.1 cm/frame", 4), G("SPEED", "RightHand 3.4 cm/frame", 4)], [G("SPEED", "RightHand 2.5 cm/frame", 4)], "b");
 expect("deltaOf: groups sharing a key are summed (8 -> 4 is better, not resolved)", merged.resolved === 0 && merged.better === 1 && merged.worse === 0, JSON.stringify(merged));
 expect("deltaOf: a group without severity is weighed by severityOf", deltaOf([{ kind: "SPEED", subject: "x", count: 2, worst: 0.05, limit: 0.04 }], [{ kind: "SPEED", subject: "x", count: 4, worst: 0.05, limit: 0.04 }], "b").worse === 1);
 
