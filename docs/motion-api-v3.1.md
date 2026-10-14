@@ -139,7 +139,7 @@ qa.groups[i] = { "kind": "COLLIDE", "subject": "thigh_r x cube", "count": 6, "fi
 - Every hint function (`hints-*.js`) returns `{ cause, hint, fix? }`. `explain.js` puts `fix` on the group as a non-enumerable property, so it never reaches the output. The `moveHint` signature is frozen.
 - `fix = { channel, f, delta } | { channel, f, value } | { path: "/fix/retime", value: true } | { path: "/anchors/cupHandle/p", delta }`.
 - `qa/patch.js` `attachPatches(groups, { X, userSpec }) -> groups`: `X` is the explain context, `userSpec` the spec as the agent sent it (patches address it).
-- `repair.js` `repairSpec(spec, { rounds }, compile) -> { spec, result, repair }` with `repair = { rounds, compiles, applied: [{ kind, subject, patch, severity: [before, after] }], rejected }`. Each round tries the top 3 groups that carry a patch, keeps one when the summed severity drops, and stops when a round keeps nothing. Deterministic, at most 20 s. With `install: true` the improved spec is installed and `output.specId` names it.
+- `repair.js` `repairSpec(spec, { rounds }, compile) -> { spec, result, repair }` with `repair = { rounds, compiles, applied: [{ kind, subject, patch, severity: [before, after] }], rejected }`. Each round tries the top 3 groups that carry a patch, keeps one when the summed severity drops, and stops when a round keeps nothing. Deterministic, at most 20 s. With `install: true` (or `"ifClean"` and a clean result, C12) the improved spec is installed and `output.specId` names it.
 
 ## C7. specId, base + patch, delta, report, output budget
 
@@ -206,6 +206,15 @@ verify_result { "targets": ["char-a"], "checks": ["motion"], "visual": "trace" }
 
 - `frames` defaults to `"even"`, as today.
 - Beats pick, in order: grab and release frames, beat starts, the worstFrame of the top 2 groups, then even fill. Frames within +-3 of a pick are dropped. At most 6, ascending.
+
+## C12. install: "ifClean" (waste-removal round, lane G1)
+
+`motion.compile { install }` takes `true` (the default), `false` or `"ifClean"`. `true` and `false` are unchanged.
+
+- `"ifClean"` installs the take only when the final result is clean: `qa.ok`, which includes the goals, measured after `repair` when `repair` is sent. Otherwise it is `install: false`. The agent no longer compiles a second time only to install.
+- It works with `spec` and with `base` + `patch`. With `repair`, the repaired spec is what is installed, and `output.specId` names it (the spec the take stores).
+- `output.installed` is `true` when the character's take is now this result, else `false`. The receipt `affectedIds` names the character, and an undo/history entry exists, only when a take was installed.
+- The take already installed: when the installed take is exactly the take this compile would install (the same spec by specId, placement, bones and object tracks), `"ifClean"` changes nothing. There is no replace, no `affectedIds` and no history entry, so IK edits on the take stay. `output.installed` is `true`, and the receipt summary says `already installed, unchanged`. It is not an error. `install: true` still replaces the take as before.
 
 ## Pipeline (`pipeline.js` `compileSpec(spec, { sk, scene }, opts)`)
 

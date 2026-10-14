@@ -13,7 +13,7 @@ import { resolveBone } from "../motion3/bones.js";
 import { MOTION_ACTION_HELP as HELP } from "../motion3/docs.js";
 import { DESCRIBE_TOPICS } from "../motion3/schema/fields.js";
 import { describe } from "../motion3/describe.js";
-import { createSpecStore, SPEC_STORE_SIZE } from "../motion3/spec-store.js";
+import { createSpecStore, specIdOf, SPEC_STORE_SIZE } from "../motion3/spec-store.js";
 import { applyPatch } from "../motion3/json-patch.js";
 import { deltaOf } from "../motion3/delta.js";
 import { repairSpec } from "../motion3/repair.js";
@@ -29,7 +29,7 @@ const list = (items, maxItems) => ({ type: "array", items, minItems: 1, maxItems
 // readOnly: reads the scene and the take, never changes them (C10).
 const declarations = Object.freeze([
 	{ id: "motion.compile", label: "Compile motion", kind: "job", domain: "motion", timeoutMs: 120000, description: HELP.compile,
-		input: input({ characterId: id, spec: openObject, base: specId, patch: list(openObject, 64), install: { type: "boolean", default: true },
+		input: input({ characterId: id, spec: openObject, base: specId, patch: list(openObject, 64), install: { oneOf: [{ type: "boolean" }, { const: "ifClean" }], default: true },
 			probes: list(openObject, 16), repair: input({ rounds: { type: "integer", minimum: 1, maximum: 8, default: 4 } }, []) }, ["characterId"]) },
 	{ id: "motion.qa", label: "Measure motion", kind: "job", domain: "motion", timeoutMs: 120000, readOnly: true, description: HELP.qa,
 		input: input({ characterId: id, checks: openObject }, ["characterId"]) },
@@ -45,6 +45,14 @@ export { declarations };
 
 const DEFAULT_BONES = ["Hips", "Head", "LeftHand", "RightHand", "LeftFoot", "RightFoot"];
 const unknownSpec = (what, value, then = "send spec") => fail("INVALID_ARGUMENT", `${what} "${value}" is not known (the editor keeps the last ${SPEC_STORE_SIZE} compiled specs this session); ${then}`);
+
+const sameArray = (a, b) => a?.length === b?.length && Array.prototype.every.call(a, (v, i) => v === b[i]);
+/** True when `installed` is the take `take` would install: the same spec, placement, bones and object tracks. */
+function sameTake(installed, take) {
+	return installed?.schema === take.schema && installed.frameCount === take.frameCount && installed.rig === take.rig
+		&& specIdOf(installed.spec ?? null) === specIdOf(take.spec) && JSON.stringify(installed.placement) === JSON.stringify(take.placement)
+		&& sameArray(installed.rot, take.rot) && sameArray(installed.hips, take.hips) && JSON.stringify(installed.objects ?? {}) === JSON.stringify(take.objects);
+}
 
 /** Runs `run`, turning a MOTION_SPEC_INVALID error into INVALID_ARGUMENT with the exact message. */
 function asArgument(run) {
@@ -92,15 +100,22 @@ export function register(registry, ports) {
 		const once = s => compile(character, s, { probes });
 		const fixed = repair ? repairSpec(source, repair, once) : { spec: source, result: once(source) };
 		const r = fixed.result, { sk, out, qa } = r;
-		if (install) {
+		// ifClean: install only a clean final result (qa.ok includes the goals; after repair when asked)
+		const wanted = install === "ifClean" ? qa.ok : install;
+		let installs = wanted, kept = false;
+		if (wanted) {
 			// open ranges are stored with the values the search chose, so motion.qa re-measures this take
 			const take = bakeTake(sk, out, { position: [character.x ?? 0, character.y ?? 0, character.z ?? 0], yaw: character.rot ?? 0 }, { spec: r.stored, prompt: fixed.spec.label ?? "" });
+			// ifClean of the take already installed changes nothing (no undo entry; IK edits on it stay)
+			kept = install === "ifClean" && sameTake(owner().motionFor(characterId), take);
+			installs = !kept;
 			const apply = () => owner().replace(characterId, { ...take, frames: take.frameCount });
-			if (context?.commit) context.commit(apply); else apply();
+			if (installs) { if (context?.commit) context.commit(apply); else apply(); }
 		}
 		const delta = base === undefined ? {} : { delta: deltaOf(store.parts(base)?.groups ?? [], qa.groups, base) };
-		return { affectedIds: install ? [characterId] : [], summary: `Compiled ${out.frameCount} frames; QA ${qa.ok ? "clean" : `${qa.total} issues`}.`,
-			output: report(r, { frames: out.frameCount, fps: TIMELINE_FPS, installed: install }, { ...delta, ...(fixed.repair ? { repair: fixed.repair } : {}) }) };
+		const how = kept ? "; already installed, unchanged" : install === "ifClean" ? (installs ? "; installed" : "; not installed") : "";
+		return { affectedIds: installs ? [characterId] : [], summary: `Compiled ${out.frameCount} frames; QA ${qa.ok ? "clean" : `${qa.total} issues`}${how}.`,
+			output: report(r, { frames: out.frameCount, fps: TIMELINE_FPS, installed: wanted }, { ...delta, ...(fixed.repair ? { repair: fixed.repair } : {}) }) };
 	} });
 	registry.register({ ...declarations[1], available: mounted, run({ characterId, checks }) {
 		const character = characterOf(ports, characterId), take = installed(characterId);

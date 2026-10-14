@@ -2,6 +2,8 @@
 // motion.compile / motion.qa / motion.sample through the real action registry with stub ports.
 import { createStudioAppActions } from "../../src/commands/index.js";
 import { skeletonFor } from "../../src/motion3/rigs/index.js";
+import { compileSpec } from "../../src/motion3/pipeline.js";
+import { specIdOf } from "../../src/motion3/spec-store.js";
 
 let failures = 0;
 function expect(name, condition, detail = "") {
@@ -10,7 +12,8 @@ function expect(name, condition, detail = "") {
 }
 
 const takes = new Map();
-const owner = { replace: (id, take) => takes.set(id, take), motionFor: id => takes.get(id) ?? null };
+let replaced = 0;
+const owner = { replace: (id, take) => { replaced += 1; takes.set(id, take); }, motionFor: id => takes.get(id) ?? null };
 const character = { id: "char-1", model: "x-bot-tpose", subject: "Cascy", x: 1, y: 0, z: 2, rot: 90, scale: 1 };
 const objects = [{ id: "wall", name: "Wall", renderer: "cube", x: 4.7, y: 0, z: 2, rot: 0, rotX: 0, rotZ: 0, scaleX: 0.2, scaleY: 2, scaleZ: 2, footprint: { width: 1, depth: 1 }, height: 1 }];
 const ports = { state: () => ({ characters: [character], objects, frameCount: 300 }), storeDomain: name => (name === "motion" ? owner : null) };
@@ -44,6 +47,52 @@ expect("motion.qa re-measures the installed take", qa.qa.ok === true);
 let refused = null;
 try { run("motion.compile", { characterId: "char-1", spec: { ...spec, fps: 30 } }); } catch (error) { refused = error; }
 expect("a spec at another frame rate is refused", refused?.code === "INVALID_ARGUMENT" || /fps/.test(JSON.stringify(refused ?? "")), String(refused));
+
+// install: "ifClean" installs only a clean final result (qa.ok, goals included, after repair), in the same compile.
+const ifClean = args => registry.run("motion.compile", { characterId: "char-1", install: "ifClean", ...args });
+const before = takes.get("char-1"), count = () => replaced;
+let n = count(), r = ifClean({ spec: long });
+expect("ifClean: a dirty spec is not installed, the take is unchanged, no affectedIds", r.output.qa.ok === false && r.output.installed === false && r.affectedIds.length === 0
+	&& takes.get("char-1") === before && count() === n && /not installed/.test(r.summary), JSON.stringify({ installed: r.output.installed, ids: r.affectedIds, summary: r.summary }));
+const missed = { ...spec, goals: [{ name: "hand at head", near: ["joint:LeftHand", "joint:Head"], tol: 0.02, at: 100 }] };
+r = ifClean({ spec: missed });
+expect("ifClean: a failed goal (no other issue) is not installed", r.output.qa.goals?.[0]?.ok === false && r.output.qa.groups.every(g => g.kind === "GOAL")
+	&& r.output.installed === false && r.affectedIds.length === 0 && takes.get("char-1") === before && count() === n, JSON.stringify(r.output.qa.groups.slice(0, 2)));
+const met = { ...spec, frames: 210, goals: [{ name: "walked", above: ["joint:Head", "joint:LeftFoot"], by: 1, at: 100 }] };
+r = ifClean({ spec: met });
+const metTake = takes.get("char-1");
+expect("ifClean: a clean spec (goals met) is installed, with affectedIds; output.specId names the installed take's spec", r.output.qa.ok && r.output.installed === true
+	&& r.affectedIds[0] === "char-1" && count() === n + 1 && metTake.frames === 210 && r.output.specId === specIdOf(metTake.spec) && r.output.specId === specIdOf(met), JSON.stringify(r.output.qa.groups.slice(0, 2)));
+n = count();
+r = ifClean({ base: r.output.specId });
+expect("ifClean: the take already installed stays as it is (installed: true, no replace, no affectedIds)", r.output.qa.ok && r.output.installed === true && r.affectedIds.length === 0
+	&& takes.get("char-1") === metTake && count() === n && /already installed/.test(r.summary), r.summary);
+r = ifClean({ base: r.output.specId, patch: [{ op: "replace", path: "/frames", value: 220 }] });
+expect("ifClean with base + patch: the clean patched spec is installed and output.specId names it", r.output.qa.ok && r.output.installed === true && r.output.delta?.base === specIdOf(met)
+	&& takes.get("char-1").frames === 220 && r.output.specId === specIdOf(takes.get("char-1").spec) && r.output.specId !== specIdOf(met));
+const cleanTake = takes.get("char-1");
+r = ifClean({ base: r.output.specId, patch: [{ op: "replace", path: "/generators/0/steps", value: 14 }, { op: "replace", path: "/frames", value: 340 }] });
+expect("ifClean with base + patch: a dirty patched spec is not installed", r.output.qa.ok === false && r.output.installed === false && takes.get("char-1") === cleanTake);
+r = registry.run("motion.compile", { characterId: "char-1", spec: long });
+expect("install: true still installs a dirty spec", r.output.qa.ok === false && r.output.installed === true && takes.get("char-1").frames === 340 && r.affectedIds[0] === "char-1");
+const wrongInstall = (() => { try { registry.run("motion.compile", { characterId: "char-1", spec, install: "yes" }); return null; } catch (error) { return error; } })();
+expect("install takes only true, false or \"ifClean\"", wrongInstall?.code === "INVALID_ARGUMENT", String(wrongInstall));
+
+// ifClean + repair: a hand 1.5 cm into a board; repair reaches qa.ok and the repaired spec is installed.
+const boardTakes = new Map();
+const boardOwner = { replace: (cid, take) => boardTakes.set(cid, take), motionFor: cid => boardTakes.get(cid) ?? null };
+const still = { id: "char-2", model: "x-bot-tpose", subject: "Still", x: 0, y: 0, z: 0, rot: 0, scale: 1 };
+const held = { schema: "cozyclay.motion-spec.v1", fps: 24, frames: 60, use: [{ skill: "standIdle", f0: 0, args: { at: [0, 0] } }],
+	keys: [{ f: 0, set: { armw_r: 1, hand_r: [-0.22, 1.1, 0.32], elbow_r: [-0.5, -1, -0.3] } }, { f: 30, set: { hand_r: [-0.22, 1.1, 0.36] } }, { f: 59, set: { hand_r: [-0.22, 1.1, 0.32] } }] };
+const P30 = compileSpec(held, { sk, scene: { objects: {} } }).out.frames[30].s.P, front = Math.max(P30[I.RightHand][2], P30[I.RightHandMiddle3][2]) + 0.022;
+const board = [{ id: "board", name: "Board", renderer: "cube", x: -0.2, y: 0, z: front + 0.035, rot: 0, rotX: 0, rotZ: 0, scaleX: 0.6, scaleY: 1.6, scaleZ: 0.1, footprint: { width: 1, depth: 1 }, height: 1 }];
+const boardReg = createStudioAppActions({ state: () => ({ characters: [still], objects: board, frameCount: 60 }), storeDomain: name => (name === "motion" ? boardOwner : null) });
+r = boardReg.run("motion.compile", { characterId: "char-2", spec: held, install: "ifClean" });
+expect("ifClean without repair: the hand in the board is not installed", r.output.qa.ok === false && r.output.installed === false && !boardTakes.has("char-2"));
+r = boardReg.run("motion.compile", { characterId: "char-2", spec: held, install: "ifClean", repair: { rounds: 4 } });
+const repaired = boardTakes.get("char-2");
+expect("ifClean + repair: repaired to clean, the repaired spec is installed and output.specId names it", r.output.qa.ok && r.output.installed === true && r.output.repair.applied.length >= 1
+	&& repaired?.spec?.fix?.penetration === 0.02 && r.output.specId === specIdOf(repaired.spec) && r.output.specId !== specIdOf(held), JSON.stringify(r.output.repair));
 
 if (failures) { console.error(`${failures} motion3 command check(s) failed`); process.exit(1); }
 console.log("motion3 commands: all checks passed");
