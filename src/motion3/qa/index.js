@@ -1,6 +1,9 @@
 // Motion QA entry: general checks on every take, the checks the spec declares, the objects it
-// moves (object-checks.js) and its goals (goals.js). Groups are ranked by severity.js.
-import { generalChecks } from "./checks.js";
+// moves (object-checks.js), its goals (goals.js) and the style checks it opted into by naming
+// their limit (style.js; otherwise style is measured, not judged: observeMotion). Groups are
+// ranked by severity.js.
+import { generalChecks, QA_LIMITS } from "./checks.js";
+import { styleChecks, floatChecks } from "./style.js";
 import { specChecks } from "./spec-checks.js";
 import { objectChecks } from "./object-checks.js";
 import { goalChecks } from "./goals.js";
@@ -29,7 +32,8 @@ function summarizeIssues(issues) {
 export function runMotionQa(sk, out, spec, opts = {}) {
 	const checks = spec.checks ?? {}, goals = goalChecks(out, spec.goals ?? []);
 	const issues = [...generalChecks(sk, out, { allow: checks.allow, limits: checks.limits, mouthPoints: checks.mouthPoints }), ...specChecks(out, checks),
-		...objectChecks(sk, out, spec), ...goals.issues];
+		...objectChecks(sk, out, spec), ...floatChecks(out, checks),
+		...styleChecks(sk, out, checks, { ...QA_LIMITS, ...checks.limits }), ...goals.issues];
 	if (out.f0) for (const i of issues) i.frame += out.f0;
 	const groups = summarizeIssues(issues);
 	if (opts.explain !== false) explainGroups(sk, out, spec, groups, { userSpec: opts.userSpec });

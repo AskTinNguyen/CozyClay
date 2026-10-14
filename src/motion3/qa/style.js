@@ -1,0 +1,205 @@
+// Style quantities: how fast a joint moves, how hard it speeds up, how far the centre of mass
+// leaves the feet and how deep a knee or elbow bends. They depend on what the motion is for (a
+// bat swing moves the wrists at 9 m/s), so QA measures them (output.observations) and does not
+// judge them. A spec that names a style limit in checks.limits asks for that quantity to be a
+// check again: speedCore/speedLimb -> SPEED, accCore/accLimb -> ACC, knee -> KNEE (bend),
+// balance -> BALANCE. A pop is not style: one frame whose acceleration stands out from the
+// frames around it is an artifact (a step key, a pole flip, a snapped anchor), so POP stays a
+// QA error, and so is a FLOAT: the body off the ground without falling (floatChecks). See
+// docs/motion-api-v3.1.md C13.
+import { add, sub, scale, len, angle } from "../compiler/math.js";
+import { CAPSULES, segPoints, sdBox, solePoints } from "./geometry.js";
+
+const SPEED_JOINTS = ["Hips", "Head", "LeftHand", "RightHand", "LeftFoot", "RightFoot", "LeftLeg", "RightLeg", "LeftForeArm", "RightForeArm"];
+const CORE = new Set(["Hips", "Head"]);
+const BENDS = [["knee_l", "LeftUpLeg", "LeftLeg", "LeftFoot"], ["knee_r", "RightUpLeg", "RightLeg", "RightFoot"],
+	["elbow_l", "LeftArm", "LeftForeArm", "LeftHand"], ["elbow_r", "RightArm", "RightForeArm", "RightHand"]];
+/** A pop's acceleration is at least this many times the largest of the frames 2 and 3 away. */
+const POP_RATIO = 2;
+/** FLOAT: the share of gravity an airborne run may miss (0.75: the hips fall at a quarter of g). */
+const FLOAT_LIMIT = 0.75;
+/** Peak speed (m/s) under which a joint counts as still and peaks leaves it out. */
+const STILL = 0.05;
+const r2 = x => Math.round(x * 100) / 100;
+
+/** Per SPEED_JOINT: speed v[f] (m/frame, from f-1) and acceleration a[f] (m/frame^2, from f-2), 0 where undefined. */
+function kinematics(sk, out) {
+	const F = out.frames, n = F.length;
+	return SPEED_JOINTS.map(j => {
+		const X = F.map(fr => fr.s.P[sk.index[j]]), v = new Float64Array(n), a = new Float64Array(n);
+		for (let f = 1; f < n; f++) v[f] = len(sub(X[f], X[f - 1]));
+		for (let f = 2; f < n; f++) a[f] = len(sub(sub(X[f], X[f - 1]), sub(X[f - 1], X[f - 2])));
+		return { j, core: CORE.has(j), v, a };
+	});
+}
+
+/**
+ * The acceleration level around frame f that a pop is measured against: the largest of the
+ * frames 2 and 3 away. A one-frame event shows in up to three neighbouring frames (a step key in
+ * f and f+1, a one-frame glitch in f-1..f+1), so the frames next to f are not read. A smooth
+ * motion, however fast, spreads its acceleration over 4 frames or more (a 4-frame move: 1x).
+ */
+function popLevel(a, f) {
+	let m = 0;
+	for (const q of [f - 3, f - 2, f + 2, f + 3]) if (q >= 2 && q < a.length) m = Math.max(m, a[q]);
+	return m;
+}
+
+/** True when a[f] (m/frame^2) is a pop: above floor and POP_RATIO times popLevel(a, f). */
+export const isPop = (a, f, floor) => a[f] > floor && a[f] > POP_RATIO * popLevel(a, f);
+
+/** Hard POP issues (limits L: accCore, accLimb are the floor); push(kind, msg, f, value, limit). */
+export function popChecks(sk, out, L, push) {
+	for (const { j, core, a } of kinematics(sk, out)) {
+		const floor = core ? L.accCore : L.accLimb;
+		for (let f = 2; f < a.length; f++) if (isPop(a, f, floor)) push("POP", `${j} accel ${(a[f] * 100).toFixed(2)} cm/f^2 in one frame`, f, a[f], floor);
+	}
+}
+
+/** True when a declared support (checks.supports) carries the body at frame f. */
+function supported(out, f, supports) {
+	const { P } = out.frames[f].s, I = out.ctx.sk.index;
+	return supports.some(sp => {
+		const box = out.objectsAt(f)[sp.object], cap = CAPSULES.find(c => c[0] === (sp.part ?? "hips"));
+		return box && cap && Math.min(...segPoints(P[I[cap[1]]], P[I[cap[2]]]).map(p => sdBox(p, box))) - cap[3] < (sp.tol ?? 0.04);
+	});
+}
+
+/**
+ * Per frame: null where a declared support carries the body, "air" with no foot on the ground,
+ * else the balance margin in metres: how far the centre of mass (hips, spine, head) sits inside
+ * the feet's box on the floor (< 0: outside it). While the hips travel every foot counts.
+ */
+function balanceMargins(out, supports = []) {
+	const sk = out.ctx.sk, I = sk.index, F = out.frames;
+	return F.map(({ s }, f) => {
+		if (supported(out, f, supports)) return null;
+		const { P } = s;
+		const moving = f > 0 && f < F.length - 1 && Math.hypot(F[f + 1].s.P[I.Hips][0] - F[f - 1].s.P[I.Hips][0], F[f + 1].s.P[I.Hips][2] - F[f - 1].s.P[I.Hips][2]) / 2 > 0.006;
+		const feet = [];
+		for (const S of ["Left", "Right"]) {
+			const sp = solePoints(sk, s, S);
+			if (moving || Math.min(sp.heel[1], sp.ball[1]) < 0.02) feet.push(sp.heel, sp.ball, sp.tip);
+		}
+		if (!feet.length) return "air";
+		const com = scale(["Hips", "Spine1", "Spine2", "Head"].reduce((acc, j) => add(acc, P[I[j]]), [0, 0, 0]), 0.25);
+		const xs = feet.map(p => p[0]), zs = feet.map(p => p[2]);
+		return Math.min(com[0] - Math.min(...xs), Math.max(...xs) - com[0], com[2] - Math.min(...zs), Math.max(...zs) - com[2]);
+	});
+}
+
+/** Runs [a, b] (indexes of out.frames) with both soles 2 cm or more above the floor and no declared support. */
+function airRuns(out, supports = []) {
+	const sk = out.ctx.sk, n = out.frames.length, runs = [];
+	const air = out.frames.map(({ s }, f) => !supported(out, f, supports)
+		&& ["Left", "Right"].every(S => { const sp = solePoints(sk, s, S); return Math.min(sp.heel[1], sp.ball[1]) >= 0.02; }));
+	for (let a = 0; a < n; a++) {
+		if (!air[a]) continue;
+		let b = a;
+		while (b + 1 < n && air[b + 1]) b++;
+		runs.push([a, b]);
+		a = b;
+	}
+	return runs;
+}
+
+/**
+ * Hard FLOAT issues: 4 or more frames off the ground (airRuns) in which the hips do not fall.
+ * A jump or a drop is ballistic: over the run the hips' vertical speed drops by gravity (the
+ * speed into the run minus the speed out of it, per frame, is g). A body held up by nothing
+ * keeps it; under a quarter of g is a float. value = the share of g missing (1 = no fall).
+ */
+export function floatChecks(out, checks = {}) {
+	const F = out.frames, n = F.length, I = out.ctx.sk.index, g = 9.81 / (out.fps ?? 24) ** 2, f0 = out.f0 ?? 0, issues = [];
+	const y = f => F[Math.max(0, Math.min(n - 1, f))].s.P[I.Hips][1];
+	for (const [a, b] of airRuns(out, checks.supports)) {
+		const frames = b - a + 1;
+		if (frames < 4) continue;
+		const vin = a > 0 ? y(a) - y(a - 1) : y(a + 1) - y(a), vout = b < n - 1 ? y(b + 1) - y(b) : y(b) - y(b - 1);
+		const missing = 1 - (vin - vout) / frames / g;
+		if (missing <= FLOAT_LIMIT) continue;
+		for (let f = a; f <= b; f++) issues.push({ kind: "FLOAT", msg: `no foot on the ground f${a + f0}-f${b + f0}, hips fall at ${Math.round(Math.max(0, 1 - missing) * 100)}% of g`, frame: f, value: +missing.toFixed(4), limit: FLOAT_LIMIT });
+	}
+	return issues;
+}
+
+const bendAt = (sk, s, [, a, b, c]) => angle(sub(s.P[sk.index[b]], s.P[sk.index[a]]), sub(s.P[sk.index[c]], s.P[sk.index[b]]));
+
+/**
+ * The style checks the spec opted into by naming their limit in checks.limits (own keys only);
+ * L is QA_LIMITS merged with them. Issues as generalChecks makes them (f indexes out.frames).
+ */
+export function styleChecks(sk, out, checks, L) {
+	const own = checks?.limits ?? {}, on = k => Object.hasOwn(own, k), issues = [];
+	const push = (kind, msg, f, value, limit) => issues.push({ kind, msg, frame: f, value: +value.toFixed(4), limit });
+	for (const { j, core, v, a } of kinematics(sk, out)) {
+		const vk = core ? "speedCore" : "speedLimb", ak = core ? "accCore" : "accLimb";
+		for (let f = 1; f < v.length; f++) {
+			if (on(vk) && v[f] > L[vk]) push("SPEED", `${j} ${(v[f] * 100).toFixed(1)} cm/frame`, f, v[f], L[vk]);
+			// a pop is already a POP group
+			if (on(ak) && f > 1 && a[f] > L[ak] && !isPop(a, f, L[ak])) push("ACC", `${j} accel ${(a[f] * 100).toFixed(2)} cm/f^2`, f, a[f], L[ak]);
+		}
+	}
+	if (on("knee")) out.frames.forEach(({ s }, f) => {
+		for (const bend of BENDS.slice(0, 2)) {
+			const deg = bendAt(sk, s, bend);
+			if (deg > L.knee) push("KNEE", `${bend[0] === "knee_l" ? "Left" : "Right"} knee bent ${deg.toFixed(0)}deg`, f, deg, L.knee);
+		}
+	});
+	if (on("balance")) balanceMargins(out, checks.supports).forEach((m, f) => {
+		if (m === "air") push("BALANCE", "no foot on the ground", f, 0, 0);
+		else if (m !== null && -m > L.balance) {
+			const com = scale(["Hips", "Spine1", "Spine2", "Head"].reduce((acc, j) => add(acc, out.frames[f].s.P[sk.index[j]]), [0, 0, 0]), 0.25);
+			push("BALANCE", `centre of mass ${com[0].toFixed(2)},${com[2].toFixed(2)} outside the feet`, f, -m, L.balance);
+		}
+	});
+	return issues;
+}
+
+/**
+ * output.observations: measurements, not verdicts. Frames are absolute (out.f0 added).
+ * { units, peaks: { <joint>: { speed: [m/s, f], accel: [m/s^2, f] } } (joints that move: STILL),
+ *   balance: { min: [m, f], outside?: [f0, f1], air?: [[f0, f1], ...] (at most 4 runs with both
+ *   feet off the floor) }, bend: { knee_l: [deg, f], ... } }
+ */
+export function observeMotion(sk, out, checks = {}) {
+	const f0 = out.f0 ?? 0, fps = out.fps ?? 24, peak = (arr, k) => {
+		let at = 0;
+		for (let f = 1; f < arr.length; f++) if (arr[f] > arr[at]) at = f;
+		return [Math.round(arr[at] * k * 100) / 100, at + f0];
+	};
+	const peaks = Object.fromEntries(kinematics(sk, out).map(({ j, v, a }) => [j, { speed: peak(v, fps), accel: peak(a, fps * fps) }]).filter(([, p]) => p.speed[0] >= STILL));
+	const margins = balanceMargins(out, checks.supports), span = test => {
+		const fs = margins.map((m, f) => (test(m) ? f + f0 : -1)).filter(f => f >= 0);
+		return fs.length ? [fs[0], fs[fs.length - 1]] : null;
+	}, air = airRuns(out, checks.supports).slice(0, 4).map(([a, b]) => [a + f0, b + f0]);
+	let min = null;
+	margins.forEach((m, f) => { if (typeof m === "number" && (!min || m < min[0])) min = [r2(m), f + f0]; });
+	const outside = span(m => typeof m === "number" && m < 0);
+	const bend = Object.fromEntries(BENDS.map(b => {
+		let best = [0, f0];
+		out.frames.forEach(({ s }, f) => { const d = bendAt(sk, s, b); if (d > best[0]) best = [d, f + f0]; });
+		return [b[0], [Math.round(best[0]), best[1]]];
+	}));
+	return { units: "[value, frame]; speed m/s, accel m/s^2, balance m inside the feet (< 0 outside), bend deg (0 straight)",
+		peaks, balance: { min, ...(outside ? { outside } : {}), ...(air.length ? { air } : {}) }, bend };
+}
+
+/**
+ * Per frame, how many times too fast the motion is by what QA reports (fix/retime.js): a pop
+ * against its surroundings (square root: acceleration falls with the square of the stretch) and
+ * the speed or acceleration limits the spec opted into. L = QA_LIMITS merged with own.
+ */
+export function speedExcess(sk, out, own, L) {
+	const on = k => Object.hasOwn(own ?? {}, k), e = new Float64Array(out.frames.length);
+	for (const { core, v, a } of kinematics(sk, out)) {
+		const vk = core ? "speedCore" : "speedLimb", ak = core ? "accCore" : "accLimb";
+		for (let f = 1; f < v.length; f++) {
+			if (on(vk)) e[f] = Math.max(e[f], v[f] / L[vk]);
+			if (f < 2) continue;
+			if (isPop(a, f, L[ak])) e[f] = Math.max(e[f], Math.sqrt(a[f] / Math.max(L[ak], POP_RATIO * popLevel(a, f))));
+			if (on(ak)) e[f] = Math.max(e[f], Math.sqrt(a[f] / L[ak]));
+		}
+	}
+	return e;
+}

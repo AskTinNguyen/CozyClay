@@ -5,7 +5,7 @@
 // the best (repair.js), like an automatic { range } that stays near the agent's value:
 //   cause "... use[i] <skill> ..."          each arg in SKILL_INFO[skill].tune, 1 then 2 steps
 //                                             either way, from the arg as sent or its default
-//   SPEED/POP "between keys[a] fA and keys[b] fB" (the agent's keys)
+//   SPEED/ACC/POP "between keys[a] fA and keys[b] fB" (the agent's keys)
 //                                             key a 1 or 2 frames earlier, key b later
 // Every candidate is a JSON Patch on the agent's spec; the order is fixed, so the search is
 // deterministic. Least-change candidates come first, so a tie keeps the smaller edit.
@@ -37,9 +37,9 @@ function skillCandidates(cause, spec) {
 	return out;
 }
 
-/** SPEED/POP between two of the agent's keys: more frames between them, 1 then 2. */
+/** SPEED/ACC/POP between two of the agent's keys: more frames between them, 1 then 2. */
 function keyCandidates(g, cause, spec) {
-	if (g.kind !== "SPEED" && g.kind !== "POP") return [];
+	if (!["SPEED", "ACC", "POP"].includes(g.kind)) return [];
 	const m = /between keys\[(\d+)\] f(\d+) and keys\[(\d+)\] f(\d+)/.exec(cause);
 	if (!m) return [];
 	const [a, fa, b, fb] = m.slice(1).map(Number), keys = spec.keys ?? [];

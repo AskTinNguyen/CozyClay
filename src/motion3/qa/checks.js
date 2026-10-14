@@ -1,20 +1,21 @@
 // General motion checks (every take): scene collisions, ground, IK reach, planted-foot slide,
-// bone length, speed / pops, knee and elbow flips, knee hyper-extension, balance, self contact,
-// hands and held props entering the head (and the torso, contact-checks.js).
+// bone length, one-frame pops (style.js), knee and elbow flips, knees bending backward, self
+// contact, hands and held props entering the head (and the torso, contact-checks.js). Speed,
+// acceleration, knee bend and balance are style: style.js measures them and checks them only
+// when the spec names their limit (checks.limits).
 import { add, sub, scale, apply, len, dist, cross, norm, dot, angle } from "../compiler/math.js";
 import { CAPSULES, segPoints, sdBox, segDist, headDepth, solePoints } from "./geometry.js";
 import { contactChecks } from "./contact-checks.js";
+import { popChecks } from "./style.js";
 
 export const QA_LIMITS = { allow: 0.005, groundAllow: 0.01, reach: 0.01, slide: 0.0015, plantH: 0.012,
 	speedCore: 0.04, speedLimb: 0.16, accCore: 0.015, accLimb: 0.05, flip: 60, knee: 150, headAllow: 0.003, self: 0,
-	body: 0.005, hands: 0.01, object: 0.005, grab: 0.03 };
+	body: 0.005, hands: 0.01, object: 0.005, grab: 0.03, balance: 0.08 };
 
 export const allowance = (allow, part, obj) => {
 	for (const a of allow ?? []) if (part.startsWith(a.part) && (a.object === obj || (a.object.endsWith("*") && obj.startsWith(a.object.slice(0, -1))))) return a.depth;
 	return null;
 };
-
-export const SPEED_JOINTS = ["Hips", "Head", "LeftHand", "RightHand", "LeftFoot", "RightFoot", "LeftLeg", "RightLeg", "LeftForeArm", "RightForeArm"];
 
 export function generalChecks(sk, out, opts = {}) {
 	const L = { ...QA_LIMITS, ...opts.limits }, issues = [], I = sk.index, F = out.frames, n = F.length;
@@ -50,7 +51,6 @@ export function generalChecks(sk, out, opts = {}) {
 		for (const S of ["Left", "Right"]) {
 			const th = s.P[I[`${S}UpLeg`]], kn = s.P[I[`${S}Leg`]], an = s.P[I[`${S}Foot`]];
 			const bend = angle(sub(kn, th), sub(an, kn));
-			if (bend > L.knee) push("KNEE", `${S} knee bent ${bend.toFixed(0)}deg`, f, bend, L.knee);
 			// the foot's heading on the ground; the toe sits below the ankle, which must not count
 			const toeDir = sub(s.P[I[`${S}ToeBase`]], an); toeDir[1] = 0;
 			const mid = sub(kn, [(th[0] + an[0]) / 2, (th[1] + an[1]) / 2, (th[2] + an[2]) / 2]);
@@ -75,18 +75,7 @@ export function generalChecks(sk, out, opts = {}) {
 		const drift = Math.max(...F.map(fr => Math.abs(dist(fr.s.P[j], fr.s.P[p]) - L0)));
 		if (drift > 0.001) push("LENGTH", `${sk.names[p]}-${sk.names[j]}`, 0, drift, 0.001);
 	}
-	for (const j of SPEED_JOINTS) {
-		const core = j === "Hips" || j === "Head";
-		const X = F.map(fr => fr.s.P[I[j]]);
-		for (let f = 1; f < n; f++) {
-			const v = dist(X[f], X[f - 1]), vl = core ? L.speedCore : L.speedLimb;
-			if (v > vl) push("SPEED", `${j} ${(v * 100).toFixed(1)} cm/frame`, f, v, vl);
-			if (f > 1) {
-				const acc = len(sub(sub(X[f], X[f - 1]), sub(X[f - 1], X[f - 2]))), al = core ? L.accCore : L.accLimb;
-				if (acc > al) push("POP", `${j} accel ${(acc * 100).toFixed(2)} cm/f^2`, f, acc, al);
-			}
-		}
-	}
+	popChecks(sk, out, L, push);
 	for (const S of ["Left", "Right"]) for (const [a, b, c] of [[`${S}UpLeg`, `${S}Leg`, `${S}Foot`], [`${S}Arm`, `${S}ForeArm`, `${S}Hand`]]) {
 		let prev = null;
 		for (let f = 0; f < n; f++) {

@@ -9,6 +9,9 @@ import { skeletonFor } from "../../src/motion3/rigs/index.js";
 import { I3 } from "../../src/motion3/compiler/math.js";
 import { createStudioAppActions } from "../../src/commands/index.js";
 import { SCENE_OBJECTS as CUP_OBJECTS, CHARACTER as CUP_CHARACTER } from "./fixtures/cup-scene.mjs";
+import { isPop } from "../../src/motion3/qa/style.js";
+import { repairSpec } from "../../src/motion3/repair.js";
+import { fitOutput } from "../../src/motion3/report.js";
 
 let failures = 0;
 function expect(name, condition, detail = "") {
@@ -83,16 +86,55 @@ const penOff = compile(held(undefined), board), penOn = compile(held({ penetrati
 show("hand 1.5 cm into a board, fix off", penOff);
 show("hand 1.5 cm into a board, penetration 0.02", penOn);
 expect("penetration fix: the board hit is gone, pushes reported", penOff.qa.groups.some(g => g.kind === "COLLIDE") && penOn.qa.ok && penOn.fixed.penetration?.frames > 0, JSON.stringify(penOn.fixed));
-// retime: a hand thrown 0.5 m in 4 frames
-const throwHand = fix => ({ ...stand({ fix, frames: 120 }), keys: [{ f: 30, set: { armw_r: 0 } }, { f: 36, set: { armw_r: 1, hand_r: [-0.25, 1.1, 0.25] } }, { f: 50, set: { hand_r: [-0.25, 1.1, 0.25] } }, { f: 54, set: { hand_r: [0.1, 1.45, 0.3] } }, { f: 90, set: { hand_r: [0.1, 1.45, 0.3] } }] });
-const fastOff = compile(throwHand(undefined), empty), fastOn = compile(throwHand({ retime: true }), empty);
-show("hand thrown, no retime", fastOff);
-show("hand thrown, retime", fastOn);
-expect("retime: speed/pop issues gone, stretch reported", fastOff.qa.groups.some(g => g.kind === "POP" || g.kind === "SPEED") && fastOn.qa.ok && fastOn.fixed.retime?.maxStretch > 1, JSON.stringify(fastOn.fixed));
+// retime: a hand thrown 0.5 m in 4 frames. Smooth and fast is style (C13): retime stretches only
+// what QA reports, here the speed and acceleration limits the spec opts into.
+const throwHand = (fix, limits) => ({ ...stand({ fix, frames: 120, ...(limits ? { checks: { limits } } : {}) }), keys: [{ f: 30, set: { armw_r: 0 } }, { f: 36, set: { armw_r: 1, hand_r: [-0.25, 1.1, 0.25] } }, { f: 50, set: { hand_r: [-0.25, 1.1, 0.25] } }, { f: 54, set: { hand_r: [0.1, 1.45, 0.3] } }, { f: 90, set: { hand_r: [0.1, 1.45, 0.3] } }] });
+const everyday = { speedLimb: 0.16, accLimb: 0.05 };
+const fastOff = compile(throwHand(undefined, everyday), empty), fastOn = compile(throwHand({ retime: true }, everyday), empty);
+show("hand thrown, everyday limits, no retime", fastOff);
+show("hand thrown, everyday limits, retime", fastOn);
+expect("retime: opted-in speed/acc issues gone, stretch reported", fastOff.qa.groups.some(g => g.kind === "ACC" || g.kind === "SPEED") && fastOn.qa.ok && fastOn.fixed.retime?.maxStretch > 1, JSON.stringify(fastOn.fixed));
+const fastFree = compile(throwHand({ retime: true }), empty);
+expect("retime: without the opt-in a smooth fast throw is clean and keeps its speed", fastFree.qa.ok && !fastFree.fixed.retime && fastFree.observations.peaks.RightHand.speed[0] > 3.8, JSON.stringify(fastFree.observations.peaks));
 // the exitcar fixture itself stays clean with the default fixes on
 r = compile(EXITCAR_SPEC);
 expect("exitcar: QA 0 with the default fixes, and the fixes report their counts", r.qa.ok && typeof r.fixed === "object", JSON.stringify(r.qa.groups.slice(0, 2)));
 console.log(`  exitcar default fixes: ${JSON.stringify(r.fixed)}; ${JSON.stringify(r.ms)}`);
+
+// 5b. Style is measured, not judged (C13). A bat-like swing moves the wrist at ~9 m/s, smoothly.
+const swing = ({ end, ...extra } = {}) => stand({ frames: 48, ...extra, keys: [{ f: 0, set: { aswing_r: -50, abend_r: 10 } }, { f: 20, set: { aswing_r: -50 } },
+	{ f: end ?? 27, set: { aswing_r: 150 } }, { f: 47, set: { aswing_r: 150 } }] });
+const fastSwing = compile(swing(), empty), wrist = fastSwing.observations?.peaks?.RightHand;
+console.log(`  swing: ${fastSwing.qa.total} issues; observations ${JSON.stringify(fastSwing.observations)}`);
+expect("fast smooth swing: qa.ok, observations show the wrist peak (~9 m/s) and its frame", fastSwing.qa.ok && wrist?.speed[0] > 8.5 && wrist.speed[0] < 10 && wrist.speed[1] >= 21 && wrist.speed[1] <= 27
+	&& wrist.accel[0] > 50 && Number.isInteger(wrist.accel[1]), JSON.stringify(fastSwing.qa.groups.slice(0, 2)));
+expect("observations: still joints are left out, knees and elbows report their deepest bend, balance its minimum",
+	!("LeftFoot" in fastSwing.observations.peaks) && fastSwing.observations.bend.elbow_r.length === 2 && fastSwing.observations.balance.min[0] > 0, JSON.stringify(fastSwing.observations));
+const optSpeed = compile(swing({ checks: { limits: { speedLimb: 0.16 } } }), empty);
+expect("checks.limits.speedLimb opts back in: SPEED is an error again (and only SPEED)", !optSpeed.qa.ok && optSpeed.qa.groups.some(g => g.kind === "SPEED" && /RightHand/.test(g.subject))
+	&& optSpeed.qa.groups.every(g => g.kind === "SPEED"), JSON.stringify(optSpeed.qa.groups.map(g => `${g.kind} ${g.subject}`)));
+const stepped = compile(stand({ keys: [{ f: 0, set: { armw_r: 1, hand_r: [-0.25, 1.1, 0.25] } }, { f: 30, set: { hand_r: [-0.25, 1.1, 0.25] } }, { f: 31, step: ["hand_r"], set: { hand_r: [-0.2, 1.15, 0.3] } }] }), empty);
+expect("an isolated pop (a hand that jumps 8.7 cm in one frame) is still an error", !stepped.qa.ok && stepped.qa.groups.some(g => g.kind === "POP" && /RightHand .* in one frame/.test(g.subject)), JSON.stringify(stepped.qa.groups.map(g => g.subject)));
+// the detector: a one-frame event (kink, step, glitch) against the frames 2-3 away, not a short smooth move
+const series = list => Float64Array.from(list), at = (a, f) => isPop(series(a), f, 0.05);
+expect("isPop: a kink, a step key (f and f+1) and a one-frame glitch (f-1..f+1) pop",
+	at([0, 0, 0, 0, 0, 0.2, 0, 0, 0, 0], 5) && at([0, 0, 0, 0, 0, 0.2, 0.2, 0, 0, 0], 5) && at([0, 0, 0, 0, 0.1, 0.2, 0.1, 0, 0, 0], 5));
+expect("isPop: a 4-frame smooth move, steady hard acceleration and anything under the floor do not",
+	!at([0, 0, 0, 0.078, 0.094, 0, 0.094, 0.078, 0, 0], 4) && !at([0, 0, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1], 5) && !at([0, 0, 0, 0, 0, 0.04, 0, 0, 0, 0], 5));
+// search and repair cost only qa.groups: the fast end of a searched swing is not penalised, repair has nothing to do
+const searched = compile(swing({ end: { range: [24, 30] } }), empty);
+expect("search ignores observations: the midpoint swing is clean at once (cost 0, 1 eval)", searched.qa.ok && searched.search?.cost === 0 && searched.search.evals === 1, JSON.stringify(searched.search));
+const repaired = repairSpec(swing(), { rounds: 4 }, s => compile(s, empty));
+expect("repair ignores observations: a clean fast swing compiles once and is kept as sent", repaired.repair.rounds === 0 && repaired.repair.compiles === 1 && JSON.stringify(repaired.spec) === JSON.stringify(swing()), JSON.stringify(repaired.repair));
+// a float: the root keyed 4 cm past the legs' reach lifts both feet for 7 frames, the hips do not fall
+const float = compile(stand({ fix: { reach: false }, keys: [{ f: 20, set: { root: [0, sk.restWorldPos[I.Hips][1] - 0.01, 0] } }, { f: 30, set: { root: [0, sk.restWorldPos[I.Hips][1] + 0.03, 0] } }, { f: 40, set: { root: [0, sk.restWorldPos[I.Hips][1] - 0.01, 0] } }] }), empty);
+expect("FLOAT: off the ground without falling is a hard error; the airborne frames are observed", float.qa.groups.some(g => g.kind === "FLOAT" && g.count >= 4 && g.hint) && float.observations.balance.air?.length >= 1
+	&& !float.qa.groups.some(g => g.kind === "BALANCE"), JSON.stringify(float.qa.groups.map(g => `${g.kind} ${g.subject}`)));
+// the output budget keeps observations whole, after qa, even when groups are cut
+const crowded = fitOutput({ frames: 48, specId: "spec-000000000000", qa: { ok: false, total: 400, groups: Array.from({ length: 80 }, (_, i) => ({ kind: "COLLIDE", subject: `hand_r x box-${i}`, count: 5, severity: 5, first: 0, last: 4, worst: 0.02, hint: "x".repeat(200) })) },
+	observations: fastSwing.observations, timeline: [] }, 6000);
+expect("output budget: observations kept whole and right after qa when groups are cut", JSON.stringify(crowded.observations) === JSON.stringify(fastSwing.observations)
+	&& Object.keys(crowded).indexOf("observations") === Object.keys(crowded).indexOf("qa") + 1 && crowded.more.groups > 0 && new TextEncoder().encode(JSON.stringify(crowded)).length <= 6000);
 
 // 6. Strict validation, exact messages.
 const reject = (edit, scene = car) => { try { compile(broken(edit), scene); return ""; } catch (error) { return error.message; } };

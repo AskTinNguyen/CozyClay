@@ -162,7 +162,8 @@ qa.groups[i] = { "kind": "COLLIDE", "subject": "thigh_r x cube", "count": 6, "fi
 - `json-patch.js` `applyPatch(doc, ops) -> copy`: add, remove, replace, test, `-` appends in add, `~0`/`~1` escapes. Errors: `patch[1] (replace /keys/12/f): /keys/12 does not exist (keys has 9 entries)`.
 - `delta.js` `deltaOf(baseGroups, groups, baseId) -> delta`.
 - Errors: `base "spec-…" is not known (the editor keeps the last 64 compiled specs this session); send spec`.
-- `report.js`: `MOTION_OUTPUT_BUDGET = 6000` bytes (8 KiB receipt minus about 1.5 KB of head and readback). `fitOutput(full, budget) -> output` keeps, in order: (1) frames, fps, installed, specId, qa.ok/total/goals, delta, repair; (2) the first 4 groups in full; (3) probes; (4) timeline (planted spans go first); (5) the other groups as one-liners `{ kind, subject, count, severity, first, last }`; (6) fixed, search, skills, ms. Room left turns one-liners back into full groups from the top. `more.<part>` counts the items missing or shortened. Every compile and `motion.qa` keeps its full parts in the store (`keepParts`), and `motion.report` pages them with `reportPage(parts, specId, part, from)`.
+- `patch` may be empty. `{ base }` alone or `{ base, patch: [] }` compiles the base again, for example to measure new probes.
+- `report.js`: `MOTION_OUTPUT_BUDGET = 6000` bytes (8 KiB receipt minus about 1.5 KB of head and readback). `fitOutput(full, budget) -> output` keeps, in order: (1) frames, fps, installed, specId, qa.ok/total/goals, observations (C13), delta, repair; (2) the first 4 groups in full; (3) probes; (4) timeline (planted spans go first); (5) the other groups as one-liners `{ kind, subject, count, severity, first, last }`; (6) fixed, search, skills, ms. Room left turns one-liners back into full groups from the top. `more.<part>` counts the items missing or shortened. Every compile and `motion.qa` keeps its full parts in the store (`keepParts`), and `motion.report` pages them with `reportPage(parts, specId, part, from)`.
 
 ## C8. Goals (spec top level; `qa/goals.js` `goalChecks(out, goals) -> { issues, results }`)
 
@@ -178,6 +179,7 @@ qa.groups[i] = { "kind": "COLLIDE", "subject": "thigh_r x cube", "count": 6, "fi
 ```
 
 - Exactly one predicate: `near` (distance <= `tol`, default 0.05), `above` (a.y - b.y >= `by`, default 0), `moved` (the object base moved at least `by`, default 0.05, from the scene pose).
+- `moved` accepts a bare object id: `"empty-2"` means `"object:empty-2"`. Every other ref needs its prefix.
 - `mode` is `"all"` (default) or `"any"`.
 - A GOAL issue's value is the shortfall and its limit is 0. A failed goal makes `qa.ok` false. `qa.goals` is there when `spec.goals` is.
 - Issue frames index `out.frames`. `goals[].at` is absolute.
@@ -230,12 +232,40 @@ verify_result { "targets": ["char-a"], "checks": ["motion"], "visual": "contact_
 
 ## C12. install: "ifClean" (waste-removal round, lane G1)
 
-`motion.compile { install }` takes `true` (the default), `false` or `"ifClean"`. `true` and `false` are unchanged.
+`motion.compile { install }` takes `true` (the default), `false` or `"ifClean"`. `true` and `false` are unchanged. `"never"` equals `false`.
 
 - `"ifClean"` installs the take only when the final result is clean: `qa.ok`, which includes the goals, measured after `repair` when `repair` is sent. Otherwise it is `install: false`. The agent no longer compiles a second time only to install.
 - It works with `spec` and with `base` + `patch`. With `repair`, the repaired spec is what is installed, and `output.specId` names it (the spec the take stores).
 - `output.installed` is `true` when the character's take is now this result, else `false`. The receipt `affectedIds` names the character, and an undo/history entry exists, only when a take was installed.
 - The take already installed: when the installed take is exactly the take this compile would install (the same spec by specId, placement, bones and object tracks), `"ifClean"` changes nothing. There is no replace, no `affectedIds` and no history entry, so IK edits on the take stay. `output.installed` is `true`, and the receipt summary says `already installed, unchanged`. It is not an error. `install: true` still replaces the take as before.
+
+## C13. QA verdict and observations (lane H1)
+
+QA errors are kept for what is broken whatever the motion is for. Quantities that depend on the motion's intent are measured, not judged: a bat swing moves the wrists at 8-10 m/s, a lunge leaves the centre of mass outside the feet.
+
+| Class | Kinds | Why |
+|---|---|---|
+| hard (`qa.groups`, `qa.total`, `qa.ok`, search and repair cost) | COLLIDE (body, carried object), OBJECT (hinged object), GROUND, REACH, SLIDE, FLIP, LENGTH, FACE, BODY, SELF, KNEE (bends backward), GRAB, POP, FLOAT, the spec's checks (CONTACT, ORIENT, BELOW, CLEARANCE, APPEAR), GOAL | penetration, a pose that is not the one asked for, a planted foot that skates, a pole that flips, a stretched bone, a one-frame artifact, a body held up by nothing, a failed declared check or goal |
+| style (`output.observations`) | SPEED, ACC (sustained acceleration), KNEE (bend past `knee`), BALANCE | fast, hard, deep or off-balance is a choice: a swing, a throw, a deep squat, a lunge |
+
+- **POP** (hard): a one-frame event. The acceleration of a joint at frame f (second difference, m/frame^2) is above `accLimb` (`accCore` for Hips and Head) and more than 2x the largest acceleration of the frames 2 and 3 away (f-3, f-2, f+2, f+3). A one-frame event shows in up to three neighbouring frames (a step key in f and f+1, a one-frame glitch in f-1..f+1), so the frames next to f are not read. A smooth motion spreads its acceleration over 4 frames or more, so it is never a pop however fast it is. Subject `"<joint> accel 8.66 cm/f^2 in one frame"`. `qa/style.js` `isPop(a, f, floor)`.
+- **FLOAT** (hard): 4 or more frames with both soles 2 cm or more above the floor and no declared support (`checks.supports`), in which the hips do not fall. Over the run the hips' vertical speed must drop by gravity; `value` is the share of g missing (1 = no fall), `limit` 0.75. A jump or a drop passes; a body held in the air does not. Subject `"no foot on the ground f27-f33, hips fall at 9% of g"`.
+- **Opt-in.** A spec whose `checks.limits` names a style limit (its own key, also from `motion.qa { checks }`) makes that quantity a check again, with these kinds: `speedCore`/`speedLimb` -> SPEED (m/frame), `accCore`/`accLimb` -> ACC (m/frame^2, pop frames excluded), `knee` -> KNEE `"<side> knee bent 152deg"`, `balance` (new, default 0.08 m) -> BALANCE (`value` = metres of the centre of mass outside the feet, or `"no foot on the ground"`). The agent decides this on purpose; the defaults in `QA_LIMITS` are only the opt-in values.
+- `fix.retime` stretches only what QA reports: pops, and the speed and acceleration limits the spec opted into (`qa/style.js` `speedExcess`). A smooth fast motion keeps its speed.
+
+`output.observations` (every `motion.compile` and `motion.qa`, after `qa`; frames are absolute):
+
+```jsonc
+"observations": {
+  "units": "[value, frame]; speed m/s, accel m/s^2, balance m inside the feet (< 0 outside), bend deg (0 straight)",
+  "peaks": { "RightHand": { "speed": [9.27, 24], "accel": [149.98, 24] } },   // SPEED_JOINTS that move (peak >= 0.05 m/s)
+  "balance": { "min": [-0.09, 18], "outside": [18, 59], "air": [[27, 33]] },   // min margin; outside = first/last frame < 0; air = up to 4 runs
+  "bend": { "knee_l": [18, 0], "knee_r": [17, 0], "elbow_l": [0, 0], "elbow_r": [10, 25] } }
+```
+
+- Peak acceleration includes the centripetal part: a swing's wrist peaks near its fastest frame.
+- `balance.min` skips frames carried by a declared support and frames where no foot counts; `air` lists the runs with both soles 2 cm or more above the floor.
+- Budget (C7): observations are tier 1 (always kept) and bounded (10 joints, 4 limbs, at most about 1 KB).
 
 ## Pipeline (`pipeline.js` `compileSpec(spec, { sk, scene }, opts)`)
 
@@ -243,10 +273,10 @@ verify_result { "targets": ["char-a"], "checks": ["motion"], "visual": "contact_
 2. Open parameters are searched (`search.js`).
 3. `nameChecks` (`qa/check-names.js`, on a copy): an unnamed `contacts`, `orient`, `below`, `clearance` or `appear` entry is named by its place in the agent's spec, `contacts[0]`. The QA subject reads `"contacts[0]: 100.0 cm apart"`, and two unnamed checks are two groups.
 4. Skills expand, then `validateSpec(full, { sk, scene, lenient })`.
-5. Compile, then `runMotionQa(sk, out, spec, { userSpec })`.
+5. Compile, then `runMotionQa(sk, out, spec, { userSpec })` and `observeMotion(sk, out, spec.checks)` (C13).
 6. `timelineOf` and, with `opts.probes`, `runProbes`.
 
-It answers `{ out, qa, spec, expanded, used, fixed, search, timeline, probes?, ms }`. `opts`: `checks` (replace every check), `lenient`, `probes`.
+It answers `{ out, qa, observations, spec, expanded, used, fixed, search, timeline, probes?, ms }`. `opts`: `checks` (replace every check), `lenient`, `probes`.
 
 ## Fixture
 

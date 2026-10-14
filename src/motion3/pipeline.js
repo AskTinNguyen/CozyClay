@@ -2,12 +2,14 @@
 // parameters are searched (search.js), unnamed checks get their index as a name (on a copy,
 // qa/check-names.js), skills expand (skills/), the spec is validated strictly (leniently for a
 // saved take compiled again), the compiler bakes and auto-fixes the frames, QA measures them with
-// a cause and a hint per issue group against the agent's own spec, and the timeline and the
-// requested probes read the result. liftRequest first takes what the agent obviously meant:
-// spec.probes are request probes, and a bare goals[].moved id is object:<id>.
+// a cause and a hint per issue group against the agent's own spec, the style quantities are
+// measured (qa/style.js observeMotion), and the timeline and the requested probes read the result.
+// liftRequest first takes what the agent obviously meant: spec.probes are request probes, and a
+// bare goals[].moved id is object:<id>.
 import { compileMotion } from "./compiler/compile.js";
 import { validateSpec } from "./compiler/validate.js";
 import { runMotionQa } from "./qa/index.js";
+import { observeMotion } from "./qa/style.js";
 import { nameChecks } from "./qa/check-names.js";
 import { expandUse } from "./skills/index.js";
 import { resolveFrames } from "./skills/frames-auto.js";
@@ -43,8 +45,8 @@ export function liftRequest(spec, probes) {
 }
 
 /**
- * spec -> { out, qa, spec (frames and open values filled in), expanded, used, fixed, search,
- * timeline, probes?, ms }. opts.checks replaces every check (the spec's and its skills') for a
+ * spec -> { out, qa, observations, spec (frames and open values filled in), expanded, used,
+ * fixed, search, timeline, probes?, ms }. opts.checks replaces every check (the spec's and its skills') for a
  * re-measure; opts.lenient ignores unknown fields (take-source.js); opts.probes are measured
  * (with spec.probes, liftRequest).
  */
@@ -68,7 +70,8 @@ export function compileSpec(sent, { sk, scene }, opts = {}) {
 	const { full: expanded, used } = expand(resolved);
 	const out = compileMotion({ fps: 24, ...expanded }, ctx);
 	const compileMs = ms(t1), t2 = performance.now();
-	const qa = runMotionQa(sk, out, out.timeMap ? warpChecks(expanded, out.timeMap) : expanded, { userSpec: resolved });
+	const measured = out.timeMap ? warpChecks(expanded, out.timeMap) : expanded;
+	const qa = runMotionQa(sk, out, measured, { userSpec: resolved }), observations = observeMotion(sk, out, measured.checks);
 	const timeline = timelineOf(out, { used, spec: expanded }), probes = asked && runProbes(out, asked, { spec: expanded, sk, scene });
-	return { out, qa, spec: resolved, expanded, used, fixed: out.fixed, search, timeline, ...(probes ? { probes } : {}), ms: { compile: compileMs, qa: ms(t2), total: ms(t0) } };
+	return { out, qa, observations, spec: resolved, expanded, used, fixed: out.fixed, search, timeline, ...(probes ? { probes } : {}), ms: { compile: compileMs, qa: ms(t2), total: ms(t0) } };
 }

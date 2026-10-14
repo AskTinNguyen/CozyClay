@@ -90,7 +90,7 @@ export function register(registry, ports) {
 	const report = (r, head, extra = {}) => {
 		const specIdValue = store.put(r.stored);
 		store.keepParts(specIdValue, { groups: r.qa.groups, timeline: r.timeline, probes: r.probes ?? {} });
-		return fitOutput({ ...head, specId: specIdValue, qa: r.qa, ...extra, ...(r.probes ? { probes: r.probes } : {}), timeline: r.timeline,
+		return fitOutput({ ...head, specId: specIdValue, qa: r.qa, observations: r.observations, ...extra, ...(r.probes ? { probes: r.probes } : {}), timeline: r.timeline,
 			fixed: r.fixed, ...(r.search ? { search: r.search } : {}), ...(r.used.length ? { skills: r.used } : {}), ms: r.ms });
 	};
 	const installed = characterId => owner().motionFor(characterId)?.schema === "cozyclay.take.v3" ? owner().motionFor(characterId)

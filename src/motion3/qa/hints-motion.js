@@ -1,6 +1,7 @@
-// Hints for motion-type issues (reach, knees, pole flips, sliding, speed, pops) and for the
-// spec's own checks (contacts, orient, below, appear). Orient and below try small changes of
-// the wrist or elbow channels on the worst frame and scale the best one to the needed amount.
+// Hints for motion-type issues (reach, knees, pole flips, sliding, pops, floating, opted-in
+// speed and acceleration) and for the spec's own checks (contacts, orient, below, appear). Orient and
+// below try small changes of the wrist or elbow channels on the worst frame and scale the best
+// one to the needed amount.
 import { add, sub, scale, norm, len, dist, angle, apply, ry, clamp, dot } from "../compiler/math.js";
 import { solveFrame } from "../compiler/compile.js";
 import { channelsAt } from "../compiler/channels.js";
@@ -107,6 +108,8 @@ export const motionHints = {
 	},
 	SPEED: (X, g) => speedHint(X, g, 1),
 	POP: (X, g) => speedHint(X, g, 0.5),
+	ACC: (X, g) => speedHint(X, g, 0.5),
+	FLOAT: (X, g) => ({ cause: X.cause("root", g.worstFrame), hint: `over f${g.first}-f${g.last} lower the root or key foot_l/foot_r back to the floor (ankle y 0.087); a jump needs the hips to rise and fall; a seat or ledge the body rests on goes in checks.supports` }),
 	LENGTH: () => ({ cause: "compiler", hint: "a bone changed length: report the spec, this is a compiler fault" }),
 	CONTACT(X, g) {
 		const ck = (X.spec.checks?.contacts ?? []).find(c => g.subject.startsWith(`${c.name}:`)), f = g.worstFrame, i = X.rel(f);

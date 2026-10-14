@@ -55,9 +55,10 @@ expect("exit car: result.spec is the repaired spec", r.result.spec.keys[0].set.r
 r = repair(low);
 expect("deterministic: the same spec, report and QA", json(r.spec) === json(first.spec) && json(r.repair) === json(first.repair) && json(r.result.qa) === json(first.result.qa));
 
-// 4. Nothing helps: the spec stays as sent and the rejected patches are counted.
+// 4. Nothing helps: the spec stays as sent and the rejected patches are counted. The REACH
+// patches lift a foot for good; balance (style, C13) is opted in so that costs more than it gains.
 const P = sk.restWorldPos, hipY = P[I.Hips][1] - 0.01;
-const deep = stand({ fix: { reach: false }, keys: [{ f: 20, set: { root: [0, hipY, 0] } }, { f: 30, set: { root: [0, hipY + 0.04, 0] } }, { f: 40, set: { root: [0, hipY, 0] } }] });
+const deep = stand({ fix: { reach: false }, checks: { limits: { balance: 0.08 } }, keys: [{ f: 20, set: { root: [0, hipY, 0] } }, { f: 30, set: { root: [0, hipY + 0.04, 0] } }, { f: 40, set: { root: [0, hipY, 0] } }] });
 r = repair(deep, empty);
 expect("no improvement: spec unchanged, nothing applied, rejected counted, one round", r.spec === deep && r.repair.applied.length === 0 && r.repair.rejected >= 1 && r.repair.rounds === 1, json(r.repair));
 
@@ -111,11 +112,16 @@ expect("run3: repair { rounds: 4 } reaches qa.ok with every goal met, by a walkT
 expect("run3: under the 20 s cap (and 10 s here); compiles = 1 + applied + rejected", r.ms < 10000 && r.repair.compiles === 1 + r.repair.applied.length + r.repair.rejected, `${r.ms} ms ${json(r.repair)}`);
 expect("run3: twice the same answer", json(cupRepair(RUN3_SPEC).spec) === json(run3.spec) && json(cupRepair(RUN3_SPEC).repair) === json(run3.repair));
 expect("run3: rounds 1, as the agent sent it, is enough", cupRepair(RUN3_SPEC, 1).result.qa.ok);
-const popped = ids["spec-2f5debe72b57"], pop = cupCompile(popped).qa;
-expect("run3, after the agent's firstStep edit: only POP LeftForeArm 5.04, between keys[0] and keys[2], no patch", pop.groups.length === 1 && pop.groups[0].kind === "POP"
+// The 5.04 cm/f^2 forearm acceleration is smooth (C13): measured, not an error, unless the
+// spec opts into accLimb; then it is an ACC group the key-pair tune clears.
+const popped = ids["spec-2f5debe72b57"], smooth = cupCompile(popped);
+expect("run3, after the agent's firstStep edit: qa.ok, the forearm's 5.04 cm/f^2 (29 m/s^2) is an observation", smooth.qa.ok
+	&& Math.abs(smooth.observations.peaks.LeftForeArm.accel[0] - 0.0504 * 576) < 0.5, json(smooth.observations.peaks.LeftForeArm));
+const optedAcc = { ...popped, checks: { ...popped.checks, limits: { ...popped.checks?.limits, accLimb: 0.05 } } }, pop = cupCompile(optedAcc).qa;
+expect("run3 + checks.limits.accLimb: only ACC LeftForeArm 5.04, between keys[0] and keys[2], no patch", pop.groups.length === 1 && pop.groups[0].kind === "ACC"
 	&& /between keys\[0\] f86 and keys\[2\] f110/.test(pop.groups[0].cause) && !pop.groups[0].patch, json(pop.groups));
-r = cupRepair(popped);
-expect("POP near the limit: repair moves a key of the pair one frame apart and reaches qa.ok", r.result.qa.ok && json(r.repair.applied[0]?.patch) === json([{ op: "replace", path: "/keys/0/f", value: 85 }]), json(r.repair));
+r = cupRepair(optedAcc);
+expect("ACC near the limit: repair moves a key of the pair one frame apart and reaches qa.ok", r.result.qa.ok && json(r.repair.applied[0]?.patch) === json([{ op: "replace", path: "/keys/0/f", value: 85 }]), json(r.repair));
 
 // 8. A change that makes the total worse, or fails a goal that held, is never kept.
 const fake = s => {

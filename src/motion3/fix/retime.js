@@ -1,27 +1,20 @@
-// Retime (spec.fix.retime): where a joint moves faster than QA's speed or acceleration limit,
-// the key intervals around it get longer, borrowing the frames from the neighbouring key
-// intervals of the same window (slower or held stretches get shorter). Interpolation between
-// keys scales with their spacing, so each interval is stretched by its own peak excess. The
-// frame count and every key outside the windows stay where they are; the time map is kept on
-// out.timeMap so frame-range checks follow.
-import { dist, sub, len } from "../compiler/math.js";
-import { QA_LIMITS, SPEED_JOINTS } from "../qa/checks.js";
+// Retime (spec.fix.retime): where QA reports the motion too fast, the key intervals around it
+// get longer, borrowing the frames from the neighbouring key intervals of the same window
+// (slower or held stretches get shorter). Too fast means a one-frame pop, or a speed or
+// acceleration limit the spec named in checks.limits (qa/style.js speedExcess); a fast but smooth
+// motion is style and keeps its speed. Interpolation between keys scales with their spacing, so
+// each interval is stretched by its own peak excess. The frame count and every key outside the
+// windows stay where they are; the time map is kept on out.timeMap so frame-range checks follow.
+import { QA_LIMITS } from "../qa/checks.js";
+import { speedExcess } from "../qa/style.js";
 
 const HEADROOM = 1.1, MIN_RATE = 0.35, PASSES = 3;
 
 /** e[i] = how many times too fast frame i is (speed ratio, or sqrt of the acceleration ratio). */
-function excess(out) {
-	const I = out.ctx.sk.index, F = out.frames, e = new Float64Array(F.length);
-	for (const j of SPEED_JOINTS) {
-		const core = j === "Hips" || j === "Head", vl = core ? QA_LIMITS.speedCore : QA_LIMITS.speedLimb, al = core ? QA_LIMITS.accCore : QA_LIMITS.accLimb;
-		const X = F.map(fr => fr.s.P[I[j]]);
-		for (let i = 1; i < F.length; i++) {
-			e[i] = Math.max(e[i], dist(X[i], X[i - 1]) / vl);
-			if (i > 1) e[i] = Math.max(e[i], Math.sqrt(len(sub(sub(X[i], X[i - 1]), sub(X[i - 1], X[i - 2]))) / al));
-		}
-	}
-	return e;
-}
+const excess = out => {
+	const own = out.ctx.spec?.checks?.limits;
+	return speedExcess(out.ctx.sk, out, own, { ...QA_LIMITS, ...own });
+};
 
 /** Windows [a, b] (key frames) around each run of too-fast frames, merged where they overlap. */
 function windows(e, keyFrames, n) {
