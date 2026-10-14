@@ -83,6 +83,15 @@ export function trackShown(id, frame, take) {
 	return !track?.vis || track.vis[Math.max(0, Math.min(track.frameCount - 1, Math.round(frame) || 0))] === 1;
 }
 
+/**
+ * True while a compiled take holds the record in a hand (a grabbed cup): its track is in world
+ * space then, so the carry from its own parents (the table it stood on) is cut, like `attach`.
+ */
+function held(id, frame, take) {
+	const track = take?.objectTracks?.get?.(id);
+	return track?.hold?.[Math.max(0, Math.min(track.frameCount - 1, Math.round(frame) || 0))] === 1;
+}
+
 /** The record's own route sample (or compiled track) as a matrix, or null when it does not travel. */
 function ownTravelMatrix(object, frame, take, out) {
 	const tracked = trackMatrix(object, frame, take, out);
@@ -148,11 +157,13 @@ export function sceneObjectTravelMatrixAt(objects, id, frame, take = {}, out = n
 	for (let index = chain.length - 1; index >= 0; index -= 1) {
 		const ancestor = chain[index];
 		if (!ownTravelMatrix(ancestor, frame, take, scratchOwn)) continue;
+		if (held(ancestor.id, frame, take)) scratchMotion.identity();
 		scratchMotion.multiply(scratchOwn).multiply(authoredMatrix(ancestor, scratchAuthored).invert());
 		moved = true;
 	}
 	const own = ownTravelMatrix(object, frame, take, scratchOwn);
 	if (!moved && !own) return null;
+	if (own && held(object.id, frame, take)) return out.copy(own);
 	return out.multiplyMatrices(scratchMotion, own ?? authoredMatrix(object, scratchAuthored));
 }
 
@@ -196,7 +207,8 @@ const wrapDegrees = (value) => {
 
 /**
  * The records as they stand at `frame`: x/y/z and rotation replaced for every
- * record that travels on its own route or under a routed ancestor. Untouched
+ * record that travels on its own route or compiled track, or under an ancestor
+ * that does. Untouched
  * records are returned as-is, and so is the list when nothing moves.
  */
 export function sceneObjectsAt(objects, frame, take = {}) {
@@ -226,7 +238,9 @@ export function sceneObjectsAt(objects, frame, take = {}) {
 	};
 	return objects.map((object) => { const record = placedAt(object); return trackShown(record.id, frame, take) ? record : { ...record, hidden: true }; });
 	function placedAt(object) {
-		if (object.attach || (!ancestorsOf(lookup, object).some((ancestor) => ancestor.path) && !ridden(lookup, object))) {
+		// A compiled track (a hinged door, a carried cup) on the record or above it places it too.
+		const tracked = (record) => take?.objectTracks?.has?.(record.id);
+		if (object.attach || (!tracked(object) && !ancestorsOf(lookup, object).some((ancestor) => ancestor.path || tracked(ancestor)) && !ridden(lookup, object))) {
 			// Nothing above it travels (and nothing below carries it): the route
 			// sample alone, exactly as before the hierarchy carry — for a carried
 			// prop, in the frame its numbers already live in.

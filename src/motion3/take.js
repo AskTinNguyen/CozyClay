@@ -3,10 +3,11 @@
 // them straight onto the rig; the hips also carry a position. Everything is expressed in the
 // character's placement frame (its base position and yaw), in metres, so moving or turning
 // the character carries the take with it. Scene objects the motion animates ride along in
-// world space.
+// world space: one track per spec.objects key (a group: its root only).
 import { toLocal } from "./compiler/skeleton.js";
 import { sub, apply, ry, quatFromMat, mul } from "./compiler/math.js";
-import { isCarried, carriedPose } from "./carried.js";
+import { isCarried } from "./carried.js";
+import { rootPoseAt, spanOf } from "./object-pose.js";
 
 const TAKE_SCHEMA = "cozyclay.take.v3";
 
@@ -22,17 +23,22 @@ export function bakeTake(sk, out, placement = { position: [0, 0, 0], yaw: 0 }, m
 		quats.forEach((q, b) => rot.set(q, (f * B + b) * 4));
 		hips.set(h, f * 3);
 	}
-	const objects = {};
+	// one track per spec.objects key: a body, or a group root its parts ride (object-pose.js);
+	// `hold` marks the frames a carried record is in hand (world space: object-travel.js cuts the
+	// carry of its own parents there)
+	const objects = {}, f0 = out.f0 ?? 0;
 	for (const [id, spec] of Object.entries(out.ctx.spec.objects ?? {})) {
 		const pos = new Float32Array(F * 3), quat = new Float32Array(F * 4), carried = isCarried(spec);
-		const vis = carried && spec.visible ? new Uint8Array(F) : null;
+		const vis = carried && spec.visible ? new Uint8Array(F) : null, hold = carried ? new Uint8Array(F) : null;
+		const [grab, release] = carried ? spanOf(out, spec) : [0, 0];
 		for (let f = 0; f < F; f++) {
-			const o = carried ? carriedPose(sk, out.ctx.spec, out.frames[f].s, spec) : out.objectsAt(f)[id];
+			const o = rootPoseAt(out, id, f + f0);
 			if (!o) continue;
 			pos.set(o.pos, f * 3); quat.set(quatFromMat(o.R), f * 4);
-			if (vis) vis[f] = (out.baked?.[spec.visible]?.[f + (out.f0 ?? 0)] ?? 0) > 0.5 ? 1 : 0;
+			if (vis) vis[f] = (out.baked?.[spec.visible]?.[f + f0] ?? 0) > 0.5 ? 1 : 0;
+			if (hold) hold[f] = f + f0 >= grab && f + f0 <= release ? 1 : 0;
 		}
-		objects[id] = vis ? { pos, quat, vis } : { pos, quat };
+		objects[id] = { pos, quat, ...(vis ? { vis } : {}), ...(hold ? { hold } : {}) };
 	}
 	return { schema: TAKE_SCHEMA, fps: out.fps, frameCount: F, rig: sk.model, bones: sk.names.slice(), rot, hips, objects, placement, ...meta };
 }

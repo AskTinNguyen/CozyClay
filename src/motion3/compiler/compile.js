@@ -7,10 +7,13 @@
 //   fits:       [{ side, anchor, effector: { prop, point } | { joints: [...] }, offset? }]
 //               moves the wrist so the effector lands on the anchor whenever that weight is on
 //   objects:    { id: { pivot: [x,y,z], axis: [x,y,z], channel: "door" } }  hinge angle in degrees
+//               { id: { prop, grab?, release?, at?, along?, visible? } }   carried (../object-pose.js)
+//               id is a body or a group (Empty); a group moves every body under it
 //   generators: [{ type: "walk", f0, ... }]  (walk.js)
 //   fix:        { reach, slide, penetration, retime }  deterministic auto-fixes (../fix/)
 // ctx = { sk, scene: { objects: { id: { pos, R, half, ancestors } } } }; out.ctx.scene keeps the scene (object-pose.js)
-import { add, sub, scale, norm, len, dot, apply, mul, axisRot, I3 } from "./math.js";
+import { add, sub, scale, norm, len, dot, apply, axisRot } from "./math.js";
+import { isCarried, hingePose } from "../carried.js";
 import { pose } from "./pose.js";
 import { bakeChannels, channelsAt } from "./channels.js";
 import { resolveAnchor, measureProps } from "./anchors.js";
@@ -19,21 +22,32 @@ import { fixOptions, applyFixes } from "../fix/index.js";
 
 const smooth = x => x * x * (3 - 2 * x);
 
+/**
+ * Scene boxes by frame. A body moves with its own spec.objects entry or its nearest group's
+ * (hinge: turned; carry: left at its scene pose and marked `carried` with the carrying id, for
+ * object anchors only). `obstacles` drops the carried ones: QA measures them at their real pose
+ * (object-pose.js, qa/object-checks.js).
+ */
 function objectTracks(spec, scene, baked) {
 	const cache = new Map();
-	return f => {
+	const all = f => {
 		if (cache.has(f)) return cache.get(f);
 		const out = {};
 		for (const [id, o] of Object.entries(scene?.objects ?? {})) {
-			const hinge = spec.objects?.[id];
-			if (hinge?.prop !== undefined) continue; // carried by a hand: not an obstacle (carried.js)
-			if (!hinge) { out[id] = o; continue; }
-			const ang = baked[hinge.channel]?.[f] ?? 0, R = axisRot(hinge.axis ?? [0, 1, 0], ang);
-			out[id] = { ...o, pos: add(hinge.pivot, apply(R, sub(o.pos, hinge.pivot))), R: mul(R, o.R ?? I3()), angle: ang };
+			const mover = [id, ...(o.ancestors ?? [])].find(k => spec.objects?.[k]), entry = spec.objects?.[mover];
+			if (!entry) out[id] = o;
+			else if (isCarried(entry)) out[id] = { ...o, carried: mover };
+			else out[id] = { ...o, ...hingePose(entry, o, baked, f) };
 		}
 		cache.set(f, out);
 		return out;
 	};
+	const kept = new Map();
+	const obstacles = f => {
+		if (!kept.has(f)) kept.set(f, Object.fromEntries(Object.entries(all(f)).filter(([, box]) => !box.carried)));
+		return kept.get(f);
+	};
+	return { all, obstacles };
 }
 
 function effectorPoint(sk, s, diag, eff) {
@@ -118,8 +132,9 @@ export function compileMotion(spec, { sk, scene }, opts = {}) {
 		rebake(keys) {
 			out.keys = keys;
 			out.baked = bakeChannels(keys, frameCount);
-			ctx.objectsAt = objectTracks(spec, scene, out.baked);
-			out.objectsAt = a ? f => ctx.objectsAt(f + a) : ctx.objectsAt;
+			const tracks = objectTracks(spec, scene, out.baked);
+			ctx.objectsAt = tracks.all;
+			out.objectsAt = a ? f => tracks.obstacles(f + a) : tracks.obstacles;
 		},
 		solve(frames) { for (const f of frames) if (f >= a && f <= b) out.frames[f - a] = solveFrame(ctx, channelsAt(out.baked, f), f); },
 		all: () => Array.from({ length: b - a + 1 }, (_, i) => a + i),
