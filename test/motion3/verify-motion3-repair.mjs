@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 // C6 (lane D1): repairSpec tries the QA patches round by round and keeps the ones that lower the
 // summed severity; motion.compile { repair } installs the improved spec and reports what it did.
+// A group just past its limit with no patch gets a small local search (repair-tune.js): the
+// live run3 cup take clears its walkTo thigh hits and its key-pair pop without the agent.
 import { EXITCAR_SPEC, SCENE_OBJECTS } from "./fixtures/exitcar-scene.mjs";
 import { compileSpec } from "../../src/motion3/pipeline.js";
 import { motionScene } from "../../src/motion3/scene.js";
@@ -9,6 +11,10 @@ import { I3 } from "../../src/motion3/compiler/math.js";
 import { repairSpec } from "../../src/motion3/repair.js";
 import { specIdOf } from "../../src/motion3/spec-store.js";
 import { createStudioAppActions } from "../../src/commands/index.js";
+import { applyPatch } from "../../src/motion3/json-patch.js";
+import { tuneCandidates } from "../../src/motion3/repair-tune.js";
+import { SCENE_OBJECTS as CUP_OBJECTS } from "./fixtures/cup-scene.mjs";
+import { RUN3_SPEC, RUN3_MANUAL } from "./fixtures/cup-run3-spec.mjs";
 
 let failures = 0;
 function expect(name, condition, detail = "") {
@@ -76,6 +82,50 @@ const take = takes.get("char-1");
 console.log(`  command: ${plain.qa.total} issues -> ${out.qa.total}; repair ${json(out.repair)}`);
 expect("motion.compile repair: fewer issues, the report is in the output", out.repair?.applied?.length >= 1 && out.qa.total < plain.qa.total, json(out.repair));
 expect("install: the take keeps the repaired spec and specId names it", take && json(take.spec.use[0].args.at) !== json([0, 0]) && out.specId === specIdOf(take.spec), `${out.specId} ${json(take?.spec?.use)}`);
+
+// 7. Live run3 turn 1: the spec before the agent's hand sweep of walkTo args (fixture).
+const ybot = skeletonFor("y-bot-tpose"), cup = motionScene(CUP_OBJECTS);
+const cupCompile = s => compileSpec(s, { sk: ybot, scene: cup });
+const cupRepair = (spec, rounds = 4) => {
+	const t0 = performance.now(), r = repairSpec(spec, { rounds }, cupCompile);
+	r.ms = Math.round(performance.now() - t0);
+	console.log(`  ${r.ms} ms, ${json({ ...r.repair, applied: r.repair.applied.map(a => `${a.kind} ${a.subject} ${json(a.patch)} ${a.severity}`) })}`);
+	return r;
+};
+const ids = { "spec-440c4b69334b": RUN3_SPEC };
+for (const m of RUN3_MANUAL) ids[m.specId] = applyPatch(ids[m.base], m.patch);
+expect("run3 fixture: the session's specIds", Object.entries(ids).every(([id, s]) => specIdOf(s) === id), json(Object.entries(ids).map(([id, s]) => [id, specIdOf(s)])));
+const stuck = cupCompile(RUN3_SPEC).qa;
+expect("run3 fixture: goals met, only thigh_r/thigh_l x cube just past the limit, caused by use[1] walkTo, no patch",
+	stuck.goals.every(g => g.ok) && json(stuck.groups.map(g => g.subject).sort()) === json(["thigh_l x cube", "thigh_r x cube"])
+	&& stuck.groups.every(g => g.excess < 0.002 && /use\[1\] walkTo/.test(g.cause) && !g.patch), json(stuck.groups));
+const thigh = stuck.groups[0];
+expect("tune: the walkTo args one step either way first, as add or replace on use[1].args",
+	json(tuneCandidates(thigh, RUN3_SPEC).slice(0, 8).map(p => `${p[0].op} ${p[0].path} ${p[0].value}`)) === json(["add /use/1/args/lift 0.07", "add /use/1/args/lift 0.09",
+		"add /use/1/args/halfWidth 0.09", "add /use/1/args/halfWidth 0.11", "replace /use/1/args/firstStep 0.39", "replace /use/1/args/firstStep 0.41", "replace /use/1/args/step 0.39", "replace /use/1/args/step 0.41"]),
+	json(tuneCandidates(thigh, RUN3_SPEC)));
+expect("tune: nothing for a group far past its limit or one that has a patch", !tuneCandidates({ ...thigh, worst: 0.03 }, RUN3_SPEC).length && !tuneCandidates({ ...thigh, patch: [] }, RUN3_SPEC).length);
+r = cupRepair(RUN3_SPEC);
+const run3 = r;
+expect("run3: repair { rounds: 4 } reaches qa.ok with every goal met, by a walkTo arg", r.result.qa.ok && r.result.qa.goals.every(g => g.ok) && r.repair.applied.every(a => a.patch[0].path.startsWith("/use/1/args/")), json(r.result.qa.groups));
+expect("run3: under the 20 s cap (and 10 s here); compiles = 1 + applied + rejected", r.ms < 10000 && r.repair.compiles === 1 + r.repair.applied.length + r.repair.rejected, `${r.ms} ms ${json(r.repair)}`);
+expect("run3: twice the same answer", json(cupRepair(RUN3_SPEC).spec) === json(run3.spec) && json(cupRepair(RUN3_SPEC).repair) === json(run3.repair));
+expect("run3: rounds 1, as the agent sent it, is enough", cupRepair(RUN3_SPEC, 1).result.qa.ok);
+const popped = ids["spec-2f5debe72b57"], pop = cupCompile(popped).qa;
+expect("run3, after the agent's firstStep edit: only POP LeftForeArm 5.04, between keys[0] and keys[2], no patch", pop.groups.length === 1 && pop.groups[0].kind === "POP"
+	&& /between keys\[0\] f86 and keys\[2\] f110/.test(pop.groups[0].cause) && !pop.groups[0].patch, json(pop.groups));
+r = cupRepair(popped);
+expect("POP near the limit: repair moves a key of the pair one frame apart and reaches qa.ok", r.result.qa.ok && json(r.repair.applied[0]?.patch) === json([{ op: "replace", path: "/keys/0/f", value: 85 }]), json(r.repair));
+
+// 8. A change that makes the total worse, or fails a goal that held, is never kept.
+const fake = s => {
+	const g = (kind, worst, patch) => ({ kind, subject: "a x b", count: 1, worst, limit: 0.005, first: 0, last: 0, worstFrame: 0, severity: Math.round(worst * 1e4) / 10, patch });
+	if (s.x === 0) return { qa: { goals: [{ ok: true }], groups: [g("COLLIDE", 0.006, [{ op: "replace", path: "/x", value: 1 }]), { ...g("SLIDE", 0.006, [{ op: "replace", path: "/x", value: 2 }]), subject: "c" }] } };
+	if (s.x === 1) return { qa: { goals: [{ ok: true }], groups: [g("COLLIDE", 0.009), { ...g("SLIDE", 0.006), subject: "c" }] } };
+	return { qa: { goals: [{ ok: false }], groups: [] } };
+};
+r = repairSpec({ x: 0 }, { rounds: 4 }, fake);
+expect("guard: a worse total (12 -> 15) and a broken goal (total 0) are both rejected", r.spec.x === 0 && r.repair.applied.length === 0 && r.repair.rejected === 2, json(r.repair));
 
 if (failures) { console.error(`${failures} motion3 repair check(s) failed`); process.exit(1); }
 console.log("motion3 repair: all checks passed");

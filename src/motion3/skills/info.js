@@ -1,7 +1,9 @@
 // What each skill takes and does, for motion.describe { topic: "skills" } and the expander (an
 // arg not listed here is refused; a lenient reload ignores it): args (JSON Schema fragments),
 // required args, what must come before it (needs), how many frames it runs from f0 and what it
-// adds to the spec. A test keeps the names equal to SKILL_NAMES (skills/index.js).
+// adds to the spec. A test keeps the names equal to SKILL_NAMES (skills/index.js). `tune` names
+// the numeric args repair may nudge (arg -> one step) when a near-limit QA group names the skill
+// as its cause (repair-tune.js); the start value is the arg as sent, else its schema default.
 import { WALK_FIELDS } from "../schema/fields.js";
 import { WALK_TYPES, num, int, str, side, ref } from "../schema/types.js";
 import { FINGER_PRESETS } from "../compiler/vocab.js";
@@ -24,6 +26,7 @@ export const SKILL_INFO = {
 			heading: { oneOf: [num(), WALK_TYPES.heading], description: "degrees: h1, or [h0, h1]" } },
 		needs: "a standing pose keyed before f0 (standIdle or a skill that ends standing)", frames: "16 + steps * period + 18 (194 with steps 8, period 20)",
 		adds: ["keys: a walk (the walk generator), feet together at the end"], example: { f0: 10, args: { to: [0.5, 1.5] } },
+		tune: { lift: 0.01, halfWidth: 0.01, firstStep: 0.01, step: 0.01 },
 	},
 	reachGrip: {
 		args: { anchor: str("the anchor to grip (not ending in _l/_r)"), side: side("the hand"), reach: int("frames to reach", { default: 20 }), hold: int("frames held", { default: 22 }),
@@ -33,6 +36,7 @@ export const SKILL_INFO = {
 		adds: ["props.<anchor>Grip (fingers point)", "fits: fingers onto the anchor", "checks.contacts \"fingers on <anchor>\"", "checks.allow hand on the anchor's object",
 			"keys: w_<anchor>_<side>, fingers_<side>, armw_<side>"],
 		example: { f0: 10, args: { anchor: "bar", side: "r", define: { kind: "world", p: [-0.2, 1.2, 0.33] } } },
+		tune: { reach: 2, release: 2 },
 	},
 	sitInSeat: {
 		args: { ...carArgs(["car", "seat", "seatBack", "wheel"]), offset: { ...ref("vec3", "hips from the seat top, seat frame"), default: [0, 0.17, 0.02] }, floor: num("floor y under the feet, m") },
