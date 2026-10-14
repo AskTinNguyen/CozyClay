@@ -8,6 +8,7 @@ import { createStudioAppActions } from "../../src/commands/index.js";
 import { SCENE_OBJECTS, CHARACTER, CUP } from "./fixtures/cup-scene.mjs";
 import { DESCRIBE_TOPICS } from "../../src/motion3/schema/fields.js";
 import { MOTION_OUTPUT_BUDGET } from "../../src/motion3/report.js";
+import { DESCRIBE_BUDGET } from "../../src/motion3/describe.js";
 import { groupKey } from "../../src/motion3/qa/severity.js";
 
 let failures = 0;
@@ -79,7 +80,7 @@ expect("motion.qa answers the goal too", qa.qa.goals?.[0]?.ok === true, JSON.str
 
 // ---- describe, strict validation ----------------------------------------------------------
 const sizes = DESCRIBE_TOPICS.map(topic => [topic, JSON.stringify(run("motion.describe", { topic })).length]);
-expect("motion.describe answers every topic within the budget", sizes.every(([, n]) => n > 0 && n <= MOTION_OUTPUT_BUDGET), JSON.stringify(sizes));
+expect("motion.describe answers every topic within the budget", sizes.every(([t, n]) => n > 0 && n <= (t === "essentials" ? DESCRIBE_BUDGET : MOTION_OUTPUT_BUDGET)), JSON.stringify(sizes));
 const probe = refusal(() => registry.run("motion.compile", { characterId: CHARACTER.id, spec: cupSpec({ objects: { [CUP.group]: { prop: "grip", grab: GRAB, zzz: 1 } } }), install: false }));
 expect("a bogus field is refused with the allowed fields", /zzz/.test(probe) && /grab/.test(probe), probe);
 

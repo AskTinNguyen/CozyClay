@@ -3,8 +3,12 @@
 // under the receipt budget with an example that passes validation; unknown fields are refused at
 // every level with a suggestion and the field list (and ignored on a lenient reload); the skill
 // info matches the skills; frames: "auto" resolves to the last frame any part needs, plus 1.
-import { describe } from "../../src/motion3/describe.js";
-import { DESCRIBE_TOPICS, PROBE_FIELDS } from "../../src/motion3/schema/fields.js";
+// Lane G4: topic essentials answers every field, type and skill in one receipt.
+import { describe, DESCRIBE_BUDGET } from "../../src/motion3/describe.js";
+import { DESCRIBE_TOPICS, PROBE_FIELDS, SPEC_FIELDS, KEY_FIELDS, USE_FIELDS, ANCHOR_FIELDS, PROP_FIELDS, FIT_FIELDS, OBJECT_FIELDS, WALK_FIELDS, CHECK_FIELDS,
+	CHECK_ENTRY_FIELDS, GOAL_FIELDS, REF_KINDS } from "../../src/motion3/schema/fields.js";
+import { VEC_CHANNELS, NUM_CHANNELS, MAP_CHANNELS } from "../../src/motion3/compiler/vocab.js";
+import { fixture } from "../bus/fixture.mjs";
 import { SKILL_NAMES, expandUse } from "../../src/motion3/skills/index.js";
 import { SKILL_INFO } from "../../src/motion3/skills/info.js";
 import { resolveFrames } from "../../src/motion3/skills/frames-auto.js";
@@ -40,8 +44,9 @@ const validate = (spec, ctx = { sk, scene: empty }) => {
 // 1. every topic: small, the contract shape, an example that validates
 for (const topic of DESCRIBE_TOPICS) {
 	const a = describe(topic);
-	expect(`describe ${topic}: ${bytes(a)} B <= ${MOTION_OUTPUT_BUDGET}`, bytes(a) <= MOTION_OUTPUT_BUDGET, bytes(a));
-	if (topic === "skills") continue;
+	const budget = topic === "essentials" ? DESCRIBE_BUDGET : MOTION_OUTPUT_BUDGET;
+	expect(`describe ${topic}: ${bytes(a)} B <= ${budget}`, bytes(a) <= budget, bytes(a));
+	if (topic === "skills" || topic === "essentials") continue;
 	expect(`describe ${topic}: { topic, schema (2020-12), example, notes }`, a.topic === topic && /2020-12/.test(a.schema.$schema) && a.example && a.notes.length > 0 && a.notes.every(n => typeof n === "string"));
 	const refs = JSON.stringify(a.schema).match(/"#\/\$defs\/[A-Za-z]+"/g) ?? [];
 	expect(`describe ${topic}: every $ref resolves`, refs.every(r => a.schema.$defs?.[r.slice(9, -1)]), refs.join());
@@ -75,6 +80,46 @@ for (const name of SKILL_NAMES) {
 	expect(`describe skills ${name}: the example expands and validates`, msg === "", msg);
 }
 expect("an unknown skill name is refused with a suggestion", /skill "walkto" is not a skill; did you mean "walkTo"\?/.test(refusal(() => describe("skills", "walkto"))));
+
+// 2b. essentials: one call names every field, type, channel, skill and skill arg; it fits one receipt
+const ess = describe("essentials"), essText = JSON.stringify(ess);
+expect("essentials answers { topic, types, skills, notes }", JSON.stringify(Object.keys(ess)) === '["topic","types","skills","notes"]' && ess.notes.every(n => typeof n === "string"));
+expect("essentials has a type line for every topic but skills, and for every shared shape it names",
+	DESCRIBE_TOPICS.filter(t => t !== "skills" && t !== "essentials").every(t => typeof ess.types[t] === "string")
+	&& ["vec3", "frameSpan", "ref", "checkRef", "part", "when", "key", "use", "walk"].every(n => typeof ess.types[n] === "string"), Object.keys(ess.types).join());
+const tables = { SPEC_FIELDS, KEY_FIELDS, USE_FIELDS, ANCHOR_FIELDS: Object.values(ANCHOR_FIELDS).flat(), PROP_FIELDS, FIT_FIELDS, OBJECT_FIELDS: Object.values(OBJECT_FIELDS).flat(),
+	WALK_FIELDS, CHECK_FIELDS, CHECK_ENTRY_FIELDS: Object.values(CHECK_ENTRY_FIELDS).flat(), GOAL_FIELDS, PROBE_FIELDS };
+const missing = Object.entries(tables).flatMap(([table, fields]) => fields.filter(f => !new RegExp(`[{,] ${f}\\??: `).test(essText)).map(f => `${table}.${f}`));
+expect("essentials names every field of every field table with its type", missing.length === 0, missing.join());
+const channels = [...VEC_CHANNELS, ...NUM_CHANNELS, ...MAP_CHANNELS].filter(ch => !essText.includes(` ${ch}?:`) && !essText.includes(` ${ch.replace(/_[lr]$/, "_l|r")}?:`));
+expect("essentials names every channel (a left/right pair as x_l|r)", channels.length === 0, channels.join());
+expect("essentials names every ref kind", REF_KINDS.every(k => ess.types.refs.includes(`${k}:`)), ess.types.refs);
+expect("essentials lists exactly SKILL_NAMES, each with needs, frames, adds and every arg typed", JSON.stringify(ess.skills.map(s => s.name)) === JSON.stringify(SKILL_NAMES)
+	&& ess.skills.every(s => s.needs === SKILL_INFO[s.name].needs && s.frames === SKILL_INFO[s.name].frames && s.adds === SKILL_INFO[s.name].adds
+		&& Object.keys(SKILL_INFO[s.name].args).every(a => new RegExp(`[{,] ${a}\\??: `).test(s.args))));
+const rg = ess.skills.find(s => s.name === "reachGrip").args;
+expect("essentials: reachGrip args are typed, required ones without ?, defaults shown", /anchor: string, side: 'l'\|'r', reach\?: int=20/.test(rg) && /fingers\?: .*='grip'/.test(rg), rg);
+expect("essentials: a goal is a list entry with one of near|above|moved", /^\(\{ name: string, near\?: \[ref, ref\].*\(one of near\|above\|moved\)\)\[\]$/.test(ess.types.goals), ess.types.goals);
+expect("essentials: objects maps an id to a hinge or a carry", /hinge \{ pivot: vec3.*\| carry \{ prop: string/.test(ess.types.objects), ess.types.objects);
+expect("essentials: the notes say how to read a whole topic or one skill", /motion\.describe \{ topic \}/.test(ess.notes.join()) && /'skills', name/.test(ess.notes.join()));
+// What the three live sessions read in 2-3 calls each (topics, then skills by name): the sum cannot fit
+// one 8 KiB receipt; essentials covers each field of it in one, and the full topics stay one call each.
+const READ = ["spec", "skills", "goals", "objects", "anchors", "props", "channels", "refs", "checks"], SKILLS_READ = ["reachGrip", "walkTo"];
+const readBytes = READ.reduce((n, t) => n + bytes(describe(t)), 0) + SKILLS_READ.reduce((n, k) => n + bytes(describe("skills", k)), 0);
+console.log(`  sizes: the sessions read ${readBytes} B in full (${READ.join(", ")}, skills ${SKILLS_READ.join(", ")}); essentials ${bytes(ess)} B (budget ${DESCRIBE_BUDGET})`);
+expect(`the full topics the sessions read (${readBytes} B) exceed one 8 KiB receipt, essentials (${bytes(ess)} B) fits it`, readBytes > 8192 && bytes(ess) <= DESCRIBE_BUDGET);
+// through the real command bus: the receipt validates (<= 8 KiB); with a live host (uuid ids, long revisions) it still fits
+const app = createStudioAppActions({ state: () => ({ characters: [], objects: [], frameCount: 100 }), storeDomain: () => null });
+const bus = fixture([app.get("motion.describe")]);
+const receipt = await bus.bus.run("motion.describe", { topic: "essentials" }, bus.request("agent"));
+const uuid = "00000000-0000-4000-8000-000000000000", live = { ...receipt, host: { workspaceId: uuid, documentEpoch: uuid, sceneId: "scene-mv87b44h-1", sceneEpoch: uuid }, revision: { before: 999999, after: 999999 } };
+const { output: _out, ...head } = live;
+expect(`motion.describe essentials receipt: ${bytes(receipt)} B (live host ${bytes(live)} B, head ${bytes(head)} B) <= 8192`, receipt.ok && receipt.status === "completed"
+	&& JSON.stringify(receipt.output) === essText && bytes(live) <= 8192 && bytes(head) <= 8192 - DESCRIBE_BUDGET, bytes(live));
+for (const [topic, name] of [["spec"], ["skills"], ["skills", "reachGrip"]]) {
+	const r = await bus.bus.run("motion.describe", { topic, ...(name ? { name } : {}) }, bus.request("agent"));
+	expect(`motion.describe ${topic}${name ? ` ${name}` : ""} still answers through the bus as before`, r.ok && JSON.stringify(r.output) === JSON.stringify(describe(topic, name)));
+}
 
 // 3. a zzz field at every level is refused (strict), and ignored on a lenient reload
 const grip = { hand: "r", origin: ["RightHandIndex2", "RightHandMiddle2"], points: { tip: [0, 0, 0] } }, spot = { kind: "world", p: [-0.2, 1.1, 0.35] };

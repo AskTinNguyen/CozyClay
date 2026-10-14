@@ -40,6 +40,8 @@ export const EXAMPLES = {
 };
 
 export const NOTES = {
+	essentials: ["types: ? optional, =v default, lo..hi range, A | B one of, [key]: T a map, x_l|r a left/right pair; names such as vec3 or key are spelled under types.",
+		"motion.describe { topic } adds each field's meaning, a valid example and notes; { topic: 'skills', name } one skill's arg meanings and a use example."],
 	spec: [`World metres, +Y up; ${CONVENTIONS.yaw}; the character's left is +X at yaw 0. Angles in degrees.`,
 		"frames: an integer, or \"auto\" (the last skill end, generator end or key f, plus 1); the stored spec keeps the number.",
 		"Any number may be { range: [lo, hi] } (int: true for frames): the compiler searches it, QA 0 first, at most search.budget compiles.",

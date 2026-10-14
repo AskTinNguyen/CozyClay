@@ -19,6 +19,7 @@ import { refPoint, refDistance, checkRef } from "../../src/motion3/refs.js";
 import { resolveBone } from "../../src/motion3/bones.js";
 import { applyPatch } from "../../src/motion3/json-patch.js";
 import { fitOutput, reportPage, MOTION_OUTPUT_BUDGET } from "../../src/motion3/report.js";
+import { DESCRIBE_BUDGET } from "../../src/motion3/describe.js";
 import { rankGroups, groupKey, severityOf, weightOf, excessOf } from "../../src/motion3/qa/severity.js";
 import { nameChecks } from "../../src/motion3/qa/check-names.js";
 import { objectChecks } from "../../src/motion3/qa/object-checks.js";
@@ -124,8 +125,9 @@ expect("reportPage answers { specId, part, from, items, next }", JSON.stringify(
 
 // 4. motion.describe answers every topic, small
 const answers = DESCRIBE_TOPICS.map(topic => run(cupRegistry, "motion.describe", { topic }));
-expect("motion.describe answers every topic with { topic, schema, example, notes }", answers.every((a, i) => a.topic === DESCRIBE_TOPICS[i] && bytes(a) <= MOTION_OUTPUT_BUDGET
-	&& (a.topic === "skills" ? Array.isArray(a.skills) && a.skills.length > 0 : a.schema && a.example && Array.isArray(a.notes))));
+expect("motion.describe answers every topic with { topic, schema, example, notes } (essentials: { types, skills, notes } within DESCRIBE_BUDGET)", answers.every((a, i) => a.topic === DESCRIBE_TOPICS[i]
+	&& bytes(a) <= (a.topic === "essentials" ? DESCRIBE_BUDGET : MOTION_OUTPUT_BUDGET)
+	&& (a.topic === "skills" ? Array.isArray(a.skills) && a.skills.length > 0 : a.topic === "essentials" ? a.types && a.skills.length > 0 && Array.isArray(a.notes) : a.schema && a.example && Array.isArray(a.notes))));
 const one = run(cupRegistry, "motion.describe", { topic: "skills", name: "reachGrip" });
 expect("motion.describe { skills, name } answers one skill", one.name === "reachGrip" && one.example.skill === "reachGrip" && /did you mean "reachGrip"/.test(refusal(() => cupRegistry.run("motion.describe", { topic: "skills", name: "reachGirp" }))));
 

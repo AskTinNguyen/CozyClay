@@ -1,8 +1,9 @@
 // C9. motion.describe { topic, name? }: the spec's schema, a valid example and notes. The field
 // lists come from schema/fields.js, their types from schema/types.js, channels from
 // compiler/vocab.js, FIX_KEYS from fix/index.js, the skills from skills/index.js and
-// skills/info.js; examples and notes from schema/topics.js. Every answer stays under 6,000 bytes.
-//   topic != "skills"           { topic, schema (JSON Schema 2020-12 fragment), example, notes }
+// skills/info.js; examples and notes from schema/topics.js. Every answer fits DESCRIBE_BUDGET.
+//   topic "essentials"          { topic, types: { <topic or shared shape>: type line }, skills: [{ name, args (type line), needs, frames, adds }], notes }
+//   other topic                 { topic, schema (JSON Schema 2020-12 fragment), example, notes }
 //   topic "skills"              { topic, skills: [{ name, args, needs, frames, adds }] }
 //   topic "skills", name        { topic, name, schema (the skill's args), example (a use entry), notes }
 import { SPEC_FIELDS, KEY_FIELDS, USE_FIELDS, ANCHOR_FIELDS, PROP_FIELDS, FIT_FIELDS, OBJECT_FIELDS, WALK_FIELDS, CHECK_FIELDS, CHECK_ENTRY_FIELDS,
@@ -10,10 +11,15 @@ import { SPEC_FIELDS, KEY_FIELDS, USE_FIELDS, ANCHOR_FIELDS, PROP_FIELDS, FIT_FI
 import { DEFS, SPEC_TYPES, KEY_TYPES, USE_TYPES, WALK_TYPES, ANCHOR_TYPES, ANCHOR_REQUIRED, PROP_TYPES, FIT_TYPES, OBJECT_TYPES, CHECK_ENTRY_TYPES, CHECK_REQUIRED, CHECKS_TYPES,
 	GOAL_TYPES, PROBE_TYPES, FIX_TYPES, REF_DOCS } from "./schema/types.js";
 import { EXAMPLES, NOTES } from "./schema/topics.js";
+import { briefType } from "./schema/brief.js";
 import { VEC_CHANNELS, NUM_CHANNELS, MAP_CHANNELS, FINGER_PRESETS, CHANNEL_DOCS, channelFamily, rangeOf, didYouMean } from "./compiler/vocab.js";
 import { FIX_KEYS } from "./fix/index.js";
 import { SKILL_NAMES } from "./skills/index.js";
 import { SKILL_INFO } from "./skills/info.js";
+
+/** Bytes of JSON a describe answer may take: the 8 KiB receipt minus 768 B for a describe receipt's
+ * head (569 B in a live Studio receipt: ids, host, revision, summary; no readback, it changes nothing). */
+export const DESCRIBE_BUDGET = 8192 - 768;
 
 const bad = msg => { throw new Error(`MOTION_SPEC_INVALID: ${msg}`); };
 const typeOf = (types, f, table) => types[f] ?? bad(`describe: ${table}.${f} has no type in schema/types.js`);
@@ -84,9 +90,28 @@ function describeSkill(name) {
 		example: { skill: name, ...info.example }, notes: [`needs: ${info.needs}`, `frames from f0: ${info.frames}`, `adds: ${info.adds.join("; ")}`] };
 }
 
+const shapeLine = s => briefType(s) + (s.description ? ` (${s.description})` : "");
+
+/** Every topic's schema and every skill's args as one type line each, and the shared shapes they name. */
+function essentials() {
+	const types = {}, shared = {};
+	for (const topic of DESCRIBE_TOPICS.filter(t => SCHEMAS[t])) {
+		const { $defs = {}, ...schema } = rooted(SCHEMAS[topic]());
+		types[topic] = briefType(schema);
+		Object.assign(shared, $defs);
+	}
+	for (const [name, d] of Object.entries(shared)) types[name] = shapeLine(d);
+	const skills = SKILL_NAMES.map(n => {
+		const { args, required = [], needs, frames, adds } = SKILL_INFO[n] ?? bad(`describe: skill ${n} has no entry in skills/info.js`);
+		return { name: n, args: briefType({ type: "object", properties: args, required }), needs, frames, adds };
+	});
+	return { topic: "essentials", types, skills, notes: NOTES.essentials };
+}
+
 /** describe(topic, name?) -> the answer for one topic (see the table above). */
 export function describe(topic, name) {
 	if (!DESCRIBE_TOPICS.includes(topic)) bad(`topic "${topic}" is not a describe topic${didYouMean(String(topic), DESCRIBE_TOPICS)} (topics: ${DESCRIBE_TOPICS.join(", ")})`);
+	if (topic === "essentials") return essentials();
 	if (topic !== "skills") return { topic, schema: rooted(SCHEMAS[topic]()), example: EXAMPLES[topic], notes: NOTES[topic] };
 	if (name === undefined) return { topic, skills: SKILL_NAMES.map(n => ({ name: n, args: skillArgs(n), needs: SKILL_INFO[n].needs, frames: SKILL_INFO[n].frames, adds: SKILL_INFO[n].adds })) };
 	if (!SKILL_NAMES.includes(name)) bad(`skill "${name}" is not a skill${didYouMean(String(name), SKILL_NAMES)} (skills: ${SKILL_NAMES.join(", ")})`);

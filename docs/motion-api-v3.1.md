@@ -185,7 +185,8 @@ qa.groups[i] = { "kind": "COLLIDE", "subject": "thigh_r x cube", "count": 6, "fi
 
 - `motion.describe { topic, name? }` answers `{ topic, schema (JSON Schema 2020-12 fragment), example (passes validation), notes[] }`.
 - `topic: "skills"` answers `{ topic, skills: [{ name, args, needs, frames, adds }] }`. With `name` it answers that skill's full args schema and a `use` example.
-- Every answer is at most 6,000 bytes. It is a readOnly job.
+- `topic: "essentials"` answers `{ topic, types, skills, notes }` in one call: `types` has one type line per topic and per shared shape (vec3, key, ref, ...), built from the same schemas (`schema/brief.js`); `skills` lists each skill with typed args, needs, frames and adds. The full topics stay one call each for meanings, examples and notes.
+- Every answer is at most 6,000 bytes, except essentials: at most `DESCRIBE_BUDGET` (`describe.js`, 8,192 − 768 = 7,424 bytes; a describe receipt's head is about 570 B). It is a readOnly job.
 
 ## C10. readOnly
 
