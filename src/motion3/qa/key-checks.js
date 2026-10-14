@@ -5,12 +5,14 @@
 //   REACH  "<id>: 6.2 cm off its keys", value metres, limit checks.limits.reach (default 0.01)
 // The hint names the key and why the hand fell short (diag.hold_<side>, compiler/hold.js): the
 // arm out of reach, or a wrist turn past its limit.
+// Measured, not judged (C16, output.observations.held): every key as drawn, so the agent sees how
+// far each one is from what the hand can hold without a probe.
 import { keyedEntries, curveIn, keyedPose } from "../object-keys.js";
 import { rootPoseAt, partsOf } from "../object-pose.js";
 import { relative } from "../carried.js";
 import { groupsOf } from "../scene.js";
 import { WRIST_LIMITS } from "../compiler/hold.js";
-import { add, apply, dist } from "../compiler/math.js";
+import { add, apply, dist, norm, angle, matFromQuat } from "../compiler/math.js";
 
 const SUBJECT = /^(.+): [\d.]+ cm off its keys$/;
 const WRIST_WORDS = { twist: "twist about the forearm", flex: "flex", dev: "deviation (+ toward the thumb)" };
@@ -48,4 +50,25 @@ export function keyHint(X, g) {
 		...Object.entries(WRIST_LIMITS).filter(([n, [lo, hi]]) => h[n] < lo || h[n] > hi).map(([n, [lo, hi]]) => `the wrist ${WRIST_WORDS[n]} needs ${Math.round(h[n])}deg (limit ${lo}..${hi})`)];
 	return { cause: `objects.${id}.keys[${near}] f${o.keys[near].f}`,
 		hint: `${id} at f${f}: ${why.length ? why.join(", ") : "the hand cannot hold it there"}; key a pose nearer the hand (turned back toward the forearm), or bring the body to it (root, yaw, spine_yaw)` };
+}
+
+const r1 = v => Math.round(v * 10) / 10, r2 = v => Math.round(v * 100) / 100;
+/** observations.held units: what a row of a keyed object says. */
+export const HELD_UNITS = "held: per key, deg = the drawn +Y off the asked one (aim, or rot's +Y), cm = the drawn base off pos, got = the drawn +Y (when 1 deg off or more), rot = what an aim key used";
+
+/**
+ * Every key of every keyed carry as drawn: { <id>: [{ f, deg, cm, got?, rot? }] } in key order
+ * (frames as the spec writes them), or null when nothing is keyed.
+ */
+export function heldReadings(out) {
+	const held = keyedEntries(out.ctx.spec);
+	if (!held.length) return null;
+	return Object.fromEntries(held.map(([id, o]) => {
+		const curve = curveIn(out, id), keys = [...o.keys].sort((a, b) => a.f - b.f);
+		return [id, keys.map((k, i) => {
+			const got = rootPoseAt(out, id, Math.round(curve.t[i])), y = [got.R[0][1], got.R[1][1], got.R[2][1]];
+			const want = k.aim ? norm(k.aim) : apply(matFromQuat(curve.q[i]), [0, 1, 0]), deg = r1(angle(want, y));
+			return { f: k.f, deg, cm: r1(dist(k.pos, got.pos) * 100), ...(deg >= 1 ? { got: y.map(r2) } : {}), ...(k.aim ? { rot: curve.rots[i] } : {}) };
+		})];
+	}));
 }

@@ -64,10 +64,11 @@ const SCHEMAS = {
 	props: () => ({ type: "object", properties: {
 		props: { type: "object", description: "name -> prop", additionalProperties: objectOf(PROP_FIELDS, PROP_TYPES, "props", ["hand", "origin"]) },
 		fits: listOf(objectOf(FIT_FIELDS, FIT_TYPES, "fits", ["side", "anchor", "effector"])) } }),
-	objects: () => ({ type: "object", description: "object or group id -> hinge, carry or switch", additionalProperties: { oneOf: [
+	objects: () => ({ type: "object", description: "object or group id -> hinge, carry, switch or follow", additionalProperties: { oneOf: [
 		{ title: "hinge", ...objectOf(OBJECT_FIELDS.hinge, OBJECT_TYPES, "objects (hinge)", ["pivot", "channel"]) },
 		{ title: "carry", ...objectOf(OBJECT_FIELDS.carry, OBJECT_TYPES, "objects (carry)", ["prop"]) },
-		{ title: "switch", ...objectOf(OBJECT_FIELDS.switch, OBJECT_TYPES, "objects (switch)") }] } }),
+		{ title: "switch", ...objectOf(OBJECT_FIELDS.switch, OBJECT_TYPES, "objects (switch)") },
+		{ title: "follow", ...objectOf(OBJECT_FIELDS.follow, OBJECT_TYPES, "objects (follow)", ["follow"]) }] } }),
 	checks: () => ({ type: "object", properties: Object.fromEntries(CHECK_FIELDS.map(f => [f, CHECK_ENTRY_FIELDS[f]
 		? listOf(objectOf(CHECK_ENTRY_FIELDS[f], CHECK_ENTRY_TYPES, `checks.${f}`, CHECK_REQUIRED[f]))
 		: typeOf(CHECKS_TYPES, f, "checks")])), additionalProperties: false }),
@@ -76,7 +77,7 @@ const SCHEMAS = {
 	channels: () => ({ type: "object", description: "key.set: channel -> value",
 		properties: Object.fromEntries([...VEC_CHANNELS, ...NUM_CHANNELS, ...MAP_CHANNELS].map(ch => [ch, channelSchema(ch)])),
 		patternProperties: { "^w_.+_[lr]$": { type: "number", minimum: 0, maximum: 1, description: rangeOf("w_a_l")[3] }, "_vis$": { type: "number", description: "shown above 0.5" } },
-		additionalProperties: { type: "number", description: "spec.channels, a hinge's, a switch's or a check's when" } }),
+		additionalProperties: { type: "number", description: "spec.channels, an object's or a check's when" } }),
 	refs: () => ({ type: "string", oneOf: REF_KINDS.map(k => ({ pattern: `^${k}:`, description: typeOf(REF_DOCS, k, "refs") })) }),
 	fix: () => ({ oneOf: [{ const: false }, objectOf(FIX_KEYS, FIX_TYPES, "fix")] }),
 };

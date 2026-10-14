@@ -29,7 +29,8 @@ for (const kit of KIT_NAMES) {
 	expect(`${kit}: an Empty root first, every part parented to it, ids unique, y >= 0`, root.renderer === "empty" && root.id === k.rootId
 		&& k.records.slice(1).every(r => r.parent === k.rootId) && new Set(existing.map(r => r.id)).size === existing.length && k.records.every(r => r.y >= 0),
 	JSON.stringify(k.records.map(r => [r.id, r.renderer, r.parent, r.y])));
-	expect(`${kit}: bind carries the root and names a prop`, k.bind[k.rootId]?.prop && Array.isArray(k.bind[k.rootId].along), JSON.stringify(k.bind));
+	// the exhale kit rides no hand: its root follows the mouth (C16)
+	expect(`${kit}: bind carries the root and names a prop (exhale: follows the mouth)`, kit === "exhale" ? k.bind[k.rootId]?.follow === "landmark:mouth" : k.bind[k.rootId]?.prop && Array.isArray(k.bind[k.rootId].along), JSON.stringify(k.bind));
 }
 const cigBody = built.cigarette.records.find(r => r.id === built.cigarette.parts.body);
 expect("the cigarette is 7.8 mm thick, its root at the grip 2.6 cm from the filter end",
@@ -37,9 +38,10 @@ expect("the cigarette is 7.8 mm thick, its root at the grip 2.6 cm from the filt
 const batBody = built.bat.records.find(r => r.id === built.bat.parts.body);
 expect("the bat is 0.84 m long from the knob at its root, 67 mm across the barrel", Math.abs(objectSize(batBody).height - 0.84) < 1e-3 && Math.abs(objectSize(batBody).width - 0.067) < 1e-3
 	&& Math.abs(batBody.y - built.bat.records[0].y) < 1e-6, JSON.stringify(objectSize(batBody)));
-expect("an unknown kit is refused with the kit list", /kit "pipe" is not a kit \(kits: cigarette, lighter, bat, ball, sword, pistol\)/.test(buildKit("pipe").error ?? ""));
-expect("the catalogue lists every kit with its parts, prop and a one-line description",
-	KIT_CATALOGUE.length === KIT_NAMES.length && KIT_CATALOGUE.every(k => k.description.length > 20 && !k.description.includes("\n") && k.parts.includes("body") && k.prop));
+expect("an unknown kit is refused with the kit list", /kit "pipe" is not a kit \(kits: cigarette, lighter, exhale, bat, ball, sword, pistol\)/.test(buildKit("pipe").error ?? ""));
+expect("the catalogue lists every kit with its parts, prop (exhale: the point it follows) and a one-line description",
+	KIT_CATALOGUE.length === KIT_NAMES.length && KIT_CATALOGUE.every(k => k.description.length > 20 && !k.description.includes("\n")
+		&& (k.kit === "exhale" ? k.parts.includes("puff") && k.follow === "landmark:mouth" && !k.prop : k.parts.includes("body") && k.prop)), JSON.stringify(KIT_CATALOGUE.find(k => k.kit === "exhale")));
 
 // 2. object.createKit through the action registry: one write, the answer, a refusal
 let objects = [], writes = 0;
@@ -55,7 +57,7 @@ try { registry.run("object.createKit", { kit: "pipe" }); } catch (error) { refus
 expect("object.createKit refuses an unknown kit", refused?.code === "INVALID_ARGUMENT", String(refused));
 
 // 3. the smoke take with kits: the ember and the flame glow, the lights and the tip smoke are box-less
-//    records (motionScene lists them in others by renderer), the exhale is an effect at the mouth.
+//    records (motionScene lists them in others by renderer), the exhale is an effect that follows the mouth (C16).
 function smokingScene() {
 	const cig = buildKit("cigarette", [], { position: { x: 0.6, z: 0.5 } }), lit = buildKit("lighter", cig.records, { position: { x: 0.75, z: 0.5 } });
 	const records = [...cig.records, ...lit.records, { id: "puff", name: "Exhale", renderer: "effect", x: 0, y: 1.5, z: 0.1, rot: 0, footprint: { width: 0, depth: 0 }, height: 0 }];
@@ -94,7 +96,7 @@ for (const rig of ["y-bot-tpose", "x-bot-tpose"]) for (const [label, startOf, f0
 		&& JSON.stringify(o[lit.rootId]) === JSON.stringify({ prop: "lighter", grab: f0 + 35, release: f0 + 102, at: [0, 0, 0], along: [0, 1, 0], visible: "lit_vis" })
 		&& o[cig.parts.ember]?.level === "ember" && o[cig.parts.light]?.level === "ember" && o[cig.parts.smoke]?.visible === "ember_vis"
 		&& o[lit.parts.flame]?.visible === "flame_vis" && o[lit.parts.light]?.visible === "flame_vis"
-		&& o.puff?.visible === "exhale", JSON.stringify(o));
+		&& JSON.stringify(o.puff) === JSON.stringify({ follow: "landmark:mouth", aim: "face", visible: "exhale" }), JSON.stringify(o));
 	if (rig !== "y-bot-tpose" || f0 !== 1) continue;
 	const b = r.out.baked, at = f => f0 + f;
 	expect(`${label}: ember 0 before lighting, 2 on each drag, 0.6 between; exhale on while breathing out`,

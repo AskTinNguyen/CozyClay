@@ -12,8 +12,9 @@
 import { isCarried, carriedPose, compose, relative } from "./carried.js";
 import { groupsOf } from "./scene.js";
 import { restState } from "./compiler/skeleton.js";
-import { add, scale, sub, apply, T, matFromQuat } from "./compiler/math.js";
+import { add, scale, sub, apply, T, matFromQuat, quatFromMat } from "./compiler/math.js";
 import { qmul, qconj, qlog, qexp, qrot, qdot, qnorm } from "./compiler/quat.js";
+import { keyRots } from "./key-aim.js";
 
 /** Frames over which the hand blends into and out of the keyed span. */
 export const KEY_BLEND = 8;
@@ -23,22 +24,25 @@ const smooth = x => x * x * (3 - 2 * x);
 const spanIn = (out, o) => { const map = f => (out.timeMap ? Math.round(out.timeMap(f)) : f); return [map(o.grab ?? 0), o.release === undefined ? out.frameCount - 1 : map(o.release)]; };
 const invert = p => { const Rt = T(p.R); return { pos: scale(apply(Rt, p.pos), -1), R: Rt }; };
 
-/** The keys of entry o as a curve: times (after a retime), positions, quaternions on one hemisphere, tangents. */
-function curveOf(o, map) {
-	const keys = [...o.keys].sort((a, b) => a.f - b.f), t = keys.map(k => map(k.f)), p = keys.map(k => k.pos.slice()), q = [];
-	for (const k of keys) { const n = qnorm(k.rot); q.push(q.length && qdot(q[q.length - 1], n) < 0 ? n.map(v => -v) : n); }
+/** The keys of entry o as a curve: times (after a retime), positions, quaternions on one hemisphere (aim keys resolved: key-aim.js), tangents. */
+function curveOf(o, map, plain) {
+	const keys = [...o.keys].sort((a, b) => a.f - b.f), t = keys.map(k => map(k.f)), p = keys.map(k => k.pos.slice()), q = [], rots = keyRots(keys, i => plain(t[i]));
+	for (const r of rots) { const n = qnorm(r); q.push(q.length && qdot(q[q.length - 1], n) < 0 ? n.map(v => -v) : n); }
 	const last = keys.length - 1, rate = i => scale(qlog(qmul(qconj(q[i]), q[i + 1])), 1 / (t[i + 1] - t[i]));
 	const tangent = (i, of) => (i === 0 || i === last ? [0, 0, 0] : scale(add(scale(of(i), t[i] - t[i - 1]), scale(of(i - 1), t[i + 1] - t[i])), 1 / (t[i + 1] - t[i - 1])));
 	const m = p.map((_, i) => tangent(i, j => scale(sub(p[j + 1], p[j]), 1 / (t[j + 1] - t[j])))), w = q.map((_, i) => tangent(i, rate));
-	return { t, p, q, m, w };
+	return { t, p, q, m, w, rots };
 }
 
 const curves = new WeakMap();
-/** The key curve of spec.objects[id] in `out` (cached per compile result and time map). */
+/** The key curve of spec.objects[id] in `out` (cached per compile result, time map and baked channels: an aim key turns from the plain carry at its frame). */
 export function curveIn(out, id) {
 	if (!curves.has(out)) curves.set(out, new Map());
-	const cache = curves.get(out), map = out.timeMap;
-	if (!cache.has(id) || cache.get(id).map !== map) cache.set(id, { map, curve: curveOf(out.ctx.spec.objects[id], f => (map ? map(f) : f)) });
+	const cache = curves.get(out), map = out.timeMap, baked = out.baked, had = cache.get(id);
+	if (!had || had.map !== map || had.baked !== baked) {
+		const plain = t => quatFromMat(out.ctx.hold.plainAt(id, Math.round(t)).R);
+		cache.set(id, { map, baked, curve: curveOf(out.ctx.spec.objects[id], f => (map ? map(f) : f), plain) });
+	}
 	return cache.get(id).curve;
 }
 
@@ -74,7 +78,8 @@ export const keyedEntries = spec => Object.entries(spec.objects ?? {}).filter(([
  * The hooks a compile needs when some carry has keys (else null): lead(k, f) -> { w, palm,
  * measure } | null for pose.js hooks.hold, and attach(id) -> the object in the palm frame (the
  * plain carry's offset: at/along, or the grab-frame offset solved without the keys, so the keys
- * never feed back into it). solvePlain(f) solves frame f without the keys.
+ * never feed back into it), plainAt(id, f) -> the plain carry's pose at f (where an aim key
+ * turns from, key-aim.js). solvePlain(f) solves frame f without the keys.
  */
 export function holdHook(ctx, out, solvePlain) {
 	const { sk, spec, scene } = ctx, held = keyedEntries(spec);
@@ -91,6 +96,8 @@ export function holdHook(ctx, out, solvePlain) {
 		cache.set(id, a);
 		return a;
 	};
+	/** Where the plain carry (no keys) holds id at absolute frame f: palm o attach. */
+	const plainAt = (id, f) => compose(palmOf(spec.objects[id], solvePlain(f).s), attach(id));
 	const lead = (k, f) => {
 		for (const [id, o] of held) {
 			if (spec.props?.[o.prop]?.hand !== k) continue;
@@ -99,5 +106,5 @@ export function holdHook(ctx, out, solvePlain) {
 		}
 		return null;
 	};
-	return { lead, attach };
+	return { lead, attach, plainAt };
 }

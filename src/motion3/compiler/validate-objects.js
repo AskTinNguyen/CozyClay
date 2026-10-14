@@ -1,16 +1,32 @@
 // Validation of spec.objects (C3): a hinge { pivot, axis?, channel } or a carry { prop, grab?,
 // release?, at?, along?, visible?, level?, keys? }. Both take a body or a group (Empty) id; at/along
 // pin the palm offset (a group: its root; without them a group keeps its grab-frame offset); keys
-// (C14) pose a carried object while it is in hand. A switch { visible?, level? } (C15: no prop, no
-// hinge field) takes any record, a light or an effect too, and moves nothing. Fields:
-// schema/fields.js OBJECT_FIELDS, OBJECT_KEY_FIELDS. See validate.js.
+// (C14) pose a carried object while it is in hand (rot, or aim + roll: C16). A switch { visible?,
+// level? } (C15: no prop, no hinge field) takes any record, a light or an effect too, and moves
+// nothing; so does a follow { follow, offset?, aim?, visible?, level? } (C16), which rides a point
+// of the body. Fields: schema/fields.js OBJECT_FIELDS, OBJECT_KEY_FIELDS. See validate.js.
 import { isVec3, fmt, didYouMean } from "./vocab.js";
 import { objectOk } from "./validate-common.js";
 import { OBJECT_FIELDS, OBJECT_KEY_FIELDS } from "../schema/fields.js";
-import { isSwitch } from "../carried.js";
+import { isSwitch, isFollow, movesRecord } from "../carried.js";
+import { checkRef } from "../refs.js";
+import { partsOf } from "../object-pose.js";
 
-const KEY = "{ f, pos: [x, y, z], rot: [x, y, z, w] }";
+const KEY = "{ f, pos: [x, y, z], rot: [x, y, z, w] } or { f, pos, aim: [x, y, z], roll? }";
 const isQuat = q => Array.isArray(q) && q.length === 4 && q.every(Number.isFinite) && Math.abs(Math.hypot(...q) - 1) <= 0.01;
+const isDir = v => isVec3(v) && Math.hypot(...v) > 1e-9;
+
+/** A key's rotation: rot (a unit quaternion) or aim (a world direction for its +Y) with an optional roll (degrees about it), not both. */
+function keyTurnOk(err, kat, k) {
+	if (k.rot !== undefined && k.aim !== undefined) return err(`${kat} gives both rot and aim; give one: rot [x, y, z, w], or aim [x, y, z] (the world direction its +Y points) with roll`);
+	if (k.aim === undefined) {
+		if (k.roll !== undefined) err(`${kat}.roll turns the object about aim; give aim [x, y, z] with it, or leave roll out (rot fixes the roll)`);
+		if (!isQuat(k.rot)) err(`${kat}.rot must be a unit quaternion [x, y, z, w], got ${fmt(k.rot)}${k.rot === undefined ? "; or give aim [x, y, z], the world direction its +Y points" : ""}`);
+		return;
+	}
+	if (!isDir(k.aim)) err(`${kat}.aim must be a non-zero world direction [x, y, z] for the object's +Y (a bat: knob to barrel), got ${fmt(k.aim)}`);
+	if (k.roll !== undefined && !Number.isFinite(k.roll)) err(`${kat}.roll must be degrees about aim (a number), got ${fmt(k.roll)}`);
+}
 
 /** objects.<id>.keys (C14): whole frames inside grab..release, one per frame, a world position and a unit quaternion. */
 function validateKeys(err, unknown, at, o, frames) {
@@ -25,8 +41,28 @@ function validateKeys(err, unknown, at, o, frames) {
 		else if (seen.has(k.f)) err(`${kat}.f = ${k.f}: keys[${seen.get(k.f)}] is at that frame already; one key per frame`);
 		else seen.set(k.f, i);
 		if (!isVec3(k.pos)) err(`${kat}.pos must be [x, y, z], the world position of the object's base (a group: its root), got ${fmt(k.pos)}`);
-		if (!isQuat(k.rot)) err(`${kat}.rot must be a unit quaternion [x, y, z, w], got ${fmt(k.rot)}`);
+		keyTurnOk(err, kat, k);
 	});
+}
+
+/** An object: ref a follow entry may use: one no follow entry moves (else it would follow itself). */
+function stillRef(spec, err, scene, at, ref) {
+	const id = /^object:(.+?)(?:\.(?:center|top|base))?$/s.exec(ref)?.[1];
+	if (id === undefined) return;
+	const movers = partsOf(scene, id).flatMap(p => [p, ...(scene.objects[p].ancestors ?? [])].find(k => movesRecord(spec.objects?.[k])) ?? []);
+	const by = movers.find(k => isFollow(spec.objects[k]));
+	if (by) err(`${at} "${ref}": "${id}" moves with the follow entry objects.${by}; a follow entry rides a joint, landmark, prop or anchor point, or an object no follow entry moves`);
+}
+
+/** follow (C16): a point ref, offset along the record's own axes, aim "face" | "up" | [x, y, z] | a point ref. */
+function validateFollow(spec, err, ctx, at, o) {
+	if (checkRef(spec, err, ctx, `${at}.follow`, o.follow)) stillRef(spec, err, ctx.scene, `${at}.follow`, o.follow);
+	if (o.offset !== undefined && !isVec3(o.offset)) err(`${at}.offset must be [x, y, z], metres along the record's own axes after aim (+Y along aim), got ${fmt(o.offset)}`);
+	const aim = o.aim;
+	if (aim === undefined || aim === "face" || aim === "up") return;
+	if (Array.isArray(aim)) { if (!isDir(aim)) err(`${at}.aim must be a non-zero world direction [x, y, z], got ${fmt(aim)}`); return; }
+	if (typeof aim !== "string" || !/^[a-z]+:/.test(aim)) return err(`${at}.aim must be "face", "up", a world direction [x, y, z] or a point ref (toward it), where the record's +Y points; got ${fmt(aim)}`);
+	if (checkRef(spec, err, ctx, `${at}.aim`, aim)) stillRef(spec, err, ctx.scene, `${at}.aim`, aim);
 }
 
 function frameOk(err, at, v, frames) {
@@ -42,12 +78,17 @@ function channelsOk(err, at, o) {
 	if (o.level !== undefined && (typeof o.level !== "string" || !o.level)) err(`${at}.level must name a channel (the record's level 0..4: 0 dark, 1 as authored; it scales its light, glow and effect rate)`);
 }
 
-export function validateObjects(spec, err, { scene, frames = spec.frames, unknown = err }) {
+export function validateObjects(spec, err, { sk, scene, frames = spec.frames, unknown = err }) {
 	for (const [id, o] of Object.entries(spec.objects ?? {})) {
-		const at = `objects.${id}`, kind = o?.prop !== undefined ? "carry" : isSwitch(o) ? "switch" : "hinge", fields = OBJECT_FIELDS[kind];
-		// a switch takes any record (a light, an effect); the others a body or a group
-		if (kind !== "switch" || !scene?.others?.[id]) objectOk(err, scene, at, id, { groups: true });
+		const at = `objects.${id}`, kind = o?.prop !== undefined ? "carry" : isFollow(o) ? "follow" : isSwitch(o) ? "switch" : "hinge", fields = OBJECT_FIELDS[kind];
+		// a switch and a follow take any record (a light, an effect); the others a body or a group
+		if ((kind !== "switch" && kind !== "follow") || !scene?.others?.[id]) objectOk(err, scene, at, id, { groups: true });
 		for (const f of Object.keys(o ?? {})) if (!fields.includes(f) && !(kind === "hinge" && f === "keys")) unknown(`${at} (${kind}) has unknown field "${f}"${didYouMean(f, fields)}; fields: ${fields.join(", ")}`);
+		if (kind === "follow") {
+			validateFollow(spec, err, { sk, scene }, at, o);
+			channelsOk(err, at, o);
+			continue;
+		}
 		if (kind === "switch") {
 			if (o.visible === undefined && o.level === undefined) err(`${at} needs visible or level (a channel): a switch shows, hides or dims "${id}" without moving it; a carry needs prop, a hinge pivot and channel`);
 			channelsOk(err, at, o);

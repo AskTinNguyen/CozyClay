@@ -34,5 +34,16 @@ export function qexp(v) {
 /** Rotate vector v by unit q. */
 export const qrot = (q, v) => qmul(qmul(q, [v[0], v[1], v[2], 0]), qconj(q)).slice(0, 3);
 
+/** The shortest turn taking unit direction a onto unit direction b (half a turn about a normal of a when they are opposite). */
+export function arcQuat(a, b) {
+	const w = 1 + a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+	if (w > 1e-9) return qnorm([a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0], w]);
+	const n = Math.abs(a[0]) < 0.9 ? [0, a[2], -a[1]] : [-a[2], 0, a[0]], l = Math.hypot(...n);
+	return [n[0] / l, n[1] / l, n[2] / l, 0];
+}
+
+/** The turn by `deg` degrees about unit axis `u` (right-handed). */
+export const axisQuat = (u, deg) => { const h = deg * Math.PI / 360, s = Math.sin(h); return [u[0] * s, u[1] * s, u[2] * s, Math.cos(h)]; };
+
 /** a -> b by t along the short arc (t = 0: a, t = 1: b). */
 export const slerp = (a, b, t) => qmul(a, qexp(qlog(qmul(qconj(a), b)).map(c => c * t)));

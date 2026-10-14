@@ -23,6 +23,7 @@ The wave-0 PR (W0) wires every hot file once. After W0 these files are frozen fo
 | P | `bin/agent/studio-prompt.mjs`, `docs.js` (the words), supervisor default (off) |
 | J2 | C14: `object-keys.js`, `key-edit.js`, `compiler/hold.js`, `compiler/quat.js`, `qa/key-checks.js`, `motion.keyObject` in `src/commands/motion3.js` |
 | K4 | C15: switch entries and `level` (`compiler/validate-objects.js`, `take.js`, `src/object-travel.js` `trackShown`/`trackLevel`), `skills/smoke.js`, `skills/smoke-kit.js`, `src/kits/`, `object.createKit` in `src/commands/kits.js` |
+| K6 | C16: follow entries (`follow.js`) and aim keys (`key-aim.js`, `qa/key-checks.js` `heldReadings`), the exhale kit (`src/kits/smoking.js`), the exhale look (`src/effects/`) |
 
 Paths without a folder are under `src/motion3/`. Every lane test is already registered in `tools/run-tests.mjs` as a placeholder that prints `pending (lane X)`.
 
@@ -282,13 +283,13 @@ spec.objects[id] = { "prop": "batGrip", "grab": 30, "release": 90,
 
 **Validation** (strict; a lenient reload ignores only unknown key fields). The exact messages:
 
-- `objects.<id>.keys must be an array of { f, pos: [x, y, z], rot: [x, y, z, w] }`
-- `objects.<id>.keys[i] has unknown field "rott"; did you mean "rot"?; a key is { f, pos: [x, y, z], rot: [x, y, z, w] }`
+- `objects.<id>.keys must be an array of { f, pos: [x, y, z], rot: [x, y, z, w] } or { f, pos, aim: [x, y, z], roll? }` (aim: C16)
+- `objects.<id>.keys[i] has unknown field "rott"; did you mean "rot"?; a key is { f, pos: [x, y, z], rot: [x, y, z, w] } or { f, pos, aim: [x, y, z], roll? }`
 - `objects.<id>.keys[i].f must be a whole frame, got 3.5`
 - `objects.<id>.keys[i].f = 20 is outside grab..release (34..80); keys pose the object only while it is in hand` (no grab: 0; no release: the last frame)
 - `objects.<id>.keys[i].f = 50: keys[0] is at that frame already; one key per frame`
 - `objects.<id>.keys[i].pos must be [x, y, z], the world position of the object's base (a group: its root), got ...`
-- `objects.<id>.keys[i].rot must be a unit quaternion [x, y, z, w], got ...` (length within 0.01 of 1)
+- `objects.<id>.keys[i].rot must be a unit quaternion [x, y, z, w], got ...` (length within 0.01 of 1; with neither rot nor aim it adds `; or give aim [x, y, z], the world direction its +Y points`)
 - on a hinge: `objects.<id>.keys: only a carried object (prop) takes keys; a hinge turns by its channel "door", keyed in spec.keys`
 
 **Between keys** (`object-keys.js`):
@@ -338,7 +339,8 @@ spec.objects[id] = { "prop": "batGrip", "grab": 30, "release": 90,
 - Refusals (`INVALID_ARGUMENT`), with the exact text:
   - `frame 120 is outside the take (0..95)`
   - `"<id>" is in hand only f30..f95 (grab..release); at f20 the take does not hold it, so drag it as a scene object, or change objects.<id>.grab/release first`
-  - `keying "<id>" (carried) needs pos [x, y, z] and rot [x, y, z, w]: the world pose of its base (a group: its root)`
+  - `keying "<id>" (carried) needs pos [x, y, z] and rot [x, y, z, w] or aim [x, y, z] (+ roll), one of the two: the world pose of its base (a group: its root)` (aim: C16)
+  - `"<id>" follows landmark:mouth (spec.objects.<id>); it has no keys: change its follow, offset or aim` (a follow entry, C16)
   - `keying "<id>" (a hinge on channel "door") needs angle (degrees) or rot [x, y, z, w] (its drawn world rotation; the turn about the hinge axis is kept)`
   - `"<id>" has no key at f47; its keys: f40, f53`, and for a hinge: `"<id>" (hinge, channel "door") has no key at f20; door is keyed at f0, f40`
   - `"cube-6" moves with "empty-2" (spec.objects.empty-2); key "empty-2" with its root pose` (a part of a moved group)
@@ -392,6 +394,7 @@ object.createKit { "kit": "cigarette", "name"?: "Smoke", "position"?: { "x": 0.5
 |---|---|---|
 | cigarette | body (sculpt: filter, paper; 8.4 cm x 7.8 mm), ember (1 cm sphere, glow), light (faint point light; a glow lights nothing), smoke (effect at the tip) | prop `cig`: origin between RightHandIndex2/Middle2; +Y along the palm normal, filter at y -0.026, tip at y 0.058; at [0, 0, 0], along [0, 0, 1] |
 | lighter | body (sculpt: body, hood, wheel), flame (sphere, glow), light (point, flicker 0.6) | prop `lighter`: origin LeftHand/LeftHandMiddle1; +Y toward the thumb, flame at the prop point flame [0.01, 0.036, 0]; along [0, 1, 0] |
+| exhale (C16) | puff (an exhale effect on the root) | no hand: the root's bind is `{ follow: "landmark:mouth", aim: "face", visible: "exhale" }`; the catalogue row has `follow` in place of `prop` |
 | bat | body (sculpt: knob, handle, taper frustums, barrel, end cap; 0.84 m), trail (effect on the barrel, width 0.3 along it) | root at the knob, +Y along the bat; props.batGrip of the swing fixture, at -0.14 u, along u = [0, 0.5, 0.866] |
 | ball | body (7.4 cm sphere) | props.ballGrip |
 | sword | body (sculpt: pommel, grip, guard, blade, tip; 1 m), trail | root at the grip; props.swordGrip |
@@ -401,9 +404,9 @@ A part whose kind the build does not have is left out and named in `skipped`.
 
 ### smokeCigarette: args.kit, channels, any posture
 
-- `args.kit: { cig: <rootId>, lighter: <rootId>, exhale?: <effect id> }`. The skill adds the `spec.objects` entries itself: the cigarette root `{ prop: "cig", grab: f0+28, at: [0, 0, 0], along: [0, 0, 1], visible: "cig_vis" }`, the lighter root `{ prop: "lighter", grab: f0+35, release: f0+102, at: [0, 0, 0], along: [0, 1, 0], visible: "lit_vis" }`, and switches found by what the parts are: under the cigarette a glowing body and a light `{ visible: "ember_vis", level: "ember" }` and an effect `{ visible: "ember_vis" }`; under the lighter a glowing body and a light `{ visible: "flame_vis" }`; the exhale effect `{ visible: "exhale" }`.
-- The exhale emitter is an effect record the agent places at the mouth (a `landmark:mouth` probe at the exhale frames gives the point). It is not carried: an emitter attached to a bone emits only from the bone's current pose (effects lane), and a squatting or standing smoker's head barely moves while breathing out. It also allows the kits 3 cm (cigarette, right thigh) and 4.5 cm (lighter, left thigh) into the thigh their pocket is on.
-- Refusal: `use[i] smokeCigarette: args.kit.cig "<id>" is not a group in the scene; object.createKit { kit: "cigarette" } answers its rootId` (and for lighter, an unknown field, a missing exhale).
+- `args.kit: { cig: <rootId>, lighter: <rootId>, exhale?: <the exhale kit's rootId, or an effect id> }`. The skill adds the `spec.objects` entries itself: the cigarette root `{ prop: "cig", grab: f0+28, at: [0, 0, 0], along: [0, 0, 1], visible: "cig_vis" }`, the lighter root `{ prop: "lighter", grab: f0+35, release: f0+102, at: [0, 0, 0], along: [0, 1, 0], visible: "lit_vis" }`, and switches found by what the parts are: under the cigarette a glowing body and a light `{ visible: "ember_vis", level: "ember" }` and an effect `{ visible: "ember_vis" }`; under the lighter a glowing body and a light `{ visible: "flame_vis" }`; the exhale `{ follow: "landmark:mouth", aim: "face", visible: "exhale" }` (C16, amended by lane K6: it was a switch on an emitter the agent placed at the mouth, which a moving or squatting head left behind).
+- The exhale emitter needs no placing: `object.createKit { kit: "exhale" }` (an Empty root and an exhale effect part on it) answers the rootId to pass, and the follow entry puts the root on the mouth every frame. It also allows the kits 3 cm (cigarette, right thigh) and 4.5 cm (lighter, left thigh) into the thigh their pocket is on.
+- Refusal: `use[i] smokeCigarette: args.kit.cig "<id>" is not a group in the scene; object.createKit { kit: "cigarette" } answers its rootId` (and for lighter, an unknown field), and `use[i] smokeCigarette: args.kit.exhale "<id>" is not a scene object; object.createKit { kit: "exhale" } answers its rootId (it follows the mouth)`.
 - New channels (in `spec.channels` of the expanded spec): `exhale` (1 over f0+116..137 and f0+238..259) and `ember` (0 before f0+73, 1 when it catches, 2 on each drag f0+80..90 and f0+200..212, 0.6 between).
 - Any posture keyed before f0 (`needs: a pose keyed before f0: standing or squatting`):
   - head_pitch keys are offsets from the head pitch keyed before f0 (standing: 0, unchanged);
@@ -420,6 +423,61 @@ A part whose kind the build does not have is left out and named in `skipped`.
 6. `timelineOf` and, with `opts.probes`, `runProbes`.
 
 It answers `{ out, qa, observations, spec, expanded, used, fixed, search, timeline, probes?, ms }`. `opts`: `checks` (replace every check), `lenient`, `probes`.
+
+## C16. Follow entries and aim keys (lane K6)
+
+Two live runs showed the same gap: the agent could only place a record where a hand holds it or where it stands. An exhale puff the agent placed at a guessed point floated above a squatting smoker's head (session da8760fa), and bat keys took a hand-written direction-to-quaternion script per call (session 6912547c, 13 scripts in 25 calls).
+
+### Follow entries (`follow.js`)
+
+```jsonc
+spec.objects[id] = { "follow": "landmark:mouth", "offset"?: [x, y, z], "aim"?: "face" | "up" | [x, y, z] | <ref>, "visible"?: "exhale", "level"?: "puff" }
+```
+
+- **Any record:** a body, a group root, or a record with no box (an effect, a light, an Empty), like a switch (C15). `follow` makes the entry a follow; `prop` still makes it a carry, and any of pivot, axis or channel a hinge.
+- **The ref** is any point ref (C2): `landmark:mouth`, `joint:<Bone>`, `bone:<Bone>`, `prop:<prop>.<point>`, `anchor:<name>`, `object:<id>[.center|.top|.base]`. An `object:` ref may not name an object a follow entry moves (it would follow itself).
+- **aim** sets the record's +Y (effects emit along local +Y). The record turns the shortest way from upright onto it.
+  - `"up"` (default): world up.
+  - `"face"`: the face's forward direction, the Head bone's rest +Z (as `checks.orient` "face").
+  - `[x, y, z]`: a world direction.
+  - a ref: toward that point.
+- **offset** is metres along the record's own axes after aim (+Y along aim), from the ref point.
+- **The take** bakes `pos`, `quat` and `hold` on every frame, plus `vis`/`lvl` from its channels. The track is world space throughout, so `src/object-travel.js` cuts the carry of the record's own parents, and a following group's parts ride its root. The effects lane births a particle at the emitter's pose at its birth frame, so a puff leaves the mouth while the head moves.
+- **Motion and QA.** `rootPoseAt` and `objectBoxesAt` answer the follow pose, so refs, probes and goals see it. A follow entry is not an obstacle: `compile.js` marks its bodies `carried`, so the body capsules, the scene-object check and the auto-fixes skip them. `qa/object-checks.js` checks only carries, so a following body, light or effect makes no COLLIDE issue.
+- **Validation** (exact messages):
+  - `objects.<id>.follow "<ref>" ...`: the C2 `checkRef` messages, for example `objects.puff.follow "mouth" must be joint:<Bone>, bone:<Bone>, prop:<prop>.<point>, anchor:<name>, landmark:mouth, object:<id>[.center|.top|.base]; did you mean "landmark:mouth"?`
+  - `objects.<id>.follow "object:lid.top": "lid" moves with the follow entry objects.crate; a follow entry rides a joint, landmark, prop or anchor point, or an object no follow entry moves` (the same for `aim`)
+  - `objects.<id>.offset must be [x, y, z], metres along the record's own axes after aim (+Y along aim), got ...`
+  - `objects.<id>.aim must be "face", "up", a world direction [x, y, z] or a point ref (toward it), where the record's +Y points; got ...`
+  - `objects.<id>.aim must be a non-zero world direction [x, y, z], got ...`
+  - `objects.<id> (follow) has unknown field "ofset"; did you mean "offset"?; fields: follow, offset, aim, visible, level`
+  - `visible` and `level` take the C15 messages.
+- **motion.keyObject** refuses a follow entry: `"<id>" follows landmark:mouth (spec.objects.<id>); it has no keys: change its follow, offset or aim`.
+- **smokeCigarette** `args.kit.exhale` gets `{ follow: "landmark:mouth", aim: "face", visible: "exhale" }` (C15, amended). The exhale kit makes the emitter with no placing.
+- **The exhale look** (`src/effects/`): the preset now throws the breath forward and a little down (`droop` 0.25 of the speed, a look parameter, not a record field), then it rises and spreads. Defaults: size 0.035 m, grow 8, speed 0.9 m/s, spread 0.35, gravity -0.35, opacity 0.3.
+
+### Aim keys (`key-aim.js`, amends C14)
+
+```jsonc
+{ "f": 47, "pos": [x, y, z], "aim": [x, y, z], "roll"?: 0 }     // in place of rot
+```
+
+- **aim** is the world direction the object's +Y points (a bat: knob to barrel; a kit root's +Y). It is named like the follow `aim` (where +Y points). A spot light's `light.aim` (K2) is a world point, which is different.
+- **The turn** is the shortest turn from where the plain carry (no keys) holds the object at that key's frame onto aim, then **roll** degrees about aim (right-handed). So roll 0 keeps the hand's own roll, and the wrist can follow.
+  - The orchestrator asked for "the minimal twist from the previous key". Over a swing that piles the roll up: the J2 fixture's four keys written as 2-decimal aims missed by 45.5 cm (REACH, 32.4 deg off at f53) when each key turned from the key before it. Turned from the plain carry, the same aims draw every key within 0.0 deg and 0.0 cm, with the same QA as the rot keys.
+- **Hemisphere continuity and grid.** The quaternion is rounded to 1e-5 (the grid `motion.keyObject` writes) and kept on the hemisphere of the key before it. `rot` keys are used as given, so every rot-key take bakes bit for bit as before.
+- **Validation** (exact messages):
+  - `objects.<id>.keys[i] gives both rot and aim; give one: rot [x, y, z, w], or aim [x, y, z] (the world direction its +Y points) with roll`
+  - `objects.<id>.keys[i].aim must be a non-zero world direction [x, y, z] for the object's +Y (a bat: knob to barrel), got ...`
+  - `objects.<id>.keys[i].roll must be degrees about aim (a number), got ...`
+  - `objects.<id>.keys[i].roll turns the object about aim; give aim [x, y, z] with it, or leave roll out (rot fixes the roll)`
+- **Readback, measured not judged** (`output.observations.held`, `qa/key-checks.js` `heldReadings`). Every key of every keyed carry is drawn as `{ f, deg, cm, got?, rot? }`:
+  - `deg`: the drawn +Y off the asked direction (aim, or rot's +Y).
+  - `cm`: the drawn base off `pos`.
+  - `got`: the drawn +Y, when 1 deg off or more.
+  - `rot`: the quaternion an aim key used.
+  - `observations.units` says so. REACH (C14) still judges the residual.
+- **motion.keyObject** takes `aim` (+ `roll`) in place of `rot` and upserts `{ f, pos, aim, roll? }` (aim 1e-5, roll 0.01 deg). The J1 gizmo still writes `pos` + `rot`.
 
 ## Fixture
 

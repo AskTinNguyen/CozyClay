@@ -2,19 +2,21 @@
 // Empty root plus parts. The root is the grip: carried with the entry `bind` names (at/along pin
 // it to the prop origin), it puts every part where the hand holds it. Parts are ordinary records
 // (sculpts, primitives, effects, lights) parented to the root; a part that glows, burns or lights
-// up carries the switch entry a take uses to show it (`switch`).
+// up carries the switch entry a take uses to show it (`switch`). The exhale kit rides no hand: its
+// root's entry is a follow (C16).
 //   buildKit(kit, existing, { name?, position? }) -> { records, rootId, parts: { role: id }, bind, props?, use? } | { error }
 import { Euler, Matrix4, Quaternion, Vector3 } from "three";
 import { createSceneObject, createSculptObject, normalizeSceneObject, EMPTY_KIND } from "../scene-objects.js";
-import { cigarette, lighter } from "./smoking.js";
+import { cigarette, lighter, exhale } from "./smoking.js";
 import { bat, ball, sword, pistol } from "./held.js";
 
-const KITS = { cigarette, lighter, bat, ball, sword, pistol };
+const KITS = { cigarette, lighter, exhale, bat, ball, sword, pistol };
 export const KIT_NAMES = Object.keys(KITS);
 const DEG = Math.PI / 180;
 
-/** inspect_studio { scope: "catalogue" } kits: name, roles, the prop the root rides and one line. */
-export const KIT_CATALOGUE = KIT_NAMES.map(kit => ({ kit, parts: KITS[kit].parts.map(p => p.role), prop: KITS[kit].prop, description: KITS[kit].description }));
+/** inspect_studio { scope: "catalogue" } kits: name, roles, the prop the root rides (or the point it follows) and one line. */
+export const KIT_CATALOGUE = KIT_NAMES.map(kit => ({ kit, parts: KITS[kit].parts.map(p => p.role), ...(KITS[kit].prop ? { prop: KITS[kit].prop } : { follow: KITS[kit].carry.follow }),
+	description: KITS[kit].description }));
 
 const uniqueName = (base, existing) => {
 	const names = new Set(existing.map(o => o.name));

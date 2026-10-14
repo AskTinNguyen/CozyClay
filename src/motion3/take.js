@@ -4,10 +4,11 @@
 // character's placement frame (its base position and yaw), in metres, so moving or turning
 // the character carries the take with it. Scene objects the motion animates ride along in
 // world space: one track per spec.objects key (a group: its root only). A switch entry (C15)
-// bakes only vis and lvl, no pos/quat: its record keeps its own place (object-travel.js).
+// bakes only vis and lvl, no pos/quat: its record keeps its own place (object-travel.js). A follow
+// entry (C16) bakes pos/quat with hold on every frame: its track is world space throughout.
 import { toLocal } from "./compiler/skeleton.js";
 import { sub, apply, ry, quatFromMat, mul } from "./compiler/math.js";
-import { isCarried, isSwitch } from "./carried.js";
+import { isCarried, isFollow, isSwitch } from "./carried.js";
 import { rootPoseAt, spanOf } from "./object-pose.js";
 
 const TAKE_SCHEMA = "cozyclay.take.v3";
@@ -25,13 +26,14 @@ export function bakeTake(sk, out, placement = { position: [0, 0, 0], yaw: 0 }, m
 		hips.set(h, f * 3);
 	}
 	// one track per spec.objects key: a body, or a group root its parts ride (object-pose.js);
-	// `hold` marks the frames a carried record is in hand (world space: object-travel.js cuts the
-	// carry of its own parents there); a switch bakes vis/lvl only (no pos/quat: it never moves)
+	// `hold` marks the frames a carried record is in hand, and every frame of a follow entry (world
+	// space: object-travel.js cuts the carry of its own parents there); a switch bakes vis/lvl only
 	const objects = {}, f0 = out.f0 ?? 0;
 	for (const [id, spec] of Object.entries(out.ctx.spec.objects ?? {})) {
-		const carried = isCarried(spec), moves = !isSwitch(spec), pos = moves ? new Float32Array(F * 3) : null, quat = moves ? new Float32Array(F * 4) : null;
-		const vis = (carried || !moves) && spec.visible ? new Uint8Array(F) : null, hold = carried ? new Uint8Array(F) : null;
-		const lvl = (carried || !moves) && spec.level ? new Float32Array(F) : null;
+		const carried = isCarried(spec), follows = isFollow(spec), rides = carried || follows, moves = !isSwitch(spec);
+		const pos = moves ? new Float32Array(F * 3) : null, quat = moves ? new Float32Array(F * 4) : null;
+		const vis = (rides || !moves) && spec.visible ? new Uint8Array(F) : null, hold = rides ? new Uint8Array(F) : null;
+		const lvl = (rides || !moves) && spec.level ? new Float32Array(F) : null;
 		const [grab, release] = carried ? spanOf(out, spec) : [0, 0];
 		for (let f = 0; f < F; f++) {
 			if (vis) vis[f] = (out.baked?.[spec.visible]?.[f + f0] ?? 0) > 0.5 ? 1 : 0;
@@ -40,7 +42,7 @@ export function bakeTake(sk, out, placement = { position: [0, 0, 0], yaw: 0 }, m
 			const o = rootPoseAt(out, id, f + f0);
 			if (!o) continue;
 			pos.set(o.pos, f * 3); quat.set(quatFromMat(o.R), f * 4);
-			if (hold) hold[f] = f + f0 >= grab && f + f0 <= release ? 1 : 0;
+			if (hold) hold[f] = follows || (f + f0 >= grab && f + f0 <= release) ? 1 : 0;
 		}
 		objects[id] = { ...(moves ? { pos, quat } : {}), ...(vis ? { vis } : {}), ...(hold ? { hold } : {}), ...(lvl ? { lvl } : {}) };
 	}

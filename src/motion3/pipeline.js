@@ -3,7 +3,8 @@
 // qa/check-names.js), skills expand (skills/), the spec is validated strictly (leniently for a
 // saved take compiled again), the compiler bakes and auto-fixes the frames, QA measures them with
 // a cause and a hint per issue group against the agent's own spec, the style quantities are
-// measured (qa/style.js observeMotion), and the timeline and the requested probes read the result.
+// measured (qa/style.js observeMotion; keyed objects: every key as drawn, qa/key-checks.js
+// heldReadings), and the timeline and the requested probes read the result.
 // liftRequest first takes what the agent obviously meant: spec.probes are request probes, and a
 // bare goals[].moved id is object:<id>.
 import { compileMotion } from "./compiler/compile.js";
@@ -18,6 +19,7 @@ import { findParams, searchParams } from "./search.js";
 import { timelineOf } from "./timeline.js";
 import { runProbes } from "./probes.js";
 import { canonicalGoals } from "./compiler/validate-goals.js";
+import { heldReadings, HELD_UNITS } from "./qa/key-checks.js";
 
 const ms = t => Math.round(performance.now() - t);
 
@@ -71,7 +73,8 @@ export function compileSpec(sent, { sk, scene }, opts = {}) {
 	const out = compileMotion({ fps: 24, ...expanded }, ctx);
 	const compileMs = ms(t1), t2 = performance.now();
 	const measured = out.timeMap ? warpChecks(expanded, out.timeMap) : expanded;
-	const qa = runMotionQa(sk, out, measured, { userSpec: resolved }), observations = observeMotion(sk, out, measured.checks);
+	const qa = runMotionQa(sk, out, measured, { userSpec: resolved }), observations = observeMotion(sk, out, measured.checks), held = heldReadings(out);
+	if (held) Object.assign(observations, { units: `${observations.units}; ${HELD_UNITS}`, held });
 	const timeline = timelineOf(out, { used, spec: expanded }), probes = asked && runProbes(out, asked, { spec: expanded, sk, scene });
 	return { out, qa, observations, spec: resolved, expanded, used, fixed: out.fixed, search, timeline, ...(probes ? { probes } : {}), ms: { compile: compileMs, qa: ms(t2), total: ms(t0) } };
 }

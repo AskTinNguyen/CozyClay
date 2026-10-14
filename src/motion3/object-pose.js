@@ -18,8 +18,11 @@
 //   no grab: in hand from frame 0; no release: in hand to the end (PR #14 behaviour)
 //   keys (C14, object-keys.js): the object leads and the hand follows; the object is still drawn
 //                         in the hand, so what the hand cannot reach shows as a residual (QA)
-// Carried objects are OBSTACLES at every frame, at their pose that frame (qa/object-checks.js).
-import { isCarried, carriedPose, compose, relative, movesRecord } from "./carried.js";
+//   follow { follow, offset?, aim?, visible?, level? }   rides a point of the body every frame (C16, follow.js)
+// Carried objects are OBSTACLES at every frame, at their pose that frame (qa/object-checks.js);
+// a follow entry is none.
+import { isCarried, isFollow, carriedPose, compose, relative, movesRecord } from "./carried.js";
+import { followPose } from "./follow.js";
 import { groupsOf } from "./scene.js";
 import { solveFrame } from "./compiler/compile.js";
 import { channelsAt } from "./compiler/channels.js";
@@ -99,6 +102,7 @@ function carriedAt(out, id, o, f) {
  */
 export function rootPoseAt(out, id, f) {
 	const { spec, scene } = out.ctx, o = movesRecord(spec.objects?.[id]) ? spec.objects[id] : undefined, rest = restPose(scene, id);
+	if (isFollow(o)) return followPose(out, o, f);
 	if (isCarried(o) && (rest || !keepsOffset(scene, id, o))) {
 		const [grab, release] = spanOf(out, o);
 		return f < grab && rest ? { pos: rest.pos, R: rest.R } : carriedAt(out, id, o, Math.max(grab, Math.min(f, release)));
@@ -122,7 +126,7 @@ export function objectBoxesAt(out, id, f) {
 	const spec = out.ctx.spec, at = out.ctx.objectsAt(f);
 	return parts.map(p => {
 		const box = scene.objects[p], mover = moverOf(spec, scene, p);
-		const pose = isCarried(spec.objects?.[mover]) ? compose(rootPoseAt(out, mover, f), relative(restPose(scene, mover), box)) : at[p] ?? box;
+		const pose = isCarried(spec.objects?.[mover]) || isFollow(spec.objects?.[mover]) ? compose(rootPoseAt(out, mover, f), relative(restPose(scene, mover), box)) : at[p] ?? box;
 		return { id: p, pos: pose.pos, R: pose.R, half: box.half };
 	});
 }

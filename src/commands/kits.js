@@ -9,7 +9,8 @@ import { fail } from "./shared.js";
 const KIT_HELP = `Create a ready-made, correctly scaled prop as one group (an Empty root at the grip plus its parts), one undo entry. kit: ${KIT_NAMES.join(", ")} (inspect_studio scope catalogue lists each with its parts). `
 	+ "position { x, y, z, rot? } places the root (world m, yaw degrees; default the origin, lifted so nothing is under the floor); name names the root. "
 	+ "Answers rootId, parts { role: id } and bind: the spec.objects snippet to paste into a motion spec (the root's carry: prop, at, along, plus switch entries { visible, level } that show the lit parts). "
-	+ "Kits without a skill also answer props (the grip prop to paste into spec.props). The cigarette and lighter need no paste: smokeCigarette args.kit { cig, lighter, exhale? } adds the entries itself. "
+	+ "Kits without a skill also answer props (the grip prop to paste into spec.props). The cigarette, lighter and exhale need no paste: smokeCigarette args.kit { cig, lighter, exhale? } adds the entries itself "
+	+ "(exhale: a puff that follows the mouth, no placing). "
 	+ "Example: { kit: \"cigarette\" } -> { rootId: \"empty-3\", parts: { body: \"sculpt-2\", ember: \"sphere\", light: \"point-light\", smoke: \"effect\" }, bind: { \"empty-3\": { prop: \"cig\", at: [0, 0, 0], along: [0, 0, 1], visible: \"cig_vis\" }, "
 	+ "sphere: { visible: \"ember_vis\", level: \"ember\" }, \"point-light\": { visible: \"ember_vis\", level: \"ember\" }, effect: { visible: \"ember_vis\" } } }; "
 	+ "then motion.compile use [{ skill: \"smokeCigarette\", f0: 0, args: { kit: { cig: \"empty-3\", lighter: \"<lighter rootId>\" } } }].";

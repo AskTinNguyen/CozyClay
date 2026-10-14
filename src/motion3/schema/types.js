@@ -63,7 +63,7 @@ export const ANCHOR_TYPES = {
 	name: { const: "mouth" }, prop: str("a prop held by the other hand"), point: str("a point of that prop, or origin"),
 };
 
-const palm = d => ref("vec3", `${d} [d, l, n] along the palm axes (d toward the middle finger, l toward the thumb side, n = d x l), m`);
+const palm = d => ref("vec3", `${d} [d, l, n] on the palm axes (d to the middle finger, l to the thumb side, n = d x l), m`);
 /** Fields an anchor of each kind must have. */
 export const ANCHOR_REQUIRED = { world: ["p"], body: ["p"], bone: ["bone"], segment: ["from", "to"], object: ["object"], landmark: ["name"], prop: ["prop", "point"] };
 
@@ -79,14 +79,16 @@ export const FIT_TYPES = {
 	offset: ref("vec3", "world offset, m"),
 };
 
-const OBJECT_KEY_TYPES = { f: int(), pos: ref("vec3"), rot: { type: "array", items: { type: "number" }, minItems: 4, maxItems: 4, description: "quaternion x, y, z, w" } };
+const OBJECT_KEY_TYPES = { f: int(), pos: ref("vec3"), rot: { type: "array", items: { type: "number" }, minItems: 4, maxItems: 4, description: "quaternion x, y, z, w" },
+	aim: ref("vec3", "or rot: its +Y direction"), roll: num("deg about aim") };
 
 export const OBJECT_TYPES = {
-	pivot: ref("vec3", "world hinge point, m"), axis: ref("vec3", "hinge axis, default [0, 1, 0]"), channel: str("the angle channel (degrees) your keys set"),
-	prop: str("a spec.props name: the object follows that hand"), at: palm("fixed offset:"), along: palm("its +Y, fixed:"),
+	pivot: ref("vec3", "world hinge point, m"), axis: ref("vec3", "default [0, 1, 0]"), channel: str("the angle channel (degrees) your keys set"),
+	prop: str("a spec.props name: it rides that hand"), at: palm("fixed offset:"), along: palm("its +Y, fixed:"),
 	visible: str("a channel: shown above 0.5"), level: str("a channel: light, glow, effect strength 0..4 (1 as authored)"), grab: int("frame the hand takes it", { default: 0 }), release: int("frame it is put down (else the end)"),
-	keys: { type: "array", items: { type: "object", properties: Object.fromEntries(OBJECT_KEY_FIELDS.map(f => [f, OBJECT_KEY_TYPES[f]])), required: OBJECT_KEY_FIELDS, additionalProperties: false },
-		description: "world pose at frame f (a group: its root), grab..release; the hand follows" },
+	keys: { type: "array", items: { type: "object", properties: Object.fromEntries(OBJECT_KEY_FIELDS.map(f => [f, OBJECT_KEY_TYPES[f]])), required: ["f", "pos"], additionalProperties: false },
+		description: "world pose at f (a group: its root), grab..release; the hand follows" },
+	follow: ref("ref"), offset: ref("vec3"), aim: { oneOf: [{ enum: ["face", "up"] }, { $ref: "#/$defs/vec3" }, { $ref: "#/$defs/ref" }], default: "up" },
 };
 
 export const CHECK_ENTRY_TYPES = {
@@ -126,6 +128,6 @@ export const FIX_TYPES = {
 };
 
 export const REF_DOCS = {
-	joint: "joint:<Bone>, the bone's joint", bone: "bone:<Bone>, the same as joint:", prop: "prop:<prop>.<point> (origin always exists)",
-	anchor: "anchor:<name>, a spec anchor", landmark: "landmark:mouth", object: "object:<id>[.center|.top|.base], a body or a group (Empty); bare = its surface in a distance",
+	joint: "joint:<Bone>, the bone's joint", bone: "bone:<Bone>, as joint:", prop: "prop:<prop>.<point> (origin always exists)",
+	anchor: "anchor:<name>, a spec anchor", landmark: "landmark:mouth", object: "object:<id>[.center|.top|.base], a body or group (Empty); bare = its surface in a distance",
 };

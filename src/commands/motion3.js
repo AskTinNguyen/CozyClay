@@ -46,8 +46,8 @@ const declarations = Object.freeze([
 	{ id: "motion.report", label: "Read motion report", kind: "job", domain: "motion", timeoutMs: 10000, readOnly: true, description: HELP.report,
 		input: input({ specId, part: { type: "string", enum: ["groups", "timeline", "probes"] }, from: { type: "integer", minimum: 0, default: 0 } }, ["specId", "part"]) },
 	{ id: "motion.keyObject", label: "Key held object", kind: "job", domain: "motion", timeoutMs: 120000, description: HELP.keyObject,
-		input: input({ characterId: id, objectId: id, frame: { type: "integer", minimum: 0 }, pos: numbers(3), rot: numbers(4), angle: { type: "number" },
-			remove: { type: "boolean", default: false } }, ["characterId", "objectId", "frame"]) },
+		input: input({ characterId: id, objectId: id, frame: { type: "integer", minimum: 0 }, pos: numbers(3), rot: numbers(4), aim: numbers(3), roll: { type: "number" },
+			angle: { type: "number" }, remove: { type: "boolean", default: false } }, ["characterId", "objectId", "frame"]) },
 ]);
 export { declarations };
 

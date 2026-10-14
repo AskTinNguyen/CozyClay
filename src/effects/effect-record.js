@@ -25,7 +25,7 @@ const ZERO = vec(0, 0, 0);
  */
 export const EFFECT_PRESETS = Object.freeze({
 	smoke: { rate: 60, life: 2.8, size: 0.012, grow: 6, speed: 0.05, spread: 0.1, gravity: -0.3, wind: vec(0.02, 0, 0), color: "#7d8a99", opacity: 0.42, additive: false, area: ZERO, width: 0 },
-	exhale: { rate: 120, life: 2.4, size: 0.03, grow: 7, speed: 1.1, spread: 0.25, gravity: -0.15, wind: vec(0.02, 0, 0), color: "#a3abb4", opacity: 0.26, additive: false, area: vec(0.01, 0, 0.01), width: 0 },
+	exhale: { rate: 120, life: 2.4, size: 0.035, grow: 8, speed: 0.9, spread: 0.35, gravity: -0.35, wind: vec(0.02, 0, 0), color: "#a3abb4", opacity: 0.3, additive: false, area: vec(0.01, 0, 0.01), width: 0 },
 	steam: { rate: 26, life: 2, size: 0.03, grow: 4, speed: 0.1, spread: 0.2, gravity: -0.45, wind: vec(0.02, 0, 0), color: "#bcc5ce", opacity: 0.2, additive: false, area: vec(0.07, 0, 0.07), width: 0 },
 	fire: { rate: 140, life: 0.75, size: 0.12, grow: 0.3, speed: 0.4, spread: 0.15, gravity: -2.2, wind: ZERO, color: "#ff7a1f", opacity: 1, additive: true, area: vec(0.22, 0, 0.22), width: 0 },
 	sparks: { rate: 40, life: 1, size: 0.012, grow: 0.6, speed: 2.6, spread: 0.55, gravity: 6, wind: ZERO, color: "#ff9d33", opacity: 1, additive: true, area: vec(0.05, 0, 0.05), width: 0 },

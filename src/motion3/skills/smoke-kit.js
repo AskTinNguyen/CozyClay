@@ -4,7 +4,8 @@
 //   switch with the skill's channels. A part is found by what it is, not by its name: under the
 //   cigarette a glowing body and a light (the ember: ember_vis, level ember) and an effect (the
 //   tip smoke: ember_vis); under the lighter a glowing body (the flame) and a light (flame_vis).
-//   exhale is an effect at the mouth (shown by the exhale channel).
+//   exhale is the exhale kit's root (or any effect): it follows the mouth, facing forward, and shows
+//   while the exhale channel is on (C16: { follow: "landmark:mouth", aim: "face", visible: "exhale" }).
 //   squat: with the hips keyed low before f0 the cigarette rests over the right knee, not beside
 //   the hip where the thigh is, and the hand leaves (and comes back to) the lips straight ahead
 //   first (anchor mouthOut): a straight move between the lips and the knee would cross the hand's
@@ -16,6 +17,8 @@ import { bonePoint } from "../compiler/skeleton.js";
 import { add, sub, scale, len, apply, ry } from "../compiler/math.js";
 
 const KIT_FIELDS = ["cig", "lighter", "exhale"];
+/** The exhale emitter's entry: at the lips, its +Y (the puff) along the face, shown while breathing out. */
+const EXHALE = { follow: "landmark:mouth", aim: "face", visible: "exhale" };
 const KIT_OF = { cig: "cigarette", lighter: "lighter" };
 /** Below this share of the rig's standing hips height the pose before f0 is a squat. */
 const SQUAT_HIPS = 0.7;
@@ -61,10 +64,10 @@ export function kitObjects(ctx, at) {
 	}
 	for (const [id, o, body] of partsUnder(ctx.scene, lighter)) if ((body && o.glow) || (!body && o.renderer === "light")) objects[id] = { visible: "flame_vis" };
 	if (kit.exhale !== undefined) {
-		if (typeof kit.exhale !== "string" || !(ctx.scene?.others?.[kit.exhale] || ctx.scene?.objects?.[kit.exhale])) {
-			skillError(ctx.tag, `args.kit.exhale ${JSON.stringify(kit.exhale)} is not a scene object; give the id of an exhale effect at the mouth`);
+		if (typeof kit.exhale !== "string" || !(ctx.scene?.others?.[kit.exhale] || ctx.scene?.objects?.[kit.exhale] || groupsOf(ctx.scene)[kit.exhale])) {
+			skillError(ctx.tag, `args.kit.exhale ${JSON.stringify(kit.exhale)} is not a scene object; object.createKit { kit: "exhale" } answers its rootId (it follows the mouth)`);
 		}
-		objects[kit.exhale] = { visible: "exhale" };
+		objects[kit.exhale] = { ...EXHALE };
 	}
 	const allow = [{ part: "thigh_r", object: cig, depth: POCKET_DEPTH.cig }, { part: "thigh_l", object: lighter, depth: POCKET_DEPTH.lighter }];
 	return { objects, allow };

@@ -54,7 +54,7 @@ export const SKILL_INFO = {
 	},
 	smokeCigarette: {
 		args: { until: int("hold to this frame; default the last frame"),
-			kit: { type: "object", properties: { cig: str("the cigarette kit's rootId (object.createKit)"), lighter: str("the lighter kit's rootId"), exhale: str("an exhale effect at the mouth") },
+			kit: { type: "object", properties: { cig: str("the cigarette kit's rootId (object.createKit)"), lighter: str("the lighter kit's rootId"), exhale: str("the exhale kit's rootId (or an effect): it follows the mouth") },
 				required: ["cig", "lighter"], additionalProperties: false, description: "kits the skill carries and lights: it adds their spec.objects entries itself" } },
 		needs: "a pose keyed before f0: standing or squatting", frames: "265 (to args.until)",
 		adds: ["anchors lpocket, rpocket, hold, mouth, flame", "props cig, lighter", "channels cig_vis, lit_vis, flame_vis, ember_vis, exhale, ember",

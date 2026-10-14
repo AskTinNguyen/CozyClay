@@ -14,10 +14,11 @@ export const ANCHOR_FIELDS = { world: ["p"], body: ["p"], bone: ["bone", "offset
 	object: ["object", "local"], landmark: ["name"], prop: ["prop", "point", "offset"] };
 export const PROP_FIELDS = ["hand", "origin", "points"];
 export const FIT_FIELDS = ["side", "anchor", "effector", "offset"];
-/** spec.objects[id]: a hinge or a carry (a body or a group id), see C3; carry keys: C14; a switch (any record, C15) moves nothing. */
-export const OBJECT_FIELDS = { hinge: ["pivot", "axis", "channel"], carry: ["prop", "at", "along", "visible", "level", "grab", "release", "keys"], switch: ["visible", "level"] };
-/** One spec.objects[id].keys entry (C14): the held object's world pose at frame f. */
-export const OBJECT_KEY_FIELDS = ["f", "pos", "rot"];
+/** spec.objects[id]: a hinge or a carry (a body or a group id), see C3; carry keys: C14; a switch (any record, C15) moves nothing; a follow (any record, C16) rides a point of the body. */
+export const OBJECT_FIELDS = { hinge: ["pivot", "axis", "channel"], carry: ["prop", "at", "along", "visible", "level", "grab", "release", "keys"], switch: ["visible", "level"],
+	follow: ["follow", "offset", "aim", "visible", "level"] };
+/** One spec.objects[id].keys entry (C14): the held object's world pose at frame f; aim (+ roll) in place of rot (C16). */
+export const OBJECT_KEY_FIELDS = ["f", "pos", "rot", "aim", "roll"];
 export const WALK_FIELDS = ["type", "f0", "steps", "step", "period", "swing", "halfWidth", "lift", "heading", "turnDistance", "pelvisHigh", "pelvisLow", "firstStep", "armSwing"];
 /** spec.checks keys. */
 export const CHECK_FIELDS = ["contacts", "orient", "below", "clearance", "appear", "supports", "allow", "limits", "mouthPoints"];

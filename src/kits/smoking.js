@@ -7,6 +7,8 @@
 //              8.4 cm x 7.8 mm.
 //   lighter:   root between LeftHand and LeftHandMiddle1; +Y toward the thumb side; the flame sits
 //              on the hood at the prop point flame [0.01, 0.036, 0] (d, l, n).
+//   exhale:    no hand: the root follows the mouth (C16), its +Y along the face, so the puff part
+//              needs no placing; smokeCigarette args.kit.exhale shows it while the exhale channel is on.
 
 const PAPER = "#f3efe6", FILTER = "#d48a4c", ASH = "#4a3a33";
 const D = 0.0078, FILTER_LEN = 0.022, LEN = 0.084, TIP = 0.058;
@@ -43,4 +45,11 @@ export const lighter = {
 		{ role: "light", kind: "point-light", at: [0.01, 0.045, 0], light: { type: "point", color: "#ffb35c", intensity: 0.5, range: 4, flicker: 0.6, shadow: false },
 			switch: { visible: "flame_vis" } },
 	],
+};
+
+export const exhale = {
+	label: "Exhale", skill: "smokeCigarette",
+	description: "a breath of smoke from the mouth: its root follows landmark:mouth facing forward (no placing); smokeCigarette args.kit.exhale shows it while breathing out",
+	carry: { follow: "landmark:mouth", aim: "face", visible: "exhale" },
+	parts: [{ role: "puff", kind: "effect", at: [0, 0, 0], effect: { preset: "exhale" } }],
 };

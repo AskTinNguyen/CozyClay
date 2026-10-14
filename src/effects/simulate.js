@@ -29,11 +29,13 @@ const TRAIL_FULL_SPEED = 2;
 // The shape of each preset that is not authored: drag (1/s), sway/curl/jitter
 // drift (m), fades, spread of life/size, spin (rad/s), streak (s of velocity),
 // flicker, a lift of the birth point (x start size, so a flame on the deck
-// starts above it), and whether births fill a volume (rain/snow/dust).
-const LOOK = { drag: 1.5, sway: 0, curl: 0, curlRate: 2, jitter: 0, fadeIn: 0.05, fadeOut: 1, lifeVar: 0.2, sizeVar: 0.3, growPow: 1, spin: 0, streak: 0, flicker: 0, twinkle: 0, lift: 0, tint: null, clean: false, volume: false, top: false };
+// starts above it), a droop of the throw (a share of the speed turned down),
+// and whether births fill a volume (rain/snow/dust).
+const LOOK = { drag: 1.5, sway: 0, curl: 0, curlRate: 2, jitter: 0, fadeIn: 0.05, fadeOut: 1, lifeVar: 0.2, sizeVar: 0.3, growPow: 1, spin: 0, streak: 0, flicker: 0, twinkle: 0, lift: 0, droop: 0, tint: null, clean: false, volume: false, top: false };
 const LOOKS = {
 	smoke: { ...LOOK, drag: 1.7, sway: 0.012, curl: 0.01, curlRate: 2.2, jitter: 0.005, fadeIn: 0.04, fadeOut: 1, lifeVar: 0.25, sizeVar: 0.25, growPow: 0.8, spin: 0.6 },
-	exhale: { ...LOOK, drag: 3.2, sway: 0.02, curl: 0.03, curlRate: 1.6, jitter: 0.03, fadeIn: 0.03, fadeOut: 1.5, lifeVar: 0.3, sizeVar: 0.35, growPow: 0.6, spin: 0.8 },
+	// a breath leaves the lips forward and a little down (droop: a downward share of the speed), then rises and spreads
+	exhale: { ...LOOK, drag: 3.2, sway: 0.02, curl: 0.03, curlRate: 1.6, jitter: 0.03, fadeIn: 0.03, fadeOut: 1.5, lifeVar: 0.3, sizeVar: 0.35, growPow: 0.6, spin: 0.8, droop: 0.25 },
 	steam: { ...LOOK, drag: 1.8, sway: 0.03, curl: 0.025, curlRate: 2.5, jitter: 0.015, fadeIn: 0.12, fadeOut: 1.8, lifeVar: 0.3, sizeVar: 0.35, growPow: 0.8, spin: 0.5 },
 	fire: { ...LOOK, drag: 3, sway: 0.01, curl: 0.03, curlRate: 5, jitter: 0.03, fadeIn: 0.06, fadeOut: 2.2, lifeVar: 0.35, spin: 1.5, streak: 0.15, flicker: 0.35, lift: 0.5, tint: "fire", clean: true },
 	sparks: { ...LOOK, drag: 0.8, jitter: 0.05, fadeIn: 0, fadeOut: 0.7, lifeVar: 0.5, sizeVar: 0.4, streak: 0.035, flicker: 0.5, tint: "spark", clean: true },
@@ -131,7 +133,7 @@ function particleAt(em, s, k, u, age, life, split, frame, fps, out) {
 	const speed = effect.speed * (0.75 + 0.5 * r(8)), drag = look.drag;
 	// Velocity relaxes to the terminal one: the wind plus gravity / drag.
 	const tx = effect.wind.x, ty = effect.wind.y - effect.gravity / drag, tz = effect.wind.z;
-	const v0x = dx * speed + (look.volume ? tx : 0), v0y = dy * speed + (look.volume ? ty : 0), v0z = dz * speed + (look.volume ? tz : 0);
+	const v0x = dx * speed + (look.volume ? tx : 0), v0y = (dy - look.droop) * speed + (look.volume ? ty : 0), v0z = dz * speed + (look.volume ? tz : 0);
 	const e = Math.exp(-drag * age), f1 = (1 - e) / drag;
 	let x = out.bx + tx * age + (v0x - tx) * f1, y = out.by + ty * age + (v0y - ty) * f1, z = out.bz + tz * age + (v0z - tz) * f1;
 	// Drift: a sway frozen at birth (so the column snakes as it rises), a slow

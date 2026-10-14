@@ -10,9 +10,11 @@ import { SIDES } from "./compiler/pose.js";
 import { add, scale, norm, sub, dot, cross, apply, mul, T, axisRot, I3 } from "./compiler/math.js";
 
 export const isCarried = o => typeof o?.prop === "string";
-/** A switch entry { visible?, level? } (C15): no prop and no hinge field, so it moves nothing; it shows, hides or dims its record. */
-export const isSwitch = o => !!o && typeof o === "object" && !Array.isArray(o) && ["prop", "pivot", "axis", "channel"].every(k => o[k] === undefined);
-/** An entry that moves its record (a carry or a hinge), as opposed to a switch. */
+/** A follow entry { follow: <ref>, offset?, aim?, visible?, level? } (C16, follow.js): the record rides a point of the body. */
+export const isFollow = o => !isCarried(o) && o?.follow !== undefined;
+/** A switch entry { visible?, level? } (C15): no prop, no follow and no hinge field, so it moves nothing; it shows, hides or dims its record. */
+export const isSwitch = o => !!o && typeof o === "object" && !Array.isArray(o) && ["prop", "follow", "pivot", "axis", "channel"].every(k => o[k] === undefined);
+/** An entry that moves its record (a carry, a follow or a hinge), as opposed to a switch. */
 export const movesRecord = o => !!o && typeof o === "object" && !isSwitch(o);
 
 /** Mean of the prop's origin joints on pose s (the point the hand holds the prop by). */
