@@ -489,7 +489,7 @@ function registerTests() {
 			["inspect_studio", { scope: "actions", limit: 99 }, "$.args.limit: Expected a number within [1, 32], got 99."],
 			["run_action", { action: "motion.compile", characterId: "char-a", args: {} }, '$.args has unknown field "characterId"; allowed: action, args, confirmationToken.'],
 			["run_action", { action: "motion.compile", args: "{}" }, "$.args.args: expected an object, got a string."],
-			["verify_result", { checks: [], targets: ["a"] }, "$.args.checks: expected 1 to 3 items, got 0."],
+			["verify_result", { checks: [], targets: ["a"] }, "$.args.checks: expected 1 to 4 items, got 0."],
 			["verify_result", { checks: ["motion"], targets: ["a"], range: "all" }, '$.args.range must be "whole_clip" or an object, got "all".'],
 			["undo_edit", { receiptId: 3 }, "$.args.receiptId: expected a string, got a number."],
 			["operate_studio", { selection: "char-a" }, '$.args.selection must be an object or null, got "char-a".'],

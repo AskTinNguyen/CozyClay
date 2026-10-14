@@ -17,12 +17,12 @@ import { readFileSync } from "node:fs";
 import { parseSync } from "rolldown/experimental";
 import {
 	createCharacterEntry,
-	createKeyLight,
 	createSceneDocument,
 	createSceneStage,
 	readSceneDocument,
 	serializeSceneDocument,
 } from "../src/scenes.js";
+import { createKeyLight } from "../src/stage-lighting.js";
 import { createProjectDocument, readProjectDocument } from "../src/project.js";
 import { createSceneHistoryStore } from "../src/document-store.js";
 import { copyPhysicsKeys } from "../src/motion/physics-review.js";

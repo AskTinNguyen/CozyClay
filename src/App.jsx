@@ -64,10 +64,10 @@ import { proxyYaw } from "./proxy-figure.jsx";
 import { autoColorHex, loadAutoColor } from "./auto-color.js";
 import { DualRender, GIZMO_LAYER } from "./dualview.jsx";
 import { GridFloor } from "./grid-floor.jsx";
-import { GRID_BACKGROUND, GRID_FOG, stageBackground, readStoredGridView, writeStoredGridView } from "./grid-view.js";
+import { readStoredGridView, writeStoredGridView } from "./grid-view.js";
 import { useUiTheme } from "./theme.js";
 
-import { Room, StageLights } from "./room.jsx";
+import { Room, StageLights, StageAtmosphere } from "./room.jsx";
 import { createDocumentMirrors } from "./document-mirrors.js";
 import {
 	buildFollowTrack,
@@ -557,7 +557,7 @@ export default function App() {
 		get objects() { return storeRef.current.objects; },
 	}));
 	const {
-		preset, shotAspectKey, environmentImage, cameraPresetId, sensorId, keyLight, changeKeyLight,
+		preset, shotAspectKey, environmentImage, cameraPresetId, sensorId, keyLight, lighting, changeKeyLight,
 		resetKeyLight, changeEnvironmentImage, hasEnvSheet, environment, style, publishStudioStage,
 	} = stageDomain;
 	const shotsDomain = useShots(appContext.forRender({
@@ -2197,7 +2197,7 @@ export default function App() {
 		shotAspect: shotAspectKey,
 		cameraPresetId,
 		sensorId,
-		keyLight,
+		keyLight, lighting,
 		// What this location IS and how it should look. Session state until #345:
 		// a reopened scene came back with another room's description.
 		environment,
@@ -2513,7 +2513,7 @@ export default function App() {
 		filmback,
 		// keyLight rides the live stage envelope: it is authored, undoable and
 		// patchable state, so every reader sees the body the save path writes.
-		stage: { shotAspect: shotAspectKey, cameraPresetId, sensorId, hasCharSheet, environmentImage, environment, style, hasEnvSheet, keyLight },
+		stage: { shotAspect: shotAspectKey, cameraPresetId, sensorId, hasCharSheet, environmentImage, environment, style, hasEnvSheet, keyLight, lighting },
 		timeline: { currentFrame: tlFrame, frameCount: tlFrameCount, fps: tlFps },
 		activeCharacterId,
 		partColours: partColoursEnabled ? PART_COLOURS : null,
@@ -4811,7 +4811,7 @@ export default function App() {
 		studioAgentError, studioAgentMode, setStudioAgentMode, AgentPanel, setAgentCollapsed,
 		buildStudioAgentContext, highlightAgentTargets, selectedSceneObject, rigSelection,
 		inspectorActionsOpen, setInspectorActionsOpen, deleteSelectedSceneObject, inspectorHasContent, keyLightSelected,
-		keyLight, changeKeyLight, resetKeyLight, isCameraSelection, moveSequence,
+		keyLight, lighting, changeKeyLight, resetKeyLight, isCameraSelection, moveSequence,
 		cameraKeys, activeShot, changeShotTargetModel, updateCharacterAt, openStudio,
 		posing, removeCharacter, setShowB, activeChar, changeInspectorCharacter,
 		selectablePoses, ikApplyPoseAsKey,
@@ -4944,16 +4944,9 @@ export default function App() {
 								timelineHeight={workspaceLayout.timelineHeight}
 								planZoom={workspaceLayout.planZoom}
 							/>
-							<color attach="background" args={[gridView ? GRID_BACKGROUND : stageBackground(uiTheme)]} />
-							{/* The open stage runs 500 m; without a falloff the whole deck
-							    reads at once and the horizon sits a kilometre away. Blender's
-							    viewport answer is a clip distance that lets the neutral void
-							    show through; the fog below is the seamless version of the
-							    same idea — it fades the floor INTO the background colour, so
-							    past ~120 m the deck simply ceases to exist with no horizon
-							    line, no clip edge and no tone break. */}
-							<fog attach="fog" args={gridView ? [GRID_FOG.color, GRID_FOG.near, GRID_FOG.far] : [stageBackground(uiTheme), 18, 54]} />
-							<StageLights keyLight={keyLight} neutral={gridView} light={uiTheme === "light"} />
+							{/* Sky, fog and exposure of the stage look (stage-sky.jsx), for every pane and export. */}
+							<StageAtmosphere lighting={lighting} keyLight={keyLight} theme={uiTheme} grid={gridView} />
+							<StageLights keyLight={keyLight} lighting={lighting} neutral={gridView} light={uiTheme === "light"} />
 							<KeyLightPuck
 								keyLight={keyLight}
 								selected={keyLightSelected}
@@ -4966,7 +4959,7 @@ export default function App() {
 								onChange={(patch) => changeKeyLight("puck", patch)}
 								onDragEnd={endGestureUndo}
 							/>
-							{gridView ? <GridFloor layer={GIZMO_LAYER} /> : <Room light={uiTheme === "light"} />}
+							{gridView ? <GridFloor layer={GIZMO_LAYER} /> : <Room light={uiTheme === "light" && !lighting.sky} />}
 							<SetProps
 								objects={stageSceneObjects}
 								authoredObjects={sceneObjects}

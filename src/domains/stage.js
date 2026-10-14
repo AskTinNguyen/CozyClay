@@ -2,7 +2,7 @@ import { useContext, useEffect, useRef, useState } from 'react';
 import { AppContext } from '../app-context.js';
 import { createSceneStageStore } from '../store/scene-stage.js';
 import { useDocumentDomain } from '../store/use-document-store.js';
-import { createKeyLight } from '../scenes.js';
+import { createKeyLight } from '../stage-lighting.js';
 import { shotAspectRatio } from '../shot.js';
 import { normalizeStage } from '../commands/stage.js';
 

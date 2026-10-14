@@ -24,7 +24,7 @@ export default function DetailsSlot() {
 		setStudioAgentMode, AgentPanel, setAgentCollapsed, scenes, activeSceneId,
 		buildStudioAgentContext, highlightAgentTargets, selectedSceneObject, rigSelection,
 		inspectorActionsOpen, setInspectorActionsOpen, runStudioAction, deleteSelectedSceneObject, inspectorHasContent,
-		keyLightSelected, keyLight, isCameraSelection,
+		keyLightSelected, keyLight, lighting, isCameraSelection,
 		shot, moveSequence, cameraKeys, activeShot,
 		isCharacterSelection, showB, characters, openStudio,
 		posing, workflowMode, activeChar,
@@ -121,7 +121,7 @@ export default function DetailsSlot() {
 
 			{/* Camera animation is authored against the same playhead as motion,
 			    so keep its controls beside the Motion tools as well as Shot setup. */}
-			<LightPanel keyLightSelected={keyLightSelected} keyLight={keyLight} />
+			<LightPanel keyLightSelected={keyLightSelected} keyLight={keyLight} lighting={lighting} />
 			{/* Lens, Recenter and Record used to live here as well as in the
 			    viewport camera bar and the topbar Export menu. One home each
 			    (#193, R1): framing is the bar's job, delivery is Export's, and

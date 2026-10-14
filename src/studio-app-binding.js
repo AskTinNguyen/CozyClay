@@ -13,7 +13,7 @@ import { createStudioCommandJournal, entityWorldBounds, framingChecks, localTran
 import { verifyInstalledTake } from "./studio-agent-motion.js";
 import { shotGeometryFacts } from "./studio-geometry-facts.js";
 import { STUDIO_TOOL_FAMILIES, StudioProtocolError, validateReceipt, validateStudioCommand, validateStudioIdentity } from "./studio-agent-protocol.js";
-import { studioVisual } from "./studio-motion-visual.js";
+import { studioVisual, verifyLighting } from "./studio-motion-visual.js";
 import { withEffectState } from "./effects/state.js";
 
 // App-owned adapter: the shared command modules remain the only
@@ -275,9 +275,10 @@ export function createStudioAppBinding(ports) {
 				// A framing check also carries the cut's geometry, read from the scene: side of the action line
 				// and sight lines per shot, the receipt's or targets' shots first (8 at most).
 				const result = { receiptId: receipt?.receiptId ?? null, revision: s.revision, evidenceRevision, stale: evidenceRevision !== s.revision, checks: measured ? { coverage: "current-scene-targets" } : receipt.checks,
-					verification: receipt?.verification ?? null, semanticStatus: "unavailable", visualRefs: [], unsupportedChecks: [], unsupportedReasons: {}, ...(args.checks.includes("framing") ? { geometry: shotGeometryFacts(scene, { first: receipt ? receipt.affectedIds : args.targets, ports: { bounds: ports.bounds } }) } : {}) };
-				const reasons = result.unsupportedReasons, verified = [], skipped = [], pending = [];
-				for (const check of args.checks.filter(check => check !== "motion" && measured)) {
+					verification: receipt?.verification ?? null, semanticStatus: "unavailable", visualRefs: [], unsupportedChecks: [], unsupportedReasons: {}, ...(args.checks.includes("framing") ? { geometry: shotGeometryFacts(scene, { first: receipt ? receipt.affectedIds : args.targets, ports: { bounds: ports.bounds } }) } : {}) }, reasons = result.unsupportedReasons, verified = [], skipped = [], pending = [];
+				// Lighting is measured from the rendered shot frame (studio-lighting-check.js), never from a receipt.
+				if (args.checks.includes("lighting")) verifyLighting(result, args.targets ?? receipt.affectedIds, scene, ports);
+				for (const check of args.checks.filter(check => !["motion", "lighting"].includes(check) && measured)) {
 					if (!measured.length) { reasons[check] = "No target is an object or character in the current scene."; continue; }
 					try { result.checks[check] = check === "placement" ? placementChecks(measured, scene, { bounds: ports.bounds }) : framingChecks(measured, scene, { bounds: ports.bounds }); }
 					catch (error) { if (!(error instanceof StudioProtocolError)) throw error; reasons[check] = error.message; }

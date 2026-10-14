@@ -89,7 +89,8 @@ function fixture(options={}) {
  const chars=options.characters??[a,b], rigs={'actor-a':rig(),'actor-b':rig()}; rigs['actor-b'].parent.position.x=4;rigs['actor-b'].parent.updateMatrixWorld(true);
  const actionsRef=ref(null);
  const revision=ref(0), clock=ref(0), lastObject=ref(0), history=ref({past:[],future:[]}), studioHistory=ref(new Map()), characterRef=ref(chars), buffer=ref({waypoints:[],motion:null}), state=ref(ik.createIkState()), layers=ref(new Map());
- const stage={shotAspect:'16:9',cameraPresetId:null,sensorId:'fullFrame',hasCharSheet:false,environmentImage:null,environment:'a sunlit modern living room',style:'moody cinematic lighting, 35mm film look',hasEnvSheet:false,keyLight:{x:6,y:9,z:4,intensity:1.12,warmth:0.5}};
+ const stage={shotAspect:'16:9',cameraPresetId:null,sensorId:'fullFrame',hasCharSheet:false,environmentImage:null,environment:'a sunlit modern living room',style:'moody cinematic lighting, 35mm film look',hasEnvSheet:false,keyLight:{x:6,y:9,z:4,intensity:1.12,warmth:0.5,color:null},
+  lighting:{preset:'studio',sky:null,skyTop:null,ambient:1,hemiSky:'#ffffff',hemiGround:'#5a5d64',fill:1,fog:0,exposure:1,shadowSoftness:0}};
  const live=ref({characters:chars,objects:[],rigs,shots:[],scenes:[{id:'scene',name:'Fixture',objects:[],shotDocument:null,stage:null}],activeCharacterId:a.id,stage,timeline:{currentFrame:0,frameCount:48},filmback:{sensorId:'fullFrame',aspectRatio:16/9},studioSelection:{kind:'character',id:a.id},studioShotId:null,studioView:{mode:'scene',frame:0,playing:false,lookThrough:false,grid:false,autoColor:false}});
  const camera=new THREE.PerspectiveCamera(45,16/9); camera.position.set(0,1.6,5);
  const values={}, semantic=[], motionStore=options.motionStore??new Map(), motionSet=[];
@@ -266,6 +267,10 @@ const stageEvidence = (patch = {}) => Object.entries({
  'stage.environmentImage': {text:null}, 'stage.environment': {text:'a sunlit modern living room'},
  'stage.style': {text:'moody cinematic lighting, 35mm film look'}, 'stage.hasEnvSheet': {flag:false},
  'stage.camera': {text:'16:9'}, 'stage.cameraPresetId': {text:null}, 'stage.sensorId': {text:'fullFrame'},
+ // The stage look (stage.lighting) reads back at its studio defaults.
+ 'stage.keyLight.color': {text:null}, 'stage.lighting.sky': {text:null}, 'stage.lighting.skyTop': {text:null}, 'stage.lighting.ambient': {number:1},
+ 'stage.lighting.hemiSky': {text:'#ffffff'}, 'stage.lighting.hemiGround': {text:'#5a5d64'}, 'stage.lighting.fill': {number:1}, 'stage.lighting.fog': {number:0},
+ 'stage.lighting.exposure': {number:1}, 'stage.lighting.shadowSoftness': {number:0},
  ...patch,
 }).map(([path,value])=>({path,...value}));
 async function railCameraUndo(f, interleaveObject) {
@@ -514,7 +519,7 @@ const implementations={
   assert.equal(f.binding.context().entities.find(c=>c.id==='actor-a').motion.takeId,null);
   const scene=await f.call('inspect_studio',{scope:'scene'}),stage=scene.document.stage;
   assert.deepEqual({environment:stage.environment,style:stage.style,hasEnvironmentImage:!!stage.environmentImage,hasEnvSheet:stage.hasEnvSheet,keyLight:stage.keyLight,camera:{presetId:stage.cameraPresetId,aspect:stage.shotAspect,sensorId:stage.sensorId}},
-   {environment:'a sunlit modern living room',style:'moody cinematic lighting, 35mm film look',hasEnvironmentImage:false,hasEnvSheet:false,keyLight:{x:6,y:9,z:4,intensity:1.12,warmth:0.5},camera:{presetId:null,aspect:'16:9',sensorId:'fullFrame'}});
+   {environment:'a sunlit modern living room',style:'moody cinematic lighting, 35mm film look',hasEnvironmentImage:false,hasEnvSheet:false,keyLight:{x:6,y:9,z:4,intensity:1.12,warmth:0.5,color:null},camera:{presetId:null,aspect:'16:9',sensorId:'fullFrame'}});
   assert.deepEqual({characters:f.binding.context().scene.characterCount,objects:f.binding.context().scene.objectCount,shots:scene.document.shots.length,frames:f.binding.context().scene.frameCount,assets:f.binding.context().assets.length},
    {characters:2,objects:0,shots:1,frames:48,assets:commands.studioObjectCatalogue().objects.length});
   const made=await f.call('arrange_objects',f.request('arrange_objects',{ops:[{op:'create',source:{kind:'cube'},position:{world:{x:0,y:0,z:0}}},{op:'create',source:{kind:'cube'},position:{world:{x:2,y:0,z:0}}}]}));

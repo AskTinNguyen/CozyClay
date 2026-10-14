@@ -8,13 +8,13 @@ import { normalizeStableItems } from "./stable-items.js";
 import { elementByPath } from "./studio-elements.js";
 import { wrapAngle } from "./scene-objects.js";
 import { normalizeTakeSource } from "./domains/motion/take-source.js";
+import { createKeyLight, normalizeLighting } from "./stage-lighting.js";
 // The timeline clock lives in timeline-fps.js (three-free, so the agent
 // sidecar can import it); re-exported here for every scene-side caller.
 import { LEGACY_FRAME_FPS, TIMELINE_FRAME_FPS, toTimelineFrame } from "./timeline-fps.js";
 
 const CHARACTER_POSITION_LIMITS = elementByPath("character.position");
 const CHARACTER_SCALE_LIMITS = elementByPath("character.scale");
-const KEY_LIGHT_LIMITS = Object.fromEntries(["x", "y", "z", "intensity", "warmth"].map((axis) => [axis, elementByPath(`stage.keyLight.${axis}`)]));
 
 export const SCENES_VERSION = 5;
 export const SCENES_STORAGE_KEY = "cozyclay.scenes.v5";
@@ -71,29 +71,7 @@ const DEFAULT_SCENE_STAGE = Object.freeze({
 	shotAspect: "16:9",
 	cameraPresetId: null,
 	sensorId: DEFAULT_SENSOR_FORMAT,
-	// The key light the user can grab: position of the sun puck, the rig's
-	// master brightness, and a warm/cool colour offset. Values mirror the
-	// tuned StageLights defaults, so a stage saved before the light was
-	// movable renders exactly as it did.
-	keyLight: Object.freeze({ x: 6, y: 9, z: 4, intensity: 1.12, warmth: 0.5 }),
 });
-
-/** Clamp a stored key light back into the stage's usable envelope. */
-export function createKeyLight(value) {
-	const source = plainObject(value) ? value : {};
-	const fallback = DEFAULT_SCENE_STAGE.keyLight;
-	const finite = (entry, base, bounds) => (typeof entry === "number" && Number.isFinite(entry)
-		? Math.max(bounds.min, Math.min(bounds.max, entry))
-		: base);
-	return {
-		x: finite(source.x, fallback.x, KEY_LIGHT_LIMITS.x),
-		y: finite(source.y, fallback.y, KEY_LIGHT_LIMITS.y),
-		z: finite(source.z, fallback.z, KEY_LIGHT_LIMITS.z),
-		intensity: finite(source.intensity, fallback.intensity, KEY_LIGHT_LIMITS.intensity),
-		// 0 = cool daylight, 0.5 = the tuned warm default, 1 = sunset amber
-		warmth: finite(source.warmth, fallback.warmth, KEY_LIGHT_LIMITS.warmth),
-	};
-}
 
 let sceneSequence = 1;
 
@@ -266,7 +244,7 @@ function migrateLegacyCast(source) {
 }
 
 const STAGE_ENVELOPE_KEYS = new Set([
-	"characters", "hasCharSheet", "environmentImage", "environment", "style", "hasEnvSheet", "shotAspect", "cameraPresetId", "sensorId", "keyLight",
+	"characters", "hasCharSheet", "environmentImage", "environment", "style", "hasEnvSheet", "shotAspect", "cameraPresetId", "sensorId", "keyLight", "lighting",
 	"charA", "charB", "showB", "poseA", "poseB", "subject", "subject2",
 ]);
 
@@ -305,7 +283,10 @@ export function createSceneStage(stage = null) {
 		sensorId: Object.hasOwn(SENSOR_FORMATS, source.sensorId ?? source.sensorFormat)
 			? (source.sensorId ?? source.sensorFormat)
 			: DEFAULT_SCENE_STAGE.sensorId,
+		// The key light the user grabs (puck position, master brightness, warmth or
+		// colour) and the stage look; a stage saved before either renders as it did.
 		keyLight: createKeyLight(source.keyLight),
+		lighting: normalizeLighting(source.lighting),
 	};
 }
 

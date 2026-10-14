@@ -11,6 +11,8 @@ import { skeletonFor } from "./motion3/rigs/index.js";
 import { beatFrames, grabReleases, traceSeries, TRACE_COLORS } from "./motion3/beats.js";
 import { projectPoint, trailPoints, viewCameras } from "./motion3/views.js";
 import { checkRef } from "./motion3/refs.js";
+// verify_result's lighting check also reads the rendered shot frame; the binding imports it from here.
+export { verifyLighting } from "./studio-lighting-check.js";
 
 const TIMELINE_FPS = 24, TRACE_WIDTH = 960, TRACE_HEIGHT = 360, PAD = 12;
 const rgb = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));

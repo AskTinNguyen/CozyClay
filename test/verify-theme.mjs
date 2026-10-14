@@ -16,6 +16,8 @@ const app = ["../src/App.jsx", "../src/shell/TopBar.jsx", "../src/shell/MenuBar.
 const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
 const room = readFileSync(new URL("../src/room.jsx", import.meta.url), "utf8");
+// The tuned rig's numbers and the stage colours live in the stage look (stage.lighting).
+const look = readFileSync(new URL("../src/stage-lighting.js", import.meta.url), "utf8");
 const theme = readFileSync(new URL("../src/theme.js", import.meta.url), "utf8");
 
 expect("header brand is Cozy Clay", app.includes("Cozy <span>Clay</span>"));
@@ -34,7 +36,8 @@ expect("current frame uses the v2 selection token", css.includes(".tl-frame-box"
 expect("new installs start in light mode", theme.includes('export const DEFAULT_THEME = "light"'));
 // The stage is the grey workbench (editor, preview, exports), dark or light
 // with the UI theme; grid view only trades the deck for the reference grid.
-expect("Canvas uses the grey workbench background", app.includes('args={[gridView ? GRID_BACKGROUND : stageBackground(uiTheme)]}'));
+expect("Canvas uses the grey workbench background", app.includes("<StageAtmosphere lighting={lighting} keyLight={keyLight} theme={uiTheme} grid={gridView} />")
+	&& look.includes("const sky = themed ? (grid ? GRID_BACKGROUND : stageBackground(theme)) : l.sky;"));
 expect("Character uses white clay", app.includes('const CLAY = "#ffffff"'));
 expect("Room uses a grey deck a step above the sky", room.includes('const FLOOR = "#5b5d63"'));
 // The walls are gone on purpose: the set is an open deck, so a shot can stage a
@@ -48,11 +51,14 @@ expect(
 	// The key is user-movable now: the tuned rig survives as the keyLight
 	// DEFAULTS, so an untouched stage still renders the same high-key look.
 	// grid view may swap in the neutral studio rig; the clay values stay the default arm
-	room.includes('["#ffffff", light ? "#d6d8de" : "#5a5d64", 0.9]') &&
-		room.includes("neutral ? 0.34 : light ? 0.32 : 0.18") &&
-		// the key colour is now the user's warmth dial, defaulting to the
-		// tuned warm value — the default keyLight shape carries it
-		room.includes("{ x: 6, y: 9, z: 4, intensity: 1.12, warmth: 0.5 }"),
+	// stage.lighting's studio default carries it (test/bus/verify-stage-lighting.mjs pins the numbers)
+	room.includes("<hemisphereLight args={[look.hemi.sky, look.hemi.ground, 0.9]}") &&
+		look.includes('ground: neutral ? "#3a3d42" : lightTheme ? "#d6d8de" : l.hemiGround') &&
+		look.includes('hemiSky: "#ffffff", hemiGround: "#5a5d64"') &&
+		look.includes("(neutral ? 0.34 : lightTheme ? 0.32 : 0.18)") &&
+		// the key colour is now the user's warmth dial (or an explicit colour),
+		// defaulting to the tuned white — the default keyLight shape carries it
+		look.includes("{ x: 6, y: 9, z: 4, intensity: 1.12, warmth: 0.5, color: null }"),
 );
 
 // #650: the project-mode badge is quiet secondary text from the v2 text scale,

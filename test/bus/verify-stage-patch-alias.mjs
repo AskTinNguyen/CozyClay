@@ -1,14 +1,16 @@
 import assert from 'node:assert/strict';
-import { STUDIO_ELEMENTS } from '../../src/studio-elements.js';
+import { STUDIO_ELEMENTS, isSettableElement } from '../../src/studio-elements.js';
 import { stageFixture } from './stage-fixture.mjs';
 const values = { 'keyLight.x': -8, 'keyLight.y': 14, 'keyLight.z': -5, 'keyLight.intensity': 500, 'keyLight.warmth': .8,
   environmentImage: 'data:image/png;base64,QQ==', environment: 'A rooftop', style: 'Watercolour', hasEnvSheet: true,
-  camera: '9:16', cameraPresetId: 'wide', sensorId: 'super35' };
+  camera: '9:16', cameraPresetId: 'wide', sensorId: 'super35', 'keyLight.color': '#9db6e6', 'lighting.sky': '#0b1426', 'lighting.skyTop': '#020408',
+  'lighting.ambient': 0.6, 'lighting.hemiSky': '#34507f', 'lighting.hemiGround': '#0a0c12', 'lighting.fill': 0.25, 'lighting.fog': 0.45, 'lighting.exposure': 1.4, 'lighting.shadowSoftness': 0.75 };
 function stable(receipt) {
   const { commandId, receiptId, undo, ...rest } = receipt;
   return { ...rest, undo: undo && { entries: undo.entries, canUndoDirect: undo.canUndoDirect } };
 }
-for (const element of STUDIO_ELEMENTS.filter(row => row.path.startsWith('stage.'))) {
+// lighting.preset is written by stage.applyLighting alone, so neither path sets it.
+for (const element of STUDIO_ELEMENTS.filter(row => row.path.startsWith('stage.') && isSettableElement(row))) {
   const a = stageFixture(), b = stageFixture();
   try {
     const key = element.path.slice(6), value = values[key];

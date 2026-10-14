@@ -25,6 +25,7 @@ const app = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8")
 	+ readFileSync(new URL("../src/stage-capture.jsx", import.meta.url), "utf8")
 	+ readFileSync(new URL("../src/stage-characters.jsx", import.meta.url), "utf8");
 const room = readFileSync(new URL("../src/room.jsx", import.meta.url), "utf8");
+const look = readFileSync(new URL("../src/stage-lighting.js", import.meta.url), "utf8");
 
 /* --- the grid is baked into the deck, not floated over it ----------------- */
 
@@ -62,16 +63,18 @@ expect(
 	"the capture pushes the fog back and restores it",
 	app.includes("const CAPTURE_FOG_NEAR = 55;") &&
 	app.includes("const CAPTURE_FOG_FAR = 95;") &&
-	app.includes("fog.near = CAPTURE_FOG_NEAR;") &&
-	app.includes("fog.near = fogNear;"),
+	// haze (stage.lighting.fog) brings its own range; without it the export horizon stands
+	app.includes("fog.near = look?.fog?.near ?? CAPTURE_FOG_NEAR;") &&
+	app.includes("fog.near = fogNear;") &&
+	look.includes("captureFog: l.fog > 0 ? haze : null"),
 );
 expect(
 	"the viewport fog is untouched",
 	// Clay stage keeps its tuned values; grid view swaps to the void fog whose
 	// far plane also sits below CAPTURE_FOG_NEAR, so the capture trick holds.
-	app.includes('args={gridView ? [GRID_FOG.color, GRID_FOG.near, GRID_FOG.far] : [stageBackground(uiTheme), 18, 54]}'),
+	look.includes("base = neutral ? GRID_FOG : { near: 18, far: 54 }") && look.includes("near: Math.min(base.near, haze.near), far: Math.min(base.far, haze.far)"),
 );
-const captureFog = app.indexOf("fog.near = CAPTURE_FOG_NEAR;");
+const captureFog = app.indexOf("fog.near = look?.fog?.near ?? CAPTURE_FOG_NEAR;");
 const restoreFog = app.indexOf("fog.near = fogNear;");
 expect("the restore happens after the render, in a finally", captureFog > 0 && restoreFog > captureFog);
 

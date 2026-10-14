@@ -54,14 +54,22 @@ export function CaptureRig({ apiRef, camRef, width = CAPTURE_W, height = CAPTURE
 					// exported frame wants the opposite: the horizon IS the vanishing
 					// point, and without it the floor has no far edge to read depth
 					// against. Push the falloff back for this draw only, then restore
-					// it so the viewport is untouched.
+					// it so the viewport is untouched. Haze (stage.lighting.fog, set by
+					// StageAtmosphere) is part of the look, so it brings its own range.
 					const fog = scene.fog;
 					const fogNear = fog?.near;
 					const fogFar = fog?.far;
+					const look = scene.userData.stageCapture;
 					if (fog) {
-						fog.near = CAPTURE_FOG_NEAR;
-						fog.far = CAPTURE_FOG_FAR;
+						fog.near = look?.fog?.near ?? CAPTURE_FOG_NEAR;
+						fog.far = look?.fog?.far ?? CAPTURE_FOG_FAR;
 					}
+					// three tone-maps only the canvas, never a render target, so the
+					// viewport's exposure reaches an export as light: every light is
+					// scaled by it for this draw and put back after.
+					const scaled = [];
+					if (look && look.exposure !== 1) scene.traverse((node) => { if (node.isLight) scaled.push([node, node.intensity]); });
+					for (const [light, intensity] of scaled) light.intensity = intensity * look.exposure;
 					try {
 						gl.setRenderTarget(target);
 						gl.render(scene, cam);
@@ -72,6 +80,7 @@ export function CaptureRig({ apiRef, camRef, width = CAPTURE_W, height = CAPTURE
 							fog.near = fogNear;
 							fog.far = fogFar;
 						}
+						for (const [light, intensity] of scaled) light.intensity = intensity;
 					}
 					return buffer;
 				},

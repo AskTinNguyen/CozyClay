@@ -17,7 +17,6 @@
 	"export src/camera-tutorial.jsx#default",
 	"export src/domains/motion.js#createMotionDomain",
 	"export src/domains/objects.js#createObjectsDomain",
-	"export src/grid-view.js#STAGE_BACKGROUND",
 	"export src/grid-view.js#STAGE_BACKGROUND_LIGHT",
 	"export src/mesh-sniff.js#isFbxBinaryMagic",
 	"export src/mesh-sniff.js#isGlbMagic",
