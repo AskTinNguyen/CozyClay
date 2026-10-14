@@ -187,6 +187,7 @@ qa.groups[i] = { "kind": "COLLIDE", "subject": "thigh_r x cube", "count": 6, "fi
 - A GOAL issue's value is the shortfall and its limit is 0. A failed goal makes `qa.ok` false. `qa.goals` is there when `spec.goals` is.
 - Issue frames index `out.frames`. `goals[].at` is absolute.
 - Validation: `compiler/validate-goals.js` `validateGoals(spec, err, opts)`.
+- `tol` on `above` or `moved` is refused, not mapped: a tolerance could mean `by: -tol` (slack) or `by: tol` (clearance). The message names the replacement with the number sent: `goals[0].tol applies to near; above takes by (a.y - b.y >= by, default 0): use by: 0.02 for a at least 0.02 m above b, or by: -0.02 to let a sit up to 0.02 m below b, not tol`.
 
 ## C9. describe (`describe.js` `describe(topic, name?)`)
 
@@ -402,9 +403,9 @@ object.createKit { "kit": "cigarette", "name"?: "Smoke", "position"?: { "x": 0.5
 
 | Kit | Parts (role) | Root, carry |
 |---|---|---|
-| cigarette | body (sculpt: filter, paper; 8.4 cm x 7.8 mm), ember (1 cm sphere, glow), light (faint point light; a glow lights nothing), smoke (effect at the tip) | prop `cig`: origin between RightHandIndex2/Middle2; +Y along the palm normal, filter at y -0.026, tip at y 0.058; at [0, 0, 0], along [0, 0, 1] |
-| lighter | body (sculpt: body, hood, wheel), flame (sphere, glow), light (point, flicker 0.6) | prop `lighter`: origin LeftHand/LeftHandMiddle1; +Y toward the thumb, flame at the prop point flame [0.01, 0.036, 0]; along [0, 1, 0] |
-| exhale (C16) | puff (an exhale effect on the root) | no hand: the root's bind is `{ follow: "landmark:mouth", aim: "face", visible: "exhale" }`; the catalogue row has `follow` in place of `prop` |
+| cigarette | body (sculpt: filter, paper; 8.4 cm x 7.8 mm), ember (1 cm sphere, glow), light (faint point light; a glow lights nothing), smoke (effect at the tip); ember, light and smoke are `showOnlyInTake` | prop `cig`: origin between RightHandIndex2/Middle2; +Y along the palm normal, filter at y -0.026, tip at y 0.058; at [0, 0, 0], along [0, 0, 1] |
+| lighter | body (sculpt: body, hood, wheel), flame (sphere, glow), light (point, flicker 0.6); flame and light are `showOnlyInTake` | prop `lighter`: origin LeftHand/LeftHandMiddle1; +Y toward the thumb, flame at the prop point flame [0.01, 0.036, 0]; along [0, 1, 0] |
+| exhale (C16) | puff (an exhale effect on the root, `showOnlyInTake`) | no hand: the root's bind is `{ follow: "landmark:mouth", aim: "face", visible: "exhale" }`; the catalogue row has `follow` in place of `prop` |
 | bat | body (sculpt: knob, handle, taper frustums, barrel, end cap; 0.84 m), trail (effect on the barrel, width 0.3 along it) | root at the knob, +Y along the bat; props.batGrip of the swing fixture, at -0.14 u, along u = [0, 0.5, 0.866] |
 | ball | body (7.4 cm sphere) | props.ballGrip |
 | sword | body (sculpt: pommel, grip, guard, blade, tip; 1 m), trail | root at the grip; props.swordGrip |
@@ -412,7 +413,7 @@ object.createKit { "kit": "cigarette", "name"?: "Smoke", "position"?: { "x": 0.5
 
 A part whose kind the build does not have is left out and named in `skipped`.
 
-A part marked `showOnlyInTake` (a record field the normalizer keeps, `object-look.js`) draws only on the frames a take's visible channel shows it; with no take, or a take that does not bind it, it is hidden (`object-travel.js` `trackShown`, `sceneObjectsAt`).
+A part marked `showOnlyInTake` (a record field the normalizer keeps, `object-look.js`) draws only on the frames a take's visible channel shows it: its own channel, or one of a group above it (the exhale root's `visible: "exhale"` shows the puff). With no take, or a take that binds no visible channel on it or above it, it is hidden: a light, glow or effect included (`object-travel.js` `trackShown`, `sceneObjectsAt`, `effects/emitter.js`). The bodies and the bat and sword trails (a still trail draws nothing) are not marked.
 
 A glowing part (the ember, the flame, the muzzle flash) casts no shadow: any record with `glow` is self-lit (lane K9), so a light inside it shines out. A light that renders a shadow from inside a record that casts one lights almost nothing; the receipt that places, switches or moves either says `LIGHT_BLOCKED` with the light's id and `Blocked: inside <name> (<id>), which casts shadows, so it lights almost nothing. Move it out or set shadow false.` (`src/light-blockers.js`; primitives by their drawn shape, other records by their box).
 

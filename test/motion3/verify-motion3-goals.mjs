@@ -125,7 +125,11 @@ const cases = [
 	[[{ moved: "object:cylinder" }], ["goals[0] needs at: a frame or [f0, f1] (absolute frames within 0..47)"]],
 	[[{ moved: "object:cylinder", at: 3, mode: "some" }], ['goals[0].mode must be "all" or "any", got "some"']],
 	[[{ near: ["joint:LeftHand", "anchor:spot"], tol: -1, at: 3 }], ["goals[0].tol must be a number >= 0 (metres), got -1"]],
-	[[{ above: ["joint:LeftHand", "anchor:spot"], tol: 0.1, at: 3 }], ["goals[0].tol applies to near; above takes by"]],
+	// tol on above/moved names the by that replaces it (the live sessions 1e3d1adc and c100b90c sent tol 0.05 and 0.02 on above)
+	[[{ above: ["joint:LeftHand", "anchor:spot"], tol: 0.1, at: 3 }], ["goals[0].tol applies to near; above takes by (a.y - b.y >= by, default 0): use by: 0.1 for a at least 0.1 m above b, or by: -0.1 to let a sit up to 0.1 m below b, not tol"]],
+	[[{ above: ["joint:LeftKnee", "joint:Hips"], tol: 0.02, at: 3 }], ["goals[0].tol applies to near; above takes by (a.y - b.y >= by, default 0): use by: 0.02 for a at least 0.02 m above b, or by: -0.02 to let a sit up to 0.02 m below b, not tol"]],
+	[[{ moved: "object:cylinder", tol: 0.03, at: 3 }], ["goals[0].tol applies to near; moved takes by (the object moves >= by, default 0.05): use by: 0.03 (metres), not tol"]],
+	[[{ above: ["joint:LeftHand", "anchor:spot"], tol: "x", at: 3 }], ["goals[0].tol applies to near; above takes by (a.y - b.y >= by, default 0): use by: 0.05 for a at least 0.05 m above b, or by: -0.05 to let a sit up to 0.05 m below b, not tol"]],
 	[[{ near: ["joint:LeftHand", "anchor:spot"], by: 0.1, at: 3 }], ["goals[0].by applies to above and moved; near takes tol"]],
 	[[{ moved: "object:cylinder", by: -0.1, at: 3 }], ["goals[0].by must be a number >= 0 (metres), got -0.1"]],
 	[[{ moved: "object:cylinder", at: 3, mdoe: "any" }], ['goals[0] has unknown field "mdoe"; did you mean "mode"? (fields: name, near, above, moved, tol, by, at, mode)']],

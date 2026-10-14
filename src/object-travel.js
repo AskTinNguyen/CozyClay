@@ -80,25 +80,32 @@ function trackMatrix(object, frame, take, out) {
 	return out.compose(scratchPos, scratchQuat, scratchScale);
 }
 
-// A record marked showOnlyInTake (a kit's muzzle flash and its light) stays hidden until a take's vis track shows it.
-const ownShown = (id, frame, take, record) => {
+// The record's own vis track at `frame`: true or false, null when the take has none for it.
+const visAt = (id, frame, take) => {
 	const track = take?.objectTracks?.get?.(id);
-	return track?.vis ? track.vis[trackFrame(track, frame)] === 1 : record?.showOnlyInTake !== true;
+	return track?.vis ? track.vis[trackFrame(track, frame)] === 1 : null;
 };
 
 // False while a compiled take carries the record out of sight (a cigarette still in the pocket),
 // or hides a record it is grouped under: with `objects` (the authored records, a Map by id or the
 // list) every ancestor's vis track counts too, so a group's visible channel hides its parts.
+// A record marked showOnlyInTake (a kit's flame, ember, tip smoke, exhale puff or muzzle flash, and
+// their lights) is hidden unless a vis track drives it: its own or, with `objects`, a group's above it
+// (the exhale kit's root shows its puff). A static scene never draws it.
 export function trackShown(id, frame, take, objects = null) {
-	const lookup = objects && asLookup(objects);
-	if (!ownShown(id, frame, take, lookup?.get(id))) return false;
-	if (!lookup || !take?.objectTracks?.size) return true;
-	const seen = new Set([id]);
-	for (let parent = lookup.get(id)?.parent; typeof parent === "string" && !seen.has(parent); parent = lookup.get(parent)?.parent) {
-		seen.add(parent);
-		if (!ownShown(parent, frame, take, lookup.get(parent))) return false;
+	const lookup = objects && asLookup(objects), own = visAt(id, frame, take);
+	if (own === false) return false;
+	let driven = own === true;
+	if (lookup && take?.objectTracks?.size) {
+		const seen = new Set([id]);
+		for (let parent = lookup.get(id)?.parent; typeof parent === "string" && !seen.has(parent); parent = lookup.get(parent)?.parent) {
+			seen.add(parent);
+			const shown = visAt(parent, frame, take);
+			if (shown === false || (shown === null && lookup.get(parent)?.showOnlyInTake === true)) return false;
+			driven ||= shown === true;
+		}
 	}
-	return true;
+	return driven || lookup?.get(id)?.showOnlyInTake !== true;
 }
 
 // The take's level of the record at `frame` (its lvl track: 0 dark, 1 as authored, up to 4; C15), else 1.

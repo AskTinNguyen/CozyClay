@@ -40,6 +40,14 @@ const extra = [
 ];
 export const declarations = Object.freeze([extra[0], ...existing, ...extra.slice(1).map(entry => entry.id === 'shot.frame' ? entry : { ...entry, exposure: 'ui-only' })]);
 
+// shot.setRange also takes range: [startFrame, endFrameExclusive] or flat startFrame/endFrameExclusive
+// fields; both become range: { startFrame, endFrameExclusive } before validation (registry normalizeArgs).
+function lenientRange(args) {
+  const { range, startFrame, endFrameExclusive, ...rest } = args, flat = Object.fromEntries(Object.entries({ startFrame, endFrameExclusive }).filter(([, v]) => v !== undefined));
+  if (Array.isArray(range) && range.length === 2 && !Object.keys(flat).length) return { ...rest, range: { startFrame: range[0], endFrameExclusive: range[1] } };
+  return range === undefined && Object.keys(flat).length ? { ...rest, range: flat } : args;
+}
+
 export function register(registry, ports) {
   const owner = () => ports.storeDomain('shot');
   const mounted = () => Boolean(ports.storeDomain?.('shot')) || 'The shots document owner is not mounted.';
@@ -159,6 +167,7 @@ export function register(registry, ports) {
   };
   registerElementSet(registry, ports, extra[0]);
   for (const declaration of declarations.filter(row => row.id !== 'shot.set')) registry.register({ ...declaration,
+    ...(declaration.id === 'shot.setRange' ? { normalizeArgs: lenientRange } : {}),
     available: state => mounted() === true ? (availability[declaration.id] ?? (existing.includes(declaration) ? hasShots : () => true))(state) : mounted(),
     run(args, context) {
       if (declaration.id === 'shot.frame') {

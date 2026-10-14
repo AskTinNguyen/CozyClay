@@ -17,8 +17,9 @@ const lookup = new Map(records.map(r => [r.id, r]));
 expect("the flash and its light are showOnlyInTake, the body and the root are not",
 	records.filter(r => r.showOnlyInTake).map(r => r.id).sort().join() === [flash, light].sort().join(), JSON.stringify(records.map(r => [r.id, r.showOnlyInTake])));
 let others = [];
-for (const kit of KIT_NAMES.filter(k => k !== "pistol")) others = [...others, ...buildKit(kit, others).records];
-expect("no other kit part is", !others.some(r => "showOnlyInTake" in r));
+// the smoking kits' lit parts are take-only too (verify-smoke-kit-take-only.mjs)
+for (const kit of KIT_NAMES.filter(k => !["pistol", "cigarette", "lighter", "exhale"].includes(k))) others = [...others, ...buildKit(kit, others).records];
+expect("no part of the bat, ball or sword is", others.length > 0 && !others.some(r => "showOnlyInTake" in r));
 
 // static: no take, and a take that binds only the pistol's carry
 const carryOnly = { frameCount: 10, objectTracks: new Map([[pistol.rootId, { frameCount: 10, pos: new Float32Array(30), quat: new Float32Array(40).fill(0).map((_, i) => (i % 4 === 3 ? 1 : 0)) }]]) };

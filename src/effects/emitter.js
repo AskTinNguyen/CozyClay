@@ -16,14 +16,10 @@ const scratchScale = new Vector3();
 const scratchEuler = new Euler();
 
 /** False while the take hides the record or any record it is grouped under
- * (a smoke emitter on a cigarette still in the pocket). */
+ * (a smoke emitter on a cigarette still in the pocket), and for a
+ * showOnlyInTake emitter no take drives (a kit's tip smoke in a static scene). */
 export function emitterShown(lookup, record, frame, take) {
-	const seen = new Set();
-	for (let node = record; node && !seen.has(node.id); node = typeof node.parent === "string" ? lookup.get(node.parent) : null) {
-		seen.add(node.id);
-		if (!trackShown(node.id, frame, take)) return false;
-	}
-	return true;
+	return trackShown(record.id, frame, take, lookup);
 }
 
 function authoredPose(record) {

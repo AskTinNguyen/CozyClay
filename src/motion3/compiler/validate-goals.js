@@ -12,6 +12,13 @@ import { GOAL_KINDS, goalKinds } from "../qa/goals.js";
 import { didYouMean, fmt } from "./vocab.js";
 
 const SHAPE = "{ name?, near | above | moved, tol?, by?, at, mode? }";
+// tol on above/moved is refused, not mapped: a tolerance reads as by: -tol (slack) or by: tol (clearance),
+// and agents meant both, so the message names each by that could be meant with the number sent.
+function tolOnBy(kind, tol) {
+	const v = Number.isFinite(tol) && tol !== 0 ? Math.abs(tol) : 0.05;
+	return kind === "above" ? `above takes by (a.y - b.y >= by, default 0): use by: ${v} for a at least ${v} m above b, or by: -${v} to let a sit up to ${v} m below b, not tol`
+		: `moved takes by (the object moves >= by, default 0.05): use by: ${v} (metres), not tol`;
+}
 const bareMoved = g => typeof g?.moved === "string" && g.moved !== "" && !/^[a-z]+:/.test(g.moved);
 
 /** goals with every bare moved id written as "object:<id>"; goals itself when none is bare. */
@@ -48,7 +55,7 @@ function validateGoal(spec, err, opts, g, i, names) {
 		else pair.forEach((ref, j) => checkRef(spec, err, ctx, `${at}.${kind}[${j}]`, ref));
 	}
 	if (g.tol !== undefined) {
-		if (kinds.length === 1 && kind !== "near") err(`${at}.tol applies to near; ${kind} takes by`);
+		if (kinds.length === 1 && kind !== "near") err(`${at}.tol applies to near; ${tolOnBy(kind, g.tol)}`);
 		else if (!(Number.isFinite(g.tol) && g.tol >= 0)) err(`${at}.tol must be a number >= 0 (metres), got ${fmt(g.tol)}`);
 	}
 	if (g.by !== undefined) {

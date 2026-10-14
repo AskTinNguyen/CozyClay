@@ -87,7 +87,7 @@ export const STUDIO_ACTIONS = freezeStudioData([
 	{ id: "shot.remove", label: "Delete shot", kind: "mutation", undoDomain: "shot", input: input(shotId),
 		description: "Delete a shot and leave its frames as free-camera time." },
 	{ id: "shot.setRange", label: "Set shot range", kind: "mutation", undoDomain: "shot", input: input({ ...shotId, range: StudioSchemas.FrameRange }),
-		description: "Move a shot's start and end to a half-open frame range. Edges are clamped to the timeline and refused where they would overlap another shot; the receipt's delta shows the range that landed." },
+		description: "Move a shot's start and end to a half-open frame range, e.g. { shotId, range: { startFrame: 0, endFrameExclusive: 240 } } for frames 0-239. range: [0, 240] ([start, endExclusive]) and flat { shotId, startFrame: 0, endFrameExclusive: 240 } are taken as the same range. Edges are clamped to the timeline and refused where they would overlap another shot; the receipt's summary shows the range that landed (\"Set shot range: Shot 1 [0, 240).\")." },
 	{ id: "shot.reorder", label: "Move shot", kind: "mutation", undoDomain: "shot",
 		input: input(shotId, { startFrame: frame, index: stillIndex }),
 		description: "Move a shot; give exactly one of startFrame or index. With startFrame, a clip moves in time to start there, keeping its length and camera keys (a noop where it would overlap another shot), and a still moves to the place in the still order that frame falls in. With index (stills only), the still moves to that position among the stills (0 is first; past the end means last). Stills stay end to end from frame 0." },
@@ -219,8 +219,9 @@ export function createStudioActionRegistry({ readState } = {}) {
 			});
 		},
 		prepare(id, args = {}) {
-			const entry = registry.get(id);
-			const validated = validateStudioSchema(entry.input, args ?? {}, "INVALID_ARGUMENT", "$.args");
+			const entry = registry.get(id), given = args ?? {};
+			// normalizeArgs (optional) rewrites another spelling the action takes into its declared input first.
+			const validated = validateStudioSchema(entry.input, entry.normalizeArgs ? entry.normalizeArgs(given) : given, "INVALID_ARGUMENT", "$.args");
 			if (readState) {
 				const verdict = availability(entry, readState());
 				if (verdict !== true) fail("TARGET_NOT_READY", verdict);
