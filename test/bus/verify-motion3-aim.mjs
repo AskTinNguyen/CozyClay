@@ -31,12 +31,13 @@ const withKeys = keys => { const sp = structuredClone(SWING_SPEC); sp.objects[BA
 const compile = keys => compileSpec(withKeys(keys), { sk, scene });
 const Y = [0, 1, 0], col = (R, i) => [R[0][i], R[1][i], R[2][i]];
 
-// 1. the car exit bakes the take of v3@9674cdcf; the plain and keyed swings bake lane L2's (soles on the floor, the back foot pivots on its ball)
+// 1. the car exit bakes the take of v3@9674cdcf; the plain swing bakes lane L2's (soles on the floor, the back foot pivots on its ball),
+// the keyed one lane N1's (its left hand, anchored to the bat, swivels its elbow clear of the torso: C14 second hand)
 const plain = compileSpec(SWING_SPEC, { sk, scene }), keyed = compile(SWING_KEYS), dsk = skeletonFor(DRIVER.model);
 const car = compileSpec({ fps: 24, ...EXITCAR_SPEC }, { sk: dsk, scene: motionScene(CAR_OBJECTS) });
 const hashes = { plain: hashOf(bakeTake(sk, plain.out)), keyed: hashOf(bakeTake(sk, keyed.out)), exitcar: hashOf(bakeTake(dsk, car.out)) };
-expect("the car exit bakes the take of v3@9674cdcf, bit for bit; the swing without keys and with the J2 rot keys bake the takes of lane L2",
-	hashes.plain === "681b862de6399b43" && hashes.keyed === "28b1eb95ff5197a5" && hashes.exitcar === "9e35eb6aa9a2c9f8", JSON.stringify(hashes));
+expect("the car exit bakes the take of v3@9674cdcf, bit for bit; the swing without keys bakes the take of lane L2, with the J2 rot keys the take of lane N1",
+	hashes.plain === "681b862de6399b43" && hashes.keyed === "c21fc53ff579e90f" && hashes.exitcar === "9e35eb6aa9a2c9f8", JSON.stringify(hashes));
 
 // 2. the same keys as aims: +Y of each rot; roll = its turn about aim from where the plain carry holds the bat at that frame
 const rollFrom = (q, from, aim) => {

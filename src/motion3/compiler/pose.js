@@ -95,7 +95,7 @@ export function pose(sk, c, hooks = {}) {
 		wrist(sk, s, side, num(c[`wtwist_${k}`]), num(c[`wflex_${k}`]));
 		fingers(sk, s, side, c[`fingers_${k}`]);
 		const held = hooks.hold?.(k, s);
-		if (held) holdHand(sk, s, side, held, poleIk, ELBOW_REST, diag, k);
+		if (held) holdHand(sk, s, side, held, ELBOW_REST, diag, k);
 		hooks.afterArm?.(k, s, diag);
 	}
 	return { s, diag };

@@ -141,7 +141,9 @@ export function holdHook(ctx, out, solvePlain, solveLed) {
 		let run = [];
 		const flush = () => {
 			const x = smoothPath((i, r) => run[i].grip.cost(r), (i, r) => run[i].grip.point(r), run.map(g => g.grip.softmin())), gate = smoothed(run.map((g, i) => gripGate(g.grip, x[i])));
-			run.forEach((g, i) => plan.set(g.f, { roll: x[i], gate: gate[i] }));
+			// then its elbow's path at those rolls, like the holding elbow's (hold-plan.js)
+			const arm = i => run[i].grip.arm(x[i]), th = smoothPath((i, t) => arm(i).at(t).cost, (i, t) => arm(i).at(t).elbow, run.map((_, i) => arm(i).best.th));
+			run.forEach((g, i) => plan.set(g.f, { roll: x[i], gate: gate[i], pole: arm(i).at(th[i]).pv }));
 			run = [];
 		};
 		for (let f = Math.max(0, grab); f <= Math.min(out.frameCount - 1, release); f++) {
@@ -160,7 +162,7 @@ export function holdHook(ctx, out, solvePlain, solveLed) {
 			if (h) return { ...h, pole: planOf(id, o).get(f) };
 			const w = k === "l" && s && !planning ? leadWeight(curveIn(out, id), spanIn(out, o), f) : 0, grip = w > 0 ? gripAt(id, s, c) : null;
 			const planned = grip && rollsOf(id, o).get(f), roll = planned?.roll ?? grip?.softmin();
-			if (grip) return secondHold(grip, w, roll, planned?.gate ?? gripGate(grip, roll));
+			if (grip) return secondHold(grip, w, roll, planned?.gate ?? gripGate(grip, roll), planned?.pole ?? grip.arm(roll).best.pole);
 		}
 		return null;
 	};

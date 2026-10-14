@@ -35,20 +35,17 @@ export function wristNeed(neutral, goal, axT, l) {
 	return { twist: twist * DEG, flex: dot(swing, axF) * DEG, dev: dot(swing, axD) * DEG, axF, axD };
 }
 
-/** The strain of a wrist need: each turn's squared share of its half range, plus OVER times the squared share past a limit. */
-function strainOf(need) {
+/**
+ * The strain of a wrist need: each turn's squared share of its half range, plus OVER times the
+ * squared share past a limit; `margin` (a share of the half range) moves the limits that far in.
+ */
+function strainOf(need, margin = 0) {
 	let cost = 0;
 	for (const [k, [lo, hi]] of Object.entries(WRIST_LIMITS)) {
-		const z = (need[k] - (lo + hi) / 2) / ((hi - lo) / 2), over = Math.max(0, Math.abs(z) - 1);
+		const z = (need[k] - (lo + hi) / 2) / ((hi - lo) / 2), over = Math.max(0, Math.abs(z) - 1 + margin);
 		cost += z * z + OVER * over * over;
 	}
 	return cost;
-}
-
-/** The strain of turning the hand of `side` on pose s to world rotation `goal` with the forearm as it is. */
-export function strainHere(sk, s, side, goal) {
-	const I = sk.index, fa = I[`${side}ForeArm`], h = I[`${side}Hand`], neutral = mul(s.R[fa], mul(T(sk.restWorldRot[fa]), sk.restWorldRot[h]));
-	return strainOf(wristNeed(neutral, goal, norm(sub(s.P[h], s.P[fa])), apply(mul(neutral, T(s.R[h])), palmAxes(sk, s, side).l)));
 }
 
 /**
@@ -56,9 +53,9 @@ export function strainHere(sk, s, side, goal) {
  * arm of `side`): at(th) -> { pv, need, elbow, cost } for the elbow th radians about the shoulder-wrist
  * axis from `ref` (the bend direction the channels gave), angleOf(world direction) -> th,
  * softmin() -> the th of the Boltzmann-weighted mean of POLES poles, miss the metres the arm is
- * short of W.
+ * short of W. `margin` tightens the wrist limits the strain prices (strainOf).
  */
-export function landscape(sk, s, side, goal, W, ref, restBend) {
+export function landscape(sk, s, side, goal, W, ref, restBend, margin = 0) {
 	const I = sk.index, a = I[`${side}Arm`], fa = I[`${side}ForeArm`], h = I[`${side}Hand`], S = s.P[a];
 	const A = len(sub(s.P[fa], S)), B = len(sub(s.P[h], s.P[fa]));
 	const v = sub(W, S), d = len(v), u = scale(v, 1 / Math.max(d, 1e-9)), dc = clamp(d, Math.abs(A - B) + 1e-4, (A + B) * 0.9995);
@@ -71,7 +68,7 @@ export function landscape(sk, s, side, goal, W, ref, restBend) {
 		const pv = add(scale(e1, Math.cos(th)), scale(e2, Math.sin(th))), fdir = sub(Wn, add(S, add(scale(u, along), scale(pv, rad))));
 		const neutral = mul(align(faDir, faBend, fdir, pv), neutralRel), need = wristNeed(neutral, goal, norm(fdir), apply(neutral, lLocal));
 		const z = Math.abs(Math.atan2(Math.sin(th), Math.cos(th))) / SWING;
-		return { pv, need, elbow: add(S, add(scale(u, along), scale(pv, rad))), cost: strainOf(need) + PULL * (1 - Math.cos(th)) + OVER * Math.max(0, z - 1) ** 2 };
+		return { pv, need, elbow: add(S, add(scale(u, along), scale(pv, rad))), cost: strainOf(need, margin) + PULL * (1 - Math.cos(th)) + OVER * Math.max(0, z - 1) ** 2 };
 	};
 	const angleOf = x => (len(off(x)) > 1e-6 ? Math.atan2(dot(x, e2), dot(x, e1)) : 0);
 	const softmin = () => {
@@ -86,10 +83,11 @@ export function landscape(sk, s, side, goal, W, ref, restBend) {
  * The elbow pole for hand rotation `goal` with the wrist at W (landscape above). opts.toward, a
  * world direction, sets the pole instead of the soft minimum (a planned pole, ../hold-plan.js);
  * opts.w (0..1, the keys' blend weight) scales the swing from ref, so the elbow eases out of and
- * back into the plain arm. Returns { pole, need, cost, miss }: pole a world direction for twoBone.
+ * back into the plain arm; opts.margin as for landscape. Returns { pole, need, cost, miss }: pole
+ * a world direction for twoBone.
  */
-export function swivel(sk, s, side, goal, W, ref, restBend, { toward, w = 1 } = {}) {
-	const land = landscape(sk, s, side, goal, W, ref, restBend), best = toward ? land.angleOf(toward) : land.softmin();
+export function swivel(sk, s, side, goal, W, ref, restBend, { toward, w = 1, margin = 0 } = {}) {
+	const land = landscape(sk, s, side, goal, W, ref, restBend, margin), best = toward ? land.angleOf(toward) : land.softmin();
 	const pick = land.at(w * Math.atan2(Math.sin(best), Math.cos(best)));
 	return { pole: pick.pv, need: pick.need, cost: pick.cost, miss: land.miss };
 }

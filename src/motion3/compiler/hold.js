@@ -10,12 +10,23 @@
 // left as a residual: QA measures it on the object (qa/key-checks.js) and reads the reasons from
 // diag.hold_<side>.
 import { add, sub, scale, norm, dot, len, mul, T, apply, axisRot, angle, quatFromMat, matFromQuat } from "./math.js";
-import { twoBone, palmAxes } from "./limbs.js";
+import { twoBone, palmAxes, carried } from "./limbs.js";
 import { rotateSubtree } from "./skeleton.js";
 import { slerp } from "./quat.js";
 import { WRIST_LIMITS, FOREARM_SHARE, ELBOW_REST, wristNeed, swivel, landscape } from "./arm-orient.js";
 
-const ITERATIONS = 3, REACH_PRICE = 1;
+// STRAIGHT: a plain arm whose elbow sits less than this (m) off its shoulder-wrist midpoint is
+// straight and has no bend plane of its own. A straight FK arm keeps 1 to 3 mm there from its bone
+// lengths (Y Bot: the upper arm is 2 mm shorter than the forearm, so the elbow sits 1 mm up the
+// arm), and that direction is no bend: as the swivel's reference it put the elbow "up", so the
+// limit 100 deg from it ruled out an elbow pointing down (session d5c110a7's batting stance).
+// ROLL_MARGIN: the share of each wrist half range by which holdCost tightens the limits, so the
+// roll picked for a key leaves the frames between keys (they turn between the picks) some room.
+// FOLD: the most an elbow folds (rad, active flexion 145 deg). twoBone folds an arm flat (the wrist
+// on the shoulder) and a flat arm turns the hand any way at all, so without a price the roll of a
+// stance key at the shoulder folded it (session d5c110a7: wrist 6-9 cm from the shoulder, 162 deg),
+// and the frames between keys, where the wrist moves a few cm, broke away from it.
+const ITERATIONS = 3, REACH_PRICE = 1, STRAIGHT = 0.005, ROLL_MARGIN = 0.15, FOLD = (145 * Math.PI) / 180;
 const clampTo = (v, [lo, hi]) => Math.min(hi, Math.max(lo, v));
 
 /**
@@ -33,16 +44,31 @@ function orient(sk, s, side, h, fa, goal) {
 	return need;
 }
 
-/** What holding `palm` with weight w needs on pose s: the hand's goal rotation, the wrist target for a hand rotation (pin "wrist": where it is; "palm": where the palm stays put), the channels' bend direction. */
-function aimArm(sk, s, side, palm, now, w, pole, pin) {
-	const I = sk.index, a = I[`${side}Arm`], fa = I[`${side}ForeArm`], h = I[`${side}Hand`];
+/**
+ * The bend direction the channels gave the arm of `side` on pose s, what its swivel turns from: the
+ * elbow off the shoulder-wrist midpoint, or for a straight arm (STRAIGHT) where its elbow would
+ * point if it bent, the upper arm's rest bend carried by the bone, so the swivel's limits sit on
+ * the upper arm's own roll.
+ */
+export function bendPlane(sk, s, side) {
+	const I = sk.index, a = I[`${side}Arm`], bend = sub(s.P[I[`${side}ForeArm`]], scale(add(s.P[a], s.P[I[`${side}Hand`]]), 0.5));
+	return len(bend) > STRAIGHT ? bend : carried(sk, s, a, ELBOW_REST);
+}
+
+/**
+ * What holding `palm` with weight w needs on pose s: the hand's goal rotation, the wrist target for
+ * a hand rotation (pin "wrist": where it is; "palm": where the palm stays put), the bend direction
+ * (bendPlane).
+ */
+function aimArm(sk, s, side, palm, now, w, pin) {
+	const I = sk.index, h = I[`${side}Hand`];
 	// the palm frame in the hand bone's frame: fixed for this frame's finger curl
 	const localR = mul(T(s.R[h]), now.R), localP = apply(T(s.R[h]), sub(now.pos, s.P[h]));
 	const goal = matFromQuat(slerp(quatFromMat(s.R[h]), quatFromMat(mul(palm.R, T(localR))), w));
-	const from = s.P[h].slice(), bend = sub(s.P[fa], scale(add(s.P[a], s.P[h]), 0.5));
+	const from = s.P[h].slice();
 	// the wrist goes where the grip lands with the orientation the wrist reached (the goal at first)
 	const grip = R => sub(palm.pos, apply(R, localP));
-	return { goal, plane: len(bend) > 1e-4 ? bend : pole, wristAt: pin === "wrist" ? () => from : pin === "palm" ? grip : R => add(from, scale(sub(grip(R), from), w)) };
+	return { goal, plane: bendPlane(sk, s, side), wristAt: pin === "wrist" ? () => from : pin === "palm" ? grip : R => add(from, scale(sub(grip(R), from), w)) };
 }
 
 /**
@@ -50,11 +76,10 @@ function aimArm(sk, s, side, palm, now, w, pole, pin) {
  * (1 inside the keyed span), the palm frame the keys ask for, the function that measures it on a
  * pose, the planned elbow pole (../hold-plan.js; searched here when absent) and, for a second hand
  * (../second-hand.js), the id of the object it grips and what stays put (pin "wrist" or "palm").
- * `pole` is the fallback bend direction for an arm the channels left straight.
  */
-export function holdHand(sk, s, side, held, pole, restBend, diag, k) {
+export function holdHand(sk, s, side, held, restBend, diag, k) {
 	const I = sk.index, a = I[`${side}Arm`], fa = I[`${side}ForeArm`], h = I[`${side}Hand`], { w } = held;
-	const { goal, plane, wristAt } = aimArm(sk, s, side, held.palm, held.measure(s), w, pole, held.pin);
+	const { goal, plane, wristAt } = aimArm(sk, s, side, held.palm, held.measure(s), w, held.pin);
 	const arm = swivel(sk, s, side, goal, wristAt(goal), plane, restBend, { toward: held.pole, w });
 	let miss = 0, need = { twist: 0, flex: 0, dev: 0 };
 	for (let i = 0; i < ITERATIONS; i++) {
@@ -67,23 +92,26 @@ export function holdHand(sk, s, side, held, pole, restBend, diag, k) {
 
 /**
  * The swivel landscape holdHand searches for `held` on pose s (the plain arm of `side`): what
- * ../hold-plan.js plans the elbow's path on. holdLandscape and holdCost read a plain arm left
- * straight against straight down (holdHand: the channels' elbow pole).
+ * ../hold-plan.js plans the elbow's path on.
  */
 export function holdLandscape(sk, s, side, held) {
-	const { goal, plane, wristAt } = aimArm(sk, s, side, held.palm, held.measure(s), held.w, [0, -1, 0]);
+	const { goal, plane, wristAt } = aimArm(sk, s, side, held.palm, held.measure(s), held.w);
 	return landscape(sk, s, side, goal, wristAt(goal), plane, ELBOW_REST);
 }
 
 /**
  * The arm's cost of holding the palm frame `palm` on pose s (the plain arm of `side`, `now` its
- * palm frame there): the wrist strain at the pole holdHand would take, plus REACH_PRICE per
- * squared centimetre the arm is short. An aim key without roll takes the cheapest roll (key-aim.js).
+ * palm frame there): the wrist strain at the pole holdHand would take, its limits ROLL_MARGIN
+ * tighter, plus REACH_PRICE per squared centimetre the arm is short or the wrist nearer the shoulder
+ * than the elbow folds (FOLD). An aim key without roll takes the cheapest roll (key-aim.js).
  */
 export function holdCost(sk, s, side, palm, now) {
-	const { goal, plane, wristAt } = aimArm(sk, s, side, palm, now, 1, [0, -1, 0]);
-	const arm = swivel(sk, s, side, goal, wristAt(goal), plane, ELBOW_REST);
-	return arm.cost + REACH_PRICE * (arm.miss * 100) ** 2;
+	const { goal, plane, wristAt } = aimArm(sk, s, side, palm, now, 1), W = wristAt(goal);
+	const arm = swivel(sk, s, side, goal, W, plane, ELBOW_REST, { margin: ROLL_MARGIN });
+	// the wrist no nearer the shoulder than the elbow folds (FOLD): an arm folded flat holds anything, and nothing between keys
+	const I = sk.index, S = s.P[I[`${side}Arm`]], A = len(sub(s.P[I[`${side}ForeArm`]], S)), B = len(sub(s.P[I[`${side}Hand`]], s.P[I[`${side}ForeArm`]]));
+	const fold = Math.max(0, Math.sqrt(A * A + B * B + 2 * A * B * Math.cos(FOLD)) - len(sub(W, S)));
+	return arm.cost + REACH_PRICE * ((arm.miss * 100) ** 2 + (fold * 100) ** 2);
 }
 
 /** Degrees the elbow swung about the shoulder-wrist axis from the bend direction `plane` the channels gave. */
