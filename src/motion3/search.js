@@ -8,9 +8,9 @@ import { compileMotion } from "./compiler/compile.js";
 import { bakeChannels } from "./compiler/channels.js";
 import { expandGenerators } from "./compiler/walk.js";
 import { runMotionQa } from "./qa/index.js";
+import { weightOf } from "./qa/severity.js";
 
 const INT_FIELDS = new Set(["f", "f0", "steps", "period", "swing", "until", "reach", "hold", "release"]);
-const LOW_IS_BAD = new Set(["ORIENT", "BELOW", "CLEARANCE"]);
 const isOpen = v => v && typeof v === "object" && !Array.isArray(v) && (v.range ?? v.search) !== undefined && Object.keys(v).every(k => ["range", "search", "int"].includes(k));
 const pathText = path => path.reduce((s, p) => (typeof p === "number" ? `${s}[${p}]` : s ? `${s}.${p}` : p), "");
 
@@ -39,15 +39,8 @@ function resolveParams(spec, params, values) {
 	return s;
 }
 
-/** QA groups -> one number: issue count weighted by how far the worst issue is past its limit. */
-function costOf(qa) {
-	let c = 0;
-	for (const g of qa.groups) {
-		const ex = LOW_IS_BAD.has(g.kind) ? g.limit - g.worst : g.worst - g.limit;
-		c += g.count * (1 + Math.min(3, Math.max(0, ex) / Math.max(Math.abs(g.limit), 0.01)));
-	}
-	return c;
-}
+/** QA groups -> one number: the sum of their severities (qa/severity.js, unrounded). */
+const costOf = qa => qa.groups.reduce((c, g) => c + weightOf(g), 0);
 
 /** Frames a parameter can change (baked channels differ between its ends), or null for all. */
 function dirtyWindow(spec, params, mid, prepare, sk) {

@@ -1,34 +1,22 @@
-// Validation of the spec parts other than keys: anchors, props, fits, objects, generators,
-// checks and fix. See validate.js.
+// Validation of the spec parts other than keys: anchors, props, fits, generators, checks and
+// fix; objects (validate-objects.js) and goals (validate-goals.js) run from here too. Unknown
+// fields go through opts.unknown, which ignores them on a lenient reload. See validate.js.
 import { didYouMean, CONVENTIONS, isVec3, fmt } from "./vocab.js";
 import { FIX_KEYS } from "../fix/index.js";
 import { QA_LIMITS } from "../qa/checks.js";
+import { ANCHOR_FIELDS, WALK_FIELDS, CHECK_FIELDS } from "../schema/fields.js";
+import { boneOk, objectOk, refOk } from "./validate-common.js";
+import { validateObjects } from "./validate-objects.js";
+import { validateGoals } from "./validate-goals.js";
 
-const ANCHOR_FIELDS = { world: ["p"], body: ["p"], bone: ["bone", "offset"], segment: ["from", "to", "t", "tMin", "offset", "reach"],
-	object: ["object", "local"], landmark: ["name"], prop: ["prop", "point", "offset"] };
-const WALK_FIELDS = ["type", "f0", "steps", "step", "period", "swing", "halfWidth", "lift", "heading", "turnDistance", "pelvisHigh", "pelvisLow", "firstStep", "armSwing"];
-const CHECK_FIELDS = ["contacts", "orient", "below", "clearance", "appear", "supports", "allow", "limits", "mouthPoints"];
 const SIDE = new Set(["l", "r"]);
 
-function boneOk(err, sk, at, bone) {
-	if (!sk || sk.index[bone] !== undefined) return true;
-	err(`${at} names unknown bone "${bone}"${didYouMean(String(bone), sk.names)}`);
-	return false;
-}
-
-function objectOk(err, scene, at, id) {
-	const ids = Object.keys(scene?.objects ?? {});
-	if (!ids.length || ids.includes(id)) return true;
-	err(`${at} names object "${id}", which is not in the scene${didYouMean(String(id), ids)}`);
-	return false;
-}
-
-function validateAnchors(spec, err, { sk, scene }) {
+function validateAnchors(spec, err, { sk, scene, unknown = err }) {
 	for (const [name, a] of Object.entries(spec.anchors ?? {})) {
 		const at = `anchors.${name}`;
 		if (/_[lr]$/.test(name)) err(`${at}: an anchor name may not end in _l or _r (the weight channel w_${name}_l would read as anchor "${name.slice(0, -2)}"); the side goes on the weight channel, so name it "${name.slice(0, -2)}"`);
 		if (!a || !ANCHOR_FIELDS[a.kind]) { err(`${at}.kind must be one of ${Object.keys(ANCHOR_FIELDS).join(", ")}, got ${fmt(a?.kind)}`); continue; }
-		for (const f of Object.keys(a)) if (f !== "kind" && !ANCHOR_FIELDS[a.kind].includes(f)) err(`${at} (${a.kind}) has unknown field "${f}"; fields: ${ANCHOR_FIELDS[a.kind].join(", ")}`);
+		for (const f of Object.keys(a)) if (f !== "kind" && !ANCHOR_FIELDS[a.kind].includes(f)) unknown(`${at} (${a.kind}) has unknown field "${f}"; fields: ${ANCHOR_FIELDS[a.kind].join(", ")}`);
 		for (const f of ["p", "offset", "local"]) if (a[f] !== undefined && !isVec3(a[f])) err(`${at}.${f} must be [x, y, z], got ${fmt(a[f])}`);
 		if ((a.kind === "world" || a.kind === "body") && a.p === undefined) err(`${at} (${a.kind}) needs p: [x, y, z]${a.kind === "body" ? `, ${CONVENTIONS.pole}` : ""}`);
 		if (a.kind === "bone") boneOk(err, sk, at, a.bone);
@@ -59,24 +47,11 @@ function validateProps(spec, err, { sk }) {
 	});
 }
 
-function validateObjectsAndGenerators(spec, err, { scene, frames }) {
-	for (const [id, o] of Object.entries(spec.objects ?? {})) {
-		const at = `objects.${id}`;
-		objectOk(err, scene, at, id);
-		if (o?.prop !== undefined) {
-			if (!spec.props?.[o.prop]) err(`${at}.prop "${o.prop}" is not in spec.props`);
-			for (const f of ["at", "along"]) if (o[f] !== undefined && !isVec3(o[f])) err(`${at}.${f} must be [d, l, n] along the palm axes, got ${fmt(o[f])}`);
-			if (o.visible !== undefined && (typeof o.visible !== "string" || !o.visible)) err(`${at}.visible must name a channel (shown above 0.5)`);
-			continue;
-		}
-		if (!isVec3(o?.pivot)) err(`${at}.pivot must be [x, y, z] (world hinge point), got ${fmt(o?.pivot)}`);
-		if (o?.axis !== undefined && (!isVec3(o.axis) || Math.hypot(...o.axis) < 1e-9)) err(`${at}.axis must be a non-zero [x, y, z], got ${fmt(o.axis)}`);
-		if (typeof o?.channel !== "string" || !o.channel) err(`${at}.channel must name the angle channel (degrees)`);
-	}
+function validateGenerators(spec, err, { frames, unknown = err }) {
 	(spec.generators ?? []).forEach((g, i) => {
 		const at = `generators[${i}]`;
 		if (g?.type !== "walk") return err(`${at}.type must be "walk", got ${fmt(g?.type)}`);
-		for (const f of Object.keys(g)) if (!WALK_FIELDS.includes(f)) err(`${at} has unknown field "${f}"${didYouMean(f, WALK_FIELDS)}`);
+		for (const f of Object.keys(g)) if (!WALK_FIELDS.includes(f)) unknown(`${at} has unknown field "${f}"${didYouMean(f, WALK_FIELDS)}`);
 		if (!Number.isInteger(g.f0) || g.f0 < 0 || g.f0 > frames - 1) err(`${at}.f0 must be an integer frame within 0..${frames - 1}, got ${fmt(g.f0)}`);
 		if (g.heading !== undefined && !(Array.isArray(g.heading) && g.heading.length === 2 && g.heading.every(Number.isFinite))) err(`${at}.heading must be [h0, h1] in degrees (${CONVENTIONS.yaw}), got ${fmt(g.heading)}`);
 		for (const f of WALK_FIELDS.slice(2)) if (f !== "heading" && g[f] !== undefined && !Number.isFinite(g[f])) err(`${at}.${f} must be a finite number, got ${fmt(g[f])}`);
@@ -85,17 +60,9 @@ function validateObjectsAndGenerators(spec, err, { scene, frames }) {
 	});
 }
 
-function refOk(spec, err, sk, at, ref) {
-	const [kind, rest] = String(ref).split(/:(.*)/s);
-	if (kind === "joint") return boneOk(err, sk, at, rest);
-	if (kind === "anchor") return spec.anchors?.[rest] ? true : err(`${at} "${ref}" names no anchor`);
-	if (kind === "prop") { const [p, pt] = (rest ?? "").split("."); return spec.props?.[p]?.points?.[pt] || pt === "origin" ? true : err(`${at} "${ref}" names no prop point`); }
-	err(`${at} "${ref}" must be joint:<Bone>, prop:<prop>.<point> or anchor:<name>`);
-}
-
-function validateChecks(spec, err, { sk, scene, frames }) {
+function validateChecks(spec, err, { sk, scene, frames, unknown = err }) {
 	const c = spec.checks ?? {};
-	for (const k of Object.keys(c)) if (!CHECK_FIELDS.includes(k)) err(`checks.${k} is not a check${didYouMean(k, CHECK_FIELDS)} (checks: ${CHECK_FIELDS.join(", ")})`);
+	for (const k of Object.keys(c)) if (!CHECK_FIELDS.includes(k)) unknown(`checks.${k} is not a check${didYouMean(k, CHECK_FIELDS)} (checks: ${CHECK_FIELDS.join(", ")})`);
 	const when = (at, w) => {
 		if (w === undefined || typeof w === "string") return;
 		if (!(Array.isArray(w) && w.length === 2 && w.every(Number.isInteger) && w[0] <= w[1] && w[0] >= 0 && w[1] <= frames - 1)) err(`${at}.when must be a weight channel or [f0, f1] within 0..${frames - 1}, got ${fmt(w)}`);
@@ -109,15 +76,18 @@ function validateChecks(spec, err, { sk, scene, frames }) {
 	(c.clearance ?? []).forEach((k, i) => { objectOk(err, scene, `checks.clearance[${i}]`, k.object); when(`checks.clearance[${i}]`, k.frames); });
 	(c.appear ?? []).forEach((k, i) => { boneOk(err, sk, `checks.appear[${i}].joint`, k.joint); if (!spec.anchors?.[k.anchor]) err(`checks.appear[${i}].anchor "${k.anchor}" is not in spec.anchors`); });
 	(c.supports ?? []).forEach((k, i) => objectOk(err, scene, `checks.supports[${i}]`, k.object));
-	for (const name of Object.keys(c.limits ?? {})) if (!(name in QA_LIMITS)) err(`checks.limits.${name} is not a QA limit${didYouMean(name, Object.keys(QA_LIMITS))}`);
+	for (const name of Object.keys(c.limits ?? {})) if (!(name in QA_LIMITS)) unknown(`checks.limits.${name} is not a QA limit${didYouMean(name, Object.keys(QA_LIMITS))}`);
 	const fix = spec.fix;
 	if (fix !== undefined && fix !== false && (typeof fix !== "object" || fix === null)) err("spec.fix must be false or { reach, slide, penetration, retime }");
-	else for (const k of Object.keys(fix || {})) if (!FIX_KEYS.includes(k)) err(`spec.fix.${k} is not a fix${didYouMean(k, FIX_KEYS)} (fixes: ${FIX_KEYS.join(", ")})`);
+	else for (const k of Object.keys(fix || {})) if (!FIX_KEYS.includes(k)) unknown(`spec.fix.${k} is not a fix${didYouMean(k, FIX_KEYS)} (fixes: ${FIX_KEYS.join(", ")})`);
 }
 
+/** opts = { sk, scene, frames, lenient, unknown: err for an unknown field (a no-op when lenient) }. */
 export function validateParts(spec, err, opts) {
 	validateAnchors(spec, err, opts);
 	validateProps(spec, err, opts);
-	validateObjectsAndGenerators(spec, err, opts);
+	validateObjects(spec, err, opts);
+	validateGenerators(spec, err, opts);
 	validateChecks(spec, err, opts);
+	validateGoals(spec, err, opts);
 }

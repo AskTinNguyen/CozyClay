@@ -3,9 +3,7 @@
 // listed at once, one per line, so the agent fixes them in one edit.
 import { VEC_CHANNELS, POLE_CHANNELS, NUM_CHANNELS, MAP_CHANNELS, FINGER_PRESETS, rangeOf, CONVENTIONS, didYouMean, isVec3, fmt } from "./vocab.js";
 import { validateParts } from "./validate-parts.js";
-
-const SPEC_FIELDS = ["schema", "fps", "frames", "label", "keys", "anchors", "props", "fits", "objects", "generators", "checks", "fix", "use", "channels", "detourRadius", "search"];
-const KEY_FIELDS = new Set(["f", "set", "step", "src"]);
+import { SPEC_FIELDS, KEY_FIELDS } from "../schema/fields.js";
 const MAX_ERRORS = 12;
 
 
@@ -46,14 +44,14 @@ function checkValue(err, at, ch, v) {
 	if (r && (v < r[1] || v > r[2])) err(`${at} ${ch} = ${v} is outside ${r[1]}..${r[2]} (${r[3]})`);
 }
 
-function validateKeys(spec, err, frames) {
+function validateKeys(spec, err, frames, unknown) {
 	if (spec.keys !== undefined && !Array.isArray(spec.keys)) return err("spec.keys must be an array of { f, set, step? }");
 	const anchors = Object.keys(spec.anchors ?? {}), custom = customChannels(spec);
 	const known = [...VEC_CHANNELS, ...NUM_CHANNELS, ...MAP_CHANNELS, ...custom, ...anchors.flatMap(a => [`w_${a}_l`, `w_${a}_r`])];
 	(spec.keys ?? []).forEach((key, i) => {
 		const name = key?.src ? (key.src.startsWith("keys[") ? key.src : `${key.src} key`) : `keys[${i}]`;
 		if (!key || typeof key !== "object") return err(`${name} must be { f, set, step? }`);
-		for (const field of Object.keys(key)) if (!KEY_FIELDS.has(field)) err(`${name} has unknown field "${field}"; a key is { f, set, step? }`);
+		for (const field of Object.keys(key)) if (!KEY_FIELDS.includes(field)) unknown(`${name} has unknown field "${field}"; a key is { f, set, step? }`);
 		if (!Number.isInteger(key.f)) return err(`${name}.f must be an integer frame, got ${fmt(key.f)}`);
 		if (key.f < 0 || key.f > frames - 1) err(`${name}.f = ${key.f} is outside 0..${frames - 1} (spec.frames ${frames})`);
 		const at = `${name} (f${key.f})`;
@@ -71,16 +69,19 @@ function validateKeys(spec, err, frames) {
 	});
 }
 
-/** Throws MOTION_SPEC_INVALID listing every problem; scene objects are checked when given. */
-export function validateSpec(spec, { sk, scene } = {}) {
-	const errors = [], err = m => { if (errors.length < MAX_ERRORS) errors.push(m); };
+/**
+ * Throws MOTION_SPEC_INVALID listing every problem; scene objects are checked when given.
+ * lenient (a saved take compiled again, take-source.js) ignores unknown fields.
+ */
+export function validateSpec(spec, { sk, scene, lenient = false } = {}) {
+	const errors = [], err = m => { if (errors.length < MAX_ERRORS) errors.push(m); }, unknown = lenient ? () => {} : err;
 	if (!spec || typeof spec !== "object") throw new Error("MOTION_SPEC_INVALID: spec must be an object");
 	if (spec.schema !== "cozyclay.motion-spec.v1") err(`spec.schema must be "cozyclay.motion-spec.v1", got ${fmt(spec.schema)}`);
-	for (const k of Object.keys(spec)) if (!SPEC_FIELDS.includes(k)) err(`spec.${k} is not a spec field${didYouMean(k, SPEC_FIELDS)} (fields: ${SPEC_FIELDS.join(", ")})`);
+	for (const k of Object.keys(spec)) if (!SPEC_FIELDS.includes(k)) unknown(`spec.${k} is not a spec field${didYouMean(k, SPEC_FIELDS)} (fields: ${SPEC_FIELDS.join(", ")})`);
 	if (spec.fps !== undefined && spec.fps !== 24) err(`spec.fps must be 24, the timeline rate, got ${fmt(spec.fps)}`);
 	const frames = spec.frames;
 	if (!Number.isInteger(frames) || frames < 1 || frames > 20000) err(`spec.frames must be an integer 1..20000, got ${fmt(frames)}`);
-	validateKeys(spec, err, Number.isInteger(frames) ? frames : 20000);
-	validateParts(spec, err, { sk, scene, frames: Number.isInteger(frames) ? frames : 20000 });
+	validateKeys(spec, err, Number.isInteger(frames) ? frames : 20000, unknown);
+	validateParts(spec, err, { sk, scene, frames: Number.isInteger(frames) ? frames : 20000, lenient, unknown });
 	if (errors.length) throw new Error(`MOTION_SPEC_INVALID: ${errors.join("\n")}${errors.length >= MAX_ERRORS ? "\n(more problems not listed)" : ""}`);
 }

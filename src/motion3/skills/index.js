@@ -5,12 +5,13 @@
 // frame), and the agent's own anchors/props/fits replace a skill's of the same name.
 import { stateAt } from "../compiler/walk.js";
 import { didYouMean } from "../compiler/vocab.js";
+import { USE_FIELDS } from "../schema/fields.js";
 import { standIdle, walkTo, reachGrip } from "./basic.js";
 import { sitInSeat, exitCar } from "./car.js";
 import { smokeCigarette } from "./smoke.js";
 
 const SKILLS = { standIdle, sitInSeat, exitCar, walkTo, reachGrip, smokeCigarette };
-const SKILL_NAMES = Object.keys(SKILLS);
+export const SKILL_NAMES = Object.keys(SKILLS);
 const bad = msg => { throw new Error(`MOTION_SPEC_INVALID: ${msg}`); };
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
@@ -29,8 +30,8 @@ function mergeChecks(into, part) {
 	}
 }
 
-/** spec with `use` -> { spec: plain spec (no use), used: [{ skill, f0, end }] }. */
-export function expandUse(spec, { sk, scene }) {
+/** spec with `use` -> { spec: plain spec (no use), used: [{ skill, f0, end }] }; lenient ignores unknown use[i] fields. */
+export function expandUse(spec, { sk, scene, lenient = false }) {
 	if (!spec.use?.length) return { spec, used: [] };
 	if (!Array.isArray(spec.use)) bad("spec.use must be an array of { skill, args, f0 }");
 	const own = (spec.keys ?? []).map((k, i) => ({ ...k, src: `keys[${i}]` }));
@@ -38,7 +39,7 @@ export function expandUse(spec, { sk, scene }) {
 	spec.use.forEach((u, i) => {
 		const tag = `use[${i}] ${u?.skill}`;
 		if (!SKILLS[u?.skill]) bad(`use[${i}].skill "${u?.skill}" is not a skill${didYouMean(String(u?.skill), SKILL_NAMES)} (skills: ${SKILL_NAMES.join(", ")})`);
-		for (const f of Object.keys(u)) if (!["skill", "args", "f0"].includes(f)) bad(`use[${i}] has unknown field "${f}"; an entry is { skill, args, f0 }`);
+		for (const f of Object.keys(u)) if (!USE_FIELDS.includes(f) && !lenient) bad(`use[${i}] has unknown field "${f}"; an entry is { skill, args, f0 }`);
 		if (!Number.isInteger(u.f0) || u.f0 < 0 || u.f0 > spec.frames - 1) bad(`use[${i}].f0 must be an integer frame within 0..${spec.frames - 1}, got ${JSON.stringify(u.f0)}`);
 		const keys = [...skillKeys, ...own];
 		const ctx = { sk, scene, frames: spec.frames, f0: u.f0, args: structuredClone(u.args ?? {}), tag, keys, state: structuredClone(stateAt(keys, u.f0)), anchors: { ...merged.anchors, ...spec.anchors } };

@@ -37,11 +37,12 @@ export function normalizeTakeSource(value) {
 /** What a scene saves for a motion layer's take descriptor: its source and take id, or null. */
 export const savedTakeSource = descriptor => descriptor?.source ? { ...descriptor.source, takeId: descriptor.studioTakeId } : null;
 
-/** Compile a source back into the installed take (with `frames`, as motion.compile installs it). */
+/** Compile a source back into the installed take (with `frames`, as motion.compile installs it).
+ * Leniently: a field a later, stricter validator does not know never blocks loading a saved take. */
 export function compileTakeSource(source) {
 	const sk = skeletonFor(source?.rig);
 	if (!sk || !plain(source.spec)) return null;
-	const { out } = compileSpec({ fps: TIMELINE_FPS, ...source.spec }, { sk, scene: source.scene ?? { objects: {} } });
+	const { out } = compileSpec({ fps: TIMELINE_FPS, ...source.spec }, { sk, scene: source.scene ?? { objects: {} } }, { lenient: true });
 	const take = bakeTake(sk, out, source.placement, { spec: source.spec, prompt: source.spec.label ?? "" });
 	return { ...take, frames: take.frameCount };
 }

@@ -1,11 +1,15 @@
 // Actionable QA: every issue group gets a `cause` (the spec element most responsible: a key and
 // channel, an anchor, a fit, a generator step, a skill) and a `hint` (what to change, with a
 // direction and an amount in world metres or degrees, at a frame). Hints are derived from the
-// geometry of the worst frame and from the keys that bracket it.
+// geometry of the worst frame and from the keys that bracket it. A hint function returns
+// { cause, hint, fix? }; fix rides on the group unseen (non-enumerable) for qa/patch.js.
 import { contactHints } from "./hints-contact.js";
 import { motionHints } from "./hints-motion.js";
+import { objectHints } from "./hints-object.js";
+import { goalHints } from "./hints-goal.js";
+import { attachPatches } from "./patch.js";
 
-const HINTS = { ...contactHints, ...motionHints };
+const HINTS = { ...contactHints, ...motionHints, ...objectHints, ...goalHints };
 
 function keyTable(out) {
 	const byCh = new Map();
@@ -58,17 +62,18 @@ function context(sk, out, spec) {
 	return X;
 }
 
-/** Adds cause + hint to the first `limit` groups (mutates and returns them). */
-export function explainGroups(sk, out, spec, groups, limit = 16) {
+/** Adds cause + hint (+ patch) to the first `limit` groups (mutates and returns them); userSpec is what patches address. */
+export function explainGroups(sk, out, spec, groups, { limit = 16, userSpec } = {}) {
 	if (!groups.length) return groups;
 	const X = context(sk, out, spec);
 	for (const g of groups.slice(0, limit)) {
 		try {
 			const r = HINTS[g.kind]?.(X, g);
 			if (r) { g.cause = r.cause; g.hint = r.hint; }
+			if (r?.fix) Object.defineProperty(g, "fix", { value: r.fix, enumerable: false, configurable: true });
 		} catch (error) {
 			g.cause = "unknown"; g.hint = `no hint (${error.message})`;
 		}
 	}
-	return groups;
+	return attachPatches(groups, { X, userSpec });
 }

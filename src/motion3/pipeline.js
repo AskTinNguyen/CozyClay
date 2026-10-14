@@ -1,11 +1,18 @@
-// One compile as motion.compile runs it: open parameters are searched (search.js), skills
-// expand (skills/), the spec is validated strictly, the compiler bakes and auto-fixes the
-// frames, and QA measures them with a cause and a hint per issue group.
+// One compile as motion.compile runs it: frames "auto" resolves (skills/frames-auto.js), open
+// parameters are searched (search.js), unnamed checks get their index as a name (on a copy,
+// qa/check-names.js), skills expand (skills/), the spec is validated strictly (leniently for a
+// saved take compiled again), the compiler bakes and auto-fixes the frames, QA measures them with
+// a cause and a hint per issue group against the agent's own spec, and the timeline and the
+// requested probes read the result.
 import { compileMotion } from "./compiler/compile.js";
 import { validateSpec } from "./compiler/validate.js";
 import { runMotionQa } from "./qa/index.js";
+import { nameChecks } from "./qa/check-names.js";
 import { expandUse } from "./skills/index.js";
+import { resolveFrames } from "./skills/frames-auto.js";
 import { findParams, searchParams } from "./search.js";
+import { timelineOf } from "./timeline.js";
+import { runProbes } from "./probes.js";
 
 const ms = t => Math.round(performance.now() - t);
 
@@ -18,25 +25,28 @@ function warpChecks(spec, map) {
 }
 
 /**
- * spec -> { out, qa, spec (open values filled in), expanded, used, fixed, search, ms }.
- * opts.checks replaces every check (the spec's and its skills') for a re-measure.
+ * spec -> { out, qa, spec (frames and open values filled in), expanded, used, fixed, search,
+ * timeline, probes?, ms }. opts.checks replaces every check (the spec's and its skills') for a
+ * re-measure; opts.lenient ignores unknown fields (take-source.js); opts.probes are measured.
  */
 export function compileSpec(spec, { sk, scene }, opts = {}) {
-	const t0 = performance.now(), ctx = { sk, scene };
+	const t0 = performance.now(), ctx = { sk, scene, lenient: opts.lenient === true };
+	const checks = opts.checks && nameChecks({ checks: opts.checks }).checks;
 	const expand = s => {
-		const { spec: exp, used } = expandUse(s, ctx);
+		const { spec: exp, used } = expandUse(nameChecks(s), ctx);
 		// plain JSON objects compile about twice as fast as structuredClone'd ones (V8 shapes)
-		const full = JSON.parse(JSON.stringify(opts.checks ? { ...exp, checks: opts.checks } : exp));
+		const full = JSON.parse(JSON.stringify(checks ? { ...exp, checks } : exp));
 		validateSpec(full, ctx);
 		return { full, used };
 	};
-	const params = findParams(spec);
-	let resolved = spec, search = null;
-	if (params.length) ({ spec: resolved, search } = searchParams(spec, params, ctx, s => expand(s).full));
+	const framed = resolveFrames(spec, ctx), params = findParams(framed);
+	let resolved = framed, search = null;
+	if (params.length) ({ spec: resolved, search } = searchParams(framed, params, ctx, s => expand(s).full));
 	const t1 = performance.now();
 	const { full: expanded, used } = expand(resolved);
 	const out = compileMotion({ fps: 24, ...expanded }, ctx);
 	const compileMs = ms(t1), t2 = performance.now();
-	const qa = runMotionQa(sk, out, out.timeMap ? warpChecks(expanded, out.timeMap) : expanded);
-	return { out, qa, spec: resolved, expanded, used, fixed: out.fixed, search, ms: { compile: compileMs, qa: ms(t2), total: ms(t0) } };
+	const qa = runMotionQa(sk, out, out.timeMap ? warpChecks(expanded, out.timeMap) : expanded, { userSpec: resolved });
+	const timeline = timelineOf(out, { used, spec: expanded }), probes = opts.probes && runProbes(out, opts.probes, { spec: expanded, sk, scene });
+	return { out, qa, spec: resolved, expanded, used, fixed: out.fixed, search, timeline, ...(probes ? { probes } : {}), ms: { compile: compileMs, qa: ms(t2), total: ms(t0) } };
 }

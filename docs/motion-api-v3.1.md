@@ -1,0 +1,229 @@
+# Motion API v3.1 contracts
+
+This file is the contract for the motion API v3.1 lanes. The stub modules repeat each contract in their JSDoc. A lane fills its stub modules and does not change a contract. If a lane needs a contract change, it stops and reports the change and the reason. The integration lane (I) then lands a small "contract amendment" PR on `v3` first, and every lane rebases.
+
+The wave-0 PR (W0) wires every hot file once. After W0 these files are frozen for the lanes:
+
+- `src/commands/motion3.js`, `src/motion3/pipeline.js`, `src/motion3/qa/index.js`
+- `src/motion3/refs.js`, `src/motion3/json-patch.js`, `src/motion3/report.js`, `src/motion3/qa/severity.js`
+- `src/motion3/compiler/validate-common.js`, `tools/run-tests.mjs`, this file
+
+## Ownership
+
+| Lane | Owns |
+|---|---|
+| A | `schema/*`, `describe.js`, `compiler/validate.js`, `compiler/validate-parts.js`, `compiler/vocab.js`, `skills/{index,basic,car,smoke,book,info,frames-auto}.js` |
+| B | `timeline.js`, `probes.js`, `bones.js` |
+| C | `carried.js`, `object-pose.js`, `take.js`, `scene.js`, `object-tracks.js`, `compiler/compile.js`, `compiler/validate-objects.js`, `qa/object-checks.js`, `qa/hints-object.js`, `qa/checks.js` (`QA_LIMITS.grab` only), `src/object-travel.js` |
+| D1 | `qa/explain.js`, `qa/hints-motion.js`, `qa/hints-contact.js`, `qa/patch.js`, `repair.js` |
+| D2 | `spec-store.js`, `delta.js` |
+| E | `src/studio-contact-sheet.js`, `beats.js`, `src/studio-motion-visual.js`, the visual branch of `src/studio-app-binding.js` |
+| F | readOnly in `src/command-bus.js` and the `registry.list()` row, the revision fix, `qa/check-names.js` |
+| G | `compiler/validate-goals.js`, `qa/goals.js`, `qa/hints-goal.js` |
+| P | `bin/agent/studio-prompt.mjs`, `docs.js` (the words), supervisor default (off) |
+
+Paths without a folder are under `src/motion3/`. Every lane test is already registered in `tools/run-tests.mjs` as a placeholder that prints `pending (lane X)`.
+
+## C1. One schema source
+
+`src/motion3/schema/fields.js` holds the field tables. The validator, the skills expander and `motion.describe` read them only from there. Channels, ranges and presets come from `compiler/vocab.js`, `FIX_KEYS` from `fix/index.js`, `QA_LIMITS` from `qa/checks.js` and the skill names (`SKILL_NAMES`) from `skills/index.js`. Do not copy them.
+
+- `SPEC_FIELDS` (now with `goals`), `KEY_FIELDS`, `USE_FIELDS`, `ANCHOR_FIELDS`, `PROP_FIELDS`, `FIT_FIELDS`, `OBJECT_FIELDS`, `WALK_FIELDS`, `CHECK_FIELDS`, `CHECK_ENTRY_FIELDS`, `GOAL_FIELDS`, `PROBE_FIELDS`, `REF_KINDS`, `DESCRIBE_TOPICS`.
+- Every new validation error is `Error("MOTION_SPEC_INVALID: <exact message>")`. `motion3.js` turns it into `INVALID_ARGUMENT`.
+- `validateSpec(spec, { sk, scene, lenient })`. With `lenient: true` an unknown field is ignored. Unknown fields go through `opts.unknown` in the validator parts. `compileTakeSource` (a saved take compiled again) is lenient. `motion.compile` is strict.
+
+## C2. Point references (`refs.js`)
+
+```text
+ref := joint:<Bone> | bone:<Bone> | prop:<prop>.<point> | anchor:<name> | landmark:mouth | object:<id>[.center|.top|.base]
+refPoint(out, f, ref)            -> [x, y, z] | null   f is absolute; null outside out.f0 .. out.f0 + frames - 1
+refDistance(out, f, a, b)        -> metres | null      a bare object:<id> means "to its surface" (sdBox, 0 inside)
+checkRef(spec, err, { sk, scene }, at, ref, kinds = REF_KINDS) -> boolean
+```
+
+- `bone:` is the same point as `joint:`. Bone names go through `bones.js` `resolveBone`.
+- `object:<id>` takes a body or a group. Its points are the centre, the top-face centre and the bottom-face centre of the AABB of its part boxes' corners (`objectBoxesAt`). The default is the centre.
+- Two bare objects measure the centre of `a` to the surface of `b`.
+- `checkRef` messages start with `` `${at} "${ref}"` ``, for example `probes[0].distance[0] "joint:LeftHnad": unknown bone; did you mean "LeftHand"?`.
+- `spec.checks.*` keep their older grammar (joint, prop, anchor; `validate-common.js` `refOk`). Goals and probes use the full grammar.
+
+## C3. Objects: hinge, carry, grab/release (revised by user decisions 7.1 and 7.2)
+
+```jsonc
+spec.objects[id] =
+  { "pivot": [x,y,z], "axis": [x,y,z], "channel": "door" }            // hinge: a body or a group
+| { "prop": "cupHandleGrip", "grab": 104, "release": 160,             // carry: a body or a group (Empty) id
+    "at": [d,l,n], "along": [d,l,n], "visible": "cup_vis" }
+```
+
+**The group (Empty) is the unit.**
+
+- `object:<group>` refs, carry and hinge all take a group id.
+- A carried or hinged group gets **one track, on the group root** (`take.objects[groupId] = { pos, quat, vis? }`). The parts follow through the parent carry that already exists in `src/object-travel.js` (`ancestorsOf`, `ownTravelMatrix`). The Empty marker moves with them. There are no per-part tracks.
+- `motionScene` lists `ancestors` (parent ids, nearest first) on every body entry, so a group is known by its parts (`object-pose.js` `partsOf`). QA and refs move the part boxes by the group's pose.
+- While a group is in hand (grab to release), its track is in world space. The carry from the group's own parent (for example the table) is cut for that span, like `attach`, so nothing is carried twice.
+- A group hinge turns the whole group about the group root.
+
+**Timing.**
+
+- `f < grab`: the scene pose. `grab <= f <= release`: the prop's hand. `f > release`: frozen at the release pose.
+- No `grab`: in hand from frame 0. No `release`: in hand to the end. This is the PR #14 behaviour.
+- `grab` without `at`/`along`: the object keeps the transform it had against the palm axes at the grab frame, so it does not jump.
+- `at`/`along`: a fixed palm offset. Bodies only, not groups.
+
+**Carried objects are obstacles (7.1).**
+
+- A carried object (every part box of a group) is an obstacle at every frame, at its pose that frame. `objectTracks` does not mark it `ignore`; it moves like a hinged obstacle.
+- Body against carried object: the existing capsule-against-box check. The holding hand's fingers, hand and forearm are excused.
+- Carried object against other scene objects: new, kind `COLLIDE`, subject `"<object> x <other>"`, the same `QA_LIMITS` depth limits as the body.
+- Contact with the support the object stood on at grab (the object right below it at the grab frame) is allowed for +-3 frames around the grab frame and around the release frame. Other exceptions use `checks.allow`.
+- The hint moves the hand channel, like `moveHint`, with a D1 `fix`.
+
+**QA and functions.**
+
+- GRAB issues: kind `"GRAB"`, subject `"<id>: hand 12.0 cm from it at grab"`, `worstFrame` = grab, `limit` = `checks.limits.grab` (default 0.03 m). The distance runs from the prop origin to the part boxes' surface.
+- `partsOf(scene, id) -> string[]`: `[id]` for a body (plus bodies parented under it), every body under a group, `[]` for an unknown id.
+- `inHandAt(o, f) -> boolean`: `o` is the `spec.objects` entry, `f` absolute.
+- `objectBoxesAt(out, id, f) -> [{ id: partId, pos, R, half }] | null`: the part boxes moved by the group root's pose at absolute frame f; null outside the compiled window or for an unknown id. W0 answers the scene pose, hinges and the always-carried body; lane C adds grab/release and the group-root pose.
+- `objectOk(err, scene, at, id, { groups })`: a group id passes only with `{ groups: true }`. Elsewhere the message lists the parts: `checks.clearance[0] names "empty-2", a group (Empty) with no body of its own; its parts are cylinder, cube-6, cube-7, cube-8. Name one part`.
+
+## C4. Timeline (`timeline.js` `timelineOf(out, { used, spec }) -> entries`)
+
+`output.timeline`, at most 12 entries, ordered by `f[0]`:
+
+```jsonc
+{ "beat": "walkTo",          // the skill name | "walk" (generators) | "keys" (spans no skill covers)
+  "src": "use[1]",           // "use[i]" | "generators[i]" | "keys"
+  "f": [12, 86],             // inclusive, absolute frames
+  "end": { "root": [0.1, 0.98, 0.27], "yaw": 2.1, "hand_l": [0.27, 0.81, 0.85], "hand_r": [-0.2, 0.87, 0.3],
+           "on_l": "anchor:cupHandle", "on_r": null },   // metres 3 decimals, degrees 1; on_* = w_<a>_k > 0.5 or the held "object:<id>"
+  "planted": { "l": [[12, 31], [52, 86]], "r": [[12, 40]] },   // heel and ball < QA_LIMITS.plantH and still, >= 3 frames, <= 4 per foot
+  "events": [{ "f": 104, "object": "empty-2", "event": "grab" }] }   // grab | release | show | hide
+```
+
+`output.skills` stays for compatibility.
+
+## C5. Probes (`probes.js` `runProbes(out, probes, { spec, sk, scene }) -> { [name]: result }`)
+
+At most 16 probes per request. The answer comes from this compile, whether or not it installs.
+
+```jsonc
+"probes": [
+  { "name": "handToCup", "distance": ["joint:LeftHand", "object:empty-2"], "frames": [80, 130] },
+  { "name": "cupTop", "position": "object:empty-2.top", "frames": [100, 170], "every": 10 } ]
+-> "probes": {
+  "handToCup": { "min": 0.012, "minAt": 106, "max": 0.41, "maxAt": 80, "mean": 0.2, "first": 0.41, "last": 0.02 },
+  "cupTop": { "at": [{ "f": 100, "p": [0.2, 0.85, 0.85] }] } }        // at most 16 rows
+```
+
+## C6. Severity, hint fix, patch, repair
+
+`qa/severity.js` (W0, final):
+
+```js
+LOW_IS_BAD = new Set(["ORIENT", "BELOW", "CLEARANCE"])
+excessOf(g)   = max(0, LOW_IS_BAD ? limit - worst : worst - limit)
+weightOf(g)   = count * (1 + min(3, excess / max(|limit|, 0.01)))     // search.js cost = the sum, unrounded
+severityOf(g) = round2(weightOf(g))
+rankGroups(groups)  // adds excess (4 decimals) and severity; GOAL first, then severity desc, then count desc
+groupKey(g)   = `${kind} ${subject with every number as "#"}`         // a bracketed index ("contacts[1]") stays
+```
+
+```jsonc
+qa.groups[i] = { "kind": "COLLIDE", "subject": "thigh_r x cube", "count": 6, "first": 60, "last": 65,
+  "worst": 0.017, "worstFrame": 62, "limit": 0.005, "excess": 0.012, "severity": 13.2,
+  "cause": "...", "hint": "...",
+  "patch": [{ "op": "replace", "path": "/keys/0/set/root", "value": [0.48, 0.92, -0.052] }] }   // only when it applies mechanically
+```
+
+- Every hint function (`hints-*.js`) returns `{ cause, hint, fix? }`. `explain.js` puts `fix` on the group as a non-enumerable property, so it never reaches the output. The `moveHint` signature is frozen.
+- `fix = { channel, f, delta } | { channel, f, value } | { path: "/fix/retime", value: true } | { path: "/anchors/cupHandle/p", delta }`.
+- `qa/patch.js` `attachPatches(groups, { X, userSpec }) -> groups`: `X` is the explain context, `userSpec` the spec as the agent sent it (patches address it).
+- `repair.js` `repairSpec(spec, { rounds }, compile) -> { spec, result, repair }` with `repair = { rounds, compiles, applied: [{ kind, subject, patch, severity: [before, after] }], rejected }`. Each round tries the top 3 groups that carry a patch, keeps one when the summed severity drops, and stops when a round keeps nothing. Deterministic, at most 20 s. With `install: true` the improved spec is installed and `output.specId` names it.
+
+## C7. specId, base + patch, delta, report, output budget
+
+```jsonc
+// request: exactly one of spec or base (+ patch)
+{ "characterId": "char-a", "base": "spec-91c2a07d3e15", "patch": [{ "op": "replace", "path": "/keys/4/f", "value": 112 }], "install": false }
+// answer
+"specId": "spec-1f0e4b2a9c77",
+"delta": { "base": "spec-91c2a07d3e15", "resolved": 2, "new": 0, "worse": 0, "better": 1,
+           "keys": { "resolved": ["COLLIDE thigh_r x cube"], "new": [], "worse": [] } },   // at most 6 each; groupKey, severity change >= 5 %
+"more": { "specId": "...", "groups": 9, "timeline": 0, "probes": 0 }                         // only when something was cut
+// motion.report { specId, part: "groups" | "timeline" | "probes", from } -> { specId, part, from, items, next }
+```
+
+- `specIdOf(spec)` (`spec-store.js`, W0, final): `"spec-"` + the first 12 hex digits of the FNV-1a 64-bit hash of the JSON with keys sorted at every level.
+- The specId names the spec the take stores: what the agent sent, or the filled-in spec when a search or `frames: "auto"` changed it. `motion.qa` answers the specId of the installed take's spec.
+- `createSpecStore(max = 64) -> { put(spec) -> specId, get(specId) -> spec | null, keepParts(specId, { groups, timeline, probes }), parts(specId) -> parts | null }`. The store lives in the editor page's memory (a reload forgets it). W0 keeps the most recent 64; D2 owns it.
+- `json-patch.js` `applyPatch(doc, ops) -> copy`: add, remove, replace, test, `-` appends in add, `~0`/`~1` escapes. Errors: `patch[1] (replace /keys/12/f): /keys/12 does not exist (keys has 9 entries)`.
+- `delta.js` `deltaOf(baseGroups, groups, baseId) -> delta`.
+- Errors: `base "spec-…" is not known (the editor keeps the last 64 compiled specs this session); send spec`.
+- `report.js`: `MOTION_OUTPUT_BUDGET = 6000` bytes (8 KiB receipt minus about 1.5 KB of head and readback). `fitOutput(full, budget) -> output` keeps, in order: (1) frames, fps, installed, specId, qa.ok/total/goals, delta, repair; (2) the first 4 groups in full; (3) probes; (4) timeline (planted spans go first); (5) the other groups as one-liners `{ kind, subject, count, severity, first, last }`; (6) fixed, search, skills, ms. Room left turns one-liners back into full groups from the top. `more.<part>` counts the items missing or shortened. Every compile and `motion.qa` keeps its full parts in the store (`keepParts`), and `motion.report` pages them with `reportPage(parts, specId, part, from)`.
+
+## C8. Goals (spec top level; `qa/goals.js` `goalChecks(out, goals) -> { issues, results }`)
+
+```jsonc
+"goals": [
+  { "name": "cup lifted", "moved": "object:empty-2", "by": 0.1, "at": [130, 140] },
+  { "name": "cup at mouth", "near": ["object:empty-2.top", "landmark:mouth"], "tol": 0.06, "at": [150, 170] },
+  { "name": "hand over table", "above": ["joint:LeftHand", "object:cube.top"], "by": 0.05, "at": 120, "mode": "any" } ]
+-> "qa": { "ok": false,
+  "goals": [{ "name": "cup at mouth", "kind": "near", "ok": false, "value": 0.31, "at": 150, "need": 0.06 }],
+  "groups": [{ "kind": "GOAL", "subject": "cup at mouth: 0.31 m at f150 (needs <= 0.06)", "count": 1,
+               "worst": 0.25, "limit": 0, "worstFrame": 150, "first": 150, "last": 170 }] }
+```
+
+- Exactly one predicate: `near` (distance <= `tol`, default 0.05), `above` (a.y - b.y >= `by`, default 0), `moved` (the object base moved at least `by`, default 0.05, from the scene pose).
+- `mode` is `"all"` (default) or `"any"`.
+- A GOAL issue's value is the shortfall and its limit is 0. A failed goal makes `qa.ok` false. `qa.goals` is there when `spec.goals` is.
+- Issue frames index `out.frames`. `goals[].at` is absolute.
+- Validation: `compiler/validate-goals.js` `validateGoals(spec, err, opts)`.
+
+## C9. describe (`describe.js` `describe(topic, name?)`)
+
+- `motion.describe { topic, name? }` answers `{ topic, schema (JSON Schema 2020-12 fragment), example (passes validation), notes[] }`.
+- `topic: "skills"` answers `{ topic, skills: [{ name, args, needs, frames, adds }] }`. With `name` it answers that skill's full args schema and a `use` example.
+- Every answer is at most 6,000 bytes. It is a readOnly job.
+
+## C10. readOnly
+
+- `motion.qa`, `motion.sample`, `motion.describe` and `motion.report` declare `readOnly: true` (data, W0).
+- Lane F shows it in the `registry.list()` rows and makes the bus skip expectedRevision and TARGET_BUSY for these actions. The host check stays.
+- `motion.describe` and `motion.report` are kind `"job"`, not transient: the bus `receipt()` carries no `output` for transient actions.
+
+## C11. verify_result
+
+```jsonc
+verify_result { "targets": ["char-a"], "checks": ["motion"], "visual": "contact_sheet", "frames": "beats" }
+-> visualRefs[0] = { "imageId": "…", "frames": [86, 104, 120, 150, 160, 169], "layout": "3x2 row-major",
+  "picks": [{ "f": 104, "why": "grab empty-2" }, { "f": 150, "why": "worst GOAL cup at mouth" }] }
+verify_result { "targets": ["char-a"], "checks": ["motion"], "visual": "trace" }
+-> visualRefs[0] = { "imageId": "…", "kind": "trace", "range": [0, 279],
+  "series": [{ "name": "hand_l.y", "color": "#d1495b", "unit": "m", "min": 0.8, "minAt": 0, "max": 1.52, "maxAt": 160 }] }
+```
+
+- `frames` defaults to `"even"`, as today.
+- Beats pick, in order: grab and release frames, beat starts, the worstFrame of the top 2 groups, then even fill. Frames within +-3 of a pick are dropped. At most 6, ascending.
+
+## Pipeline (`pipeline.js` `compileSpec(spec, { sk, scene }, opts)`)
+
+1. `resolveFrames` (`skills/frames-auto.js`).
+2. Open parameters are searched (`search.js`).
+3. `nameChecks` (`qa/check-names.js`, on a copy): an unnamed `contacts`, `orient`, `below`, `clearance` or `appear` entry is named by its place in the agent's spec, `contacts[0]`. The QA subject reads `"contacts[0]: 100.0 cm apart"`, and two unnamed checks are two groups.
+4. Skills expand, then `validateSpec(full, { sk, scene, lenient })`.
+5. Compile, then `runMotionQa(sk, out, spec, { userSpec })`.
+6. `timelineOf` and, with `opts.probes`, `runProbes`.
+
+It answers `{ out, qa, spec, expanded, used, fixed, search, timeline, probes?, ms }`. `opts`: `checks` (replace every check), `lenient`, `probes`.
+
+## Fixture
+
+`test/motion3/fixtures/cup-scene.mjs` holds the table group `empty` (top `cube`, legs `cube-2` to `cube-5`), the cup group `empty-2` under it (`cylinder`, handle `cube-6/7/8`) and `char-a` (Y Bot at the origin, yaw 0), with the ids and values of the baseline session.
+
+## Amendment procedure
+
+1. The lane stops and reports the change it needs and why.
+2. Lane I lands a small amendment PR on `v3` that changes this file, the stub JSDoc and `test/motion3/verify-motion3-contracts.mjs` together.
+3. Every lane rebases on `v3`.

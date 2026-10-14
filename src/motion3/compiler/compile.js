@@ -9,7 +9,7 @@
 //   objects:    { id: { pivot: [x,y,z], axis: [x,y,z], channel: "door" } }  hinge angle in degrees
 //   generators: [{ type: "walk", f0, ... }]  (walk.js)
 //   fix:        { reach, slide, penetration, retime }  deterministic auto-fixes (../fix/)
-// ctx = { sk, scene: { objects: { id: { pos, R, half, shape } } } }
+// ctx = { sk, scene: { objects: { id: { pos, R, half, ancestors } } } }; out.ctx.scene keeps the scene (object-pose.js)
 import { add, sub, scale, norm, len, dot, apply, mul, axisRot, I3 } from "./math.js";
 import { pose } from "./pose.js";
 import { bakeChannels, channelsAt } from "./channels.js";
@@ -112,7 +112,7 @@ export function compileMotion(spec, { sk, scene }, opts = {}) {
 	if (!(frameCount >= 1 && frameCount <= 20000)) throw new Error("MOTION_SPEC_INVALID: frames must be 1..20000");
 	const fix = fixOptions(spec.fix);
 	const [a, b] = opts.window ? [Math.max(0, opts.window[0]), Math.min(frameCount - 1, opts.window[1])] : [0, frameCount - 1];
-	const ctx = { sk, spec, softReach: fix.reach, push: { l: new Map(), r: new Map() } };
+	const ctx = { sk, spec, scene, softReach: fix.reach, push: { l: new Map(), r: new Map() } };
 	const out = { ctx, fps: spec.fps ?? 30, frameCount, f0: a, frames: [] };
 	const engine = {
 		rebake(keys) {

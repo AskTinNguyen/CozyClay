@@ -1,6 +1,7 @@
 // CozyClay 3 motion: the agent writes a motion spec (keys, anchors, props, fits, generators,
-// checks), the deterministic compiler bakes every frame, QA measures it, and the take is
-// installed on the character. Cheap enough to run in a loop until QA reports nothing.
+// checks, goals), the deterministic compiler bakes every frame, QA measures it, and the take is
+// installed on the character. Cheap enough to run in a loop until QA reports nothing. The words
+// the agent reads live in motion3/docs.js; the contracts in docs/motion-api-v3.1.md.
 import { fail, characterOf } from "./shared.js";
 import { compileSpec } from "../motion3/pipeline.js";
 import { bakeTake } from "../motion3/take.js";
@@ -8,77 +9,103 @@ import { motionScene } from "../motion3/scene.js";
 import { skeletonFor } from "../motion3/rigs/index.js";
 import { fk } from "../motion3/compiler/skeleton.js";
 import { add, apply, ry } from "../motion3/compiler/math.js";
+import { resolveBone } from "../motion3/bones.js";
+import { MOTION_ACTION_HELP as HELP } from "../motion3/docs.js";
+import { DESCRIBE_TOPICS } from "../motion3/schema/fields.js";
+import { describe } from "../motion3/describe.js";
+import { createSpecStore, SPEC_STORE_SIZE } from "../motion3/spec-store.js";
+import { applyPatch } from "../motion3/json-patch.js";
+import { deltaOf } from "../motion3/delta.js";
+import { repairSpec } from "../motion3/repair.js";
+import { fitOutput, reportPage } from "../motion3/report.js";
 
 const TIMELINE_FPS = 24;
 const id = { type: "string", minLength: 1 };
+const specId = { type: "string", pattern: "^spec-[0-9a-f]{12}$" };
 const openObject = { type: "object", properties: {}, required: [], additionalProperties: true };
 const input = (properties, required = Object.keys(properties)) => ({ type: "object", properties, required, additionalProperties: false });
-const SPEC_HELP = "spec = { schema: \"cozyclay.motion-spec.v1\", fps: 24, frames, use: [{ skill, args, f0 }], keys: [{ f, set: { channel: value }, step?: [channel] }], anchors, props, fits, objects, generators, checks, fix, search }. "
-	+ "Prefer skills (use): standIdle, sitInSeat, exitCar, walkTo, reachGrip, smokeCigarette expand into keys, anchors, props, fits and checks; your own keys win over them. "
-	+ "Any number may be { range: [lo, hi] } to let the compiler search it (QA 0 first, at most search.budget compiles, default 32, max 64). "
-	+ "fix: { reach, slide } are on by default (soft wrist reach, hips lowered for near-miss ankles, planted feet locked under 1 cm); penetration: 0.02 and retime: true are opt-in. "
-	+ "World metres, +Y up, yaw 0 faces +Z, positive yaw toward +X, the character's left is +X at yaw 0. Channels: root [x,y,z] (hips), yaw, pitch, roll, spine_yaw/pitch/roll, head_yaw/pitch/roll, "
-	+ "foot_l/r [ankle x,y,z], fyaw_l/r, fpitch_l/r, knee_l/r (body-frame pole), armw_l/r (0 FK .. 1 IK), hand_l/r [wrist x,y,z], w_<anchor>_l/r (hand-target weights), elbow_l/r (body-frame pole), "
-	+ "wtwist_l/r, wflex_l/r, aswing_l/r, abend_l/r, arm_rest, fingers_l/r { relaxed|fist|grip|cigarette|point: weight }, plus any channel an object hinge or a check names.";
+const list = (items, maxItems) => ({ type: "array", items, minItems: 1, maxItems });
 
+// readOnly: reads the scene and the take, never changes them (C10).
 const declarations = Object.freeze([
-	{ id: "motion.compile", label: "Compile motion", kind: "job", domain: "motion", timeoutMs: 120000,
-		description: `Compile a motion spec for a character with the deterministic motion compiler, measure it with QA and (install: true, the default) install it as the character's take. ${SPEC_HELP} `
-			+ "Answers output.qa { ok, total, groups: [{ kind, subject, count, first, last, worst, worstFrame, limit, cause, hint }] } (cause = the key/anchor/fit/generator step/skill most responsible, hint = what to change, direction and amount in metres or degrees, at a frame), "
-			+ "output.fixed (what the auto-fixes changed), output.search (chosen open values, evals, ms), output.skills and the frame count. Apply the hints and compile again until qa.ok; install: false measures without changing the scene.",
-		input: input({ characterId: id, spec: openObject, install: { type: "boolean", default: true } }, ["characterId", "spec"]) },
-	{ id: "motion.qa", label: "Measure motion", kind: "job", domain: "motion", timeoutMs: 120000,
-		description: "Re-run motion QA (with cause and hint per group) for the character's installed take against the scene as it is now (objects may have moved). Optional checks replace the spec's own checks and its skills' checks.",
+	{ id: "motion.compile", label: "Compile motion", kind: "job", domain: "motion", timeoutMs: 120000, description: HELP.compile,
+		input: input({ characterId: id, spec: openObject, base: specId, patch: list(openObject, 64), install: { type: "boolean", default: true },
+			probes: list(openObject, 16), repair: input({ rounds: { type: "integer", minimum: 1, maximum: 8, default: 4 } }, []) }, ["characterId"]) },
+	{ id: "motion.qa", label: "Measure motion", kind: "job", domain: "motion", timeoutMs: 120000, readOnly: true, description: HELP.qa,
 		input: input({ characterId: id, checks: openObject }, ["characterId"]) },
-	{ id: "motion.sample", label: "Sample motion", kind: "job", domain: "motion", timeoutMs: 30000,
-		description: "World positions (metres) of named bones of the installed take at up to 64 frames, e.g. to read where a hand or the hips are before writing the next keys.",
+	{ id: "motion.sample", label: "Sample motion", kind: "job", domain: "motion", timeoutMs: 30000, readOnly: true, description: HELP.sample,
 		input: input({ characterId: id, frames: { type: "array", items: { type: "integer", minimum: 0 }, minItems: 1, maxItems: 64 },
 			bones: { type: "array", items: id, maxItems: 65 } }, ["characterId", "frames"]) },
+	{ id: "motion.describe", label: "Describe motion spec", kind: "job", domain: "motion", timeoutMs: 10000, readOnly: true, description: HELP.describe,
+		input: input({ topic: { type: "string", enum: DESCRIBE_TOPICS }, name: id }, ["topic"]) },
+	{ id: "motion.report", label: "Read motion report", kind: "job", domain: "motion", timeoutMs: 10000, readOnly: true, description: HELP.report,
+		input: input({ specId, part: { type: "string", enum: ["groups", "timeline", "probes"] }, from: { type: "integer", minimum: 0, default: 0 } }, ["specId", "part"]) },
 ]);
 export { declarations };
 
 const DEFAULT_BONES = ["Hips", "Head", "LeftHand", "RightHand", "LeftFoot", "RightFoot"];
+const unknownSpec = (what, value, then = "send spec") => fail("INVALID_ARGUMENT", `${what} "${value}" is not known (the editor keeps the last ${SPEC_STORE_SIZE} compiled specs this session); ${then}`);
+
+/** Runs `run`, turning a MOTION_SPEC_INVALID error into INVALID_ARGUMENT with the exact message. */
+function asArgument(run) {
+	try {
+		return run();
+	} catch (error) {
+		if (/^MOTION_SPEC_INVALID/.test(error.message)) fail("INVALID_ARGUMENT", error.message.replace(/^MOTION_SPEC_INVALID:\s*/, ""));
+		throw error;
+	}
+}
 
 export function register(registry, ports) {
+	const store = createSpecStore();
 	const owner = () => ports.storeDomain("motion");
 	const mounted = () => Boolean(ports.storeDomain?.("motion")) || "The motion owner is not mounted.";
+	const always = () => true;
 	const rigOf = character => {
 		const sk = skeletonFor(character.model);
 		if (!sk) fail("TARGET_NOT_READY", `${character.subject || character.id} is a ${character.model} body, which motion compile cannot drive; use an X Bot or Y Bot character.`);
 		if (Math.abs((character.scale ?? 1) - 1) > 1e-6) fail("TARGET_NOT_READY", "Set the character's scale back to 1 before compiling motion.");
 		return sk;
 	};
-	const compile = (character, spec, checks) => {
+	/** spec -> pipeline result + sk + stored (the spec a take keeps and its specId names: what was sent, or the filled-in spec). */
+	const compile = (character, spec, opts) => {
 		if (spec?.fps !== undefined && spec.fps !== TIMELINE_FPS) fail("INVALID_ARGUMENT", `spec.fps must be ${TIMELINE_FPS}, the timeline rate.`);
-		const sk = rigOf(character);
-		try {
-			return { sk, ...compileSpec({ fps: TIMELINE_FPS, ...spec }, { sk, scene: motionScene(ports.state().objects) }, { checks }) };
-		} catch (error) {
-			if (/^MOTION_SPEC_INVALID/.test(error.message)) fail("INVALID_ARGUMENT", error.message.replace(/^MOTION_SPEC_INVALID:\s*/, ""));
-			throw error;
-		}
+		const sk = rigOf(character), sent = { fps: TIMELINE_FPS, ...spec };
+		const r = asArgument(() => compileSpec(sent, { sk, scene: motionScene(ports.state().objects) }, opts));
+		return { sk, ...r, stored: r.spec === sent ? spec : r.spec };
 	};
-	const brief = qa => ({ ok: qa.ok, total: qa.total, groups: qa.groups.slice(0, 16) });
-	const report = r => ({ qa: brief(r.qa), fixed: r.fixed, ...(r.search ? { search: r.search } : {}), ...(r.used.length ? { skills: r.used } : {}), ms: r.ms });
+	/** The whole output, kept in the store (motion.report, delta) and cut to the receipt budget (report.js). */
+	const report = (r, head, extra = {}) => {
+		const specIdValue = store.put(r.stored);
+		store.keepParts(specIdValue, { groups: r.qa.groups, timeline: r.timeline, probes: r.probes ?? {} });
+		return fitOutput({ ...head, specId: specIdValue, qa: r.qa, ...extra, ...(r.probes ? { probes: r.probes } : {}), timeline: r.timeline,
+			fixed: r.fixed, ...(r.search ? { search: r.search } : {}), ...(r.used.length ? { skills: r.used } : {}), ms: r.ms });
+	};
 	const installed = characterId => owner().motionFor(characterId)?.schema === "cozyclay.take.v3" ? owner().motionFor(characterId)
 		: fail("TARGET_NOT_READY", "This character has no compiled take; run motion.compile first.");
 
-	registry.register({ ...declarations[0], available: mounted, target: args => args.characterId, run({ characterId, spec, install = true }, context) {
+	registry.register({ ...declarations[0], available: mounted, target: args => args.characterId, run({ characterId, spec, base, patch, install = true, probes, repair }, context) {
 		const character = characterOf(ports, characterId);
-		const r = compile(character, spec), { sk, out, qa } = r;
+		if ((spec === undefined) === (base === undefined)) fail("INVALID_ARGUMENT", "Send exactly one of spec or base (the specId of a compiled spec, with patch).");
+		if (patch !== undefined && base === undefined) fail("INVALID_ARGUMENT", "patch applies to base, the specId of a compiled spec; send base with it, or the whole spec.");
+		const source = spec ?? asArgument(() => applyPatch(store.get(base) ?? unknownSpec("base", base), patch ?? []));
+		const once = s => compile(character, s, { probes });
+		const fixed = repair ? repairSpec(source, repair, once) : { spec: source, result: once(source) };
+		const r = fixed.result, { sk, out, qa } = r;
 		if (install) {
 			// open ranges are stored with the values the search chose, so motion.qa re-measures this take
-			const take = bakeTake(sk, out, { position: [character.x ?? 0, character.y ?? 0, character.z ?? 0], yaw: character.rot ?? 0 }, { spec: r.search ? r.spec : spec, prompt: spec.label ?? "" });
+			const take = bakeTake(sk, out, { position: [character.x ?? 0, character.y ?? 0, character.z ?? 0], yaw: character.rot ?? 0 }, { spec: r.stored, prompt: fixed.spec.label ?? "" });
 			const apply = () => owner().replace(characterId, { ...take, frames: take.frameCount });
 			if (context?.commit) context.commit(apply); else apply();
 		}
+		const delta = base === undefined ? {} : { delta: deltaOf(store.parts(base)?.groups ?? [], qa.groups, base) };
 		return { affectedIds: install ? [characterId] : [], summary: `Compiled ${out.frameCount} frames; QA ${qa.ok ? "clean" : `${qa.total} issues`}.`,
-			output: { frames: out.frameCount, fps: TIMELINE_FPS, installed: install, ...report(r) } };
+			output: report(r, { frames: out.frameCount, fps: TIMELINE_FPS, installed: install }, { ...delta, ...(fixed.repair ? { repair: fixed.repair } : {}) }) };
 	} });
 	registry.register({ ...declarations[1], available: mounted, run({ characterId, checks }) {
 		const character = characterOf(ports, characterId), take = installed(characterId);
-		const r = compile(character, take.spec, checks);
-		return { affectedIds: [], summary: `QA ${r.qa.ok ? "clean" : `${r.qa.total} issues`}.`, output: report(r) };
+		const r = compile(character, take.spec, { checks });
+		return { affectedIds: [], summary: `QA ${r.qa.ok ? "clean" : `${r.qa.total} issues`}.`, output: report(r, {}) };
 	} });
 	registry.register({ ...declarations[2], available: mounted, run({ characterId, frames, bones = DEFAULT_BONES }) {
 		const character = characterOf(ports, characterId), take = installed(characterId), sk = rigOf(character);
@@ -88,11 +115,18 @@ export function register(registry, ports) {
 			const quats = Array.from({ length: B }, (_, b) => Array.from(take.rot.subarray((ff * B + b) * 4, (ff * B + b) * 4 + 4)));
 			const state = fk(sk, quats, Array.from(take.hips.subarray(ff * 3, ff * 3 + 3)));
 			return { frame: ff, bones: Object.fromEntries(bones.map(name => {
-				const j = sk.index[name];
-				if (j === undefined) fail("INVALID_ARGUMENT", `Unknown bone ${name}.`);
-				return [name, add(at, apply(yaw, state.P[j])).map(v => Math.round(v * 1e4) / 1e4)];
+				const { bone, hint } = resolveBone(sk, name);
+				if (bone === null) fail("INVALID_ARGUMENT", `Unknown bone ${name}${hint || "."}`);
+				return [name, add(at, apply(yaw, state.P[sk.index[bone]])).map(v => Math.round(v * 1e4) / 1e4)];
 			})) };
 		});
 		return { affectedIds: [], summary: `Sampled ${rows.length} frames.`, output: { frames: rows } };
+	} });
+	registry.register({ ...declarations[3], available: always, run({ topic, name }) {
+		return { affectedIds: [], summary: `Described ${topic}${name ? ` ${name}` : ""}.`, output: asArgument(() => describe(topic, name)) };
+	} });
+	registry.register({ ...declarations[4], available: always, run({ specId: wanted, part, from = 0 }) {
+		const page = reportPage(store.parts(wanted) ?? unknownSpec("specId", wanted, "compile it again"), wanted, part, from);
+		return { affectedIds: [], summary: `${page.items.length} ${part} from ${from}.`, output: page };
 	} });
 }
