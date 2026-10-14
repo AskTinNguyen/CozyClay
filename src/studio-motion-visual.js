@@ -1,13 +1,16 @@
 // verify_result's visual: the one image the agent asks to see. "frame" and "plan" are captures;
-// "contact_sheet" tiles 6 frames, spread evenly or (frames: "beats") picked from the installed
-// take's beats; "trace" plots hand heights and distances of the take over the range (C11).
-// The beats and the trace read one lenient compile of the take's stored spec, as motion.qa does.
+// "contact_sheet" tiles frames spread evenly, picked from the installed take's beats
+// (frames: "beats") or named (frames: [f, ...]), seen by the shot camera or by views of its own
+// (views, focus, trail); "trace" plots hand heights and distances of the take over the range (C11).
+// The beats, the views and the trace read one lenient compile of the take's stored spec, as motion.qa does.
 import { StudioProtocolError } from "./studio-agent-protocol.js";
-import { CONTACT_SHEET_LAYOUT, buildContactSheet, sampleContactSheetFrames } from "./studio-contact-sheet.js";
+import { buildContactSheet, paintDots, sampleContactSheetFrames, sheetGrid, viewTileSide } from "./studio-contact-sheet.js";
 import { compileSpec } from "./motion3/pipeline.js";
 import { motionScene } from "./motion3/scene.js";
 import { skeletonFor } from "./motion3/rigs/index.js";
-import { beatFrames, grabReleases, traceSeries } from "./motion3/beats.js";
+import { beatFrames, grabReleases, traceSeries, TRACE_COLORS } from "./motion3/beats.js";
+import { projectPoint, trailPoints, viewCameras } from "./motion3/views.js";
+import { checkRef } from "./motion3/refs.js";
 
 const TIMELINE_FPS = 24, TRACE_WIDTH = 960, TRACE_HEIGHT = 360, PAD = 12;
 const rgb = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
@@ -62,6 +65,41 @@ export function traceRgba(series, [lo, hi], { width = TRACE_WIDTH, height = TRAC
 	return { data, width, height };
 }
 
+/** Named frames, ascending; each inside the range. */
+function explicitFrames(frames, [lo, hi]) {
+	const outside = frames.filter(f => f < lo || f > hi);
+	if (outside.length) throw new StudioProtocolError("INVALID_ARGUMENT", `frames ${outside.join(", ")} lie outside the range ${lo}..${hi}.`);
+	return [...frames].sort((a, b) => a - b);
+}
+
+const listOf = value => value === undefined ? [] : [value].flat();
+const round2 = p => p.map(v => Math.round(v * 100) / 100);
+
+/**
+ * A contact sheet from views of its own (motion3/views.js), a row per view, never the shot
+ * camera: each view is placed once for every frame, framed on args.focus (default the whole
+ * character) and the trails. A trail is a dot per frame of its ref over the range, so spacing is
+ * speed: frames up to the tile's frame solid, later ones faint, the tile's frame ringed.
+ */
+function viewSheet(args, r, { frames, span, grid, picks, ports }) {
+	if (!r) throw new StudioProtocolError("TARGET_NOT_READY", "views frame a character's compiled take; name a character that has one (run motion.compile first).");
+	const focus = listOf(args.focus), refs = listOf(args.trail), ctx = { sk: r.out.ctx.sk, scene: r.out.ctx.scene };
+	for (const [field, list] of [["focus", focus], ["trail", refs]]) list.forEach((ref, i) => checkRef(r.expanded, message => { throw new StudioProtocolError("INVALID_ARGUMENT", message); }, ctx, `${field}[${i}]`, ref));
+	const trails = refs.map((ref, i) => ({ ref, color: TRACE_COLORS[i], points: trailPoints(r.out, ref, span) }));
+	const side = viewTileSide(grid), cameras = viewCameras(r.out, { views: args.views, frames, focus, trails });
+	if (!cameras.length) throw new StudioProtocolError("TARGET_NOT_READY", "views found no compiled frame of the take in the range.");
+	const cells = cameras.flatMap(cam => frames.map(frame => ({ cam, frame })));
+	const sheet = buildContactSheet(cells, ({ cam, frame }) => {
+		const tile = ports.renderFrameBuffer(frame, { eye: cam.eye, quaternion: cam.quaternion, fovDeg: cam.fovDeg, output: { width: side, height: side } });
+		const dots = trails.flatMap(t => t.points.map(({ f, p }) => [f, projectPoint(cam, p, tile.width, tile.height), rgb(t.color)])
+			.filter(([, q]) => q).map(([f, [x, y], color]) => ({ x, y, color, r: f === frame ? 4 : 1.5, alpha: f <= frame ? 1 : 0.35, ring: f === frame })));
+		return { ...tile, data: paintDots(tile.data, tile.width, tile.height, dots) };
+	}, grid);
+	const views = cameras.map(cam => ({ name: cam.name, eye: round2(cam.eye), target: round2(cam.target) }));
+	const ref = { frames, layout: grid.layout, views, focus: focus.length ? focus : "character", ...(trails.length ? { trails: trails.map(({ ref: of, color }) => ({ ref: of, color })) } : {}), ...(picks ? { picks } : {}) };
+	return [{ dataUrl: ports.encodePng(sheet.data, sheet), width: sheet.width, height: sheet.height, frames, layout: grid.layout, views: views.map(v => v.name) }, ref];
+}
+
 /** Answers args.visual into result.visualRefs and keeps the image for resolve_studio_image. */
 export function studioVisual(args, { s, receipt, result, images, ports }) {
 	const keep = (image, ref) => {
@@ -69,16 +107,19 @@ export function studioVisual(args, { s, receipt, result, images, ports }) {
 		images.set(imageId, { ...image, revision: s.revision, receiptId: result.receiptId });
 		result.visualRefs.push({ imageId, ...ref });
 	};
+	if (args.visual !== "contact_sheet" && (args.views || args.focus || args.trail)) throw new StudioProtocolError("INVALID_ARGUMENT", 'views, focus and trail shape a contact sheet; send visual: "contact_sheet".');
+	if (!args.views && (args.focus || args.trail)) throw new StudioProtocolError("INVALID_ARGUMENT", 'focus and trail are drawn by views of its own; add views, e.g. ["front", "side"] (the shot camera stays the user\'s).');
 	if (args.visual === "contact_sheet") {
 		// One image of frames across the range, each rendered through the export
 		// path, which puts the playhead pose, shot camera and props back.
+		const span = rangeOf(args.range, s.frameCount), r = args.frames === "beats" || args.views ? takeCompile(args, s, receipt) : null;
 		let frames = sampleContactSheetFrames(args.range, s.frameCount), picks;
-		if (args.frames === "beats") {
-			const r = takeCompile(args, s, receipt);
-			({ frames, picks } = beatFrames({ range: rangeOf(args.range, s.frameCount), even: frames, timeline: r?.timeline, groups: r?.qa.groups, objects: r?.expanded.objects }));
-		}
-		const sheet = buildContactSheet(frames, ports.renderFrameBuffer);
-		return keep({ dataUrl: ports.encodePng(sheet.data, sheet), width: sheet.width, height: sheet.height, frames, layout: CONTACT_SHEET_LAYOUT }, { frames, layout: CONTACT_SHEET_LAYOUT, ...(picks ? { picks } : {}) });
+		if (Array.isArray(args.frames)) frames = explicitFrames(args.frames, span);
+		else if (args.frames === "beats") ({ frames, picks } = beatFrames({ range: span, even: frames, timeline: r?.timeline, groups: r?.qa.groups, objects: r?.expanded.objects }));
+		const grid = sheetGrid(frames.length, args.views?.length ?? 0);
+		if (args.views) return keep(...viewSheet(args, r, { frames, span, grid, picks, ports }));
+		const sheet = buildContactSheet(frames, ports.renderFrameBuffer, grid);
+		return keep({ dataUrl: ports.encodePng(sheet.data, sheet), width: sheet.width, height: sheet.height, frames, layout: grid.layout }, { frames, layout: grid.layout, ...(picks ? { picks } : {}) });
 	}
 	if (args.visual === "trace") {
 		const r = takeCompile(args, s, receipt);

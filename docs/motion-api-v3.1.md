@@ -209,6 +209,24 @@ verify_result { "targets": ["char-a"], "checks": ["motion"], "visual": "trace" }
 
 - `frames` defaults to `"even"`, as today.
 - Beats pick, in order: grab and release frames, beat starts, the worstFrame of the top 2 groups, then even fill. Frames within +-3 of a pick are dropped. At most 6, ascending.
+- `frames` may also be up to 8 timeline frames, `[f, ...]`. They are shown ascending; a frame outside the range is refused. 7-8 frames tile 4x2.
+
+Views of its own (observation round, lane H2). The shot camera is the user's; these cameras are the agent's.
+
+```jsonc
+verify_result { "targets": ["char-a"], "checks": ["motion"], "visual": "contact_sheet", "frames": [10, 30, 34, 50, 70, 90],
+  "views": ["front", "side"], "focus": ["object:empty-2", "joint:LeftHand"], "trail": "object:empty-2" }
+-> visualRefs[0] = { "imageId": "…", "frames": [10, 30, 34, 50, 70, 90], "layout": "6x2 row-major, a row per view",
+  "views": [{ "name": "front", "eye": [0.33, 1.25, 2.06], "target": [0.33, 1.03, 0.81] }, { "name": "side", … }],
+  "focus": ["object:empty-2", "joint:LeftHand"], "trails": [{ "ref": "object:empty-2", "color": "#d1495b" }] }
+```
+
+- `views`: 1-2 of `front`, `side`, `three-quarter`, `top` (`src/motion3/views.js`). The character's facing comes from its hip line over the frames. `side` and `three-quarter` look from the side the focus is on (the right when centred). `top` looks straight down, with the character's forward up the image.
+- Each view stays at one place for every frame. It frames the `focus` refs (default: every joint of the character) and the trail points over those frames. A deep subject moves the camera back until its far side is at most 1.8x as far as its near side, and the lens narrows (35 to 12 degrees) to fill the tile.
+- `focus` and `trail` take a ref or up to 3 (the C2 grammar). A bare `object:<id>` frames the corners of its part boxes. A trail is one dot per frame over the range, so dot spacing shows speed. Dots up to the tile's frame are solid, later ones faint, and the tile's own frame is ringed.
+- The render poses the frame as the export does, and renders it offscreen from a clone of the shot camera moved to the view. The shot camera and the view are not changed.
+- Tiles are square. One view uses 3x2 (4x2 for 7-8 frames, a strip for 1-3 frames); several views use a column per frame and a row per view. A sheet is at most 1600x900.
+- Refusals: `views`, `focus` or `trail` on a visual other than `contact_sheet`, and `focus` or `trail` without `views`, are INVALID_ARGUMENT. An unknown ref is refused with the C2 message. `views` without a compiled take is TARGET_NOT_READY.
 
 ## C12. install: "ifClean" (waste-removal round, lane G1)
 

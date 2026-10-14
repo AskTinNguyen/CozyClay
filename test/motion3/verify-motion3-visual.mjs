@@ -1,14 +1,17 @@
 #!/usr/bin/env node
 // C11 (docs/motion-api-v3.1.md): verify_result contact_sheet frames "beats" and visual "trace".
 // The frame choice runs on synthetic timeline and QA inputs (lanes B and C fill the real ones);
-// the trace and the binding path run on a real compile of the cup scene.
+// the trace and the binding path run on a real compile of the cup scene. Then explicit frames and
+// views of its own (front/side/three-quarter/top, focus, trail) on a cup pick-up.
+import * as THREE from "three";
+import { viewCameras, trailPoints, projectPoint, VIEW_NAMES } from "../../src/motion3/views.js";
 import { beatFrames, grabReleases, traceSeries } from "../../src/motion3/beats.js";
 import { studioVisual, traceRgba } from "../../src/studio-motion-visual.js";
 import { sampleContactSheetFrames, CONTACT_SHEET_LAYOUT } from "../../src/studio-contact-sheet.js";
 import { compileSpec } from "../../src/motion3/pipeline.js";
 import { motionScene } from "../../src/motion3/scene.js";
 import { skeletonFor } from "../../src/motion3/rigs/index.js";
-import { SCENE_OBJECTS, CHARACTER } from "./fixtures/cup-scene.mjs";
+import { SCENE_OBJECTS, CHARACTER, CUP } from "./fixtures/cup-scene.mjs";
 
 let failures = 0;
 function expect(name, condition, detail = "") {
@@ -122,6 +125,67 @@ try { run({ visual: "trace", targets: [CHARACTER.id] }, state(null)); } catch (e
 expect("trace without a take is TARGET_NOT_READY", refused.startsWith("TARGET_NOT_READY"), refused);
 const frameRun = run({ visual: "frame", targets: [CHARACTER.id] });
 expect("frame: the capture port, unchanged", frameRun.ref && Object.keys(frameRun.ref).length === 1 && frameRun.images.get(frameRun.ref.imageId)?.revision === 7);
+
+// ---- explicit frames ----------------------------------------------------------------------
+const chosen = run({ visual: "contact_sheet", frames: [40, 5, 20], targets: [CHARACTER.id], range: "whole_clip" });
+expect("frames [f, ...]: those frames, ascending, rendered in order, 3x2 like even", json(chosen.ref.frames) === "[5,20,40]" && json(rendered) === "[5,20,40]" && chosen.ref.layout === CONTACT_SHEET_LAYOUT && !("picks" in chosen.ref), json(chosen.ref));
+const eight = run({ visual: "contact_sheet", frames: [0, 6, 12, 18, 24, 30, 36, 42], targets: [CHARACTER.id] });
+expect("frames: 7-8 frames tile 4x2", eight.ref.layout === "4x2 row-major" && eight.ref.frames.length === 8 && encoded[0].width === 32 && encoded[0].height === 8, json({ ref: eight.ref, encoded }));
+let outsideRange = "";
+try { run({ visual: "contact_sheet", frames: [10, 60], targets: [CHARACTER.id], range: { startFrame: 0, endFrameExclusive: 48 } }); } catch (error) { outsideRange = `${error.code}: ${error.message}`; }
+expect("frames outside the range are refused by name", outsideRange === "INVALID_ARGUMENT: frames 60 lie outside the range 0..47.", outsideRange);
+
+// ---- views of its own on a cup pick-up ----------------------------------------------------
+// The left hand's fingers land on the cup handle and the cup group rides the hand 34..80
+// (the spec of verify-motion3-cup.mjs).
+const cupSpec = { schema: "cozyclay.motion-spec.v1", fps: 24, frames: 100, use: [{ skill: "standIdle", args: { at: [0.15, 0.3], heading: 0 }, f0: 0 }],
+	props: { grip: { hand: "l", origin: ["LeftHandIndex2", "LeftHandMiddle2"], points: { fingers: [0, 0, 0] } } },
+	anchors: { cupHandle: { kind: "object", object: "cube-6", local: [0, 0.03, 0] } },
+	fits: [{ side: "l", anchor: "cupHandle", effector: { prop: "grip", point: "fingers" } }],
+	keys: [{ f: 10, set: { pitch: 0, armw_l: 0, w_cupHandle_l: 0 } }, { f: 30, set: { pitch: 25, armw_l: 1, w_cupHandle_l: 1, hand_l: [0.3, 1, 0.7] } },
+		{ f: 36, set: { w_cupHandle_l: 1, pitch: 25, hand_l: [0.3, 1, 0.7] } }, { f: 60, set: { w_cupHandle_l: 0, pitch: 10, hand_l: [0.3, 1.2, 0.6] } }, { f: 99, set: {} }],
+	objects: { [CUP.group]: { prop: "grip", grab: 34, release: 80 } } };
+const cup = compileSpec(cupSpec, { sk, scene }, { lenient: true }), cupFrames = [20, 34, 50, 70];
+const cupTrail = [{ ref: `object:${CUP.group}`, points: trailPoints(cup.out, `object:${CUP.group}`, [0, 99]) }];
+const focus = [`object:${CUP.group}`, "joint:LeftHand"];
+const cams = viewCameras(cup.out, { views: VIEW_NAMES, frames: cupFrames, focus, trails: cupTrail });
+const byName = Object.fromEntries(cams.map(c => [c.name, c]));
+expect("views: the same compile and arguments give the same cameras", json(viewCameras(cup.out, { views: VIEW_NAMES, frames: cupFrames, focus, trails: cupTrail })) === json(cams));
+const towards = (c, axis) => (c.eye[axis] - c.target[axis]) / Math.hypot(...c.eye.map((v, i) => v - c.target[i]));
+expect("views: front stands before the character (it faces +Z)", towards(byName.front, 2) > 0.9, json(byName.front.eye));
+expect("views: side and three-quarter look from the cup's side (its left, +X)", towards(byName.side, 0) > 0.9 && towards(byName["three-quarter"], 0) > 0.5 && towards(byName["three-quarter"], 2) > 0.5, json([byName.side.eye, byName["three-quarter"].eye]));
+expect("views: top looks straight down", towards(byName.top, 1) > 0.999, json(byName.top.eye));
+const inside = (c, p) => { const q = projectPoint(c, p, 400, 400); return q && q[0] > 0 && q[0] < 400 && q[1] > 0 && q[1] < 400; };
+const cupAt = f => cupTrail[0].points.find(q => q.f === f).p, handAt = f => cup.out.frames[f].s.P[sk.index.LeftHand];
+expect("views: the cup and the hand are inside every view at every frame", cams.every(c => cupFrames.every(f => inside(c, cupAt(f)) && inside(c, handAt(f)))));
+const span = c => { const qs = cupFrames.flatMap(f => [cupAt(f), handAt(f)]).map(p => projectPoint(c, p, 400, 400)); return Math.max(...qs.map(q => q[1])) - Math.min(...qs.map(q => q[1])) + Math.max(...qs.map(q => q[0])) - Math.min(...qs.map(q => q[0])); };
+const wide = viewCameras(cup.out, { views: ["front"], frames: cupFrames })[0];
+expect("views: a focus fills the tile (the cup and hand span over twice what the whole-character framing gives)", span(byName.front) > 2 * span(wide), `${span(byName.front).toFixed(0)} vs ${span(wide).toFixed(0)} px`);
+const body = viewCameras(cup.out, { views: ["top"], frames: cupFrames })[0], depths = cupFrames.flatMap(f => cup.out.frames[f].s.P).map(p => -((p[0] - body.eye[0]) * body.back[0] + (p[1] - body.eye[1]) * body.back[1] + (p[2] - body.eye[2]) * body.back[2]));
+expect("views: a deep subject (the body from above) keeps perspective mild: far side <= 1.8x the near side, a longer lens", Math.max(...depths) / Math.min(...depths) <= 1.8 + 1e-6 && body.fovDeg < 35 && body.fovDeg >= 12, json({ ratio: Math.max(...depths) / Math.min(...depths), fov: body.fovDeg }));
+const three = new THREE.PerspectiveCamera(byName["three-quarter"].fovDeg, 1, 0.1, 100);
+three.position.set(...byName["three-quarter"].eye); three.quaternion.set(...byName["three-quarter"].quaternion); three.updateMatrixWorld();
+const ndc = new THREE.Vector3(...cupAt(50)).project(three), mine = projectPoint(byName["three-quarter"], cupAt(50), 400, 400);
+expect("views: the quaternion is the camera the projection uses (three.js agrees)", Math.abs((ndc.x + 1) * 200 - mine[0]) < 1e-6 && Math.abs((ndc.y + 1) * 200 - mine[1]) < 1e-6, json({ ndc, mine }));
+
+// The binding path: a strip of 2 views x 6 frames, square tiles, a trail painted on each tile.
+const cupState = () => ({ ...state({ schema: "cozyclay.take.v3", rig: sk.model, spec: cupSpec }), frameCount: 100 });
+const views = [], tiles = [];
+ports.renderFrameBuffer = (frame, view) => { rendered.push(frame); views.push(view); const data = new Uint8Array(view.output.width * view.output.height * 4).fill(40); tiles.push(data); return { data, width: view.output.width, height: view.output.height }; };
+const viewRun = run({ visual: "contact_sheet", frames: [10, 30, 34, 50, 70, 90], views: ["front", "side"], focus, trail: `object:${CUP.group}`, targets: [CHARACTER.id] }, cupState());
+expect("views: a row per view, a column per frame, one render per cell", viewRun.ref.layout === "6x2 row-major, a row per view" && json(rendered) === json([10, 30, 34, 50, 70, 90, 10, 30, 34, 50, 70, 90]), json(viewRun.ref));
+expect("views: every cell is a square of 266 px, so the sheet is 1596x532 (within 1600x900)", views.every(v => v.output.width === 266 && v.output.height === 266 && v.fovDeg >= 12 && v.fovDeg <= 35 && v.quaternion.length === 4) && encoded[0].width === 1596 && encoded[0].height === 532, json(encoded));
+expect("views: visualRefs name the views, the focus and the trail colour", json(viewRun.ref.views.map(v => v.name)) === '["front","side"]' && viewRun.ref.views.every(v => v.eye.length === 3 && v.target.length === 3)
+	&& json(viewRun.ref.focus) === json(focus) && json(viewRun.ref.trails) === json([{ ref: `object:${CUP.group}`, color: "#d1495b" }]), json(viewRun.ref));
+const painted = data => { let n = 0; for (let i = 0; i < data.length; i += 4) if (data[i] === 209 && data[i + 1] === 73 && data[i + 2] === 91) n++; return n; };
+expect("views: the trail is painted on every tile (solid dots up to the tile's frame)", tiles.every(t => painted(t) > 20) && painted(tiles[5]) > painted(tiles[0]), json(tiles.map(painted)));
+const fourViews = run({ visual: "contact_sheet", views: ["top"], targets: [CHARACTER.id] }, cupState());
+expect("views: one view keeps the 3x2 grid over 6 even frames, at most 1600x900", fourViews.ref.layout === CONTACT_SHEET_LAYOUT && fourViews.ref.focus === "character" && encoded[0].width === 1350 && encoded[0].height === 900, json(encoded));
+const refusal = (args, s = cupState()) => { try { run(args, s); return ""; } catch (error) { return `${error.code}: ${error.message}`; } };
+expect("views: focus without views is refused, naming views", /^INVALID_ARGUMENT: focus and trail are drawn by views/.test(refusal({ visual: "contact_sheet", focus: "joint:LeftHand", targets: [CHARACTER.id] })));
+expect("views: views on another visual are refused", /^INVALID_ARGUMENT: views, focus and trail shape a contact sheet/.test(refusal({ visual: "frame", views: ["front"], targets: [CHARACTER.id] })));
+expect("views: an unknown ref is refused with the ref grammar's message", /^INVALID_ARGUMENT: focus\[0\] "object:mug"/.test(refusal({ visual: "contact_sheet", views: ["front"], focus: "object:mug", targets: [CHARACTER.id] })), refusal({ visual: "contact_sheet", views: ["front"], focus: "object:mug", targets: [CHARACTER.id] }));
+expect("views: no take is TARGET_NOT_READY", /^TARGET_NOT_READY/.test(refusal({ visual: "contact_sheet", views: ["front"], targets: [CHARACTER.id] }, state(null))));
 
 if (failures) process.exit(1);
 console.log("verify-motion3-visual: all checks PASS");

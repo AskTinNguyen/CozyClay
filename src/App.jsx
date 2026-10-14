@@ -4643,8 +4643,10 @@ export default function App() {
 		stepHistory: stepStudioHistory, capture: () => liveQueries.capture_framing_png({}), capturePlan: () => liveQueries.capture_plan_png({}),
 		// One shot frame as raw read-back pixels (rows bottom-up), from the export
 		// path captureShotFramePng uses; an export in flight renders at its output.
-		renderFrameBuffer: frame => {
-			const output = recRef.current?.capture ? recRef.current.request.context.output : shotOutput, data = withExportFrame(frame);
+		// With a view (verify_result's own cameras) the posed frame is seen by that
+		// camera instead, at view.output; the shot camera is left as it is.
+		renderFrameBuffer: (frame, view = null) => {
+			const output = view?.output ?? (recRef.current?.capture ? recRef.current.request.context.output : shotOutput), data = withExportFrame(frame, view && (() => captureRef.current.renderView(view)));
 			if (!data) throw new Error("The shot renderer is not ready");
 			return { data, width: output.width, height: output.height };
 		},

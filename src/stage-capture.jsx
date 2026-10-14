@@ -25,7 +25,9 @@ export function CaptureRig({ apiRef, camRef, width = CAPTURE_W, height = CAPTURE
 	useEffect(() => {
 		// Each attempt owns its target independently of the live output size.
 		// Resizing the editor cannot dispose an in-flight export's resources.
-		function createExportCapture({ width, height }) {
+		// `camera` makes the camera of each render: a clone of the shot camera unless a caller
+		// (renderView) brings its own; the shot camera itself is never moved.
+		function createExportCapture({ width, height }, camera = () => camRef.current?.clone()) {
 			const target = new THREE.WebGLRenderTarget(width, height, {
 				colorSpace: THREE.SRGBColorSpace,
 				samples: 4,
@@ -35,9 +37,8 @@ export function CaptureRig({ apiRef, camRef, width = CAPTURE_W, height = CAPTURE
 				scene,
 				dispose: () => target.dispose(),
 				render() {
-					const source = camRef.current;
-					if (!source) return null;
-					const cam = source.clone();
+					const cam = camera();
+					if (!cam) return null;
 					// the transform gizmo is UI: it never reaches an exported frame
 					cam.layers.disable(GIZMO_LAYER);
 					// QA hook: the layer mask the export camera actually renders
@@ -76,7 +77,22 @@ export function CaptureRig({ apiRef, camRef, width = CAPTURE_W, height = CAPTURE
 				},
 			};
 		}
-		const api = { ...createExportCapture({ width, height }), createExportCapture };
+		// verify_result's own views (src/motion3/views.js): one read-back, rows bottom-up, from a
+		// camera at eye with quaternion [x, y, z, w] and a vertical fov, on a target of its own size.
+		function renderView({ eye, quaternion, fovDeg, output }) {
+			const own = createExportCapture(output, () => {
+				const source = camRef.current;
+				if (!source) return null;
+				const cam = source.clone();
+				cam.clearViewOffset();
+				cam.position.set(...eye);
+				cam.quaternion.set(...quaternion);
+				cam.fov = fovDeg;
+				return cam;
+			});
+			try { return own.render(); } finally { own.dispose(); }
+		}
+		const api = { ...createExportCapture({ width, height }), createExportCapture, renderView };
 		apiRef.current = api;
 		if (width === MCP_CAPTURE_W && height === MCP_CAPTURE_H) {
 			window.__cozyclayMcpCaptureReady = true;

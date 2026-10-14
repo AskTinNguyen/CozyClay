@@ -4,7 +4,7 @@
 import { refPoint, refDistance } from "./refs.js";
 
 const NEAR = 3, MAX_SERIES = 6;
-const TRACE_COLORS = ["#d1495b", "#2e86ab", "#edae49", "#66a182", "#a06cd5", "#f28f3b"];
+export const TRACE_COLORS = ["#d1495b", "#2e86ab", "#edae49", "#66a182", "#a06cd5", "#f28f3b"];
 const round3 = v => Math.round(v * 1000) / 1000;
 
 /** Grab and release frames: the timeline's events (lane C), then the spec.objects grab/release
