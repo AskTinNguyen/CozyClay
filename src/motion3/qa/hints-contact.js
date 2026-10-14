@@ -1,6 +1,6 @@
 // Hints for contact-type issues: a body part inside a box, the floor, the head, the torso or the
 // other limb. Each answers a world move (direction x amount) for whatever drives that part.
-import { add, sub, scale, norm, dot, len, clamp } from "../compiler/math.js";
+import { add, sub, scale, norm, dot, len, clamp, apply, ry, T } from "../compiler/math.js";
 import { bonePoint } from "../compiler/skeleton.js";
 import { CAPSULES, segPoints, sdBox, boxNormal, headDepth, segDist, solePoints } from "./geometry.js";
 import { vec, m3 } from "./fmt.js";
@@ -8,21 +8,32 @@ import { vec, m3 } from "./fmt.js";
 const MARGIN = 0.003;
 const sideOf = name => (/(^|_)l$|^Left/.test(name) ? "l" : /(^|_)r$|^Right/.test(name) ? "r" : null);
 
-/** cause + hint for moving a body part (capsule name, prop_<name>, hand_<k>) by `delta` at frame f. */
+/** fix (qa/patch.js) moving anchor `name` by a world delta at f: its own point, in the frame that point is written in. */
+function anchorFix(X, name, f, delta) {
+	const a = X.spec.anchors?.[name], path = field => `/anchors/${name}/${field}`;
+	if (a?.kind === "world") return { path: path("p"), delta };
+	if (a?.kind === "body") return { path: path("p"), delta: apply(ry(-(X.fr(f).c.yaw ?? 0)), delta) };
+	if (["bone", "segment", "prop"].includes(a?.kind)) return { path: path("offset"), delta };
+	const o = a?.kind === "object" && X.out.objectsAt(X.rel(f))[a.object];
+	return o ? { path: path("local"), delta: apply(T(o.R), delta) } : undefined;
+}
+
+/** cause + hint (+ fix, qa/patch.js) for moving a body part (capsule name, prop_<name>, hand_<k>) by `delta` at frame f. */
 export function moveHint(X, part, f, delta, why = "") {
 	const prop = /^prop_(.+)$/.exec(part);
 	const k = prop ? X.spec.props?.[prop[1]]?.hand : sideOf(part);
-	let label, cause;
+	let label, cause, fix;
 	if (/^(hand|farm|uarm)_/.test(part) || prop) {
 		const d = X.hand(k, f);
 		label = d.label;
+		fix = d.anchor ? anchorFix(X, d.anchor, f, delta) : d.ch === `hand_${k}` ? { channel: d.ch, f, delta } : undefined;
 		cause = d.anchor ? `anchor ${d.anchor}${d.fit !== null ? ` (fits[${d.fit}])` : ""} via ${X.cause(d.ch, f)}` : X.cause(d.ch, f);
-	} else if (/^(shin|foot|sole)_/.test(part)) { label = `foot_${k}`; cause = X.cause(label, f); }
-	else { label = "root"; cause = X.cause("root", f); }
+	} else if (/^(shin|foot|sole)_/.test(part)) { label = `foot_${k}`; cause = X.cause(label, f); fix = { channel: label, f, delta }; }
+	else { label = "root"; cause = X.cause("root", f); fix = { channel: "root", f, delta }; }
 	// a key the walk generator wrote: the agent changes the walk, not the key
 	const walk = / (walk|walkTo) /.test(` ${cause}`) && /step|start|end/.test(cause);
 	if (walk && !/^anchor/.test(label)) return { cause, hint: `walk path: ${label} needs ${vec(delta)} m at f${f}${why}; change that walk's heading/turnDistance/step (or give one a { range: [lo, hi] })` };
-	return { cause, hint: `${label}: move ${vec(delta)} m at f${f}${why}` };
+	return { cause, hint: `${label}: move ${vec(delta)} m at f${f}${why}`, fix };
 }
 
 const capsule = name => CAPSULES.find(c => c[0] === name);
@@ -56,7 +67,10 @@ export const contactHints = {
 	COLLIDE(X, g) {
 		const [, part, id] = /^(\S+) x (.+)$/.exec(g.subject) ?? [];
 		const r = boxHint(X, g, part, id, g.worst - g.limit + MARGIN);
-		if (r && /^(hand|farm)_/.test(part) && !X.spec.fix?.penetration && g.worst - g.limit <= 0.05) r.hint += "; or fix.penetration: 0.02 pushes shallow hand hits out";
+		if (r && /^(hand|farm)_/.test(part) && !X.spec.fix?.penetration && g.worst - g.limit <= 0.05) {
+			r.hint += "; or fix.penetration: 0.02 pushes shallow hand hits out";
+			if (X.spec.fix !== false) r.fix = { path: "/fix/penetration", value: 0.02 };
+		}
 		return r;
 	},
 	CLEARANCE(X, g) {
@@ -66,7 +80,8 @@ export const contactHints = {
 	GROUND(X, g) {
 		const k = g.subject.startsWith("Left") ? "l" : "r", f = g.worstFrame, c = X.fr(f).c;
 		const pitch = c[`fpitch_${k}`] ? `, or less fpitch_${k} (now ${m3(c[`fpitch_${k}`])} deg; + lifts the heel)` : "";
-		return { cause: X.cause(`foot_${k}`, f), hint: `foot_${k}: raise ${m3(g.worst + 0.001)} m at f${f} (foot_* is the ankle; it stands 0.087 m above the floor)${pitch}` };
+		return { cause: X.cause(`foot_${k}`, f), hint: `foot_${k}: raise ${m3(g.worst + 0.001)} m at f${f} (foot_* is the ankle; it stands 0.087 m above the floor)${pitch}`,
+			fix: { channel: `foot_${k}`, f, delta: [0, g.worst + 0.001, 0] } };
 	},
 	FACE(X, g) {
 		const nm = g.subject.replace(/ into head$/, ""), f = g.worstFrame, { s } = X.fr(f);
@@ -88,21 +103,23 @@ export const contactHints = {
 		if (g.subject === "hands overlap") {
 			const d = norm(sub(P[I.LeftHand], P[I.RightHand])), need = (g.worst - g.limit + MARGIN) / 2;
 			const r = moveHint(X, "hand_l", f, scale(d, need));
-			return { cause: r.cause, hint: `${r.hint}; and ${moveHint(X, "hand_r", f, scale(d, -need)).hint}` };
+			return { cause: r.cause, hint: `${r.hint}; and ${moveHint(X, "hand_r", f, scale(d, -need)).hint}`, fix: moveHint(X, "hand_l", f, scale(d, 2 * need)).fix };
 		}
 		const shins = g.subject === "shins touch", min = shins ? 0.1 : 0.135;
 		const [a, b] = shins ? ["Leg", "Foot"] : ["UpLeg", "Leg"];
 		const gap = segDist(P[I[`Left${a}`]], P[I[`Left${b}`]], P[I[`Right${a}`]], P[I[`Right${b}`]]);
 		const d = sub(P[I[`Left${b}`]], P[I[`Right${b}`]]); d[1] = 0;
 		const need = (min - gap + MARGIN) / 2, dir = norm(d);
-		return { cause: X.cause("foot_l", f), hint: `foot_l: move ${vec(scale(dir, need))} m and foot_r ${vec(scale(dir, -need))} m at f${f} (${shins ? "shins" : "thighs"} ${m3(gap)} m apart, need ${min}); or spread knee_l/knee_r` };
+		return { cause: X.cause("foot_l", f), hint: `foot_l: move ${vec(scale(dir, need))} m and foot_r ${vec(scale(dir, -need))} m at f${f} (${shins ? "shins" : "thighs"} ${m3(gap)} m apart, need ${min}); or spread knee_l/knee_r`,
+			fix: { channel: "foot_l", f, delta: scale(dir, 2 * need) } };
 	},
 	OBJECT(X, g) {
 		const [, id, oid] = /^(\S+) into (.+)$/.exec(g.subject) ?? [];
 		const ch = X.spec.objects?.[id]?.channel;
 		if (!ch) return null;
 		const at = f => X.out.baked[ch]?.[f] ?? 0, clean = g.first > 0 ? at(g.first - 1) : at(0);
-		return { cause: X.cause(ch, g.worstFrame), hint: `${ch}: keep it within ${m3(clean)} deg (it reaches ${m3(at(g.worstFrame))} at f${g.worstFrame}, ${m3(g.worst)} m into ${oid}), or move ${oid}` };
+		return { cause: X.cause(ch, g.worstFrame), hint: `${ch}: keep it within ${m3(clean)} deg (it reaches ${m3(at(g.worstFrame))} at f${g.worstFrame}, ${m3(g.worst)} m into ${oid}), or move ${oid}`,
+			fix: { channel: ch, f: g.worstFrame, value: clean } };
 	},
 	BALANCE(X, g) {
 		const f = g.worstFrame, { s } = X.fr(f), P = s.P, I = X.I;
@@ -111,6 +128,6 @@ export const contactHints = {
 		const feet = ["Left", "Right"].flatMap(S => Object.values(solePoints(X.sk, s, S)));
 		const xs = feet.map(p => p[0]), zs = feet.map(p => p[2]), mg = 0.08 - 0.01;
 		const to = [clamp(com[0], Math.min(...xs) - mg, Math.max(...xs) + mg), com[1], clamp(com[2], Math.min(...zs) - mg, Math.max(...zs) + mg)];
-		return { cause: X.cause("root", f), hint: `root: move ${vec(sub(to, com))} m at f${f} (centre of mass over the feet), or step a foot under it` };
+		return { cause: X.cause("root", f), hint: `root: move ${vec(sub(to, com))} m at f${f} (centre of mass over the feet), or step a foot under it`, fix: { channel: "root", f, delta: sub(to, com) } };
 	},
 };
