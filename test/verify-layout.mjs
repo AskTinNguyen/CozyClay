@@ -15,7 +15,8 @@ const app = readStudioSource()
 	+ readFileSync(new URL("../src/timeline-defaults.js", import.meta.url), "utf8")
 	+ readFileSync(new URL("../src/stage-startup-defaults.js", import.meta.url), "utf8")
 	+ readFileSync(new URL("../src/stage-characters.jsx", import.meta.url), "utf8")
-	+ readFileSync(new URL("../src/stage-canvas-rigs.jsx", import.meta.url), "utf8");
+	+ readFileSync(new URL("../src/stage-canvas-rigs.jsx", import.meta.url), "utf8")
+	+ readFileSync(new URL("../src/document-mirrors.js", import.meta.url), "utf8");
 const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
 const planview = readFileSync(new URL("../src/planview.jsx", import.meta.url), "utf8");
 const timeline = readFileSync(new URL("../src/motion/timeline.jsx", import.meta.url), "utf8");
@@ -290,7 +291,7 @@ expect(
 // stage, and the motion layer compiles the saved source again on load.
 expect(
 	"the save keeps the layer's IK edits and the take v3 source, never the baked arrays",
-	app.includes("characters.map(({ sessionMotion, ...entry }) => {") && app.includes("ikEdits: ikEditsOf(row), motionTake: savedTakeSource(row?.take)") && app.includes("characters: stageCharacters,") &&
+	app.includes("cast().map(({ sessionMotion, ...entry }) => {") && app.includes("ikEdits: ikEditsOf(row), motionTake: savedTakeSource(row?.take)") && app.includes("characters: stageCharacters() }") &&
 	app.includes("const saved = normalizeTakeSource(entry.motionTake), take = saved ? restoredTake(entry.id, saved) : null;") &&
 	app.includes("compileTakeSource(take.source)"),
 );

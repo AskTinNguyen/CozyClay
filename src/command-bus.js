@@ -292,8 +292,9 @@ export function createCommandBus({ registry, ports }) {
         // Job controls observe/cancel an admitted identity; completion itself
         // can advance the revision while their wire request is in transit.
         // Document identity and the job's own publication fence still apply.
-        if (!['job.await', 'job.cancel', 'agent.turn.finish', 'agent.turn.cancel'].includes(id) && request.expectedRevision !== before.revision) fail('STALE_SCENE', 'Authored state changed; obtain fresh intent.');
-        if (before.busy && !turn && !transactions.has(validated.txId) && !id.startsWith('job.')) fail('TARGET_BUSY', 'Finish the current editor gesture first.');
+        // A readOnly action (declared data, e.g. motion.qa) only measures: no revision or gesture fence, the host check above still holds.
+        if (!entry?.readOnly && !['job.await', 'job.cancel', 'agent.turn.finish', 'agent.turn.cancel'].includes(id) && request.expectedRevision !== before.revision) fail('STALE_SCENE', 'Authored state changed; obtain fresh intent.');
+        if (!entry?.readOnly && before.busy && !turn && !transactions.has(validated.txId) && !id.startsWith('job.')) fail('TARGET_BUSY', 'Finish the current editor gesture first.');
       }
       if (controls[id]) return mapResult(control(id, validated, request, before), remember, rejected);
       if (transactions.size) fail('TARGET_BUSY', 'Finish or cancel the open command transaction first.');

@@ -68,9 +68,7 @@ import { GRID_BACKGROUND, GRID_FOG, stageBackground, readStoredGridView, writeSt
 import { useUiTheme } from "./theme.js";
 
 import { Room, StageLights } from "./room.jsx";
-import {
-	createShotAuthoringDocument,
-} from "./shot-authoring.js";
+import { createDocumentMirrors } from "./document-mirrors.js";
 import {
 	buildFollowTrack,
 	buildRail,
@@ -154,7 +152,7 @@ import {
 	pathMetrics,
 	strokeToPathPoints,
 } from "./object-path.js";
-import { carriedPointAt, sceneObjectsAt } from "./object-travel.js"; import { objectTracksOf } from "./motion3/object-tracks.js"; import { savedTakeSource } from "./domains/motion/take-source.js"; import { tutorialWalkSpec } from "./tutorial-walk.js";
+import { carriedPointAt, sceneObjectsAt } from "./object-travel.js"; import { objectTracksOf } from "./motion3/object-tracks.js"; import { tutorialWalkSpec } from "./tutorial-walk.js";
 import { routeOwnerFor } from "./route-owner.js";
 import {
 	analyticsActive,
@@ -2183,24 +2181,16 @@ export default function App() {
 	// its latest objects and camera department envelope before React opens the
 	// destination room.
 	const activeSceneIdRef = useRef(activeSceneId);
-	const shotDocumentRef = useRef(null);
-	const actorStageRef = useRef(null);
+	// The shot document and the stage's cast are read from the stores when used,
+	// not rebuilt here: a render-time copy lagged a synchronous command by one
+	// render and moved the scene revision after its receipt (document-mirrors.js).
+	const [{ shotDocumentRef, actorStageRef }] = useState(() => createDocumentMirrors(appContext));
 	appContext.publishScenes(scenes);
 	activeSceneIdRef.current = activeSceneId;
-	shotDocumentRef.current = createShotAuthoringDocument({ shots, waypoints, frameCount: tlFrameCount });
-	// The motion layers: their IK edits (Pose mode, IK keys, range pins) ride
-	// into the saved stage below with each character, and a change to them is
-	// a reason to autosave.
+	// The motion layers (IK edits ride into the saved stage with each
+	// character): a change to them is a reason to autosave.
 	const motionLayers = appContext.storeDomain("motion")?.read() ?? null;
-	const ikEditsOf = (row) => (!row || (!row.ikKeys?.length && !row.ikPins?.length) ? null : { keys: row.ikKeys, pins: row.ikPins ?? [], pinResiduals: row.ikPinResiduals ?? [] });
-	// sessionMotion is stripped: baked takes are session-only and far too heavy
-	// for the stage envelope; a take v3 persists as its source (spec, placement).
-	const stageCharacters = characters.map(({ sessionMotion, ...entry }) => {
-		const row = motionLayers?.find((layer) => layer.id === entry.id);
-		return { ...entry, ikEdits: ikEditsOf(row), motionTake: savedTakeSource(row?.take) };
-	});
 	actorStageRef.current = {
-		characters: stageCharacters,
 		hasCharSheet,
 		environmentImage,
 		shotAspect: shotAspectKey,
