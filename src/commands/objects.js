@@ -8,6 +8,7 @@ import { expandSculptParts, normalizeSculptRecipe, patchSculptRecipe } from '../
 import { rankingRow, scoreSculptAgainstReference } from '../sculpt-compare.js';
 import { browserSculptImages, shrinkRgba } from './sculpt-images.js';
 import { clampWarning } from '../receipt-findings.js';
+import { effectPresetSet } from '../effects/effect-record.js';
 import { withShadowCapWarnings } from '../object-look.js';
 import { STUDIO_TOOL_SCHEMAS, StudioSchemas } from '../studio-agent-protocol.js';
 
@@ -163,7 +164,7 @@ export function register(registry, ports) {
 	// Scalar scale is a convenience at the command boundary; the registry still
 	// owns all field mapping, normalization, publication and patch aliases.
 	registerElementSet({ register(entry) {
-		const expand = op => typeof op.set.scale === 'number' ? { ...op, set: { ...op.set, scale: { x: op.set.scale, y: op.set.scale, z: op.set.scale } } } : op;
+		const expand = op => effectPresetSet(typeof op.set.scale === 'number' ? { ...op, set: { ...op.set, scale: { x: op.set.scale, y: op.set.scale, z: op.set.scale } } } : op, ports.state().objects);
 		registry.register({ ...entry, available, run: args => {
 			const ops = (args.ops ?? [args]).map(expand);
 			let draft = owned().read();

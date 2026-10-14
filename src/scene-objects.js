@@ -23,8 +23,11 @@ import { elementByPath } from "./studio-elements.js";
 import { MESH_DEFAULT_HEIGHT, MESH_HEIGHT_MIN } from "./scene-mesh.js";
 import { normalizeSculptRecipe, sculptStandingBox } from "./sculpt-recipe.js";
 import { GREY_BOX } from "./object-colors.js";
+import { isEffectivelyHidden } from "./object-hidden.js";
+import { EFFECT_ENTRY, effectFields } from "./effects/effect-record.js";
 import { LIGHT_KIND, LIGHT_MENU_ENTRIES, lightLibraryEntry, objectLookFields, objectLookPatch } from "./object-look.js";
 export { OBJECT_COLORS, normalizeObjectColor, rememberObjectColor, readStoredObjectColors, writeStoredObjectColors } from "./object-colors.js";
+export { isEffectivelyHidden };
 
 export const DEFAULT_SCENE_OBJECTS = [];
 /** The persistence contract (plan §8.1): the version lives in the key AND in
@@ -171,10 +174,10 @@ export function isEmptyObject(object) {
 	return object?.renderer === EMPTY_KIND || object?.renderer === LIGHT_KIND;
 }
 
-/** The catalogue grouped for the create menu: the library plus the empty and
- * the two practical lights, which are creatable but have no footprint to
- * satisfy the library's contract. */
-export const OBJECT_MENU_ENTRIES = Object.freeze([EMPTY_ENTRY, ...OBJECT_LIBRARY, ...LIGHT_MENU_ENTRIES]);
+/** The catalogue grouped for the create menu: the library plus the empty, the
+ * two practical lights and the effect emitter, which are creatable but have no
+ * footprint to satisfy the library's contract. */
+export const OBJECT_MENU_ENTRIES = Object.freeze([EMPTY_ENTRY, ...OBJECT_LIBRARY, ...LIGHT_MENU_ENTRIES, EFFECT_ENTRY]);
 
 /** Every kind that can exist in a scene: the catalogue you can create from,
  * plus the kinds that arrive by import and so are deliberately absent from the
@@ -185,6 +188,7 @@ function objectLibraryEntry(kind) {
 	if (kind === MESH_KIND) return MESH_ENTRY;
 	if (kind === SCULPT_KIND) return SCULPT_ENTRY;
 	if (kind === EMPTY_KIND) return EMPTY_ENTRY;
+	if (kind === EFFECT_ENTRY.kind) return EFFECT_ENTRY;
 	return OBJECT_LIBRARY.find((entry) => entry.kind === kind) ?? lightLibraryEntry(kind);
 }
 
@@ -336,6 +340,7 @@ export function createSceneObject(kind, existing = [], placement = {}) {
 		height: entry.height,
 		supportY: Number.isFinite(entry.supportY) ? entry.supportY : entry.height,
 		...objectLookFields({}, entry),
+		...effectFields({ renderer: kind }),
 	};
 }
 
@@ -568,36 +573,6 @@ export function descendantsOf(objects, id) {
 		frontier = next;
 	}
 	return out;
-}
-
-/** True when this record, a parent above it, or a character carrying any of
- *  those records is hidden. A cycle in parent links ends the walk. When the
- *  id is in `objects`, that stored record is what the walk reads, so a display
- *  copy cannot disagree with the authored flag. Nothing in the lists is changed. */
-export function isEffectivelyHidden(entity, objects = [], characters = []) {
-	if (!entity || typeof entity !== "object") return false;
-	const byId = new Map();
-	for (const object of objects) {
-		if (object && typeof object.id === "string") byId.set(object.id, object);
-	}
-	const characterHidden = (id) => characters.some((item) => item && typeof item === "object" && item.id === id && item.hidden === true);
-	const seen = new Set();
-	let current = entity;
-	while (current && typeof current === "object") {
-		const id = typeof current.id === "string" ? current.id : null;
-		if (id) {
-			if (seen.has(id)) break;
-			seen.add(id);
-			if (byId.has(id)) current = byId.get(id);
-		}
-		if (current.hidden === true) return true;
-		const characterId = current.attach && typeof current.attach.characterId === "string" ? current.attach.characterId : null;
-		if (characterId && characterHidden(characterId)) return true;
-		const parentId = typeof current.parent === "string" ? current.parent : null;
-		if (!parentId) break;
-		current = byId.get(parentId) ?? null;
-	}
-	return false;
 }
 
 /** Float dust (6e-17 where 0 belongs) is snapped away, and everything else is
@@ -1112,6 +1087,8 @@ export function normalizeSceneObject(record) {
 				: { footprint: { ...entry.footprint }, height: entry.height, supportY: Number.isFinite(entry.supportY) ? entry.supportY : entry.height }),
 		// A light's light, and a glow on any record (object-look.js).
 		...objectLookFields(record, entry),
+		// An effect record's emitter (src/effects/effect-record.js).
+		...effectFields(record),
 	};
 }
 

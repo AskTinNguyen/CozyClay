@@ -6,13 +6,15 @@ import { readElementDocument, elementReadback, elementPatchArgs, elementTarget, 
 import { physicsKeyStamp } from "./motion/physics-review.js";
 import { shotAtFrame } from "./cuts.js";
 import { isProxyFigure } from "./scenes.js";
-import { CUTOUT_KIND, MESH_KIND, OBJECT_MENU_ENTRIES, supportHeightForObject } from "./scene-objects.js";
+import { supportHeightForObject } from "./scene-objects.js";
+import { studioAssetList } from "./studio-asset-list.js";
 import { buildStudioContext, physicsFingerprintInput, studioEntityCursor, validateStudioCursor } from "./studio-agent-context.js";
 import { createStudioCommandJournal, entityWorldBounds, framingChecks, localTransformReadback, placementChecks, sampledFramingResult, studioObjectCatalogue } from "./studio-agent-commands.js";
 import { verifyInstalledTake } from "./studio-agent-motion.js";
 import { shotGeometryFacts } from "./studio-geometry-facts.js";
 import { STUDIO_TOOL_FAMILIES, StudioProtocolError, validateReceipt, validateStudioCommand, validateStudioIdentity } from "./studio-agent-protocol.js";
 import { studioVisual } from "./studio-motion-visual.js";
+import { withEffectState } from "./effects/state.js";
 
 // App-owned adapter: the shared command modules remain the only
 // planners and validators. Ports below publish through the native editor stores.
@@ -132,18 +134,6 @@ export function createStudioAppBinding(ports) {
 			...(o.path?.marks?.length ? { pathMarks: o.path.marks.map(mark => typeof mark === "number" ? mark : { t: mark.t, ...(mark.bank !== undefined ? { bank: mark.bank } : {}), ...(mark.pitch !== undefined ? { pitch: mark.pitch } : {}) }) } : {}), ...(local ? { local } : {}) }; })];
 	}
 	const frameRange = row => ({ startFrame: row.startFrame, endFrameExclusive: row.endFrame + 1 });
-	function assetList(s) {
-		const catalogue = studioObjectCatalogue().objects.map(({ kind }) => {
-			const entry = OBJECT_MENU_ENTRIES.find(row => row.kind === kind);
-			return { kind, name: entry?.label ?? kind, type: entry?.group === "Primitives" ? "primitive" : "set-piece" };
-		});
-		const imported = new Map();
-		for (const o of s.objects) {
-			const assetId = o.renderer === CUTOUT_KIND ? o.sourceAssetId || o.assetId : o.renderer === MESH_KIND ? o.assetId : null;
-			if (assetId && !imported.has(assetId)) imported.set(assetId, { id: assetId, name: o.name || assetId, type: o.renderer === CUTOUT_KIND ? "image" : "mesh" });
-		}
-		return [...catalogue, ...imported.values()];
-	}
 	function context() {
 		const s = refresh(), entities = entityProjection(s), registry = ports.actions?.();
 		const shot = s.shots.find(row => row.id === s.selectedShotId) ?? shotAtFrame(s.shots, s.view.frame);
@@ -157,7 +147,7 @@ export function createStudioAppBinding(ports) {
 			// buildStudioContext selects the detailed rows and writes the real page.
 			entities, entityPage: { returned: 0, total: 0, truncated: false, nextCursor: null },
 			shots: s.shots.map(row => ({ id: row.id, name: row.name, range: range(row), keyCount: row.cameraKeys.length })), shotsTruncated: false,
-			assets: assetList(s), recentReceipts: [...receipts.values()].filter(r => r.ok).reverse().slice(0, 3).map(r => ({ id: r.receiptId, summary: r.status, canUndoDirect: ports.canUndo(r) })),
+			assets: studioAssetList(s.objects), recentReceipts: [...receipts.values()].filter(r => r.ok).reverse().slice(0, 3).map(r => ({ id: r.receiptId, summary: r.status, canUndoDirect: ports.canUndo(r) })),
 			jobs: [], capabilities: { profile: "studio-slice-1", tools: STUDIO_TOOL_FAMILIES,
 				rigReady: Boolean(s.targets.get(s.activeCharacterId)?.rig), cameraReady: Boolean(s.camera), bridgeReady: s.bridgeReady,
 				...(s.previsMode ? { storyboard: s.previsMode === "storyboard" } : {}) },
@@ -359,7 +349,8 @@ export function createStudioAppBinding(ports) {
 			// Stable id order, so an offset cursor survives unrelated edits.
 			const filtered = entityProjection(s).filter(wanted).sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 			const offset = args.cursor ? validateStudioCursor(args.cursor, c) : 0, limit = command.args.limit;
-			return { ...head, entities: filtered.slice(offset, offset + limit), total: filtered.length,
+			// An effect row also carries its particles at the playhead (src/effects/state.js).
+			return { ...head, entities: filtered.slice(offset, offset + limit).map(row => withEffectState(row, s.view.frame, s.objects)), total: filtered.length,
 				nextCursor: offset + limit < filtered.length ? studioEntityCursor(c, offset + limit) : null };
 		},
 		operate_studio: request => execute({ ...request, name: "operate_studio" }),

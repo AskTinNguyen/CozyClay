@@ -6,6 +6,7 @@ const GROUP_LABELS_KO = {
 	Primitives: "기본 도형",
 	"Set pieces": "세트 소품",
 	Lights: "조명",
+	Effects: "효과",
 };
 
 const OBJECT_LABELS_KO = {
@@ -22,6 +23,7 @@ const OBJECT_LABELS_KO = {
 	"Point light": "점 조명",
 	"Spot light": "스포트 조명",
 	Light: "조명",
+	Effect: "효과",
 };
 
 function displayObjectGroupName(name) {
@@ -71,7 +73,7 @@ export function CatalogueEntries({ onPick }) {
 					<span className={`add-object-swatch ${entry.kind}`} style={{ background: entry.color }} aria-hidden="true" />
 					<span>{displayObjectLabel(entry.label)}</span>
 					{/* An empty has no size to quote: say what it is instead of "0 × 0 m". */}
-					<small>{entry.light ? ko("practical light", "실제 조명") : entry.kind === EMPTY_KIND ? ko("node only", "노드 전용") : `${entry.footprint.width} × ${entry.footprint.depth} m`}</small>
+					<small>{entry.light ? ko("practical light", "실제 조명") : entry.kind === EMPTY_KIND ? ko("node only", "노드 전용") : entry.kind === "effect" ? ko("smoke, fire, rain…", "연기, 불, 비…") : `${entry.footprint.width} × ${entry.footprint.depth} m`}</small>
 				</button>
 			))}
 		</div>
