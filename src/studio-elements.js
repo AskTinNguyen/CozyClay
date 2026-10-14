@@ -87,7 +87,7 @@ const entries = [
 	{ path: "selection", type: "id", persisted: false, undoDomain: null, normalizer: null },
 	{ path: "timeline", type: "number", persisted: false, undoDomain: null, normalizer: null },
 	{ path: "view.mode", type: "enum", persisted: false, undoDomain: null, normalizer: null, enum: ["scene", "pose", "camera", "motion"] },
-	{ path: "view.partColoursGuideModeInset", type: "array", persisted: false, undoDomain: null, normalizer: null, actions: ["view.setPartColours", "view.setGuideMode", "view.setInset"], note: "partColours/guideMode/inset; viewer settings, not document fields" },
+	{ path: "view.partColoursGuideModeInset", type: "array", persisted: false, undoDomain: null, normalizer: null, actions: ["view.setPartColours", "view.setGuideMode", "view.setInset", "view.setGhosts"], note: "partColours/guideMode/inset/ghosts; viewer settings, not document fields" },
 	{ path: "read.sceneDescription", type: "string", persisted: false, undoDomain: null, normalizer: null },
 	{ path: "read.captureFrame", type: "image", persisted: false, undoDomain: null, normalizer: null },
 	{ path: "undo", type: "boolean", persisted: false, undoDomain: null, normalizer: null },

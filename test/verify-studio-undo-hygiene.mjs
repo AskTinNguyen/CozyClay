@@ -186,7 +186,7 @@ const COMMAND_INPUTS = {
 	"object.group": { parent: "group-2", children: ["object-1"] }, "object.ungroup": { children: ["object-1"] },
 	"object.groupUnderEmpty": { id: "object-1" },
 	"objects.arrange": { ops: [{ op: "remove", id: "object-1" }] }, "objects.replace": { objects: [createSceneObject("cone")] },
-	"view.setPartColours": { mode: "flat" }, "view.setGuideMode": { mode: "thirds" }, "view.setInset": { collapsed: true },
+	"view.setPartColours": { mode: "flat" }, "view.setGuideMode": { mode: "thirds" }, "view.setInset": { collapsed: true }, "view.setGhosts": { mode: "step", count: 3 },
 	"view.select": { selection: { kind: 'character', id: 'actor' } }, "timeline.seek": { frame: 12 }, "timeline.play": { playing: true },
 	"view.setMode": { mode: 'camera' }, "view.update": { frame: 8, playing: false, mode: 'motion' },
 	"scene.create": {}, "scene.duplicate": { sceneId: "scene-1" }, "scene.rename": { sceneId: "scene-1", name: "Renamed" },

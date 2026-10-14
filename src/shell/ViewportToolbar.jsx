@@ -11,6 +11,7 @@ import { elementByPath } from "../studio-elements.js";
 import { saveAutoColor } from "../auto-color.js";
 import { trackFeature } from "../analytics.js";
 import { GUIDE_LABELS, nextGuideMode } from "../shot-guides.js";
+import GhostsMenuGroup from "./GhostsMenuGroup.jsx";
 import "./viewport.css";
 
 // G1: the single mode+tool pill. Keys 1-5 and W/E/R are bound in App's
@@ -62,12 +63,10 @@ function RailIcon({ name, size = 16 }) {
 
 // The gizmo's snap increments (TRANSLATE_SNAP / ROTATE_SNAP in
 // src/scene-objects.js). They are fixed, so the value group names them.
-const SNAP_MOVE = "5cm";
-const SNAP_TURN = "5°";
+const SNAP_MOVE = "5cm", SNAP_TURN = "5°";
 
 // Editor lens range: shotsDomain.changeLens and the FOV slider take 14-90°.
-const FOV_MIN = 14;
-const FOV_MAX = 90;
+const FOV_MIN = 14, FOV_MAX = 90;
 
 // "+ Add › Character" stands the new body one metre along X per existing
 // character, inside the same stage clamp the Content drag applies.
@@ -532,7 +531,7 @@ export default function ViewportToolbar() {
 									{ko("Composition guides", "구도 가이드")}
 									<small>{ko(GUIDE_LABELS[guideMode].en, GUIDE_LABELS[guideMode].ko)}</small>
 								</button>
-								
+								<GhostsMenuGroup />
 								{/* Part colours repaint a BODY, so the section only exists
 								    while a character is selected (R2). */}
 								{isCharacterSelection && (

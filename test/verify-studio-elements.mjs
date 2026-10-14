@@ -63,7 +63,7 @@ const exposedThroughActions = {
 	"character.ikKeys": ["character.clearIkKeys", "character.removeIkKey", "character.setIkKey"],
 	"object.attach": ["object.attach", "object.detach"],
 	"shot.cameraRail": ["shot.clearCameraRail", "shot.setCameraRail"],
-	"view.partColoursGuideModeInset": ["view.setGuideMode", "view.setInset", "view.setPartColours"],
+	"view.partColoursGuideModeInset": ["view.setGhosts", "view.setGuideMode", "view.setInset", "view.setPartColours"],
 	scenes: ["scene.create", "scene.delete", "scene.duplicate", "scene.rename", "scene.switch"],
 	project: ["project.save"],
 	"object.cutout": ["asset.import"],

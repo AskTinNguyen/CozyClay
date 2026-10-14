@@ -11,6 +11,8 @@ import { skeletonFor } from "./motion3/rigs/index.js";
 import { beatFrames, grabReleases, traceSeries, TRACE_COLORS } from "./motion3/beats.js";
 import { projectPoint, trailPoints, viewCameras } from "./motion3/views.js";
 import { checkRef } from "./motion3/refs.js";
+import { renderWithGhosts } from "./ghost-set.js";
+import { GHOST_COLORS, sheetGhostSettings } from "./view-ghosts.js";
 // verify_result's lighting check also reads the rendered shot frame; the binding imports it from here.
 export { verifyLighting } from "./studio-lighting-check.js";
 
@@ -27,7 +29,7 @@ function takeCompile(args, s, receipt) {
 		const sk = take?.schema === "cozyclay.take.v3" && take.spec ? skeletonFor(take.rig ?? character?.model) : null;
 		if (!character || !sk) continue;
 		try {
-			return compileSpec({ fps: TIMELINE_FPS, ...take.spec }, { sk, scene: motionScene(s.objects) }, { lenient: true });
+			return { ...compileSpec({ fps: TIMELINE_FPS, ...take.spec }, { sk, scene: motionScene(s.objects) }, { lenient: true }), characterId: id };
 		} catch { return null; }
 	}
 	return null;
@@ -81,24 +83,28 @@ const round2 = p => p.map(v => Math.round(v * 100) / 100);
  * A contact sheet from views of its own (motion3/views.js), a row per view, never the shot
  * camera: each view is placed once for every frame, framed on args.focus (default the whole
  * character) and the trails. A trail is a dot per frame of its ref over the range, so spacing is
- * speed: frames up to the tile's frame solid, later ones faint, the tile's frame ringed.
+ * speed: frames up to the tile's frame solid, later ones faint, the tile's frame ringed. With
+ * args.ghosts every tile also draws the take's poses around its frame (ghost-set.js).
  */
-function viewSheet(args, r, { frames, span, grid, picks, ports }) {
+function viewSheet(args, r, { s, frames, span, grid, picks, ports }) {
 	if (!r) throw new StudioProtocolError("TARGET_NOT_READY", "views frame a character's compiled take; name a character that has one (run motion.compile first).");
 	const focus = listOf(args.focus), refs = listOf(args.trail), ctx = { sk: r.out.ctx.sk, scene: r.out.ctx.scene };
 	for (const [field, list] of [["focus", focus], ["trail", refs]]) list.forEach((ref, i) => checkRef(r.expanded, message => { throw new StudioProtocolError("INVALID_ARGUMENT", message); }, ctx, `${field}[${i}]`, ref));
 	const trails = refs.map((ref, i) => ({ ref, color: TRACE_COLORS[i], points: trailPoints(r.out, ref, span) }));
 	const side = viewTileSide(grid), cameras = viewCameras(r.out, { views: args.views, frames, focus, trails });
 	if (!cameras.length) throw new StudioProtocolError("TARGET_NOT_READY", "views found no compiled frame of the take in the range.");
-	const cells = cameras.flatMap(cam => frames.map(frame => ({ cam, frame })));
+	const cells = cameras.flatMap(cam => frames.map(frame => ({ cam, frame }))), target = args.ghosts ? s.targets.get(r.characterId) : null;
+	if (args.ghosts && !target?.rig) throw new StudioProtocolError("TARGET_NOT_READY", "ghosts pose a copy of the character's rig; it has not loaded in the editor yet.");
 	const sheet = buildContactSheet(cells, ({ cam, frame }) => {
-		const tile = ports.renderFrameBuffer(frame, { eye: cam.eye, quaternion: cam.quaternion, fovDeg: cam.fovDeg, output: { width: side, height: side } });
+		const render = () => ports.renderFrameBuffer(frame, { eye: cam.eye, quaternion: cam.quaternion, fovDeg: cam.fovDeg, output: { width: side, height: side } });
+		const tile = target ? renderWithGhosts({ rig: target.rig, take: target.motion, objects: s.objects }, frame, render) : render();
 		const dots = trails.flatMap(t => t.points.map(({ f, p }) => [f, projectPoint(cam, p, tile.width, tile.height), rgb(t.color)])
 			.filter(([, q]) => q).map(([f, [x, y], color]) => ({ x, y, color, r: f === frame ? 4 : 1.5, alpha: f <= frame ? 1 : 0.35, ring: f === frame })));
 		return { ...tile, data: paintDots(tile.data, tile.width, tile.height, dots) };
 	}, grid);
 	const views = cameras.map(cam => ({ name: cam.name, eye: round2(cam.eye), target: round2(cam.target) }));
-	const ref = { frames, layout: grid.layout, views, focus: focus.length ? focus : "character", ...(trails.length ? { trails: trails.map(({ ref: of, color }) => ({ ref: of, color })) } : {}), ...(picks ? { picks } : {}) };
+	const ref = { frames, layout: grid.layout, views, focus: focus.length ? focus : "character", ...(trails.length ? { trails: trails.map(({ ref: of, color }) => ({ ref: of, color })) } : {}), ...(picks ? { picks } : {}),
+		...(target ? { ghosts: { ...sheetGhostSettings(), ...GHOST_COLORS } } : {}) };
 	return [{ dataUrl: ports.encodePng(sheet.data, sheet), width: sheet.width, height: sheet.height, frames, layout: grid.layout, views: views.map(v => v.name) }, ref];
 }
 
@@ -110,6 +116,7 @@ export function studioVisual(args, { s, receipt, result, images, ports }) {
 		result.visualRefs.push({ imageId, ...ref });
 	};
 	if (args.visual !== "contact_sheet" && (args.views || args.focus || args.trail)) throw new StudioProtocolError("INVALID_ARGUMENT", 'views, focus and trail shape a contact sheet; send visual: "contact_sheet".');
+	if (args.ghosts && (args.visual !== "contact_sheet" || !args.views)) throw new StudioProtocolError("INVALID_ARGUMENT", 'ghosts are drawn on a contact sheet from views of its own; send visual: "contact_sheet" with views, e.g. ["side"].');
 	if (!args.views && (args.focus || args.trail)) throw new StudioProtocolError("INVALID_ARGUMENT", 'focus and trail are drawn by views of its own; add views, e.g. ["front", "side"] (the shot camera stays the user\'s).');
 	if (args.visual === "contact_sheet") {
 		// One image of frames across the range, each rendered through the export
@@ -119,7 +126,7 @@ export function studioVisual(args, { s, receipt, result, images, ports }) {
 		if (Array.isArray(args.frames)) frames = explicitFrames(args.frames, span);
 		else if (args.frames === "beats") ({ frames, picks } = beatFrames({ range: span, even: frames, timeline: r?.timeline, groups: r?.qa.groups, objects: r?.expanded.objects }));
 		const grid = sheetGrid(frames.length, args.views?.length ?? 0);
-		if (args.views) return keep(...viewSheet(args, r, { frames, span, grid, picks, ports }));
+		if (args.views) return keep(...viewSheet(args, r, { s, frames, span, grid, picks, ports }));
 		const sheet = buildContactSheet(frames, ports.renderFrameBuffer, grid);
 		return keep({ dataUrl: ports.encodePng(sheet.data, sheet), width: sheet.width, height: sheet.height, frames, layout: grid.layout }, { frames, layout: grid.layout, ...(picks ? { picks } : {}) });
 	}

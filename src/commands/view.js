@@ -4,6 +4,7 @@ import { STUDIO_TOOL_SCHEMAS } from '../studio-agent-protocol.js';
 import { ko } from '../locale.js';
 import { shotAtFrame } from '../cuts.js';
 import { fail } from './shared.js';
+import { describeGhosts, setGhostSettings } from '../view-ghosts.js';
 
 const fields = STUDIO_TOOL_SCHEMAS.operate_studio.properties;
 const groups = { 'view.select': ['selection', 'shotId'], 'timeline.seek': ['frame'], 'timeline.play': ['playing'], 'view.setMode': ['mode', 'view'] };
@@ -11,7 +12,7 @@ const operations = Object.entries({ ...groups, 'view.update': Object.keys(fields
 	id, label: id, description: 'Change selection, timeline or viewer state without authoring history.', kind: 'transient',
 	input: { type: 'object', properties: Object.fromEntries(keys.map(key => [key, fields[key]])), required: [], additionalProperties: false },
 }));
-export const declarations = Object.freeze([...operations, ...["view.setPartColours", "view.setGuideMode", "view.setInset"].map(studioActionDeclaration)]);
+export const declarations = Object.freeze([...operations, ...["view.setPartColours", "view.setGuideMode", "view.setInset", "view.setGhosts"].map(studioActionDeclaration)]);
 // A storyboard project has no Motion department; every door says so the same way.
 export const STORYBOARD_MOTION_REFUSAL = Object.freeze({ en: 'Motion tools are not part of a Storyboard project.', ko: '모션 도구는 스토리보드 프로젝트에 없어요.' });
 export const viewCommand = args => Object.entries(groups).find(([, keys]) => Object.keys(args).every(key => keys.includes(key)))?.[0] ?? 'view.update';
@@ -45,4 +46,6 @@ export function register(registry, ports) {
 	viewAction("view.setPartColours", ({ mode }) => { ports.choosePartColours(mode); return `Part colours: ${mode}.`; });
 	viewAction("view.setGuideMode", ({ mode }) => { ports.setGuideMode(mode); return `Composition guide: ${mode}.`; });
 	viewAction("view.setInset", ({ collapsed }) => { ports.setInsetCollapsed(collapsed); return `Top-View inset ${collapsed ? "folded" : "unfolded"}.`; });
+	// The ghosts' setting lives with them (view-ghosts.js), not in the App: no port to reach.
+	viewAction("view.setGhosts", args => describeGhosts(setGhostSettings(args)));
 }

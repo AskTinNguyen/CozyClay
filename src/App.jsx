@@ -153,7 +153,7 @@ import {
 	pathMetrics,
 	strokeToPathPoints,
 } from "./object-path.js";
-import { carriedPointAt, sceneObjectsAt } from "./object-travel.js"; import { objectTracksOf } from "./motion3/object-tracks.js"; import { tutorialWalkSpec } from "./tutorial-walk.js";
+import { carriedPointAt, sceneObjectsAt } from "./object-travel.js"; import { objectTracksOf } from "./motion3/object-tracks.js"; import { tutorialWalkSpec } from "./tutorial-walk.js"; import { ViewGhosts } from "./view-ghosts.jsx";
 import { routeOwnerFor } from "./route-owner.js";
 import {
 	analyticsActive,
@@ -5047,11 +5047,11 @@ export default function App() {
 										partColoursMode={view.partColoursMode}
 										pose={view.pose}
 										scale={view.scale}
-										onRig={view.onRig}
-										pickId={view.pickId}
+										onRig={view.onRig} pickId={view.pickId}
 									/>
 								</ObjectCarrier>
 							))}
+							<ViewGhosts rig={rigs[activeChar.id]} take={motion} frame={tlFrame} objects={sceneObjects} propTake={{ frameCount: tlFrameCount, fps: tlFps, objectTracks }} />
 
 							{/* Selection marker: XYZ tripod + ring on the picked cast
 							    member; the X/Z arrows drag it across the deck. */}
