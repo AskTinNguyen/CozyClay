@@ -110,7 +110,7 @@ export const CHECKS_TYPES = {
 
 export const GOAL_TYPES = {
 	name: str(), near: pair({ $ref: "#/$defs/ref" }, "distance <= tol"), above: pair({ $ref: "#/$defs/ref" }, "a.y - b.y >= by"),
-	moved: str("object id or object:<id>[.center|.top|.base]; its base moved at least `by` from the scene pose"), tol: num("m", { default: 0.05 }),
+	moved: str("a ref or an object id: an object's base moves at least `by` from the scene pose; any other point (prop:, joint:, landmark:, anchor:) at least `by` from where it is at at[0] (at: [f0, f1])"), tol: num("m", { default: 0.05 }),
 	by: num("m; above default 0, moved default 0.05"), at: { oneOf: [int(null, { minimum: 0 }), { $ref: "#/$defs/frameSpan" }], description: "absolute frame or span" },
 	mode: { enum: ["all", "any"], default: "all", description: "every frame of `at`, or one" },
 };

@@ -1,8 +1,9 @@
 // Validation of spec.goals (C8), exact messages through err(...):
 //   - each goal names exactly one predicate of near | above | moved (schema/fields.js GOAL_FIELDS)
-//   - near/above take two refs, moved one object ref (refs.js checkRef, the full ref grammar);
-//     moved can only name an object, so a bare "<id>[.center|.top|.base]" is taken as object:<id>
-//     (canonicalGoals, before validation; the spec a specId names holds the object: form)
+//   - near/above take two refs, moved one ref (refs.js checkRef, the full ref grammar); a bare
+//     "<id>[.center|.top|.base]" in moved is taken as object:<id> (canonicalGoals, before
+//     validation; the spec a specId names holds the object: form); moved on any other point
+//     measures from at[0], so it needs at: [f0, f1] with f0 < f1
 //   - tol (near) and by (above, moved) are numbers, mode "all" | "any", at an absolute frame or
 //     [f0, f1] within 0..frames-1; goal names differ
 //   - unknown fields go through opts.unknown (ignored when lenient)
@@ -47,8 +48,9 @@ function validateGoal(spec, err, opts, g, i, names) {
 	if (!kinds.length) err(`${at} needs one predicate: ${GOAL_KINDS.join(", ")}`);
 	if (kinds.length > 1) err(`${at} names ${kinds.join(" and ")}; a goal takes exactly one of ${GOAL_KINDS.join(", ")} (split it into ${kinds.length} goals)`);
 	if (kinds.length === 1 && kind === "moved") {
-		if (typeof g.moved !== "string") err(`${at}.moved must be an object id or ref "object:<id>[.center|.top|.base]", got ${fmt(g.moved)}`);
-		else checkRef(spec, err, ctx, `${at}.moved`, g.moved, ["object"]);
+		if (typeof g.moved !== "string") err(`${at}.moved must be an object id or a point ref (object:<id>[.center|.top|.base], prop:<prop>.<point>, joint:<Bone>, landmark:mouth, anchor:<name>), got ${fmt(g.moved)}`);
+		else if (checkRef(spec, err, ctx, `${at}.moved`, g.moved) && !g.moved.startsWith("object:") && (Number.isInteger(g.at) || (Array.isArray(g.at) && g.at[0] === g.at[1])))
+			err(`${at}.moved "${g.moved}" measures how far the point gets from where it is at at[0], so at must be [f0, f1] with f0 < f1, got ${fmt(g.at)}`);
 	} else if (kinds.length === 1) {
 		const pair = g[kind];
 		if (!(Array.isArray(pair) && pair.length === 2 && pair.every(r => typeof r === "string"))) err(`${at}.${kind} must be [ref, ref] (two point refs), got ${fmt(pair)}`);

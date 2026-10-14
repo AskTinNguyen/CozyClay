@@ -4,7 +4,8 @@
 // saved take compiled again), the compiler bakes and auto-fixes the frames, QA measures them with
 // a cause and a hint per issue group against the agent's own spec, the style quantities are
 // measured (qa/style.js observeMotion; keyed objects: every key as drawn, qa/key-checks.js
-// heldReadings; a skill paced to fit a short span: observations.paced), and the timeline and the
+// heldReadings; a skill paced to fit a short span: observations.paced; a skill whose release or
+// settle the last frame cut: observations.cut), and the timeline and the
 // requested probes read the result.
 // liftRequest first takes what the agent obviously meant: spec.probes are request probes, and a
 // bare goals[].moved id is object:<id>.
@@ -79,6 +80,8 @@ export function compileSpec(sent, { sk, scene }, opts = {}) {
 	// a skill that paced its beats to fit a short span says so where every answer keeps it (C7 tier 1)
 	const paced = used.filter(u => u.paced).map(u => `${u.skill} paced ${u.paced.toFixed(2)} to fit f${u.f0}..f${u.end}`);
 	if (paced.length) observations.paced = paced;
+	const cut = used.filter(u => u.cut).map(u => `${u.skill}: ${u.cut}`);
+	if (cut.length) observations.cut = cut;
 	const timeline = timelineOf(out, { used, spec: expanded }), probes = asked && runProbes(out, asked, { spec: expanded, sk, scene });
 	return { out, qa, observations, spec: resolved, expanded, used, fixed: out.fixed, search, timeline, ...(probes ? { probes } : {}), ms: { compile: compileMs, qa: ms(t2), total: ms(t0) } };
 }

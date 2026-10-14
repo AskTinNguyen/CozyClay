@@ -12,7 +12,7 @@ import { inHandAt } from "../object-pose.js";
 import { refPoint } from "../refs.js";
 import { scale, norm, sub, len } from "../compiler/math.js";
 import { moveHint } from "./hints-contact.js";
-import { goalKinds, goalName, goalNeed, scenePoint } from "./goals.js";
+import { goalKinds, goalName, goalNeed, movedHome, movedRef } from "./goals.js";
 import { m3, vec } from "./fmt.js";
 
 const MARGIN = 0.003, LEAK = 0.02, BODY_MAX = 0.2;
@@ -101,8 +101,7 @@ function fixFor(X, part, f, delta) {
 /** The side to move and its delta: [part, delta], hands first, then a body part, a to b. */
 function plan(X, goal, kind, f, amount) {
 	if (kind === "moved") {
-		const part = partOf(X, goal.moved, f), home = scenePoint(X.out.ctx.scene, goal.moved);
-		const p = refPoint(X.out, f, /\.(center|top|base)$/.test(goal.moved) ? goal.moved : `${goal.moved}.base`);
+		const part = partOf(X, goal.moved, f), home = movedHome(X.out, goal), p = refPoint(X.out, f, movedRef(goal.moved));
 		const away = p && home && len(sub(p, home)) > 1e-3 ? norm(sub(p, home)) : [0, 1, 0];
 		return part ? [part, scale(away, amount)] : null;
 	}
@@ -124,6 +123,7 @@ export const goalHints = {
 		const why = ` (goal "${name}" is ${m3(g.worst)} m short; needs ${kind === "near" ? "<=" : ">="} ${goalNeed(goal, kind)})`;
 		const move = plan(X, goal, kind, f, amount);
 		if (!move) {
+			if (kind === "moved" && !goal.moved.startsWith("object:")) return { cause: `goal ${name}`, hint: `${goal.moved} does not move with the body at f${f}; name a joint, prop point or held object` };
 			if (kind === "moved") {
 				const id = goal.moved.slice(7).replace(/\.(center|top|base)$/, "");
 				return { cause: `objects.${id}`, hint: `${id} is not in a hand at f${f}, so nothing moves it: carry it (objects.${id} = { prop, grab }) or hinge it` };

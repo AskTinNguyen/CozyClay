@@ -78,8 +78,9 @@ expect("a skill names its bad argument", msg.includes("use[0] exitCar: args.seat
 // 5. Too few frames names what the skill needs (smokeCigarette first paces down to 75% of its
 //    length); frames "auto" ends where the last skill ends.
 msg = "";
-try { compileSpec({ ...exitcar(), frames: 420 }, { sk, scene: car }); } catch (error) { msg = error.message; }
-expect("a skill past the last frame says how many frames it needs", msg.includes('use[2] walkTo needs 194 frames from f246 (to f440), past the last frame f419; set frames >= 441 or frames: "auto"'), msg);
+// (the walk's last step lands at f416; a take that ends after it only cuts the settle, lane M2)
+try { compileSpec({ ...exitcar(), frames: 400 }, { sk, scene: car }); } catch (error) { msg = error.message; }
+expect("a skill past the last frame says how many frames it needs", msg.includes('use[2] walkTo needs 194 frames from f246 (to f440), past the last frame f399; set frames >= 441 or frames: "auto"'), msg);
 msg = "";
 try { compileSpec({ ...exitcar(), frames: 600 }, { sk, scene: car }); } catch (error) { msg = error.message; }
 expect("smokeCigarette short of its paced minimum says the frames and seconds it needs", msg.includes('use[3] smokeCigarette: needs frames f440..f638 at least: 199 frames, 8.3 s at 24 fps, paced 0.75 (265 frames, 11.0 s, at its own pace); it has f440..f599, so set frames >= 639 or frames: "auto"'), msg);

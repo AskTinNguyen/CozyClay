@@ -22,7 +22,8 @@ export function standIdle(ctx) {
 /**
  * walkTo({ to: [x, z] } | { heading: h | [h0, h1] }, steps, step = 0.5, turnDistance, ...): the
  * walk generator from the pose at f0. With `to` the heading turns toward the point and the step
- * count covers the distance. Ends 16 + steps * period + 18 frames after f0, feet together.
+ * count covers the distance. Ends 16 + steps * period + 18 frames after f0, feet together; a
+ * take that ends after the last step holds that pose to its end.
  */
 export function walkTo(ctx) {
 	const { args, state } = ctx;
@@ -40,15 +41,17 @@ export function walkTo(ctx) {
 		gen.steps = args.steps ?? Math.max(2, 2 + Math.round((d - first) / step));
 	}
 	if (typeof gen.heading === "number") gen.heading = [h0, gen.heading];
-	const keys = walk(gen, ctx.keys, ctx.sk, ctx.tag);
-	return { keys, end: walkEnd(gen) };
+	const keys = walk(gen, ctx.keys, ctx.sk, ctx.tag), end = walkEnd(gen), last = ctx.frames - 1;
+	// the settle after the last step only holds the pose: a take that ends in it ends the walk there
+	if (end > last && Math.max(...keys.filter(k => k.f < end).map(k => k.f)) <= last) return { keys: keys.filter(k => k.f <= last), end: last, cut: `settle cut at f${last} (hold to the end)` };
+	return { keys, end };
 }
 
 /**
  * reachGrip({ anchor, side, reach = 20, hold = 22, release = 12, elbow, fingers = "grip",
  * define }): the hand goes to the anchor (defined elsewhere, or by `define`) over `reach`
  * frames with the fingers closing, holds, and lets go. Adds a fit of the fingertips on the
- * anchor and a contact check.
+ * anchor and a contact check. A take that ends during the release holds the grip to its end.
  */
 export function reachGrip(ctx) {
 	const { args, state } = ctx, k = args.side, name = args.anchor;
@@ -56,17 +59,19 @@ export function reachGrip(ctx) {
 	if (typeof name !== "string" || /_[lr]$/.test(name)) skillError(ctx.tag, "args.anchor must name an anchor (not ending in _l/_r)");
 	const reach = args.reach ?? 20, hold = args.hold ?? 22, release = args.release ?? 12, preset = args.fingers ?? "grip";
 	const w = `w_${name}_${k}`, fg = `fingers_${k}`, armw = `armw_${k}`, el = `elbow_${k}`, wasFk = !(state[armw] > 0.5);
+	// a take that ends after the hold but before the hand lets go cuts the release: the grip holds to the last frame
+	const last = ctx.frames - 1, cut = ctx.f0 + reach + hold <= last && ctx.f0 + reach + hold + release > last;
 	for (const [c, v] of [[w, 0], [fg, { [preset]: 0 }], [armw, 0]]) if (state[c] === undefined) state[c] = v;
 	const b = keyBook(state, ctx.f0);
 	b.hold(0, w, fg, armw, el);
 	b.at(reach, { [w]: 1, [fg]: { ...state[fg], [preset]: 1 }, [armw]: 1, ...(args.elbow ? { [el]: args.elbow } : {}) });
 	b.hold(reach + hold, w, fg, armw, el);
-	b.at(reach + hold + release, { [w]: 0, [fg]: { ...state[fg], [preset]: 0 }, ...(wasFk ? { [armw]: 0 } : {}) });
+	if (!cut) b.at(reach + hold + release, { [w]: 0, [fg]: { ...state[fg], [preset]: 0 }, ...(wasFk ? { [armw]: 0 } : {}) });
 	const S = k === "l" ? "Left" : "Right", prop = `${name}Grip`;
 	const def = args.define ? { [name]: args.define } : {};
 	const obj = args.define?.kind === "object" ? args.define.object : ctx.anchors?.[name]?.kind === "object" ? ctx.anchors[name].object : null;
 	return {
-		keys: b.keys, end: ctx.f0 + reach + hold + release, anchors: def,
+		keys: b.keys, end: cut ? last : ctx.f0 + reach + hold + release, ...(cut ? { cut: `release cut at f${last} (hold to the end)` } : {}), anchors: def,
 		props: { [prop]: { hand: k, origin: [`${S}HandIndex2`, `${S}HandMiddle2`], points: { fingers: [0, 0, 0] } } },
 		fits: [{ side: k, anchor: name, effector: { prop, point: "fingers" } }],
 		checks: { contacts: [{ name: `fingers on ${name}`, point: `prop:${prop}.fingers`, target: `anchor:${name}`, tol: 0.04, when: w }],

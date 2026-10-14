@@ -117,7 +117,7 @@ const cases = [
 	[[{ at: 3 }], ["goals[0] needs one predicate: near, above, moved"]],
 	[[{ near: ["joint:LeftHnad", "anchor:spot"], at: 3 }], ['goals[0].near[0] "joint:LeftHnad": unknown bone; did you mean "LeftHand"?']],
 	[[{ near: ["joint:LeftHand", "object:empty-3"], at: 3 }], ['goals[0].near[1] "object:empty-3" names object "empty-3", which is not in the scene; did you mean "empty-2"?']],
-	[[{ moved: "joint:Hips", at: 3 }], ['goals[0].moved "joint:Hips" must be object:<id>[.center|.top|.base]']],
+	[[{ moved: "joint:Hips", at: 3 }], ['goals[0].moved "joint:Hips" measures how far the point gets from where it is at at[0], so at must be [f0, f1] with f0 < f1, got 3']],
 	[[{ near: ["joint:LeftHand"], at: 3 }], ['goals[0].near must be [ref, ref] (two point refs), got ["joint:LeftHand"]']],
 	[[{ moved: "object:cylinder", at: [40, 60] }], ["goals[0].at = [40,60] is outside 0..47 (spec.frames 48); set frames >= 61"]],
 	[[{ moved: "object:cylinder", at: -1 }], ["goals[0].at = -1 is outside 0..47 (spec.frames 48)"]],
@@ -143,7 +143,7 @@ for (const [goals, want] of cases) {
 }
 expect("a valid goal of each kind passes validation, with every ref kind", refusal(() => run([{ name: "n", near: ["prop:grip.tip", "landmark:mouth"], tol: 0.5, at: [0, 47] },
 	{ name: "a", above: ["bone:LeftHand", `object:${CUP.group}.top`], at: 47, mode: "any" }, { name: "m", moved: `object:${CUP.group}.center`, by: 0, at: 0 }])) === "");
-// moved can only name an object: a bare id is taken as object:<id> (lane H3a); refs in fields that
+// a bare moved id is taken as object:<id> (lane H3a; moved on other point refs: lane M2); refs in fields that
 // take any kind stay strict, and a bare name is refused with the prefixed forms it could mean
 r = run([{ name: "bare", moved: "cylinder", by: 0.02, at: 47 }, { name: "bare group", moved: `${CUP.group}.top`, at: 47 }]);
 const prefixedRun = run([{ name: "bare", moved: "object:cylinder", by: 0.02, at: 47 }, { name: "bare group", moved: `object:${CUP.group}.top`, at: 47 }]);
@@ -152,7 +152,7 @@ expect("a bare moved id is the object: ref (the same result; the filled-in spec 
 const ALL = "joint:<Bone>, bone:<Bone>, prop:<prop>.<point>, anchor:<name>, landmark:mouth, object:<id>[.center|.top|.base]";
 const bareCases = [
 	[[{ moved: "nope", at: 3 }], ['goals[0].moved "object:nope" names object "nope", which is not in the scene; did you mean "cube"?']],
-	[[{ moved: 3, at: 3 }], ['goals[0].moved must be an object id or ref "object:<id>[.center|.top|.base]", got 3']],
+	[[{ moved: 3, at: 3 }], ['goals[0].moved must be an object id or a point ref (object:<id>[.center|.top|.base], prop:<prop>.<point>, joint:<Bone>, landmark:mouth, anchor:<name>), got 3']],
 	[[{ near: ["LeftHand", CUP.group], at: 3 }], [`goals[0].near[0] "LeftHand" must be ${ALL}; did you mean "joint:LeftHand"?`,
 		`goals[0].near[1] "${CUP.group}" must be ${ALL}; did you mean "object:${CUP.group}"?`]],
 	[[{ above: ["grip.tip", "spot"], at: 3 }], [`goals[0].above[0] "grip.tip" must be ${ALL}; did you mean "prop:grip.tip"?`,
