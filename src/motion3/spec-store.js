@@ -1,7 +1,8 @@
-// C7. Spec ids and the editor's spec store. specIdOf is final (W0); the store is a plain
-// recently-used map until lane D2 owns it (LRU of SPEC_STORE_SIZE, base+patch errors, motion.qa).
-// The store lives in the editor page's memory: a reload forgets it, and the agent then sends
-// the whole spec again.
+// C7. Spec ids and the editor's spec store. specIdOf is final (W0). The store is an LRU of
+// SPEC_STORE_SIZE entries (lane D2): put, get, keepParts and parts all count as a use, and the
+// least recently used entry goes first. It lives in the editor page's memory: a reload forgets
+// it, and the agent then sends the whole spec again (motion3.js answers an unknown base or
+// specId with that advice).
 
 export const SPEC_STORE_SIZE = 64;
 
@@ -26,12 +27,14 @@ export function specIdOf(spec) {
  *   parts(specId) -> parts | null       what motion.report pages and delta compares against
  */
 export function createSpecStore(max = SPEC_STORE_SIZE) {
-	const entries = new Map();
-	const touch = (id, entry) => { entries.delete(id); entries.set(id, entry); while (entries.size > max) entries.delete(entries.keys().next().value); return entry; };
+	const entries = new Map(), size = Math.max(1, max);
+	// a Map keeps insertion order: re-inserting moves an entry to the end, the first is the oldest
+	const touch = (id, entry) => { entries.delete(id); entries.set(id, entry); while (entries.size > size) entries.delete(entries.keys().next().value); return entry; };
+	const seen = id => (entries.has(id) ? touch(id, entries.get(id)) : null);
 	return {
 		put(spec) { const id = specIdOf(spec); touch(id, { ...entries.get(id), spec: structuredClone(spec) }); return id; },
-		get(id) { const e = entries.get(id); return e?.spec ? structuredClone(touch(id, e).spec) : null; },
+		get(id) { const spec = seen(id)?.spec; return spec ? structuredClone(spec) : null; },
 		keepParts(id, parts) { touch(id, { ...entries.get(id), parts }); },
-		parts(id) { return entries.get(id)?.parts ?? null; },
+		parts(id) { return seen(id)?.parts ?? null; },
 	};
 }
