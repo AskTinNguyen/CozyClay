@@ -3,7 +3,6 @@
 	"bin/agent/agent-runner.mjs": 496,
 	"bin/agent/providers.mjs": 409,
 	"bin/agent/session-store.mjs": 324,
-	"bin/agent/studio-rebase.mjs": 268,
 	"bin/agent/supervisor.mjs": 283,
 	"bin/agent/video-adapters.mjs": 334,
 	"bin/cozyclay.mjs": 440,

@@ -215,7 +215,7 @@ const moveA = x => ({ ops: [{ op: "update", id: "obj-a", position: { world: { x,
 {
   const ed = editor(), s = session(ed), invoke = tools(ed, s);
   ed.userEdit("obj-b", { color: "#0000ff" });
-  await assert.rejects(invoke("frame_shot", { subjectIds: ["obj-a"], framing: { intent: { size: "wide shot", view: "front", level: "eye", side: "left" } } }), error => error.code === "STALE_SCENE" && /never replayed automatically/.test(error.message) && /obj-b/.test(error.message));
+  await assert.rejects(invoke("frame_shot", { subjectIds: ["obj-a"], framing: { intent: { size: "wide shot", view: "front", level: "eye", side: "left" } } }), error => error.code === "STALE_SCENE" && /replayed automatically only right after your own edit/.test(error.message) && /obj-b/.test(error.message));
   assert.equal(ed.attempts.length, 1);
   const ed2 = editor(), s2 = session(ed2), invoke2 = tools(ed2, s2);
   ed2.bumpUnrelated();
@@ -226,6 +226,31 @@ const moveA = x => ({ ops: [{ op: "update", id: "obj-a", position: { world: { x,
   const stale = { command: async () => ({ ok: false, code: "STALE_SCENE", message: "Authored state changed; obtain fresh intent." }) };
   await assert.rejects(createStudioTools({ liveHub: stale, workspaceHandle: "h", session: { admission: bare } }).internal.invoke("arrange_objects", moveA(1)), error => error.message === "Authored state changed; obtain fresh intent.");
   console.log("PASS non-entity tools and context-less admissions keep the plain refusal");
+}
+
+// 11. The editor settling the agent's own edit (a mirror catching up a render later) moves the
+// revision past the receipt. Nothing anyone else authored changed, so any tool is re-sent once,
+// even one with no per-entity fingerprint; an edit by someone else in between still teaches.
+{
+  const ed = editor(), s = session(ed), invoke = tools(ed, s);
+  // The settle lands before the sidecar reads back its own create: it cannot read the new row
+  // at the revision the receipt published, yet the id is its own, never "added" by someone.
+  const command = ed.command; let settle = true;
+  ed.command = async (name, payload) => { if (settle && name === "read_studio_context") { settle = false; ed.bumpUnrelated(); } return command(name, payload); };
+  const own = await invoke("arrange_objects", { ops: [{ op: "create", source: { kind: "cube" }, name: "Lamp", position: { world: { x: 0, y: 0, z: 0 } } }] });
+  assert.equal(settle, false, "the read-back met the settled revision");
+  assert.equal(s.admission.revision, own.revision.after);
+  const framed = await invoke("frame_shot", { subjectIds: ["obj-a"], framing: { intent: { size: "wide shot", view: "front", level: "eye", side: "left" } } });
+  assert.equal(framed.autoRebased, true, "re-sent once by the sidecar");
+  assert.equal(framed.autoRebase.reason, "own_edit_settled");
+  assert.ok(framed.warnings.some(w => w.code === "AUTO_REBASED" && /after your own edit/.test(w.message) && w.message.length <= 120));
+  assert.deepEqual(ed.attempts.map(a => [a.name, a.revision]), [["arrange_objects", 41], ["frame_shot", 42], ["frame_shot", 43]]);
+  const ed2 = editor(), s2 = session(ed2), invoke2 = tools(ed2, s2);
+  await invoke2("arrange_objects", moveA(2));
+  ed2.userEdit("obj-b", { color: "#0000ff" });
+  await assert.rejects(invoke2("frame_shot", { subjectIds: ["obj-a"], framing: { intent: { size: "wide shot", view: "front", level: "eye", side: "left" } } }), error => error.code === "STALE_SCENE" && /obj-b/.test(error.message));
+  assert.equal(ed2.attempts.length, 2, "an edit by someone else is never re-sent over");
+  console.log("PASS the editor settling the agent's own edit is re-sent once for any tool; someone else's edit still teaches");
 }
 
 // 10. The route wires it end to end: baseline, snapshot, tool.done flag.

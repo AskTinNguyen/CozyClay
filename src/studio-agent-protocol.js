@@ -293,7 +293,9 @@ const authoredReceipt = { ...receiptBase, authored: literal(true), undo };
 // A run_action receipt names the registered action and what it did.
 const actionFields = { action: id, summary: text(240) };
 const receiptVariants = {
-	completed: object({ ...receiptBase, status: literal("completed"), kind: choices(["job", "document", "transaction", "mutation"]) }, { ...actionFields, ...batchDetails, output: openObject, jobId: id, txId: id, nextHost: identity }),
+	// A mutation inside an agent turn answers "completed" (the turn owns its undo entry); a patch
+	// among them still reports each op, so ops ride here too.
+	completed: object({ ...receiptBase, status: literal("completed"), kind: choices(["job", "document", "transaction", "mutation"]) }, { ...actionFields, ...batchDetails, output: openObject, jobId: id, txId: id, nextHost: identity, ops: opResults }),
 	started: object({ ...receiptBase, status: literal("started"), kind: literal("job"), jobId: id, authored: literal(false), undo: literal(null) }, { ...actionFields }),
 	applied: object({ ...authoredReceipt, status: literal("applied") }, { mutated: literal(true), ops: opResults, ...batchDetails, ...actionFields }),
 	partial: object({ ...authoredReceipt, status: literal("partial"), ops: opResults }, { mutated: literal(true), ...batchDetails }),

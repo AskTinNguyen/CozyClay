@@ -85,9 +85,9 @@ const agentFailureCode = (error, signal, tool = false) => advisory(() => {
  * One user message is one editor transaction: every Studio turn whose editor
  * reports a previsMode opens agent.turn.begin and closes agent.turn.finish, so
  * all of its mutations land as ONE history entry and one receipt frame. A
- * context without a previsMode comes from an editor that predates turn
- * transactions and runs unwrapped. rollback() cancels the open transaction
- * (restoring the pre-turn document) and reopens it for the rest of the turn.
+ * context without a previsMode runs unwrapped (an editor that predates turn
+ * transactions). mark() records where a script starts; rollback() undoes only
+ * the edits after it and keeps the turn open, so earlier edits still land.
  */
 const agentTurn = ({ hub, context, turnId, admission }) => {
 	const wrapped = Boolean(context.scene?.previsMode);
@@ -102,12 +102,11 @@ const agentTurn = ({ hub, context, turnId, admission }) => {
 	};
 	const open = async () => { await control("agent.turn.begin"); admission.turnId = turnId; };
 	return {
+		mark: async () => (admission.turnId === turnId ? control("agent.turn.mark") : null),
 		async rollback() {
 			if (admission.turnId !== turnId) return null;
-			delete admission.turnId;
-			const receipt = await control("agent.turn.cancel");
+			const receipt = await control("agent.turn.rollback");
 			await admission.refresh();
-			await open();
 			return receipt;
 		},
 		run: start => async function* (input) {
@@ -119,7 +118,7 @@ const agentTurn = ({ hub, context, turnId, admission }) => {
 					if (frame.type === "done") terminal = frame; else yield frame;
 				}
 			} finally {
-				// A rollback whose reopen failed has already closed the transaction.
+				// Finish only the transaction this run opened (a rollback keeps it open).
 				if (admission.turnId === turnId) {
 					delete admission.turnId;
 					const receipt = await control("agent.turn.finish");
@@ -563,9 +562,11 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 		const script = createScriptTool({ tools: modelTools, signal: controller.signal, emit: send });
 		const scriptTool = {
 			...script,
-			// A script that fails after it edited the scene rolls the turn back, so
-			// the model retries from the pre-turn document, never from half a script.
+			// A script that fails after it edited the scene rolls back its own edits, so
+			// the model retries from the document the script started from, never from
+			// half a script; what the turn did before the script stays.
 			handler: async (args, options) => {
+				await turnTransaction.mark();
 				const result = await script.handler(args, options);
 				if (result.ok || !result.calls.some(call => call.ok && Number.isSafeInteger(call.revision?.after) && call.revision.after !== call.revision.before)) return result;
 				const rollback = await turnTransaction.rollback();

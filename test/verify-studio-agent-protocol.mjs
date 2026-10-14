@@ -312,6 +312,12 @@ function registerTests() {
 		const noop = receiptFixture("noop"); noop.ops = [{ index: 0, status: "partial", droppedPaths: ["object.renderer"] }];
 		protocol.validateReceipt(noop);
 		noop.ops = [{ index: 0, status: "applied" }]; rejects(() => protocol.validateReceipt(noop), "INVALID_RECEIPT");
+		// Inside an agent turn the bus answers a mutation "completed" (the turn owns the undo entry);
+		// a patch there still reports its ops.
+		const { mutated: _mutated, ...rest } = structuredClone(applied);
+		const composite = { ...rest, status: "completed", kind: "mutation", undo: { ...applied.undo, canUndoDirect: false } };
+		protocol.validateReceipt(composite);
+		composite.ops = [{ index: 1, status: "applied" }]; rejects(() => protocol.validateReceipt(composite), "INVALID_RECEIPT");
 	});
 	test("D4 context recursively rejects whole-document, credential and raw-pose payloads", () => {
 		for (const mutate of [c => c.document = {}, c => c.entities[0].rawPose = [1,2,3], c => c.host.accessToken = "secret", c => c.scene.inactiveScenes = [], c => c.camera = { dataUrl: "data:image/png;base64,AA" }, c => c.entities[0].position.extra = {}, c => c.jobs.push({ id: "j", payload: {} }), c => c.assets.push({ imageId: "x", path: "/tmp/private" })]) { const c = contextFixture(); mutate(c); rejects(() => protocol.validateStudioContext(c)); }

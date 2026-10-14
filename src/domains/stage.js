@@ -70,7 +70,9 @@ export function useStageTransaction() {
 }
 
 export function useStage(appContext) {
-  const [domain] = useState(() => createStageDomain(appContext));
+  // One stage owner: StrictMode runs this initializer twice, and a second domain would leave App
+  // rendering (and mirroring into the saved scene) a stage no command writes.
+  const [domain] = useState(() => appContext.storeDomain('stage') ?? createStageDomain(appContext));
   const stage = useDocumentDomain(domain.documentStore, 'stage');
   const [preset, setPreset] = useState('medium');
   const gesture = useRef(null);

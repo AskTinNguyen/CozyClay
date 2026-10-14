@@ -128,9 +128,12 @@ export function elementPatchReceipt(receipt, request, projection) {
     }).map(([key]) => `${kind}.${key}`);
     return { index, status: droppedPaths.length ? 'partial' : receipt.authored ? 'applied' : 'noop', ...(droppedPaths.length ? { droppedPaths } : {}) };
   });
-  const partial = receipt.authored && ops.some(op => op.status === 'partial');
-  // The protocol's partial variant is a patch receipt, not an action receipt.
-  const { action, summary, ...base } = receipt;
+  // A dropped path makes the receipt "partial" whenever it published one revision: an applied
+  // patch, or one inside an agent turn (which the bus answers "completed"). A composite that moved
+  // the revision further stays "completed", and its ops name the dropped paths.
+  const partial = receipt.authored && ops.some(op => op.status === 'partial') && receipt.revision.after === receipt.revision.before + 1 && !receipt.nextHost;
+  // The protocol's partial variant is a patch receipt, not an action or composite receipt.
+  const { action, summary, kind: composite, ...base } = receipt;
   return { ...(partial ? base : receipt), ops, status: partial ? 'partial' : receipt.status,
     delta: !receipt.authored ? [] : request.args.ops.slice(0, 8).map(({ target, set }) => ({ id: target.id, after: {
       patched: elementReadback(kind, elementTarget(kind, value, target.id, receipt.host.sceneId), Object.keys(set).map(key => `${kind}.${key}`), value),

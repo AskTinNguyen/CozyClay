@@ -41,12 +41,34 @@ const objects = {
 	read: () => objectStore.read("objects"),
 };
 app.registerStoreDomain("objects", objects);
+// The installed take per character, as the motion domain holds it.
+const takeStore = createDocumentStore({ owned: { motion: {} }, dev: false });
+const takes = {
+	documentStore: takeStore,
+	beginAction: targetId => takeStore.beginAction("motion", targetId),
+	write(update) { takeStore.write("motion", update); revision.current++; },
+	read: () => takeStore.read("motion"),
+};
+app.registerStoreDomain("motion", takes);
 app.updatePorts({ revision });
-const actions = { "object.add": { id: "object.add", kind: "mutation", undoDomain: "objects", exposure: "public" } };
+// What the editor does a render after an edit (a document mirror catching up): it moves the
+// scene revision once more, after the receipt answered. Flushed before the next command.
+const renders = [];
+const render = () => { while (renders.length) renders.shift()(); };
+const actions = {
+	"object.add": { id: "object.add", kind: "mutation", undoDomain: "objects", exposure: "public" },
+	"object.addSettling": { id: "object.addSettling", kind: "mutation", undoDomain: "objects", exposure: "public" },
+	"take.install": { id: "take.install", kind: "mutation", undoDomain: "motion", exposure: "public" },
+};
 const registry = {
 	state: () => ({}),
 	prepare(id, args) { if (!actions[id]) throw Object.assign(new Error(`Unknown action ${id}`), { code: "INVALID_ARGUMENT" }); return { entry: actions[id], args }; },
-	invoke(entry, args) { objects.write(rows => [...rows, args.object]); return { affectedIds: [args.object.id], summary: "Added object" }; },
+	invoke(entry, args) {
+		if (entry.id === "take.install") { takes.write(rows => ({ ...rows, [args.characterId]: args.takeId })); return { affectedIds: [args.characterId], summary: "Installed take" }; }
+		objects.write(rows => [...rows, args.object]);
+		if (entry.id === "object.addSettling") renders.push(() => { revision.current++; });
+		return { affectedIds: [args.object.id], summary: "Added object" };
+	},
 };
 const receipts = new Map();
 const journal = createStudioCommandJournal({ host: identity });
@@ -62,7 +84,8 @@ const bus = createCommandBus({ registry, ports: {
 	history: redo => app.historyEntry(redo),
 	receipt: id => receipts.get(id),
 	readTarget: id => id,
-	readback: id => ({ token: id }),
+	// Like the editor's own readback: no token, so the sidecar reads the entity back from context.
+	readback: id => ({ name: id }),
 	remember: receipt => { receipts.set(receipt.receiptId, receipt); return receipt; },
 } });
 
@@ -74,7 +97,8 @@ const context = () => ({
 	scene: { name: "Workshop", aspect: "16:9", floorY: 0, frameCount: 144, objectCount: objects.read().length, characterCount: 0, previsMode: "animation" },
 	selection: null, activeCharacterId: null,
 	view: { mode: "scene", frame: 0, playing: false, lookThrough: false, grid: false, autoColor: false }, shot: null, camera: null,
-	entities: [], entityPage: { returned: 0, total: 0, truncated: false, nextCursor: null },
+	entities: objects.read().map(o => ({ id: o.id, kind: "object", token: o.id, name: o.id, position: { x: o.x, y: o.y ?? 0, z: o.z } })),
+	entityPage: { returned: objects.read().length, total: objects.read().length, truncated: false, nextCursor: null },
 	shots: [], shotsTruncated: false, assets: [], recentReceipts: [], jobs: [],
 	capabilities: { profile: "studio-slice-1", tools: [...STUDIO_TOOL_FAMILIES], rigReady: true, cameraReady: false, bridgeReady: false },
 });
@@ -84,10 +108,15 @@ const context = () => ({
 const commands = [];
 const liveHub = {
 	command: async (name, payload) => {
+		render();
 		commands.push({ name, action: payload?.args?.action ?? null });
 		if (name === "inspect_studio") return { context: { revision: { scene: revision.current } } };
 		if (name === "verify_result") return { receiptId: null, revision: { scene: revision.current, physics: 9, view: 18 }, stale: false, checks: { coverage: "current-scene-targets" }, visualRefs: [{ imageId: "capture-1" }], unsupportedChecks: [] };
 		if (name === "resolve_studio_image") return { imageId: "capture-1", dataUrl: png, revision: { scene: revision.current } };
+		// The view-only playhead move, admitted at the scene revision exactly like the editor's.
+		if (name === "operate_studio") return payload.expectedRevision !== revision.current
+			? { ok: false, commandId: payload.commandId, host: identity, code: "STALE_SCENE", phase: "admission", message: "Authored state changed; obtain fresh intent.", mutated: false, affectedIds: [], expectedTargets: [], currentTargets: [], preserved: { authoredState: "unchanged" }, recovery: { action: "inspect", retryAllowed: false } }
+			: { ok: true, commandId: payload.commandId, receiptId: crypto.randomUUID(), host: identity, status: "transient", authored: false, revision: { before: revision.current, after: revision.current }, view: { before: 18, after: 19 }, affectedIds: [identity.sceneId], delta: [{ id: identity.sceneId, after: { frame: payload.args.frame } }], checks: { coverage: "studio-view" }, undo: null, warnings: [] };
 		if (name === "run_action") {
 			const { name: _name, args, ...options } = payload;
 			return bus.run(args.action, args.args, { ...options, origin: "agent", turnId: payload.turnId });
@@ -95,7 +124,7 @@ const liveHub = {
 		throw new Error(`unexpected hub command ${name}`);
 	},
 };
-const studioRuntime = { readContext: async () => context() };
+const studioRuntime = { readContext: async () => { render(); return context(); } };
 
 async function readSse(response, onEvent) {
 	const reader = response.body.getReader(), decoder = new TextDecoder(), events = [];
@@ -118,9 +147,9 @@ async function readSse(response, onEvent) {
 	return { events, raw };
 }
 
-async function scriptTurn(code) {
+async function scriptTurn(code, before = []) {
 	const fake = createFakeModel();
-	fake.script([{ type: "toolCall", id: "script-1", name: "script", arguments: { code } }, "done"]);
+	fake.script([...before, { type: "toolCall", id: "script-1", name: "script", arguments: { code } }, "done"]);
 	let server;
 	const handler = createAgentHandler({ auth: { getAccessToken: async () => "token" }, codex: { parseQuotaHeaders: () => ({ primary: {}, credits: {} }) }, models: fake.models, fauxProvider: fake.fauxProvider, liveHub, studioRuntime, port: () => server.address().port });
 	server = createServer((req, res) => handler(req, res).catch(error => { if (!res.headersSent) { res.writeHead(500); res.end(error.stack); } else if (!res.writableEnded) res.end(); }));
@@ -153,7 +182,7 @@ const toolCommands = () => commands.filter(command => command.name !== "resolve_
 		return { placed, visualStatus: check.visualStatus, carriesImage: "dataUrl" in check };
 	`);
 	assert.deepEqual(toolCommands().map(command => command.action ?? command.name), ["inspect_studio", "object.add", "object.add", "object.add", "object.add", "object.add", "verify_result"], "the fixture hub received the script's 7 commands");
-	assert.deepEqual(commands.filter(command => String(command.action).startsWith("agent.turn.")).map(command => command.action), ["agent.turn.begin", "agent.turn.finish"], "the animation turn is one transaction");
+	assert.deepEqual(commands.filter(command => String(command.action).startsWith("agent.turn.")).map(command => command.action), ["agent.turn.begin", "agent.turn.mark", "agent.turn.finish"], "the animation turn is one transaction; the script marks where it starts");
 	const starts = events.filter(event => event.type === "tool.start"), dones = events.filter(event => event.type === "tool.done");
 	assert.deepEqual(starts.map(event => [event.name, event.label]), [["script", "Run a script"]], "exactly one tool.start, for script");
 	assert.equal(dones.length, 1, "exactly one tool.done");
@@ -182,7 +211,7 @@ const toolCommands = () => commands.filter(command => command.name !== "resolve_
 	console.log("PASS one script call runs 7 commands: one tool.start/done pair, calls[7], no image bytes, one history entry");
 }
 
-// --- (c) a script that throws after 3 edits rolls the whole turn back ---
+// --- (c) a script that throws after 3 edits rolls its own edits back ---
 {
 	const preTurn = { objects: objects.read(), entry: app.historyEntry(false) };
 	const { events } = await scriptTurn(`
@@ -199,8 +228,59 @@ const toolCommands = () => commands.filter(command => command.name !== "resolve_
 	assert.ok(result.calls.every(call => call.ok && call.name === "run_action"));
 	assert.equal(result.rollback?.status, "rolled_back", JSON.stringify(result));
 	assert.equal(typeof result.rollback.receiptId, "string");
-	assert.deepEqual(commands.filter(command => String(command.action).startsWith("agent.turn.")).map(command => command.action), ["agent.turn.begin", "agent.turn.cancel", "agent.turn.begin", "agent.turn.finish"]);
-	assert.deepEqual({ objects: objects.read(), entry: app.historyEntry(false) }, preTurn, "the turn transaction rolled back to the pre-turn document");
+	assert.deepEqual(result.rollback.affectedIds, ["crate-0", "crate-1", "crate-2"], "the rollback names the script's own edits");
+	assert.deepEqual(commands.filter(command => String(command.action).startsWith("agent.turn.")).map(command => command.action), ["agent.turn.begin", "agent.turn.mark", "agent.turn.rollback", "agent.turn.finish"]);
+	assert.deepEqual({ objects: objects.read(), entry: app.historyEntry(false) }, preTurn, "the script's edits rolled back; nothing else was in the turn");
 	assert.equal(events.filter(event => event.type === "receipt").length, 0, "a rolled-back turn authors nothing");
-	console.log("PASS a script that throws after 3 edits rolls the turn back and reports calls[3]");
+	console.log("PASS a script that throws after 3 edits rolls its edits back and reports calls[3]");
+}
+
+// --- (d) a failing script rolls back only its own edits: a take installed earlier in the same
+// turn (motion.compile before the script, in the reported session) stays installed ---
+{
+	const preTurn = { objects: objects.read(), takes: takes.read(), entry: app.historyEntry(false) };
+	const install = { type: "toolCall", id: "take-1", name: "run_action", arguments: { action: "take.install", args: { characterId: "char-a", takeId: "take-squat-smoke" } } };
+	const { events } = await scriptTurn(`
+		await tools.run_action({ action: "object.add", args: { object: { id: "wall", x: 0, y: 0, z: -1 } } });
+		await tools.run_action({ action: "object.add", args: { object: { id: "lamp", x: 1.6, y: 0, z: -0.7 } } });
+		throw new Error("the playhead move was refused");
+	`, [install]);
+	assert.deepEqual(events.filter(event => event.type === "tool.start").map(event => event.name), ["run_action", "script"]);
+	const [installed, scripted] = events.filter(event => event.type === "tool.done");
+	assert.equal(installed.ok, true, JSON.stringify(installed));
+	const result = scripted.result;
+	assert.equal(result.ok, false, JSON.stringify(result));
+	assert.equal(result.rollback?.status, "rolled_back", JSON.stringify(result));
+	assert.deepEqual(result.rollback.affectedIds, ["wall", "lamp"], "the rollback names the script's own edits, not the take");
+	assert.deepEqual(takes.read(), { ...preTurn.takes, "char-a": "take-squat-smoke" }, "the take installed before the script survives its rollback");
+	assert.deepEqual(objects.read(), preTurn.objects, "the script's objects are gone");
+	assert.deepEqual(commands.filter(command => String(command.action).startsWith("agent.turn.")).map(command => command.action), ["agent.turn.begin", "agent.turn.mark", "agent.turn.rollback", "agent.turn.finish"]);
+	const receiptFrames = events.filter(event => event.type === "receipt");
+	assert.equal(receiptFrames.length, 1, "the turn still lands as one entry, holding the take");
+	const turnReceipt = receiptFrames[0].receipt;
+	assert.deepEqual(turnReceipt.affectedIds, ["char-a"]);
+	const undone = bus.run("edit.undo", { receiptId: turnReceipt.receiptId }, { origin: "agent", commandId: crypto.randomUUID(), host: identity, expectedRevision: revision.current });
+	assert.equal(undone.status, "undone", JSON.stringify(undone));
+	assert.deepEqual({ objects: objects.read(), takes: takes.read(), entry: app.historyEntry(false) }, preTurn, "one undo still restores the pre-turn document");
+	console.log("PASS a failing script rolls back only its own edits: the take installed before it stays, the turn is one undo step");
+}
+
+// --- (e) the editor settling the script's own edit a render later moves the revision past the
+// receipt; the script's next call (operate_studio) is re-sent once, never refused as stale ---
+{
+	const { events } = await scriptTurn(`
+		const lamp = await tools.run_action({ action: "object.addSettling", args: { object: { id: "lamp", x: 1.6, y: 0, z: -0.7 } } });
+		const seek = await tools.operate_studio({ frame: 0 });
+		return { lamp: lamp.revision, seek: { status: seek.status, autoRebased: seek.autoRebased, warnings: seek.warnings } };
+	`);
+	const result = events.find(event => event.type === "tool.done").result;
+	assert.equal(result.ok, true, JSON.stringify(result));
+	assert.deepEqual(result.calls.map(call => [call.name, call.ok]), [["run_action", true], ["operate_studio", true]]);
+	assert.equal(result.value.seek.status, "transient");
+	assert.equal(result.value.seek.autoRebased, true, "re-sent once by the sidecar");
+	assert.ok(result.value.seek.warnings.some(warning => warning.code === "AUTO_REBASED" && /after your own edit/.test(warning.message)), JSON.stringify(result.value.seek));
+	assert.equal(revision.current >= result.value.lamp.after + 1, true, "the editor did move the revision after the receipt");
+	assert.equal(result.rollback, undefined, "nothing rolled back");
+	assert.ok(objects.read().some(object => object.id === "lamp"), "the script's edit landed");
+	console.log("PASS a script's own edit settling a render later does not make its next call stale");
 }

@@ -3,6 +3,7 @@
 // idempotency. Synchronous UI actions stay synchronous (including user gestures).
 import { HISTORY_LIMIT } from './history.js';
 import { StudioProtocolError, StudioSchemas, validateStudioSchema, validateReceipt, validateStudioIdentity } from './studio-agent-protocol.js';
+import { agentTurnControls, markAgentTurn } from './agent-turn-mark.js';
 
 // A batching/retention adapter over the existing object history owner. The
 // native store still owns every snapshot and transition; this tracks only the
@@ -62,9 +63,7 @@ export function createCommandBus({ registry, ports }) {
   const object = properties => ({ type: 'object', properties, required: Object.keys(properties), additionalProperties: false });
   const argsSchema = { type: 'object', properties: {}, required: [], additionalProperties: true };
   const controls = {
-    'agent.turn.begin': object({ turnId: identifier }),
-    'agent.turn.finish': object({ turnId: identifier }),
-    'agent.turn.cancel': object({ turnId: identifier }),
+    ...agentTurnControls(object, identifier),
     'run.begin': object({ id: identifier, args: argsSchema }),
     'run.update': object({ txId: identifier, args: argsSchema }),
     'run.commit': object({ txId: identifier }),
@@ -94,6 +93,8 @@ export function createCommandBus({ registry, ports }) {
       }
       if (agentTurn?.txId !== args.turnId) fail('STALE_TARGET', 'The agent turn is no longer open.');
       const turn = agentTurn;
+      // A script's mark, and the rollback to it that keeps the turn open (agent-turn-mark.js).
+      if (id === 'agent.turn.mark' || id === 'agent.turn.rollback') return transactionReceipt(id, markAgentTurn(id, turn), request, before);
       // A rolled-back turn restores every owner it touched and leaves no entry.
       if (id === 'agent.turn.cancel') { agentTurn = null; turn.session?.cancel(); return transactionReceipt(id, turn, request, before); }
       try { turn.historyEntryId = turn.session?.commit().historyEntryId; }
@@ -219,7 +220,7 @@ export function createCommandBus({ registry, ports }) {
     if (entry.kind === 'mutation' && changed && !historyEntryId && !turn) fail('UNCERTAIN_APPLY', `${entry.id} changed the scene without one undoable entry.`);
     const completed = entry.kind === 'job' || entry.kind === 'document' || (entry.kind === 'mutation' && changed && (turn || after.revision > before.revision + 1));
     const ids = completed || changed ? result.affectedIds : entry.kind === 'transient' ? [before.host.sceneId] : [];
-    if (turn && changed) for (const id of ids) turn.affectedIds.add(id);
+    if (turn && changed) for (const id of ids) { turn.affectedIds.add(id); turn.mark?.since.add(id); }
     const build = level => validateReceipt({ ok: true, commandId: request.commandId, receiptId: crypto.randomUUID(), host: before.host,
       action: entry.id, summary: result.summary, status: completed ? 'completed' : entry.kind === 'transient' ? 'transient' : changed ? 'applied' : 'noop',
       authored: changed, ...(completed ? { kind: entry.kind, ...(result.output === undefined ? {} : { output: result.output }), ...(same(before.host, after.host) ? {} : { nextHost: after.host }) } : entry.kind === 'transient' ? { view: { before: before.viewRevision ?? 0, after: after.viewRevision ?? 0 } } : { mutated: changed }),
@@ -293,7 +294,7 @@ export function createCommandBus({ registry, ports }) {
         // can advance the revision while their wire request is in transit.
         // Document identity and the job's own publication fence still apply.
         // A readOnly action (declared data, e.g. motion.qa) only measures: no revision or gesture fence, the host check above still holds.
-        if (!entry?.readOnly && !['job.await', 'job.cancel', 'agent.turn.finish', 'agent.turn.cancel'].includes(id) && request.expectedRevision !== before.revision) fail('STALE_SCENE', 'Authored state changed; obtain fresh intent.');
+        if (!entry?.readOnly && !['job.await', 'job.cancel', 'agent.turn.mark', 'agent.turn.rollback', 'agent.turn.finish', 'agent.turn.cancel'].includes(id) && request.expectedRevision !== before.revision) fail('STALE_SCENE', 'Authored state changed; obtain fresh intent.');
         if (!entry?.readOnly && before.busy && !turn && !transactions.has(validated.txId) && !id.startsWith('job.')) fail('TARGET_BUSY', 'Finish the current editor gesture first.');
       }
       if (controls[id]) return mapResult(control(id, validated, request, before), remember, rejected);

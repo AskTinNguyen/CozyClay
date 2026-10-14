@@ -17,12 +17,20 @@
 //   - the fresh state quoted in an earlier teaching error.
 // An entity the agent merely saw as an index row (id/name/position) has no
 // token and cannot be proven unchanged.
+//
+// The editor settling the agent's own edit. A receipt answers the revision its
+// command published, but the editor can move the revision once more a render
+// later (a document mirror catching up). When the refused admission is the one
+// the agent's own last edit published, and nothing it has not authored changed,
+// that move is not news: any tool is re-sent once (`own_edit_settled`).
+import { annotateRebased, busyTeaching, staleTeaching } from "./studio-rebase-text.mjs";
+
 const IDENTITY = ["workspaceId", "documentEpoch", "sceneId", "sceneEpoch"];
-/** Tools whose targets are entities with tokens. Shot/stage patches, framing,
- * actions, undo and view changes carry no per-entity fingerprint: never retried. */
+/** Tools whose targets are entities with tokens. Shot/stage patches, framing, actions,
+ * undo and view changes carry no per-entity fingerprint: retried only on a settle. */
 const REBASE_TOOLS = new Set(["arrange_objects", "arrange_characters", "patch_elements"]);
 const DISPLAY_SKIP = new Set(["token", "detailsOmitted"]);
-const MAX_LINES = 8, MAX_FIELDS = 6, MESSAGE_CAP = 900;
+const MAX_LINES = 8, MAX_FIELDS = 6;
 
 const round = value => typeof value === "number" ? Math.round(value * 100) / 100 : value;
 const norm = value => Array.isArray(value) ? value.map(norm)
@@ -93,8 +101,8 @@ function referencedStrings(value, out = new Set()) {
 }
 
 function eligibility(name, args) {
-  if (!REBASE_TOOLS.has(name)) return `${name} reads state with no per-entity fingerprint, so it is never replayed automatically`;
-  if (name === "patch_elements" && args.ops.some(op => op?.target?.kind !== "object" && op?.target?.kind !== "character")) return "shot and stage edits have no per-entity fingerprint, so they are never replayed automatically";
+  if (!REBASE_TOOLS.has(name)) return `${name} reads state with no per-entity fingerprint, so it is replayed automatically only right after your own edit, and only when nothing else changed`;
+  if (name === "patch_elements" && args.ops.some(op => op?.target?.kind !== "object" && op?.target?.kind !== "character")) return "shot and stage edits have no per-entity fingerprint, so they are replayed automatically only right after your own edit, and only when nothing else changed";
   return null;
 }
 
@@ -145,13 +153,15 @@ const describeChanges = (survey, only = null) => {
  *     name the agent last saw (a token the agent never saw counts as changed);
  *  5. for create ops, no entity the agent has not seen carries the same name.
  */
-async function decideRebase({ name, args, seen, fresh, host, refusedRevision, fetchRows }) {
+async function decideRebase({ name, args, seen, fresh, host, refusedRevision, ownRevision, fetchRows }) {
   const survey = () => surveyChanges(seen, fresh, extra);
   const extra = new Map();
   const result = (retry, reason, targets = [], only = null) => ({ retry, reason, targets, survey: survey(), lines: describeChanges(survey(), only) });
   if (!fresh || typeof fresh !== "object" || !fresh.revision) return { retry: false, reason: "no fresh context", targets: [], survey: null, lines: [] };
   if (!sameHost(host, fresh.host)) return result(false, "the live document or scene changed, not just its contents");
   if (fresh.revision.scene === refusedRevision) return result(false, "the scene revision did not move, so a resend would be refused the same way");
+  const moved = survey();
+  if (refusedRevision === ownRevision && !moved.changed.length && !moved.removed.length && !moved.added.length) return { ...result(true, "own edit settled"), settled: true };
   const blocked = eligibility(name, args);
   if (blocked) return result(false, blocked);
 
@@ -189,33 +199,6 @@ async function decideRebase({ name, args, seen, fresh, host, refusedRevision, fe
   return result(true, "targets unchanged", targets);
 }
 
-const trim = text => text.length > MESSAGE_CAP ? `${text.slice(0, MESSAGE_CAP - 1)}…` : text;
-
-/** The teaching text appended to a STALE_SCENE the agent must handle itself. */
-function staleTeaching({ original, verdict, refusedRevision, freshRevision, name }) {
-  const detail = verdict.lines.length ? ` What changed since you last looked: ${verdict.lines.join(" | ")}.` : "";
-  const why = verdict.reason === "no fresh context" ? "" : ` Not retried automatically: ${verdict.reason}.`;
-  return trim(`${original}${why}${detail} Your admission is already refreshed to revision ${freshRevision}${refusedRevision !== undefined ? ` (was ${refusedRevision})` : ""}: adapt ${name} to the state above and resubmit it; inspect again only for ids not listed.`);
-}
-
-/** The teaching text for a TARGET_BUSY that outlived the wait. */
-function busyTeaching({ original, waitedMs, ids }) {
-  const gesture = /gesture/i.test(original);
-  const target = ids.length ? ` (it targets ${ids.slice(0, 6).join(", ")})` : "";
-  return trim(gesture
-    ? `${original} The user is dragging or editing in the editor right now${target}; nothing was applied. Waited ${waitedMs} ms and retried once, still busy. Do not loop on this tool: tell the user you are waiting, then retry after they release.`
-    : `${original} Nothing was applied. Waited ${waitedMs} ms and retried once, still busy${target}. Do not loop on this tool: finish or cancel the open operation, or ask the user.`);
-}
-
-/** Mark a result that only succeeded because the sidecar re-sent it. */
-function annotateRebased(result, info) {
-  const message = trim(info.reason === "target_busy"
-    ? `Editor was mid-gesture; waited ${info.waitedMs} ms and re-sent the command once.`
-    : `Scene revision moved ${info.fromRevision} -> ${info.toRevision} by edits that left the targets unchanged; command re-sent once.`).slice(0, 120);
-  const warnings = [...(Array.isArray(result?.warnings) ? result.warnings : []), { code: "AUTO_REBASED", message }];
-  return { ...result, autoRebased: true, autoRebase: info, warnings };
-}
-
 // One bounded wait for a TARGET_BUSY editor gesture to end (under the 1.5 s ceiling).
 export const BUSY_WAIT_MS = 1200;
 const sleepUnlessAborted = (ms, signal) => new Promise(resolve => {
@@ -234,6 +217,7 @@ const sleepUnlessAborted = (ms, signal) => new Promise(resolve => {
 export function createRebaser({ session, liveHub, workspaceHandle, mutationNames, attempt }) {
   const seen = createSeen(session?.baseline);
   const admission = session?.admission;
+  let ownRevision = null; // the revision the agent's own last authored edit published
   /** An inspect result re-admits at its revision (either result shape) and shows the agent entity state. */
   const afterInspect = result => {
     const revision = result?.context?.revision?.scene ?? result?.revision?.scene ?? result?.revision;
@@ -246,6 +230,7 @@ export function createRebaser({ session, liveHub, workspaceHandle, mutationNames
   // that command published (nothing slipped in between).
   const observeOwnEdit = async result => {
     const affected = new Set(Array.isArray(result?.affectedIds) ? result.affectedIds : []);
+    if (result?.ok !== false && Number.isSafeInteger(result?.revision?.after) && result.revision.after !== result.revision.before) ownRevision = result.revision.after;
     if (!affected.size || result?.ok === false) return;
     const tokened = new Set();
     for (const item of Array.isArray(result.delta) ? result.delta : []) {
@@ -257,9 +242,11 @@ export function createRebaser({ session, liveHub, workspaceHandle, mutationNames
     if (typeof admission?.snapshot !== "function") return;
     try {
       const snapshot = await admission.snapshot();
-      if (snapshot?.revision?.scene !== admission.revision) return;
-      seen.observeContext(snapshot, rest);
       const present = new Set([...(snapshot.entities ?? []), ...(snapshot.entityIndex ?? [])].map(row => row.id));
+      // A later revision may hold someone else's edit too: the agent then knows these ids
+      // (its own edit made or kept them, so they are not "added"), not their state.
+      if (snapshot?.revision?.scene === admission.revision) seen.observeContext(snapshot, rest);
+      else for (const id of rest) if (present.has(id)) seen.known.add(id);
       seen.drop([...rest].filter(id => !present.has(id)));
     } catch { /* the edit stays unverifiable; a later stale is simply not retried */ }
   };
@@ -286,7 +273,7 @@ export function createRebaser({ session, liveHub, workspaceHandle, mutationNames
       if (error?.code !== "STALE_SCENE" || !scratch.fresh) throw error;
       const fromRevision = scratch.refusedRevision, fresh = scratch.fresh;
       let verdict;
-      try { verdict = await decideRebase({ name, args, seen, fresh, host: admission.host, refusedRevision: fromRevision, fetchRows }); }
+      try { verdict = await decideRebase({ name, args, seen, fresh, host: admission.host, refusedRevision: fromRevision, ownRevision, fetchRows }); }
       catch { throw error; }
       if (!verdict.retry) {
         // The teaching error quotes the fresh state of what it lists, so that is
@@ -307,7 +294,7 @@ export function createRebaser({ session, liveHub, workspaceHandle, mutationNames
         const verdict2 = { ...(more ?? { lines: [], survey: null, targets: [] }), reason: `it was already re-sent once automatically (revision ${fromRevision} -> ${fresh.revision.scene}) and the scene moved again` };
         throw Object.assign(new Error(staleTeaching({ original: second.message, verdict: verdict2, refusedRevision: again.refusedRevision, freshRevision: again.fresh.revision?.scene ?? admission.revision, name })), { code: "STALE_SCENE", receipt: second.receipt, autoRebased: false });
       }
-      return annotateRebased(result, { reason: "stale_scene", fromRevision, toRevision: fresh.revision.scene, retried: true, targets: verdict.targets, unrelatedChanges: unrelated });
+      return annotateRebased(result, { reason: verdict.settled ? "own_edit_settled" : "stale_scene", fromRevision, toRevision: fresh.revision.scene, retried: true, targets: verdict.targets, unrelatedChanges: unrelated });
     }
   };
   return { seen, afterInspect, observeOwnEdit, run };

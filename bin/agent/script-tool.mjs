@@ -25,7 +25,7 @@ function description(names) {
 		"Compute coordinates in code: metres, +Y up, yaw in degrees, floor at y=0 (Math works; there are no timers, fetch or modules).",
 		"You see only what the script passes to text(value) or returns, plus a calls summary (name, ok, receiptId, status, revision, affectedIds, code, message per call). Nested results are not shown to you, so return what you need.",
 		"Images never come back from a script: call verify_result OUTSIDE the script when you need to see the frame.",
-		"If the script fails after editing, the turn's edits are rolled back and the result says so; fix the script and run it again.",
+		"If the script fails after editing, the script's own edits are rolled back (edits made before the script stay) and the result says so; fix the script and run it again.",
 	].join("\n");
 }
 
