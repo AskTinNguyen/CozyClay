@@ -100,7 +100,7 @@ const EDGE_FRAGMENT = `
 		float depthLine = smoothstep(0.055, 0.16, depthEdge);
 		float normalLine = smoothstep(0.7, 1.7, normalEdge);
 		float edge = max(depthLine * foregroundOwner, normalLine * 0.68);
-		gl_FragColor = vec4(edgeColor, edge * 0.76 * distanceFade);
+		gl_FragColor = vec4(edgeColor, edge * 0.38 * distanceFade);
 	}
 `;
 

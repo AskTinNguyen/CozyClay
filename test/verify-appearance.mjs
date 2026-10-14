@@ -54,7 +54,7 @@ expect(
 		dualview.includes("mix(0.42, 1.0") &&
 		dualview.includes("3.0 / max(centerZ, 0.001)") &&
 		dualview.includes("texel.x * 0.8") &&
-		dualview.includes("edge * 0.76 * distanceFade"),
+		dualview.includes("edge * 0.38 * distanceFade"),
 );
 expect(
 	"each pane renders into its own local edge target",

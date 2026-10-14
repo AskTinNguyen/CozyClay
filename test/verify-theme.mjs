@@ -35,7 +35,7 @@ expect("new installs start in light mode", theme.includes('export const DEFAULT_
 // The stage is the grey workbench (editor, preview, exports), dark or light
 // with the UI theme; grid view only trades the deck for the reference grid.
 expect("Canvas uses the grey workbench background", app.includes('args={[gridView ? GRID_BACKGROUND : stageBackground(uiTheme)]}'));
-expect("Character uses neutral grey clay", app.includes('const CLAY = "#bdbec3"'));
+expect("Character uses white clay", app.includes('const CLAY = "#ffffff"'));
 expect("Room uses a grey deck a step above the sky", room.includes('const FLOOR = "#5b5d63"'));
 // The walls are gone on purpose: the set is an open deck, so a shot can stage a
 // run or a chase without meeting a corner. These assert their ABSENCE, which is
