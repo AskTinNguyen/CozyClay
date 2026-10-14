@@ -1,7 +1,7 @@
 // Strict motion spec validation with exact messages, run before every compile through the
 // pipeline (after skills expand, with open parameters at a trial value). Every problem found is
 // listed at once, one per line, so the agent fixes them in one edit.
-import { VEC_CHANNELS, POLE_CHANNELS, NUM_CHANNELS, MAP_CHANNELS, FINGER_PRESETS, rangeOf, CONVENTIONS, didYouMean, isVec3, fmt } from "./vocab.js";
+import { VEC_CHANNELS, POLE_CHANNELS, NUM_CHANNELS, MAP_CHANNELS, FINGER_PRESETS, rangeOf, CONVENTIONS, didYouMean, suggestField, isVec3, fmt } from "./vocab.js";
 import { validateParts } from "./validate-parts.js";
 import { SPEC_FIELDS, KEY_FIELDS } from "../schema/fields.js";
 const MAX_ERRORS = 12;
@@ -12,8 +12,9 @@ function customChannels(spec) {
 	const out = new Set(spec.channels ?? []);
 	for (const o of Object.values(spec.objects ?? {})) for (const ch of [o?.channel, o?.visible]) if (ch) out.add(ch);
 	const c = spec.checks ?? {};
-	for (const list of [c.contacts, c.orient, c.below, c.clearance]) for (const k of list ?? []) if (typeof k.when === "string") out.add(k.when);
-	for (const k of c.appear ?? []) out.add(k.channel);
+	const list = v => (Array.isArray(v) ? v.filter(k => k && typeof k === "object") : []);
+	for (const k of [c.contacts, c.orient, c.below, c.clearance].flatMap(list)) if (typeof k.when === "string") out.add(k.when);
+	for (const k of list(c.appear)) if (typeof k.channel === "string") out.add(k.channel);
 	return out;
 }
 
@@ -51,7 +52,7 @@ function validateKeys(spec, err, frames, unknown) {
 	(spec.keys ?? []).forEach((key, i) => {
 		const name = key?.src ? (key.src.startsWith("keys[") ? key.src : `${key.src} key`) : `keys[${i}]`;
 		if (!key || typeof key !== "object") return err(`${name} must be { f, set, step? }`);
-		for (const field of Object.keys(key)) if (!KEY_FIELDS.includes(field)) unknown(`${name} has unknown field "${field}"; a key is { f, set, step? }`);
+		for (const field of Object.keys(key)) if (!KEY_FIELDS.includes(field)) unknown(`${name} has unknown field "${field}"${suggestField(field, KEY_FIELDS)}; a key is { f, set, step? }`);
 		if (!Number.isInteger(key.f)) return err(`${name}.f must be an integer frame, got ${fmt(key.f)}`);
 		if (key.f < 0 || key.f > frames - 1) err(`${name}.f = ${key.f} is outside 0..${frames - 1} (spec.frames ${frames})`);
 		const at = `${name} (f${key.f})`;
@@ -80,7 +81,7 @@ export function validateSpec(spec, { sk, scene, lenient = false } = {}) {
 	for (const k of Object.keys(spec)) if (!SPEC_FIELDS.includes(k)) unknown(`spec.${k} is not a spec field${didYouMean(k, SPEC_FIELDS)} (fields: ${SPEC_FIELDS.join(", ")})`);
 	if (spec.fps !== undefined && spec.fps !== 24) err(`spec.fps must be 24, the timeline rate, got ${fmt(spec.fps)}`);
 	const frames = spec.frames;
-	if (!Number.isInteger(frames) || frames < 1 || frames > 20000) err(`spec.frames must be an integer 1..20000, got ${fmt(frames)}`);
+	if (!Number.isInteger(frames) || frames < 1 || frames > 20000) err(`spec.frames must be an integer 1..20000 or "auto", got ${fmt(frames)}`);
 	validateKeys(spec, err, Number.isInteger(frames) ? frames : 20000, unknown);
 	validateParts(spec, err, { sk, scene, frames: Number.isInteger(frames) ? frames : 20000, lenient, unknown });
 	if (errors.length) throw new Error(`MOTION_SPEC_INVALID: ${errors.join("\n")}${errors.length >= MAX_ERRORS ? "\n(more problems not listed)" : ""}`);

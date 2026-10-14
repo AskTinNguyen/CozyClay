@@ -3,6 +3,7 @@
 import { add, apply, ry } from "../compiler/math.js";
 import { walk } from "../compiler/walk.js";
 import { keyBook, skillError } from "./book.js";
+import { walkEnd } from "./info.js";
 
 /** standIdle({ at: [x, z], heading = 0, until }): a neutral standing pose, arms down (FK). */
 export function standIdle(ctx) {
@@ -40,7 +41,7 @@ export function walkTo(ctx) {
 	}
 	if (typeof gen.heading === "number") gen.heading = [h0, gen.heading];
 	const keys = walk(gen, ctx.keys, ctx.sk, ctx.tag);
-	return { keys, end: ctx.f0 + 16 + (gen.steps ?? 8) * (gen.period ?? 20) + 18 };
+	return { keys, end: walkEnd(gen) };
 }
 
 /**

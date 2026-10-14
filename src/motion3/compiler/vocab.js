@@ -31,6 +31,27 @@ export const CONVENTIONS = {
 	root: "the hips joint in world metres (standing about 1.03 m X Bot, 0.99 m Y Bot)",
 };
 
+/** What each channel family means (a family drops the _l/_r side), for motion.describe "channels". */
+export const CHANNEL_DOCS = {
+	root: CONVENTIONS.root, yaw: `degrees; ${CONVENTIONS.yaw}`, pitch: "whole-body pitch, degrees", roll: "whole-body roll, degrees",
+	spine_yaw: "degrees", spine_pitch: "degrees, + bends forward", spine_roll: "degrees", head_yaw: "degrees", head_pitch: "degrees, + looks down", head_roll: "degrees",
+	arm_rest: "FK arms down from the T-pose, degrees (default 72)", foot: CONVENTIONS.foot, fyaw: CONVENTIONS.fyaw, fpitch: "toe-down pitch, degrees",
+	knee: `knee pole, ${CONVENTIONS.pole}`, armw: "0 = FK arm, 1 = IK to hand_* / the anchors", hand: CONVENTIONS.hand, elbow: `elbow pole, ${CONVENTIONS.pole}`,
+	wtwist: "wrist twist, degrees", wflex: "wrist flex, degrees", aswing: "FK arm swing, degrees, + forward", abend: "FK elbow bend, degrees",
+	fingers: "{ preset: weight 0..1 }",
+};
+export const channelFamily = ch => ch.replace(/_[lr]$/, "");
+
+/** "; did you mean ..." for an unknown field: frame words point at the field that takes frames, distance words at the tolerance. */
+const FIELD_ALIASES = [[["frames", "when", "range", "f", "from", "within", "during", "at"], ["when", "frames", "at", "f"]], [["max", "maxDist", "distance", "tolerance", "limit"], ["tol", "min"]]];
+export function suggestField(name, fields) {
+	for (const [words, targets] of FIELD_ALIASES) {
+		const to = words.includes(name) && targets.find(t => fields.includes(t) && t !== name);
+		if (to) return `; did you mean "${to}"?`;
+	}
+	return didYouMean(name, fields, Math.max(2, Math.floor(name.length / 3)));
+}
+
 export const isVec3 = v => Array.isArray(v) && v.length === 3 && v.every(Number.isFinite);
 export const fmt = v => JSON.stringify(v)?.slice(0, 60);
 
@@ -42,8 +63,8 @@ function editDistance(a, b) {
 	return d[a.length][b.length];
 }
 
-export function didYouMean(name, options) {
+export function didYouMean(name, options, maxD = Math.max(3, Math.floor(name.length / 3))) {
 	let best = null, bestD = Infinity;
 	for (const o of options) { const d = editDistance(name, o); if (d < bestD) { best = o; bestD = d; } }
-	return best && bestD <= Math.max(3, Math.floor(name.length / 3)) ? `; did you mean "${best}"?` : "";
+	return best && bestD <= maxD ? `; did you mean "${best}"?` : "";
 }

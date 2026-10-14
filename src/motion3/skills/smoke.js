@@ -16,7 +16,9 @@ const DEFAULTS = { armw_r: 0, armw_l: 0, w_rpocket_r: 0, w_lpocket_l: 0, w_hold_
 	cig_vis: 0, lit_vis: 0, flame_vis: 0, ember_vis: 0 };
 
 export function smokeCigarette(ctx) {
-	const until = ctx.args.until ?? ctx.frames - 1;
+	// by default it holds to the last frame (or ends with its own motion while frames is "auto"); too
+	// few frames are named by the expander
+	const until = ctx.args.until ?? (ctx.auto ? ctx.f0 + 264 : Math.max(ctx.frames - 1, ctx.f0 + 264));
 	if (until < ctx.f0 + 264) skillError(ctx.tag, `needs frames f${ctx.f0}..f${ctx.f0 + 264} at least (args.until ${until})`);
 	if (!Array.isArray(ctx.state.root)) skillError(ctx.tag, "needs a standing pose keyed before f0 (root)");
 	const fresh = Object.fromEntries(Object.entries(DEFAULTS).filter(([c]) => ctx.state[c] === undefined));

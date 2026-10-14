@@ -7,6 +7,7 @@ import { EXITCAR_SPEC, SCENE_OBJECTS } from "./fixtures/exitcar-scene.mjs";
 import { compileSpec } from "../../src/motion3/pipeline.js";
 import { compileMotion } from "../../src/motion3/compiler/compile.js";
 import { expandUse } from "../../src/motion3/skills/index.js";
+import { resolveFrames } from "../../src/motion3/skills/frames-auto.js";
 import { motionScene } from "../../src/motion3/scene.js";
 import { skeletonFor } from "../../src/motion3/rigs/index.js";
 import { dist, add, apply, mul, ry } from "../../src/motion3/compiler/math.js";
@@ -72,6 +73,12 @@ expect("an agent key overrides the skill's value on the same frame", door === -6
 let msg = "";
 try { compileSpec({ ...exitcar(), use: [{ skill: "exitCar", f0: 0, args: { seat: "Nope" } }] }, { sk, scene: car }); } catch (error) { msg = error.message; }
 expect("a skill names its bad argument", msg.includes("use[0] exitCar: args.seat \"Nope\" is not a scene object"), msg);
+
+// 5. Too few frames names what the skill needs; frames "auto" ends where the last skill ends.
+msg = "";
+try { compileSpec({ ...exitcar(), frames: 600 }, { sk, scene: car }); } catch (error) { msg = error.message; }
+expect("a skill past the last frame says how many frames it needs", msg.includes('use[3] smokeCigarette needs 264 frames from f440 (to f704), past the last frame f599; set frames >= 705 or frames: "auto"'), msg);
+expect("frames auto: smokeCigarette (holding to the end) ends with its own motion", resolveFrames({ ...exitcar(), frames: "auto" }, { sk, scene: car }).frames === 705);
 
 if (failures) { console.error(`${failures} motion3 skills check(s) failed`); process.exit(1); }
 console.log("motion3 skills: all checks passed");

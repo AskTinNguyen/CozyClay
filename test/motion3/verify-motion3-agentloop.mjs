@@ -111,6 +111,9 @@ for (const line of [
 	"fpitch_r = 95 is outside -60..90 (toe-down pitch in degrees: + lifts the heel (the toes stay flat), - lifts the toes)",
 ]) expect(`validator: ${line.slice(0, 60)}`, msg.includes(line), msg);
 expect("validator: a foot target at the floor names the ankle convention", reject(s => { s.keys[0].set.foot_l = [0.65, 0, 0.4]; }).includes("foot_l y = 0 puts the ankle into the floor; foot_* is the ANKLE target"));
+expect("validator: checks.zzz is named, not a crash, with skills present", /checks\.zzz is not a check \(checks: /.test(reject(s => { s.use = [{ skill: "sitInSeat", f0: 0, args: { car: "Car" } }]; s.checks.zzz = 1; })));
+expect("validator: a frame word in a check entry points at when", reject(s => { s.checks.contacts[0].frames = [0, 9]; }).includes('checks.contacts[0] has unknown field "frames"; did you mean "when"? (fields: name, point, target, tol, when)'));
+expect("validator: an unknown skill arg lists the skill's args", reject(s => { s.use = [{ skill: "sitInSeat", f0: 0, args: { car: "Car", zzz: 1 } }]; }).includes("use[0].args.zzz is not an arg of sitInSeat (args: car, seat, seatBack, wheel, offset, floor)"));
 expect("validator: an unknown skill gets a suggestion", /use\[0\]\.skill "exitcar" is not a skill; did you mean "exitCar"\?/.test(reject(s => { s.use = [{ skill: "exitcar", f0: 0 }]; })));
 
 if (failures) { console.error(`${failures} motion3 agent-loop check(s) failed`); process.exit(1); }
