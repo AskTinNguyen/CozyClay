@@ -1,7 +1,7 @@
 // frames: "auto". The spec's length becomes the latest of every skill end, generator end and key
 // f, plus 1. Open parameters ({ range: [lo, hi] }) count at their upper bound, so every value the
 // search tries fits. The answer is a copy with the number, so the stored spec (and a saved take)
-// keeps it.
+// keeps it; the spec store remembers the "auto" intent beside it (spec-store.js markFramesAuto).
 import { findParams } from "../search.js";
 import { expandUse } from "./index.js";
 import { walkEnd } from "./info.js";

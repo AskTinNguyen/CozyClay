@@ -45,7 +45,24 @@ function checkValue(err, at, ch, v) {
 	if (r && (v < r[1] || v > r[2])) err(`${at} ${ch} = ${v} is outside ${r[1]}..${r[2]} (${r[3]})`);
 }
 
-function validateKeys(spec, err, frames, unknown) {
+const list = v => (Array.isArray(v) ? v : []);
+const lastOf = r => (Array.isArray(r) ? r[1] : r);
+
+/**
+ * The advice an "outside 0..frames-1" message ends with: the length every frame the spec names
+ * needs (keys, walk starts, check windows, goals), and frames: "auto" when that covers it ("auto"
+ * counts keys and walks, not check windows or goals; skills/frames-auto.js).
+ */
+function pastEndAdvice(spec, frames) {
+	const counted = [...list(spec.keys).map(k => k?.f), ...list(spec.generators).map(g => g?.f0)].filter(Number.isInteger);
+	const c = spec.checks ?? {};
+	const windows = [...["contacts", "orient", "below"].flatMap(n => list(c[n]).map(k => lastOf(k?.when))), ...list(c.clearance).map(k => lastOf(k?.frames)),
+		...list(spec.goals).map(g => lastOf(g?.at))].filter(Number.isInteger);
+	const need = Math.max(frames - 1, ...counted, ...windows) + 1;
+	return `; set frames >= ${need}${Math.max(0, ...counted) + 1 >= need ? " or frames: \"auto\"" : ""}`;
+}
+
+function validateKeys(spec, err, frames, unknown, past = "") {
 	if (spec.keys !== undefined && !Array.isArray(spec.keys)) return err("spec.keys must be an array of { f, set, step? }");
 	const anchors = Object.keys(spec.anchors ?? {}), custom = customChannels(spec);
 	const known = [...VEC_CHANNELS, ...NUM_CHANNELS, ...MAP_CHANNELS, ...custom, ...anchors.flatMap(a => [`w_${a}_l`, `w_${a}_r`])];
@@ -54,7 +71,7 @@ function validateKeys(spec, err, frames, unknown) {
 		if (!key || typeof key !== "object") return err(`${name} must be { f, set, step? }`);
 		for (const field of Object.keys(key)) if (!KEY_FIELDS.includes(field)) unknown(`${name} has unknown field "${field}"${suggestField(field, KEY_FIELDS)}; a key is { f, set, step? }`);
 		if (!Number.isInteger(key.f)) return err(`${name}.f must be an integer frame, got ${fmt(key.f)}`);
-		if (key.f < 0 || key.f > frames - 1) err(`${name}.f = ${key.f} is outside 0..${frames - 1} (spec.frames ${frames})`);
+		if (key.f < 0 || key.f > frames - 1) err(`${name}.f = ${key.f} is outside 0..${frames - 1} (spec.frames ${frames})${key.f > 0 ? past : ""}`);
 		const at = `${name} (f${key.f})`;
 		if (!key.set || typeof key.set !== "object" || Array.isArray(key.set)) return err(`${at} needs set: { channel: value }`);
 		for (const [ch, v] of Object.entries(key.set)) {
@@ -82,7 +99,8 @@ export function validateSpec(spec, { sk, scene, lenient = false } = {}) {
 	if (spec.fps !== undefined && spec.fps !== 24) err(`spec.fps must be 24, the timeline rate, got ${fmt(spec.fps)}`);
 	const frames = spec.frames;
 	if (!Number.isInteger(frames) || frames < 1 || frames > 20000) err(`spec.frames must be an integer 1..20000 or "auto", got ${fmt(frames)}`);
-	validateKeys(spec, err, Number.isInteger(frames) ? frames : 20000, unknown);
-	validateParts(spec, err, { sk, scene, frames: Number.isInteger(frames) ? frames : 20000, lenient, unknown });
+	const past = Number.isInteger(frames) ? pastEndAdvice(spec, frames) : "";
+	validateKeys(spec, err, Number.isInteger(frames) ? frames : 20000, unknown, past);
+	validateParts(spec, err, { sk, scene, frames: Number.isInteger(frames) ? frames : 20000, lenient, unknown, past });
 	if (errors.length) throw new Error(`MOTION_SPEC_INVALID: ${errors.join("\n")}${errors.length >= MAX_ERRORS ? "\n(more problems not listed)" : ""}`);
 }

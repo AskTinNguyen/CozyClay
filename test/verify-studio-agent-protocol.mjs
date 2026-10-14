@@ -11,6 +11,8 @@ import { createAgentHandler } from "../bin/agent/agent-routes.mjs";
 import { PREVIS_MODES } from "../src/project.js";
 import { POSTURES } from "../src/scenes.js";
 import { createFakeModel } from "./fixtures/fake-model.mjs";
+import { validateToolArguments } from "@earendil-works/pi-ai";
+import { toAgentTools } from "../bin/agent/pi-tools.mjs";
 
 export const uuid = "00000000-0000-4000-8000-000000000001";
 export function contextFixture() {
@@ -467,6 +469,48 @@ function registerTests() {
 		const noop = { ...receiptFixture("noop"), action: "shot.create", summary: "No room for a new shot." };
 		assert.equal(protocol.validateReceipt(noop).summary, "No room for a new shot.");
 		rejects(() => protocol.validateReceipt({ ...receiptFixture("applied"), action: "not an id" }), "INVALID_RECEIPT");
+	});
+	test("schema refusals name the path, what is allowed and what arrived (G3)", () => {
+		const said = (name, args) => { try { protocol.validateStudioCommand({ name, args }); return "accepted"; } catch (error) { assert.equal(error.code, "INVALID_ARGUMENT"); return error.message; } };
+		const exact = [
+			["inspect_studio", { scope: "overview" }, '$.args.scope: "overview" is not one of: selection, scene, entities, shot, motion, catalogue, actions, document.'],
+			["inspect_studio", { scope: "actions", ids: '["motion.compile"]' }, "$.args.ids: expected an array of strings, got a string."],
+			["inspect_studio", {}, '$.args: missing required field "scope".'],
+			["inspect_studio", { scope: "actions", ids: ["a", "a"] }, '$.args.ids: items must be unique; "a" appears twice.'],
+			["inspect_studio", { scope: "actions", ids: ["bad id"] }, '$.args.ids[0]: "bad id" does not match ^[A-Za-z0-9][A-Za-z0-9._:-]*$.'],
+			["inspect_studio", { scope: "actions", ids: [""] }, "$.args.ids[0]: must not be empty."],
+			["inspect_studio", { scope: "actions", limit: 1.5 }, "$.args.limit: expected an integer, got 1.5."],
+			["inspect_studio", { scope: "actions", limit: 99 }, "$.args.limit: Expected a number within [1, 32], got 99."],
+			["run_action", { action: "motion.compile", characterId: "char-a", args: {} }, '$.args has unknown field "characterId"; allowed: action, args, confirmationToken.'],
+			["run_action", { action: "motion.compile", args: "{}" }, "$.args.args: expected an object, got a string."],
+			["verify_result", { checks: [], targets: ["a"] }, "$.args.checks: expected 1 to 3 items, got 0."],
+			["verify_result", { checks: ["motion"], targets: ["a"], range: "all" }, '$.args.range must be "whole_clip" or an object, got "all".'],
+			["undo_edit", { receiptId: 3 }, "$.args.receiptId: expected a string, got a number."],
+			["operate_studio", { selection: "char-a" }, '$.args.selection must be an object or null, got "char-a".'],
+			["operate_studio", { playing: "yes" }, "$.args.playing: expected a boolean, got a string."],
+			["arrange_objects", { ops: [{ op: "create", source: { kind: "chair" }, position: { world: { x: 1, y: 0, z: 0 }, extra: 1 } }] }, '$.args.ops[0].position has unknown field "extra"; allowed: world.'],
+		];
+		for (const [name, args, message] of exact) assert.equal(said(name, args), message);
+		// A plain-value union names every form (an action input such as install: true, false or "ifClean").
+		const install = { type: "object", properties: { install: { anyOf: [{ type: "boolean" }, { const: "ifClean" }] } }, required: [], additionalProperties: false };
+		assert.throws(() => protocol.validateStudioSchema(install, { install: "yes" }, "INVALID_ARGUMENT", "$.args"), { message: '$.args.install must be true, false or "ifClean", got "yes".' });
+		assert.deepEqual(protocol.validateStudioSchema(install, { install: "ifClean" }), { install: "ifClean" });
+		// A long payload shows as a 40-character preview, never whole.
+		const long = said("inspect_studio", { scope: "x".repeat(500) });
+		assert.ok(long.startsWith('$.args.scope: "xxxxxxxx') && long.includes('... is not one of:') && long.length < 160, long);
+	});
+	test("pi tool arguments: an unknown field is named, an array sent as JSON text is parsed (G3)", () => {
+		const tools = toAgentTools(["run_action", "inspect_studio"].map(name => ({ name, parameters: protocol.STUDIO_TOOL_SCHEMAS[name], handler: async () => ({}) })));
+		const call = (name, args) => { const tool = tools.find(t => t.name === name); return validateToolArguments(tool, { name, arguments: tool.prepareArguments(args) }); };
+		// run3 turn 2, the first motion.compile: characterId beside args, not inside it
+		assert.throws(() => call("run_action", { action: "motion.compile", characterId: "char-a", args: { characterId: "char-a", base: "spec-12350683d8db", install: false } }),
+			{ message: 'Validation failed for tool "run_action": root has unknown field "characterId"; allowed: action, args, confirmationToken. The action\'s own inputs go inside args: { "action": "<id>", "args": { ... } }.' });
+		assert.throws(() => call("inspect_studio", { section: "selection" }),
+			{ message: 'Validation failed for tool "inspect_studio": root has unknown field "section"; allowed: scope, ids, select, query, cursor, limit; missing required: scope.' });
+		// run3 turn 1: ids as JSON text is taken as the array it encodes, and still validated
+		assert.deepEqual(call("inspect_studio", { scope: "actions", ids: '["motion.compile", "motion.describe"]' }), { scope: "actions", ids: ["motion.compile", "motion.describe"] });
+		assert.throws(() => call("inspect_studio", { scope: "actions", ids: '["bad id"]' }), /ids\.0: must match pattern/);
+		assert.deepEqual(call("run_action", { action: "motion.compile", args: { characterId: "char-a" } }), { action: "motion.compile", args: { characterId: "char-a" } });
 	});
 	test("GENERATION_LIMIT is a failure code of its own, distinct from AUTH_REQUIRED", () => {
 		const failure={ok:false,commandId:"cmd-1",host:receiptFixture().host,code:"GENERATION_LIMIT",phase:"admission",affectedIds:[],expectedTargets:[],currentTargets:[],mutated:false,preserved:{authoredState:"unchanged"},recovery:{action:"none"}};

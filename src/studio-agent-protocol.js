@@ -1,5 +1,6 @@
 // Shared by the browser and sidecar. No Node, React, renderer or provider imports.
 import { STUDIO_ELEMENTS, isSettableElement } from "./studio-elements.js";
+import { wrongType, unknownField, missingField, arrayRefusal, duplicateItem, stringRefusal, enumRefusal, numberRefusal, unionRefusal } from "./studio-schema-errors.js";
 // Mirrors PREVIS_MODES (project.js) and POSTURES (scenes.js). Neither is imported:
 // both pull in three.js, which the agent sidecar must not load. The protocol test pins the lists to their owners.
 const PREVIS_MODES = ["storyboard", "animation"], POSTURES = ["stand", "sit", "lie"];
@@ -59,8 +60,7 @@ const record = value => value !== null && typeof value === "object" && !Array.is
 const text = (maxLength = 120) => ({ type: "string", minLength: 1, maxLength });
 const number = (minimum, maximum) => ({ type: "number", ...(minimum !== undefined ? { minimum } : {}), ...(maximum !== undefined ? { maximum } : {}) });
 const integer = (minimum = 0, maximum = Number.MAX_SAFE_INTEGER) => ({ ...number(minimum, maximum), type: "integer" });
-const bool = { type: "boolean" };
-const literal = value => ({ const: value });
+const bool = { type: "boolean" }, literal = value => ({ const: value });
 const choices = values => ({ type: "string", enum: values });
 const nullable = schema => ({ oneOf: [schema, { type: "null" }] });
 const array = (items, maxItems, minItems = 0, uniqueItems = false) => ({ type: "array", items, minItems, maxItems, ...(uniqueItems ? { uniqueItems } : {}) });
@@ -319,62 +319,63 @@ export const StudioSchemas = freezeStudioData({ catalogue: STUDIO_CATALOGUE, var
 	ObjectOp: objectOp, CharacterOp: characterOp, Framing: framing, Identity: identity, Host: host, TargetGuard: guardSchema,
 	Entity: entity, ShotSummary: shotSummary, StudioContextV1: contextSchema, StudioTurn: turnSchema, StudioStop: stopSchema, Receipt: receiptSchema, ReceiptVariants: receiptVariants, Failure: failureSchema, GeometryFacts: geometryFacts });
 
-/** Validate the closed JSON Schema subset used above; return a detached value
- * with declared defaults. Errors contain schema paths, never payload values. */
+/** Validate the closed JSON Schema subset used above; return a detached value with declared
+ * defaults. Errors name the path and what it allows (studio-schema-errors.js). */
 export function validateStudioSchema(schema, value, code = "INVALID_ARGUMENT", path = "$") {
-	if (schema.oneOf) {
-		const matches = [];
-		const failures = [];
-		for (const branch of schema.oneOf) {
+	if (schema.oneOf || schema.anyOf) {
+		const matches = [], failures = [];
+		for (const branch of schema.oneOf ?? schema.anyOf) {
 			try { matches.push(validateStudioSchema(branch, value, code, path)); }
 			catch (error) { if (!(error instanceof StudioProtocolError)) throw error; failures.push({ branch, error }); }
 		}
 		// No variant matched: the generic "one of N" message hides which path and
 		// bound actually offended. Surface the failure from the variant the input
 		// discriminates to (matching target.kind), or else the deepest failing
-		// path, instead of the union's own shallow message.
+		// path, instead of the union's own shallow message. A union of plain values
+		// (true, false or "ifClean") that failed at its own path names every form.
 		if (matches.length === 0 && failures.length) {
-			const kind = record(value) && record(value.target) ? value.target.kind : undefined;
-			const discriminated = kind !== undefined && failures.find(({ branch }) => branch.properties?.target?.properties?.kind?.const === kind);
+			const kind = record(value) && record(value.target) ? value.target.kind : undefined, discriminated = kind !== undefined && failures.find(({ branch }) => branch.properties?.target?.properties?.kind?.const === kind);
+			const forms = !discriminated && unionRefusal(path, failures, value);
+			if (forms) fail(code, forms, path);
 			const chosen = discriminated || failures.reduce((best, next) => next.error.details.path.length > best.error.details.path.length ? next : best);
 			throw chosen.error;
 		}
-		if (matches.length !== 1) fail(code, "Expected exactly one supported variant.", path);
+		if (matches.length !== 1 && schema.oneOf) fail(code, `${path}: matches ${matches.length} variants; send the fields of exactly one.`, path);
 		return matches[0];
 	}
-	if (Object.hasOwn(schema, "const")) { if (value !== schema.const) fail(code, "Invalid constant.", path); return value; }
-	if (schema.type === "null") { if (value !== null) fail(code, "Expected null.", path); return null; }
+	if (Object.hasOwn(schema, "const")) { if (value !== schema.const) fail(code, wrongType(path, schema, value), path); return value; }
+	if (schema.type === "null") { if (value !== null) fail(code, wrongType(path, schema, value), path); return null; }
 	if (schema.type === "object") {
-		if (!record(value)) fail(code, "Expected object.", path);
+		if (!record(value)) fail(code, wrongType(path, schema, value), path);
 		const open = schema.additionalProperties === true;
-		for (const key of Object.keys(value)) if (!Object.hasOwn(schema.properties, key) && !open) fail(code, "Unexpected field.", path);
+		for (const key of Object.keys(value)) if (!Object.hasOwn(schema.properties, key) && !open) fail(code, unknownField(path, schema, key), path);
 		const result = {};
 		if (open) for (const key of Object.keys(value)) if (!Object.hasOwn(schema.properties, key)) result[key] = structuredClone(value[key]);
 		for (const [key, child] of Object.entries(schema.properties)) {
 			if (Object.hasOwn(value, key)) result[key] = validateStudioSchema(child, value[key], code, `${path}.${key}`);
-			else if (schema.required.includes(key)) fail(code, "Required field missing.", `${path}.${key}`);
+			else if (schema.required.includes(key)) fail(code, missingField(path, key), `${path}.${key}`);
 			else if (Object.hasOwn(child, "default")) result[key] = structuredClone(child.default);
 		}
 		if (schema["x-studio-range"] && result.endFrameExclusive <= result.startFrame) fail(code, "Frame range must be nonempty and half-open.", path);
 		return result;
 	}
 	if (schema.type === "array") {
-		if (!Array.isArray(value) || value.length < schema.minItems || value.length > schema.maxItems) fail(code, "Array outside supported bounds.", path);
+		if (!Array.isArray(value) || value.length < schema.minItems || value.length > schema.maxItems) fail(code, arrayRefusal(path, schema, value), path);
 		const result = value.map((item, i) => validateStudioSchema(schema.items, item, code, `${path}[${i}]`));
-		if (schema.uniqueItems && new Set(result.map(item => JSON.stringify(item))).size !== result.length) fail(code, "Duplicate array member.", path);
+		if (schema.uniqueItems && new Set(result.map(item => JSON.stringify(item))).size !== result.length) fail(code, duplicateItem(path, result), path);
 		return result;
 	}
 	if (schema.type === "string") {
-		if (typeof value !== "string" || !value.trim() || (schema.maxLength !== undefined && [...value].length > schema.maxLength) || (schema.pattern && !new RegExp(schema.pattern).test(value))) fail(code, typeof value === "string" && schema.description && [...value].length > schema.maxLength ? `Over ${schema.maxLength} characters. ${schema.description}` : "Invalid or oversized string.", path);
-		if (schema.enum && !schema.enum.includes(value)) fail(code, "Unsupported enum value.", path);
+		if (typeof value !== "string" || !value.trim() || (schema.maxLength !== undefined && [...value].length > schema.maxLength) || (schema.pattern && !new RegExp(schema.pattern).test(value))) fail(code, stringRefusal(path, schema, value), path);
+		if (schema.enum && !schema.enum.includes(value)) fail(code, enumRefusal(path, schema, value), path);
 		return value;
 	}
-	if (schema.type === "boolean") { if (typeof value !== "boolean") fail(code, "Expected boolean.", path); return value; }
+	if (schema.type === "boolean") { if (typeof value !== "boolean") fail(code, wrongType(path, schema, value), path); return value; }
 	if (schema.type === "number" || schema.type === "integer") {
-		if (typeof value !== "number" || !Number.isFinite(value) || (schema.type === "integer" && !Number.isSafeInteger(value)) || (schema.exclusiveMinimum !== undefined && value <= schema.exclusiveMinimum)) fail(code, "Number outside supported bounds.", path);
+		if (typeof value !== "number" || !Number.isFinite(value) || (schema.type === "integer" && !Number.isSafeInteger(value)) || (schema.exclusiveMinimum !== undefined && value <= schema.exclusiveMinimum)) fail(code, numberRefusal(path, schema, value), path);
 		if ((schema.minimum !== undefined && value < schema.minimum) || (schema.maximum !== undefined && value > schema.maximum)) {
 			const bounds = [schema.minimum, schema.maximum].filter(bound => bound !== undefined);
-			fail(code, `${path}: Expected a number within [${bounds.join(", ")}].`, path);
+			fail(code, `${path}: Expected a number within [${bounds.join(", ")}], got ${value}.`, path);
 		}
 		return value;
 	}

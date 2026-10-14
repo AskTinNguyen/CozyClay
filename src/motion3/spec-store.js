@@ -3,8 +3,19 @@
 // least recently used entry goes first. It lives in the editor page's memory: a reload forgets
 // it, and the agent then sends the whole spec again (motion3.js answers an unknown base or
 // specId with that advice).
+// frames: "auto" is an intent the stored spec cannot carry: the spec a specId names (and a take
+// keeps) holds the resolved number. The pipeline marks such a spec (markFramesAuto) and the store
+// remembers the mark beside the entry, so get() answers frames: "auto" again and base + patch
+// re-resolves the length (keys appended past the old end extend it instead of failing).
 
 export const SPEC_STORE_SIZE = 64;
+const resolvedFromAuto = new WeakSet();
+
+/** Marks a spec whose numeric frames were resolved from frames: "auto" (pipeline.js); answers it. */
+export function markFramesAuto(spec) {
+	resolvedFromAuto.add(spec);
+	return spec;
+}
 
 /** Canonical JSON: object keys sorted at every level (arrays keep their order). */
 const canonical = v => (Array.isArray(v) ? `[${v.map(canonical).join(",")}]`
@@ -21,7 +32,8 @@ export function specIdOf(spec) {
 /**
  * The editor's store of compiled specs and their full output parts (C7).
  *   put(spec) -> specId                 remember a compiled spec (the most recent SPEC_STORE_SIZE)
- *   get(specId) -> spec | null          a copy of a remembered spec
+ *   get(specId) -> spec | null          a copy of a remembered spec; frames: "auto" when it was
+ *                                       resolved from "auto" (the mark sticks to the specId)
  *   keepParts(specId, parts)            the overflow hook: { groups, timeline, probes } in full,
  *                                       before fitOutput cuts them (report.js)
  *   parts(specId) -> parts | null       what motion.report pages and delta compares against
@@ -32,8 +44,15 @@ export function createSpecStore(max = SPEC_STORE_SIZE) {
 	const touch = (id, entry) => { entries.delete(id); entries.set(id, entry); while (entries.size > size) entries.delete(entries.keys().next().value); return entry; };
 	const seen = id => (entries.has(id) ? touch(id, entries.get(id)) : null);
 	return {
-		put(spec) { const id = specIdOf(spec); touch(id, { ...entries.get(id), spec: structuredClone(spec) }); return id; },
-		get(id) { const spec = seen(id)?.spec; return spec ? structuredClone(spec) : null; },
+		put(spec) {
+			const id = specIdOf(spec), was = entries.get(id);
+			touch(id, { ...was, spec: structuredClone(spec), framesAuto: resolvedFromAuto.has(spec) || was?.framesAuto === true });
+			return id;
+		},
+		get(id) {
+			const entry = seen(id);
+			return entry?.spec ? { ...structuredClone(entry.spec), ...(entry.framesAuto ? { frames: "auto" } : {}) } : null;
+		},
 		keepParts(id, parts) { touch(id, { ...entries.get(id), parts }); },
 		parts(id) { return seen(id)?.parts ?? null; },
 	};

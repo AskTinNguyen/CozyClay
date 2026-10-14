@@ -11,12 +11,12 @@ import { didYouMean, fmt } from "./vocab.js";
 
 const SHAPE = "{ name?, near | above | moved, tol?, by?, at, mode? }";
 
-function validateAt(err, at, v, frames) {
+function validateAt(err, at, v, frames, past = "") {
 	const ok = f => Number.isInteger(f);
 	if (v === undefined) return err(`${at} needs at: a frame or [f0, f1] (absolute frames within 0..${frames - 1})`);
 	const range = Array.isArray(v) ? v : [v, v];
 	if (!(range.length === 2 && range.every(ok) && range[0] <= range[1])) return err(`${at}.at must be an integer frame or [f0, f1] with f0 <= f1, got ${fmt(v)}`);
-	if (range[0] < 0 || range[1] > frames - 1) err(`${at}.at = ${fmt(v)} is outside 0..${frames - 1} (spec.frames ${frames})`);
+	if (range[0] < 0 || range[1] > frames - 1) err(`${at}.at = ${fmt(v)} is outside 0..${frames - 1} (spec.frames ${frames})${range[1] > frames - 1 ? past : ""}`);
 }
 
 function validateGoal(spec, err, opts, g, i, names) {
@@ -48,14 +48,14 @@ function validateGoal(spec, err, opts, g, i, names) {
 		else if (!Number.isFinite(g.by) || (kind === "moved" && g.by < 0)) err(`${at}.by must be a ${kind === "moved" ? "number >= 0" : "finite number"} (metres), got ${fmt(g.by)}`);
 	}
 	if (g.mode !== undefined && g.mode !== "all" && g.mode !== "any") err(`${at}.mode must be "all" or "any", got ${fmt(g.mode)}`);
-	validateAt(err, at, g.at, opts.frames);
+	validateAt(err, at, g.at, opts.frames, opts.past);
 }
 
 /**
  * validateGoals(spec, err, opts)
  * @param {object} spec  the expanded spec
  * @param {(msg: string) => void} err  collects one problem (validate.js)
- * @param {{ sk?: object, scene?: object, frames: number, lenient?: boolean, unknown?: (msg: string) => void }} opts
+ * @param {{ sk?: object, scene?: object, frames: number, lenient?: boolean, unknown?: (msg: string) => void, past?: string }} opts
  */
 export function validateGoals(spec, err, opts) {
 	if (spec.goals === undefined) return;

@@ -10,6 +10,7 @@ import { runMotionQa } from "./qa/index.js";
 import { nameChecks } from "./qa/check-names.js";
 import { expandUse } from "./skills/index.js";
 import { resolveFrames } from "./skills/frames-auto.js";
+import { markFramesAuto } from "./spec-store.js";
 import { findParams, searchParams } from "./search.js";
 import { timelineOf } from "./timeline.js";
 import { runProbes } from "./probes.js";
@@ -42,6 +43,8 @@ export function compileSpec(spec, { sk, scene }, opts = {}) {
 	const framed = resolveFrames(spec, ctx), params = findParams(framed);
 	let resolved = framed, search = null;
 	if (params.length) ({ spec: resolved, search } = searchParams(framed, params, ctx, s => expand(s).full));
+	// the store keeps the "auto" intent beside the resolved number (spec-store.js)
+	if (spec?.frames === "auto") markFramesAuto(resolved);
 	const t1 = performance.now();
 	const { full: expanded, used } = expand(resolved);
 	const out = compileMotion({ fps: 24, ...expanded }, ctx);

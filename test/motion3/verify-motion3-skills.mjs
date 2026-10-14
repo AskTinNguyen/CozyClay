@@ -8,6 +8,7 @@ import { compileSpec } from "../../src/motion3/pipeline.js";
 import { compileMotion } from "../../src/motion3/compiler/compile.js";
 import { expandUse } from "../../src/motion3/skills/index.js";
 import { resolveFrames } from "../../src/motion3/skills/frames-auto.js";
+import { createSpecStore } from "../../src/motion3/spec-store.js";
 import { motionScene } from "../../src/motion3/scene.js";
 import { skeletonFor } from "../../src/motion3/rigs/index.js";
 import { dist, add, apply, mul, ry } from "../../src/motion3/compiler/math.js";
@@ -79,6 +80,16 @@ msg = "";
 try { compileSpec({ ...exitcar(), frames: 600 }, { sk, scene: car }); } catch (error) { msg = error.message; }
 expect("a skill past the last frame says how many frames it needs", msg.includes('use[3] smokeCigarette needs 264 frames from f440 (to f704), past the last frame f599; set frames >= 705 or frames: "auto"'), msg);
 expect("frames auto: smokeCigarette (holding to the end) ends with its own motion", resolveFrames({ ...exitcar(), frames: "auto" }, { sk, scene: car }).frames === 705);
+
+// 6. The spec store keeps the "auto" intent beside the resolved number (spec-store.js): get()
+//    answers frames: "auto" for a spec compiled from it, even after the same spec is put again
+//    unmarked (motion.qa re-measuring the take); a spec sent with a number stays a number.
+const store = createSpecStore(), autoRun = compileSpec({ ...exitcar(), frames: "auto" }, { sk, scene: car });
+const autoId = store.put(autoRun.spec);
+store.put(structuredClone(autoRun.spec));
+const numberId = store.put({ ...exitcar(), frames: 720 });
+expect("spec store: a spec resolved from frames auto comes back as auto; the stored spec keeps the number",
+	autoRun.spec.frames === 705 && store.get(autoId)?.frames === "auto" && store.get(numberId)?.frames === 720, JSON.stringify({ stored: autoRun.spec.frames, auto: store.get(autoId)?.frames }));
 
 if (failures) { console.error(`${failures} motion3 skills check(s) failed`); process.exit(1); }
 console.log("motion3 skills: all checks passed");

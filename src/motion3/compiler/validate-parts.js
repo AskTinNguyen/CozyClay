@@ -56,12 +56,12 @@ function validateProps(spec, err, { sk, unknown = err }) {
 	});
 }
 
-function validateGenerators(spec, err, { frames, unknown = err }) {
+function validateGenerators(spec, err, { frames, unknown = err, past = "" }) {
 	(spec.generators ?? []).forEach((g, i) => {
 		const at = `generators[${i}]`;
 		if (g?.type !== "walk") return err(`${at}.type must be "walk", got ${fmt(g?.type)}`);
 		fieldsOk(unknown, at, g, WALK_FIELDS);
-		if (!Number.isInteger(g.f0) || g.f0 < 0 || g.f0 > frames - 1) err(`${at}.f0 must be an integer frame within 0..${frames - 1}, got ${fmt(g.f0)}`);
+		if (!Number.isInteger(g.f0) || g.f0 < 0 || g.f0 > frames - 1) err(`${at}.f0 must be an integer frame within 0..${frames - 1}, got ${fmt(g.f0)}${g.f0 > frames - 1 ? past : ""}`);
 		if (g.heading !== undefined && !(Array.isArray(g.heading) && g.heading.length === 2 && g.heading.every(Number.isFinite))) err(`${at}.heading must be [h0, h1] in degrees (${CONVENTIONS.yaw}), got ${fmt(g.heading)}`);
 		for (const f of WALK_FIELDS.slice(2)) if (f !== "heading" && g[f] !== undefined && !Number.isFinite(g[f])) err(`${at}.${f} must be a finite number, got ${fmt(g[f])}`);
 		if (g.steps !== undefined && !(Number.isInteger(g.steps) && g.steps >= 1)) err(`${at}.steps must be an integer >= 1, got ${fmt(g.steps)}`);
@@ -69,7 +69,7 @@ function validateGenerators(spec, err, { frames, unknown = err }) {
 	});
 }
 
-function validateChecks(spec, err, { sk, scene, frames, unknown = err }) {
+function validateChecks(spec, err, { sk, scene, frames, unknown = err, past = "" }) {
 	const c = spec.checks ?? {};
 	for (const k of Object.keys(c)) if (!CHECK_FIELDS.includes(k)) unknown(`checks.${k} is not a check${didYouMean(k, CHECK_FIELDS)} (checks: ${CHECK_FIELDS.join(", ")})`);
 	// each list entry is an object with known fields; a bad entry is named once and skipped
@@ -85,7 +85,7 @@ function validateChecks(spec, err, { sk, scene, frames, unknown = err }) {
 	};
 	const when = (at, w) => {
 		if (w === undefined || typeof w === "string") return;
-		if (!(Array.isArray(w) && w.length === 2 && w.every(Number.isInteger) && w[0] <= w[1] && w[0] >= 0 && w[1] <= frames - 1)) err(`${at}.when must be a weight channel or [f0, f1] within 0..${frames - 1}, got ${fmt(w)}`);
+		if (!(Array.isArray(w) && w.length === 2 && w.every(Number.isInteger) && w[0] <= w[1] && w[0] >= 0 && w[1] <= frames - 1)) err(`${at}.when must be a weight channel or [f0, f1] within 0..${frames - 1}, got ${fmt(w)}${Array.isArray(w) && w[1] > frames - 1 ? past : ""}`);
 	};
 	each("contacts", (k, i) => { refOk(spec, err, sk, `checks.contacts[${i}].point`, k.point); refOk(spec, err, sk, `checks.contacts[${i}].target`, k.target); when(`checks.contacts[${i}]`, k.when); });
 	each("orient", (k, i) => {
@@ -103,7 +103,8 @@ function validateChecks(spec, err, { sk, scene, frames, unknown = err }) {
 	else for (const k of Object.keys(fix || {})) if (!FIX_KEYS.includes(k)) unknown(`spec.fix.${k} is not a fix${didYouMean(k, FIX_KEYS)} (fixes: ${FIX_KEYS.join(", ")})`);
 }
 
-/** opts = { sk, scene, frames, lenient, unknown: err for an unknown field (a no-op when lenient) }. */
+/** opts = { sk, scene, frames, lenient, unknown: err for an unknown field (a no-op when lenient), past: the
+ * advice a frame past the end gets (validate.js) }. */
 export function validateParts(spec, err, opts) {
 	validateAnchors(spec, err, opts);
 	validateProps(spec, err, opts);

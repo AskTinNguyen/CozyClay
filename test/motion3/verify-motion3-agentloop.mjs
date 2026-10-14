@@ -7,6 +7,8 @@ import { compileSpec } from "../../src/motion3/pipeline.js";
 import { motionScene } from "../../src/motion3/scene.js";
 import { skeletonFor } from "../../src/motion3/rigs/index.js";
 import { I3 } from "../../src/motion3/compiler/math.js";
+import { createStudioAppActions } from "../../src/commands/index.js";
+import { SCENE_OBJECTS as CUP_OBJECTS, CHARACTER as CUP_CHARACTER } from "./fixtures/cup-scene.mjs";
 
 let failures = 0;
 function expect(name, condition, detail = "") {
@@ -103,7 +105,7 @@ for (const line of [
 	"spec.fps must be 24, the timeline rate, got 30",
 	"keys[3] (f32) sets unknown channel \"fpitch_left\"; did you mean \"fpitch_l\"?",
 	"keys[4] (f38) root must be [x, y, z] (3 finite numbers), got [1,2]",
-	"keys[5].f = 800 is outside 0..729 (spec.frames 730)",
+	"keys[5].f = 800 is outside 0..729 (spec.frames 730); set frames >= 801 or frames: \"auto\"",
 	"keys[6] (f54) knee_l = [0,0,-1] points backward; knees bend toward +z.",
 	"keys[7] (f66) sets w_handel_l, but there is no anchor \"handel\"; did you mean \"w_handle_l\"?",
 	"anchors.grip_l: an anchor name may not end in _l or _r",
@@ -115,6 +117,40 @@ expect("validator: checks.zzz is named, not a crash, with skills present", /chec
 expect("validator: a frame word in a check entry points at when", reject(s => { s.checks.contacts[0].frames = [0, 9]; }).includes('checks.contacts[0] has unknown field "frames"; did you mean "when"? (fields: name, point, target, tol, when)'));
 expect("validator: an unknown skill arg lists the skill's args", reject(s => { s.use = [{ skill: "sitInSeat", f0: 0, args: { car: "Car", zzz: 1 } }]; }).includes("use[0].args.zzz is not an arg of sitInSeat (args: car, seat, seatBack, wheel, offset, floor)"));
 expect("validator: an unknown skill gets a suggestion", /use\[0\]\.skill "exitcar" is not a skill; did you mean "exitCar"\?/.test(reject(s => { s.use = [{ skill: "exitcar", f0: 0 }]; })));
+
+// 7. Frames past the end (G3). The run2 session: a pick-up compiled from frames: "auto" (195
+//    frames), installed, then base + patch appended drink keys up to f296 and a goal at
+//    [218, 250]. The store keeps the "auto" intent, so the patch re-resolves the length; the take
+//    keeps the number. A numeric base answers the length that fits and frames: "auto".
+const RUN2_SPEC = {"schema": "cozyclay.motion-spec.v1", "fps": 24, "frames": "auto", "label": "step to table and pick up cup", "use": [{"skill": "standIdle", "f0": 0, "args": {"at": [0, 0], "heading": 0}}, {"skill": "walkTo", "f0": 10, "args": {"to": [0, 0.4], "steps": 2, "firstStep": 0.3, "step": 0.3, "heading": [0, 0]}}], "anchors": {"handle": {"kind": "world", "p": [0.268, 0.8, 0.85]}, "lift": {"kind": "world", "p": [0.24, 1.1, 0.66]}}, "props": {"handleGrip": {"hand": "l", "origin": ["LeftHandIndex2", "LeftHandMiddle2"], "points": {"fingers": [0, 0, 0]}}}, "fits": [{"side": "l", "anchor": "handle", "effector": {"prop": "handleGrip", "point": "fingers"}}, {"side": "l", "anchor": "lift", "effector": {"prop": "handleGrip", "point": "fingers"}}], "objects": {"empty-2": {"prop": "handleGrip", "grab": 122}}, "fix": {"penetration": 0.02}, "keys": [{"f": 86, "set": {"armw_l": 0, "w_handle_l": 0, "w_lift_l": 0, "pitch": 0, "spine_pitch": 0, "head_pitch": 0, "fingers_l": {"grip": 0}, "elbow_l": [1, -1, -0.3], "aswing_r": 0}}, {"f": 116, "set": {"armw_l": 1, "w_handle_l": 1, "pitch": 20, "spine_pitch": 35, "head_pitch": 15, "fingers_l": {"grip": 0.3}, "aswing_r": 35}}, {"f": 122, "set": {"w_handle_l": 1, "w_lift_l": 0, "pitch": 20, "spine_pitch": 35, "fingers_l": {"grip": 1}}}, {"f": 170, "set": {"w_handle_l": 0, "w_lift_l": 1, "pitch": 0, "spine_pitch": 4, "head_pitch": 12, "aswing_r": 0}}, {"f": 194, "set": {"w_lift_l": 1}}], "goals": [{"name": "fingers on the cup handle", "near": ["prop:handleGrip.fingers", "anchor:handle"], "tol": 0.05, "at": [116, 122]}, {"name": "cup lifted off the table", "moved": "object:empty-2", "by": 0.2, "at": [170, 194]}, {"name": "cup held above table", "above": ["object:empty-2.base", "object:cube.top"], "by": 0.15, "at": [170, 194]}]};
+const RUN2_PATCH = [{"op": "replace", "path": "/label", "value": "pick up cup and drink coffee"}, {"op": "add", "path": "/anchors/sip", "value": {"kind": "landmark", "name": "mouth"}}, {"op": "add", "path": "/fits/-", "value": {"side": "l", "anchor": "sip", "effector": {"prop": "handleGrip", "point": "fingers"}, "offset": [0.07, -0.06, 0.06]}}, {"op": "add", "path": "/keys/0/set/w_sip_l", "value": 0}, {"op": "replace", "path": "/keys/4", "value": {"f": 182, "set": {"w_lift_l": 1, "w_sip_l": 0, "head_pitch": 12}}}, {"op": "add", "path": "/keys/-", "value": {"f": 208, "set": {"w_lift_l": 0, "w_sip_l": 1, "head_pitch": 0, "spine_pitch": 0}}}, {"op": "add", "path": "/keys/-", "value": {"f": 218, "set": {"head_pitch": -15, "spine_pitch": -4}}}, {"op": "add", "path": "/keys/-", "value": {"f": 250, "set": {"w_sip_l": 1, "head_pitch": -15, "spine_pitch": -4}}}, {"op": "add", "path": "/keys/-", "value": {"f": 276, "set": {"w_sip_l": 0, "w_lift_l": 1, "head_pitch": 10, "spine_pitch": 4}}}, {"op": "add", "path": "/keys/-", "value": {"f": 296, "set": {"w_lift_l": 1}}}, {"op": "add", "path": "/goals/-", "value": {"name": "cup at the mouth", "near": ["object:empty-2.top", "landmark:mouth"], "tol": 0.08, "at": [218, 250]}}];
+const takes = new Map(), owner = { replace: (id, take) => takes.set(id, take), motionFor: id => takes.get(id) ?? null };
+const registry = createStudioAppActions({ state: () => ({ characters: [CUP_CHARACTER], objects: CUP_OBJECTS, frameCount: 300 }), storeDomain: n => (n === "motion" ? owner : null) });
+const act = (id, args) => { const out = registry.run(id, args); return out?.output ?? out; };
+const refused = run => { try { run(); return ""; } catch (error) { return error.message; } };
+const pickUp = act("motion.compile", { characterId: CUP_CHARACTER.id, spec: RUN2_SPEC, install: false });
+const installedPickUp = act("motion.compile", { characterId: CUP_CHARACTER.id, base: pickUp.specId, install: true });
+expect("frames auto: the pick-up resolves to 195 frames, and the installed take keeps the number", pickUp.frames === 195 && installedPickUp.specId === pickUp.specId
+	&& takes.get(CUP_CHARACTER.id)?.spec?.frames === 195, JSON.stringify({ frames: pickUp.frames, take: takes.get(CUP_CHARACTER.id)?.spec?.frames }));
+let drink = null;
+const appendRefusal = refused(() => { drink = act("motion.compile", { characterId: CUP_CHARACTER.id, base: installedPickUp.specId, patch: RUN2_PATCH, install: false }); });
+expect("frames auto: base + patch appending keys to f296 re-resolves to 297 frames", appendRefusal === "" && drink?.frames === 297 && drink.specId !== pickUp.specId && drink.delta?.base === pickUp.specId,
+	appendRefusal || JSON.stringify({ frames: drink?.frames }));
+const numeric = act("motion.compile", { characterId: CUP_CHARACTER.id, spec: { ...RUN2_SPEC, frames: 196 }, install: false });
+const pastEnd = refused(() => act("motion.compile", { characterId: CUP_CHARACTER.id, base: numeric.specId, patch: RUN2_PATCH, install: false }));
+for (const line of [
+	"keys[5].f = 208 is outside 0..195 (spec.frames 196); set frames >= 297 or frames: \"auto\"",
+	"keys[9].f = 296 is outside 0..195 (spec.frames 196); set frames >= 297 or frames: \"auto\"",
+	"goals[3].at = [218,250] is outside 0..195 (spec.frames 196); set frames >= 297 or frames: \"auto\"",
+]) expect(`frames number: ${line.slice(0, 40)}`, pastEnd.split("\n").includes(line), pastEnd);
+const autoAgain = refused(() => act("motion.compile", { characterId: CUP_CHARACTER.id, base: numeric.specId, patch: [{ op: "replace", path: "/frames", value: "auto" }, ...RUN2_PATCH], install: false }));
+expect("frames number: following the advice (frames: \"auto\") compiles", autoAgain === "", autoAgain);
+// a goal past the last key: "auto" counts keys, not goals, so the advice is the number alone
+const lateGoal = reject(s => { s.goals = [{ name: "late", near: ["joint:LeftHand", "joint:RightHand"], at: [700, 760] }]; });
+expect("frames: a goal past the end that \"auto\" would not cover gets the number alone",
+	lateGoal.replace(/^MOTION_SPEC_INVALID: /, "").split("\n").includes("goals[0].at = [700,760] is outside 0..729 (spec.frames 730); set frames >= 761"), lateGoal);
+const overview = refused(() => act("motion.describe", { topic: "overview" }));
+expect("describe: an unknown topic names the allowed ones", overview === "$.args.topic: \"overview\" is not one of: essentials, spec, skills, anchors, props, objects, checks, goals, probes, channels, refs, fix.", overview);
 
 if (failures) { console.error(`${failures} motion3 agent-loop check(s) failed`); process.exit(1); }
 console.log("motion3 agent loop: all checks passed");
