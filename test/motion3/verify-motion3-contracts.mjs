@@ -61,8 +61,8 @@ expect("objectBoxesAt: the group's part boxes { id, pos, R, half }, null outside
 	&& objectBoxesAt(out, CUP.group, 24) === null && objectBoxesAt(out, "nope", 3) === null);
 expect("resolveBone: exact name, else null with a suggestion", resolveBone(sk, "LeftHand").bone === "LeftHand" && resolveBone(sk, "LeftHnad").bone === null && /did you mean "LeftHand"/.test(resolveBone(sk, "LeftHnad").hint));
 let goalErrors = 0;
-validateGoals({ goals: [{ name: "x" }] }, () => goalErrors++, { frames: 24 });
-expect("validateGoals stub accepts goals", goalErrors === 0);
+validateGoals({ goals: [{ name: "x", near: ["joint:Hips", "joint:Head"], at: 3 }] }, () => goalErrors++, { frames: 24 });
+expect("validateGoals accepts a goal", goalErrors === 0);
 expect("objectChecks stub: no issues", Array.isArray(objectChecks(sk, out, r.expanded)) && objectChecks(sk, out, r.expanded).length === 0);
 const gc = goalChecks(out, []);
 expect("goalChecks stub: { issues, results }", Array.isArray(gc.issues) && Array.isArray(gc.results));
