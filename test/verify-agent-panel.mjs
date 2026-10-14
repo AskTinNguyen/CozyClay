@@ -994,24 +994,51 @@ expect("no timer drives the auth transition", !/set(Interval|Timeout)\([^)]*(sig
 	expect("the client asks the supervisor route", client.includes("/supervisor`") && client.includes("requestSupervisorNote(turnId)"));
 	expect("the send label goes through ko()", panel.includes('ko("Send as next prompt", "다음 턴으로 보내기")'));
 	expect("the supervisor card is token-driven and muted", /\.agent-supervisor-card\s*\{[^}]*color: var\(--agent-text-muted\)/.test(css));
-	const drive = async (frames) => {
-		const asked = [];
+	// The review is off by default (plan 7.3): the stored switch reads true only
+	// for "on", and false when storage is missing or throws.
+	const memory = (value) => ({ getItem: () => value, setItem(key, next) { value = next; } });
+	expect("the supervisor switch defaults off", module_.readStoredSupervisor(memory(null)) === false && module_.readStoredSupervisor(null) === false && module_.readStoredSupervisor(memory("off")) === false);
+	expect("a storage error reads as off", module_.readStoredSupervisor({ getItem() { throw new Error("denied"); } }) === false);
+	const toggled = memory(null);
+	module_.storeSupervisor(true, toggled);
+	expect("the toggle can still switch the review on", module_.readStoredSupervisor(toggled) === true);
+	module_.storeSupervisor(false, toggled);
+	expect("and off again", module_.readStoredSupervisor(toggled) === false);
+	const drive = async (frames, options = { supervisor: true }) => {
+		const asked = [], requests = [];
 		let store;
 		const transport = {
-			async turn(_request, onEvent) { for (const frame of frames) onEvent(frame); onEvent({ type: "done" }); },
+			async turn(request, onEvent) { requests.push(request); for (const frame of frames) onEvent(frame); onEvent({ type: "done" }); },
 			async supervisor(turnId) { asked.push({ turnId, streaming: store.getState().streaming, status: store.getState().lastTurn?.status }); return note; },
 		};
 		store = createAgentChatStore({ transport, surface: "studio", buildContext: () => ({ schema: "studio-context-v1" }) });
 		const arrived = new Promise((resolve) => { const off = store.subscribe((state) => { if (state.items.some((item) => item.kind === "supervisor")) { off(); resolve(); } }); });
-		await store.send("put a chair left of her");
-		return { store, asked, arrived, turnId: store.getState().turnId };
+		await store.send("put a chair left of her", options);
+		return { store, asked, requests, arrived, turnId: store.getState().turnId };
 	};
-	const authored = await drive([{ type: "tool.start", callId: "c1", name: "arrange_objects" }, { type: "tool.done", callId: "c1", ok: true, result: { ok: true, authored: true, receiptId: "receipt-1", affectedIds: ["chair"] } }, { type: "text.delta", text: "Placed." }]);
+	const authoredFrames = [{ type: "tool.start", callId: "c1", name: "arrange_objects" }, { type: "tool.done", callId: "c1", ok: true, result: { ok: true, authored: true, receiptId: "receipt-1", affectedIds: ["chair"] } }, { type: "text.delta", text: "Placed." }];
+	const unasked = await drive(authoredFrames, {});
+	await new Promise((resolve) => setImmediate(resolve));
+	expect("an authored turn sent without the switch never asks for a note", unasked.asked.length === 0 && !("supervisor" in unasked.requests[0]), JSON.stringify(unasked.asked));
+	const switchedOff = await drive(authoredFrames, { supervisor: false });
+	await new Promise((resolve) => setImmediate(resolve));
+	expect("a turn sent with the switch off never asks and says so", switchedOff.asked.length === 0 && switchedOff.requests[0].supervisor === false);
+	const authored = await drive(authoredFrames);
+	expect("a turn sent with the switch on carries supervisor: true", authored.requests[0].supervisor === true);
 	let deadline;
 	await Promise.race([authored.arrived, new Promise((_, reject) => { deadline = setTimeout(() => reject(new Error("supervisor note never arrived")), 5000); })]).finally(() => clearTimeout(deadline));
 	expect("an authored Studio turn asks for its note once, after it is Ready", authored.asked.length === 1 && authored.asked[0].turnId === authored.turnId && authored.asked[0].streaming === false && authored.asked[0].status === "done", JSON.stringify(authored.asked));
 	const card = authored.store.getState().items.find((item) => item.kind === "supervisor");
 	expect("the note joins the transcript as a supervisor item", card?.id === `supervisor:${authored.turnId}` && card.summary === note.summary && card.counts.blocker === 1, JSON.stringify(card));
+	expect("an explicit-on turn gets exactly one supervisor item", authored.store.getState().items.filter((item) => item.kind === "supervisor").length === 1);
+	// The wire body: the sidecar reviews only a turn that says supervisor: true.
+	const bodies = [];
+	const wire = module_.createHttpTransport({ fetchImpl: async (_url, init) => { bodies.push(JSON.parse(init.body)); return new Response('data: {"type":"done"}\n\n', { status: 200, headers: { "content-type": "text/event-stream" } }); } });
+	const studioTurn = (extra) => wire.turn({ surface: "studio", sessionId: "s", turnId: "t", text: "x", context: {}, ...extra }, () => {}, new AbortController().signal);
+	await studioTurn({});
+	await studioTurn({ supervisor: true });
+	await studioTurn({ supervisor: false });
+	expect("the Studio body sends the switch only when set", !("supervisor" in bodies[0]) && bodies[1].supervisor === true && bodies[2].supervisor === false, JSON.stringify(bodies));
 	const readOnly = await drive([{ type: "tool.start", callId: "c1", name: "inspect_studio" }, { type: "tool.done", callId: "c1", ok: true, result: { entities: [] } }, { type: "text.delta", text: "One character." }]);
 	await new Promise((resolve) => setImmediate(resolve));
 	expect("a read-only turn never asks for a note", readOnly.asked.length === 0, JSON.stringify(readOnly.asked));

@@ -622,8 +622,8 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 			else telemetry.finished(turnOutcome, turnFailureCode || "tool_failed");
 			// Marked before the done frame leaves, so a client that asks for the
 			// review the moment its stream ends finds it pending, not absent.
-			// The author's own switch (value.supervisor === false) skips this turn's review.
-			if (supervisor && process.env.COZYCLAY_SUPERVISOR !== "off" && value.supervisor !== false && !controller.signal.aborted && shouldSupervise(turnFrames)) record.supervisor = "pending";
+			// Off by default: only a turn sent with value.supervisor === true is reviewed.
+			if (supervisor && process.env.COZYCLAY_SUPERVISOR !== "off" && value.supervisor === true && !controller.signal.aborted && shouldSupervise(turnFrames)) record.supervisor = "pending";
 			}
 			send(frame);
 		};

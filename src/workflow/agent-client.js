@@ -265,16 +265,16 @@ export function storeModel(key, storage = globalThis.localStorage) {
 	}
 }
 
-/** The supervisor switch (#728): on unless the author turned it off. It rides
- * on every Studio turn as `supervisor: false` so the sidecar skips the review
- * for that turn; the sidecar's own COZYCLAY_SUPERVISOR=off still wins. */
+/** The supervisor switch (#728): off unless the author turned it on. It rides
+ * on every Studio turn as `supervisor: true|false`; the sidecar reviews only a
+ * turn sent with `true`, and its own COZYCLAY_SUPERVISOR=off still wins. */
 const AGENT_SUPERVISOR_KEY = "cozyclay.agent.supervisor";
 
 export function readStoredSupervisor(storage = globalThis.localStorage) {
 	try {
-		return storage?.getItem(AGENT_SUPERVISOR_KEY) !== "off";
+		return storage?.getItem(AGENT_SUPERVISOR_KEY) === "on";
 	} catch {
-		return true;
+		return false;
 	}
 }
 
@@ -791,7 +791,7 @@ export function createHttpTransport({ fetchImpl = globalThis.fetch?.bind(globalT
 			const body = studio
 				? JSON.stringify({
 					surface: "studio", sessionId, turnId, text, context: turnRequest.context,
-					...(model ? { model } : {}), ...(effort ? { effort } : {}), ...(attachFrame === undefined ? {} : { attachFrame: Boolean(attachFrame) }), ...(supervisor === false ? { supervisor: false } : {}), ...attached,
+					...(model ? { model } : {}), ...(effort ? { effort } : {}), ...(attachFrame === undefined ? {} : { attachFrame: Boolean(attachFrame) }), ...(typeof supervisor === "boolean" ? { supervisor } : {}), ...attached,
 				})
 				: JSON.stringify({ sessionId, text, attachFrame, model, ...(effort ? { effort } : {}), ...attached, ...(telemetry.turnId ? { turn_id: telemetry.turnId } : {}) });
 			try {
@@ -1501,7 +1501,7 @@ export function createAgentChatStore({
 					attachFrame: Boolean(options.attachFrame),
 					model: options.model,
 					effort: options.effort ?? undefined,
-					...(options.supervisor === false ? { supervisor: false } : {}),
+					...(typeof options.supervisor === "boolean" ? { supervisor: options.supervisor } : {}),
 				}, applyEvent, signal);
 			} catch (error) {
 				if (!signal.aborted) applyEvent({ type: "error", code: "upstream", message: String(error?.message || error) });
@@ -1527,7 +1527,7 @@ export function createAgentChatStore({
 							failure: turn.failure,
 						},
 					});
-					if (studio && turn.reviewable && options.supervisor !== false && !signal.aborted) requestSupervisorNote(turnId);
+					if (studio && turn.reviewable && options.supervisor === true && !signal.aborted) requestSupervisorNote(turnId);
 				}
 			}
 		},

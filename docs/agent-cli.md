@@ -604,7 +604,11 @@ the text is missing or empty or an attachment is not an inline data URL.
 
 ## Supervisor
 
-After a Studio turn ends, the sidecar reviews it once in the background and
+The review is off by default: the sidecar reviews only a Studio turn sent
+with `supervisor: true`, which the panel's Supervisor switch (stored as
+`"on"`) adds. A request that omits the field is not reviewed.
+
+After such a turn ends, the sidecar reviews it once in the background and
 leaves the result as a note card in the Agent panel. The review never delays
 the turn and never talks back to the agent: the turn's stream ends with its
 `done` frame exactly as before, and only then does the review start. It runs
