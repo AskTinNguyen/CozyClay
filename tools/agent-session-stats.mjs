@@ -44,7 +44,7 @@ for (const line of lines) {
 	} else if (m.role === "toolResult") {
 		const text = textOf(m.content);
 		if (m.isError) turn.toolErrors++;
-		turn.invalid += count(text, /INVALID_ARGUMENT/g);
+		turn.invalid += count(text, /INVALID_ARGUMENT:/g);
 		turn.stale += count(text, /STALE_SCENE/g);
 	}
 }
