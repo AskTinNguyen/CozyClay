@@ -5,12 +5,15 @@
 //   { channel: "elbow_r", f: 120, value: [x, y, z] | n }      set a channel at f
 //   { path: "/fix/retime", value: true }                      set a spec path
 //   { path: "/anchors/cupHandle/p", delta: [dx, dy, dz] }     move a spec value by delta
+//   { channel: "root", f, delta, hold: true }                  move the body that stands at f
 // Each becomes g.patch = [{ op, path, value }] against opts.userSpec (the spec as the agent sent
 // it, use[] not expanded): a user key that sets the channel within f +-2 -> replace
 // /keys/<i>/set/<ch>; a standIdle stance moved sideways -> /use/<i>/args/at; otherwise add
 // /keys/- with the frame's value moved. A path fix replaces the value, or adds it when only the
-// last step is missing (or the top-level /fix object). g.patch is set only when the patch
-// applies to userSpec and changes it.
+// last step is missing (or the top-level /fix object). A hold fix moves what placed the body
+// at f by the delta's x and z: a standIdle args.at, a walkTo's length (firstStep with 2 steps,
+// else step; its to when steps follow from it), or the run of the agent's root keys around f.
+// g.patch is set only when the patch applies to userSpec and changes it.
 import { applyPatch } from "../json-patch.js";
 
 const NEAR = 2;
@@ -59,9 +62,45 @@ function standPatch(X, userSpec, fix, near) {
 	return [{ op: Object.hasOwn(u.args, "at") ? "replace" : "add", path: `/use/${i}/args/at`, value }];
 }
 
+/** A walkTo made longer or shorter by the delta along the body's heading at f (null when it is mostly sideways). */
+function walkPatch(X, userSpec, i, fix) {
+	const u = userSpec.use?.[i], a = u?.args ?? {}, d = fix.delta, h = (X.fr(fix.f).c.yaw ?? 0) * Math.PI / 180;
+	const along = d[0] * Math.sin(h) + d[2] * Math.cos(h);
+	if (u?.skill !== "walkTo" || Math.abs(d[0] * Math.cos(h) - d[2] * Math.sin(h)) > Math.abs(along)) return null;
+	const set = (arg, value) => [u.args ? { op: Object.hasOwn(a, arg) ? "replace" : "add", path: `/use/${i}/args/${arg}`, value: round4(value) } : { op: "add", path: `/use/${i}/args`, value: { [arg]: round4(value) } }];
+	if (a.steps === undefined && Array.isArray(a.to)) return set("to", a.to.map((v, j) => v + (j === 0 ? d[0] : j === a.to.length - 1 ? d[2] : 0)));
+	const steps = a.steps ?? 8, arg = steps <= 2 ? "firstStep" : "step", now = a[arg] ?? (arg === "step" ? 0.5 : 0.4), value = now + along / Math.max(1, steps - 2);
+	return steps >= 2 && value > 0.05 ? set(arg, value) : null;
+}
+
+/** The agent's root keys around f (no skill root key between them) moved by the delta's x and z. */
+function rootRunPatch(X, userSpec, fix) {
+	const list = X.keys("root"), mine = k => /^keys\[\d+\]$/.test(k.src);
+	const at = list.findLastIndex(k => k.f <= fix.f);
+	if (at < 0 || !mine(list[at])) return null;
+	let a = at, b = at;
+	while (a > 0 && mine(list[a - 1])) a -= 1;
+	while (b < list.length - 1 && mine(list[b + 1])) b += 1;
+	return list.slice(a, b + 1).map(k => {
+		const j = Number(/\d+/.exec(k.src)[0]), r = userSpec.keys?.[j]?.set?.root;
+		return Array.isArray(r) && r.length === 3 ? { op: "replace", path: `/keys/${j}/set/root`, value: round4([r[0] + fix.delta[0], r[1], r[2] + fix.delta[2]]) } : null;
+	}).filter(Boolean);
+}
+
+/** fix.hold: what placed the body at f (the root key at or before it) moves. */
+function bodyPatch(X, userSpec, fix) {
+	if (!Array.isArray(fix.delta) || !X?.fr) return null;
+	const prev = X.bracket("root", fix.f).prev, m = /^use\[(\d+)\] (standIdle|walkTo)\b/.exec(prev?.src ?? "");
+	if (m?.[2] === "standIdle") return standPatch(X, userSpec, fix, prev);
+	if (m?.[2] === "walkTo") return walkPatch(X, userSpec, Number(m[1]), fix);
+	const run = prev && rootRunPatch(X, userSpec, fix);
+	return run?.length ? run : null;
+}
+
 function channelPatch(X, userSpec, fix) {
 	const { channel: ch, f } = fix;
 	if (typeof ch !== "string" || !isNum(f)) return null;
+	if (fix.hold) return bodyPatch(X, userSpec, fix);
 	const to = v => (fix.value !== undefined ? fix.value : moved(v, fix.delta));
 	const i = userKey(userSpec, ch, f);
 	if (i >= 0) {

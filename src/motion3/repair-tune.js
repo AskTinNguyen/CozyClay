@@ -7,12 +7,17 @@
 //                                             either way, from the arg as sent or its default
 //   SPEED/ACC/POP "between keys[a] fA and keys[b] fB" (the agent's keys)
 //                                             key a 1 or 2 frames earlier, key b later
+//   GOAL up to 10 cm short (with or without a patch): where the body stands at the worst frame,
+//                                             1 then 2 steps either way: the agent's root keys
+//                                             there (x, z), else the last standIdle/walkTo before
+//                                             it (SKILL_INFO[skill].place); then the lean, the
+//                                             spine_pitch of the agent's keys around it (5 deg)
 // Every candidate is a JSON Patch on the agent's spec; the order is fixed, so the search is
 // deterministic. Least-change candidates come first, so a tie keeps the smaller edit.
 import { excessOf } from "./qa/severity.js";
 import { SKILL_INFO } from "./skills/info.js";
 
-const NEAR = 0.5, STEPS = [-1, 1, -2, 2];
+const NEAR = 0.5, STEPS = [-1, 1, -2, 2], PLACE_MAX = 0.1, LEAN = 5;
 const isNum = x => typeof x === "number" && Number.isFinite(x);
 
 /** A group no more than half its limit (or 5 mm, for small limits) past it. */
@@ -52,11 +57,39 @@ function keyCandidates(g, cause, spec) {
 	return out;
 }
 
+const round4 = v => Math.round(v * 1e4) / 1e4;
+
+/** One step (n = 1 or 2, either way) of what places the body at frame f, then of the lean. */
+function placeSteps(spec, f, n) {
+	const keys = spec.keys ?? [], out = [];
+	const skill = (spec.use ?? []).map((u, i) => ({ u, i })).filter(({ u }) => (u?.skill === "standIdle" || u?.skill === "walkTo") && u.f0 <= f).sort((a, b) => a.u.f0 - b.u.f0).at(-1);
+	const roots = keys.map((k, j) => ({ k, j })).filter(({ k }) => Array.isArray(k?.set?.root) && k.set.root.length === 3 && isNum(k.f) && k.f > (skill?.u.f0 ?? -1));
+	if (roots.some(({ k }) => k.f <= f)) {
+		for (const axis of [0, 2]) for (const sg of [-n, n]) out.push(roots.map(({ k, j }) => ({ op: "replace", path: `/keys/${j}/set/root`, value: k.set.root.map((v, a) => (a === axis ? round4(v + sg * 0.03) : v)) })));
+	} else if (skill) {
+		const { u, i } = skill, place = SKILL_INFO[u.skill].place ?? {}, steps = u.args?.steps ?? 8;
+		for (const [arg, step] of Object.entries(place)) {
+			if (arg === "step" && steps <= 2) continue;
+			const now = u.args?.[arg] ?? SKILL_INFO[u.skill].args[arg]?.default;
+			const set = value => [u.args ? { op: u.args[arg] === undefined ? "add" : "replace", path: `/use/${i}/args/${arg}`, value } : { op: "add", path: `/use/${i}/args`, value: { [arg]: value } }];
+			if (Array.isArray(now)) for (const axis of [0, now.length - 1]) for (const sg of [-n, n]) out.push(set(now.map((v, a) => (a === axis ? round4(v + sg * step) : v))));
+			else if (isNum(now)) for (const sg of [-n, n]) if (now + sg * step > 0.05) out.push(set(round4(now + sg * step)));
+		}
+	}
+	const pitched = keys.map((k, j) => ({ f: k?.f, j })).filter(({ j }) => isNum(keys[j]?.set?.spine_pitch) && isNum(keys[j].f)).sort((a, b) => a.f - b.f);
+	const lean = [pitched.filter(p => p.f <= f).at(-1), pitched.find(p => p.f > f)].filter(Boolean).map(p => p.j);
+	for (const sg of lean.length ? [n, -n] : []) out.push(lean.map(j => ({ op: "replace", path: `/keys/${j}/set/spine_pitch`, value: keys[j].set.spine_pitch + sg * LEAN })));
+	return out;
+}
+
 /**
  * tuneCandidates(g, spec) -> patch[] (each a JSON Patch on spec; [] when the group is not near its
- * limit, already carries a patch, or its cause names nothing tunable)
+ * limit, already carries a patch, or its cause names nothing tunable; a GOAL group up to 10 cm
+ * short also gets the body placement steps)
  */
 export function tuneCandidates(g, spec) {
-	if (g.patch || typeof g.cause !== "string" || !nearLimit(g)) return [];
-	return [...skillCandidates(g.cause, spec), ...keyCandidates(g, g.cause, spec)];
+	if (typeof g.cause !== "string") return [];
+	const near = !g.patch && nearLimit(g) ? [...skillCandidates(g.cause, spec), ...keyCandidates(g, g.cause, spec)] : [];
+	if (g.kind !== "GOAL" || !isNum(g.worstFrame) || excessOf(g) > PLACE_MAX) return near;
+	return [...near, ...placeSteps(spec, g.worstFrame, 1), ...placeSteps(spec, g.worstFrame, 2)];
 }

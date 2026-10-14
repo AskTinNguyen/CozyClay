@@ -11,6 +11,7 @@ import { pointOf } from "./spec-checks.js";
 import { solePoints } from "./geometry.js";
 import { vec, m3 } from "./fmt.js";
 import { moveHint } from "./hints-contact.js";
+import { bodyMove } from "./hints-goal.js";
 
 const LIMB = { Leg: ["UpLeg", "Leg", "Foot", "knee"], ForeArm: ["Arm", "ForeArm", "Hand", "elbow"] };
 const sideOf = s => (s.startsWith("Left") ? "l" : "r");
@@ -75,6 +76,14 @@ export const motionHints = {
 		}
 		const S = k === "l" ? "Left" : "Right", { s } = X.fr(f), dir = norm(sub(s.P[X.I[`${S}Hand`]], s.P[X.I[`${S}Arm`]]));
 		const r = moveHint(X, `hand_${k}`, f, scale(dir, -need), "");
+		// a hand on a point the scene or the spec pins (an object anchor, one a goal or contact check names) stays: the body comes closer
+		const a = X.hand(k, f).anchor, refs = JSON.stringify([X.spec.goals ?? [], X.spec.checks?.contacts ?? []]);
+		const pinned = a && (X.spec.anchors?.[a]?.kind === "object" || refs.includes(`"anchor:${a}"`)), fit = X.spec.fits?.[X.hand(k, f).fit ?? -1];
+		// a fit pushes the wrist target far past reach; the body comes as far as the effector is short
+		const eff = fit?.effector?.prop && X.fr(f).diag.props?.[fit.effector.prop]?.[fit.effector.point];
+		const gap = eff ? dist(eff, add(pointOn(X, X.fr(f), `anchor:${a}`), fit.offset ?? [0, 0, 0])) + 0.01 : need;
+		const body = pinned && bodyMove(X, k, f, Math.min(need, gap));
+		if (body) return { cause: r.cause, hint: `${body.hint} (out of reach by ${m3(g.worst)} m), or ${r.hint}`, fix: body.fix };
 		return { cause: r.cause, hint: `${r.hint} (out of reach by ${m3(g.worst)} m), or bring root ${vec(scale([dir[0], 0, dir[2]], need))} m closer`, fix: r.fix };
 	},
 	KNEE(X, g) {

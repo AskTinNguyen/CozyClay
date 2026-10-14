@@ -2,7 +2,8 @@
 // C6 (lane D1): every hint may carry a fix (non-enumerable, never in the output), and qa/patch.js
 // turns it into a JSON Patch on the agent's own spec: a user key near the frame is replaced, a
 // skill key gets a new key appended, a standIdle stance moves its args.at, and path fixes
-// (fix.penetration, fix.retime, an anchor point, an object field) are added or replaced.
+// (fix.penetration, fix.retime, an anchor point, an object field) are added or replaced. A body
+// move (hold) changes what placed the body: a standIdle at, a walkTo's length, or root keys.
 import { EXITCAR_SPEC, SCENE_OBJECTS } from "./fixtures/exitcar-scene.mjs";
 import { compileSpec } from "../../src/motion3/pipeline.js";
 import { motionScene } from "../../src/motion3/scene.js";
@@ -82,6 +83,24 @@ expect("an object the agent did not define (a skill's) gets no patch", patchOf({
 expect("a patch that changes nothing is dropped", patchOf({ path: "/fix/retime", value: true }, cupSpec) === undefined);
 expect("a delta of the wrong shape is dropped", patchOf({ channel: "hand_l", f: 105, delta: 0.1 }, cupSpec) === undefined);
 expect("no userSpec, no patch", attachPatches([group({ path: "/fix/retime", value: true })], {})[0].patch === undefined);
+
+// 7. A body move (hold: true) moves what placed the body at f, by the delta's x and z.
+const bodyX = (list, yaw = 0) => ({ fr: () => ({ c: { yaw, root: [0, 0.97, 0] } }), keys: () => list,
+	bracket: (ch, f) => ({ prev: [...list].reverse().find(k => k.f <= f) ?? null, next: list.find(k => k.f > f) ?? null }) });
+const body = (list, userSpec, delta = [0, 0, 0.05], yaw) => patchOf({ channel: "root", f: 100, delta, hold: true }, userSpec, bodyX(list, yaw));
+const walkSpec = args => ({ use: [{ skill: "standIdle", f0: 0, args: { at: [0, 0] } }, { skill: "walkTo", f0: 2, args }], keys: [] });
+const walked = [{ f: 0, src: "use[0] standIdle" }, { f: 76, src: "use[1] walkTo end" }];
+expect("hold, a standIdle stance: replace /use/0/args/at", json(body([{ f: 0, src: "use[0] standIdle" }], { use: [{ skill: "standIdle", f0: 0, args: { at: [0, 0.2] } }] }, [0.01, 0, 0.05]))
+	=== json([{ op: "replace", path: "/use/0/args/at", value: [0.01, 0.25] }]));
+expect("hold, a 2-step walkTo: firstStep grows by the forward part", json(body(walked, walkSpec({ steps: 2, firstStep: 0.3, heading: 0 }))) === json([{ op: "replace", path: "/use/1/args/firstStep", value: 0.35 }]));
+expect("hold, a 4-step walkTo facing +x: step grows by the forward part over 2 strides", json(body(walked, walkSpec({ steps: 4, heading: 90 }), [0.1, 0, 0], 90)) === json([{ op: "add", path: "/use/1/args/step", value: 0.55 }]));
+expect("hold, a walkTo whose steps follow from to: to moves", json(body(walked, walkSpec({ to: [0, 1] }))) === json([{ op: "replace", path: "/use/1/args/to", value: [0, 1.05] }]));
+expect("hold, a mostly sideways move of a walk: no patch", body(walked, walkSpec({ steps: 2 }), [0.05, 0, 0.01]) === undefined);
+const rooted = [{ f: 0, src: "use[0] standIdle" }, { f: 76, src: "use[1] walkTo end" }, { f: 80, src: "keys[0]" }, { f: 110, src: "keys[2]" }];
+const rootSpec = { ...walkSpec({ steps: 2 }), keys: [{ f: 80, set: { root: [0, 0.97, 0.4] } }, { f: 90, set: { armw_l: 1 } }, { f: 110, set: { root: [0, 0.95, 0.4] } }] };
+expect("hold, the agent's root keys after the walk: each one of the run moves (y kept)", json(body(rooted, rootSpec)) === json([{ op: "replace", path: "/keys/0/set/root", value: [0, 0.97, 0.45] },
+	{ op: "replace", path: "/keys/2/set/root", value: [0, 0.95, 0.45] }]), json(body(rooted, rootSpec)));
+expect("without hold a root delta still replaces the one key near f", json(patchOf({ channel: "root", f: 110, delta: [0, 0, 0.05] }, rootSpec, bodyX(rooted))) === json([{ op: "replace", path: "/keys/2/set/root", value: [0, 0.95, 0.45] }]));
 
 if (failures) { console.error(`${failures} motion3 patch check(s) failed`); process.exit(1); }
 console.log("motion3 patch: all checks passed");

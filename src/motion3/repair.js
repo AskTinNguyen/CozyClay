@@ -1,8 +1,9 @@
 // C6. Repair: apply the QA patches (qa/patch.js) that make the motion better, round by round.
 // Each round takes the top 3 groups that carry a patch and tries them one at a time, each with
 // the patch the latest compile gives that group. When none is kept, the top 2 groups just past
-// their limit with no patch get a small local search (repair-tune.js: the responsible skill's
-// args, or the key pair of a speed spike); the best candidate is the round's change. A change
+// their limit with no patch, or a missed goal, get a small local search (repair-tune.js: the
+// responsible skill's args, the key pair of a speed spike, or for a goal where the body stands
+// and how it leans); the best candidate is the round's change. A change
 // is kept only when the summed severity (qa/severity.js) drops and no goal that held fails, else
 // it is undone. A round that keeps nothing ends the repair. The compiler is deterministic and
 // the candidates come in a fixed order, so the repair is too; no new compile starts after 20 s.
@@ -15,7 +16,9 @@ const groupsOf = r => r?.qa?.groups ?? [];
 const totalOf = r => groupsOf(r).reduce((sum, g) => sum + (g.severity ?? 0), 0);
 const failedOf = r => (r?.qa?.goals ?? []).filter(g => !g.ok).length;
 const groupIn = (r, key) => groupsOf(r).find(g => groupKey(g) === key);
-const better = (r, than) => totalOf(r) < totalOf(than) - 1e-9 && failedOf(r) <= failedOf(than);
+const heldOf = r => (r?.qa?.goals ?? []).filter(g => g.ok).map(g => g.name);
+/** Lower summed severity, no more failed goals, and every goal that held still holds. */
+const better = (r, than) => totalOf(r) < totalOf(than) - 1e-9 && failedOf(r) <= failedOf(than) && heldOf(than).every(n => heldOf(r).includes(n));
 
 /**
  * repairSpec(spec, { rounds }, compile) -> { spec, result, repair }

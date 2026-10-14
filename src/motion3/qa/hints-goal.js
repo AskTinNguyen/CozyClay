@@ -3,15 +3,57 @@
 // else a foot or the root, through moveHint (hints-contact.js, read only). The fix is
 // { channel: "hand_l", f, delta } when the hand target drives that hand (qa/patch.js turns it into
 // a patch), { path: "/anchors/<a>/p", delta } when a world anchor does, and none for an FK arm.
+// Two causes come first, because moving the hand target cannot cure them:
+//   - another anchor weight of that hand is above 0 at the frame (it ramps between two keys
+//     across the goal), so the hand goes part of the way to that anchor: key it 0 there;
+//   - the arm is at full reach (the wrist target is clamped or missed): move the body (bodyMove).
 import { resolveBone } from "../bones.js";
 import { inHandAt } from "../object-pose.js";
 import { refPoint } from "../refs.js";
 import { scale, norm, sub, len } from "../compiler/math.js";
 import { moveHint } from "./hints-contact.js";
 import { goalKinds, goalName, goalNeed, scenePoint } from "./goals.js";
-import { m3 } from "./fmt.js";
+import { m3, vec } from "./fmt.js";
 
-const MARGIN = 0.003;
+const MARGIN = 0.003, LEAK = 0.02, BODY_MAX = 0.2;
+
+/**
+ * The body move that brings shoulder k `need` m nearer its hand at f (the arm points at its
+ * target when at full reach): { delta, hint, fix } with fix { channel: "root", f, delta, hold:
+ * true } (qa/patch.js moves what places the body: a standIdle at, a walkTo's steps or the agent's
+ * root keys). null when the arm points mostly up or down, where walking closer does not help.
+ */
+export function bodyMove(X, k, f, need, why = "") {
+	const S = k === "l" ? "Left" : "Right", { s } = X.fr(f), v = sub(s.P[X.I[`${S}Hand`]], s.P[X.I[`${S}Arm`]]);
+	const flat = Math.hypot(v[0], v[2]) / Math.max(len(v), 1e-9);
+	if (flat < 0.5) return null;
+	const delta = scale(norm([v[0], 0, v[2]]), Math.min(BODY_MAX, need / flat));
+	return { delta, hint: `body: move ${vec(delta)} m toward the target at f${f}, ${X.cause("root", f)} (arm ${k} is at full reach)${why}`, fix: { channel: "root", f, delta, hold: true } };
+}
+
+/** Arm k cannot reach its wrist target at f (soft reach clamped it, or the IK missed). */
+const atReach = (X, k, f) => (X.fr(f).diag[`reach_over_${k}`] ?? 0) > 1e-3 || (X.fr(f).diag[`arm_miss_${k}`] ?? 0) > 2e-3;
+
+/** The largest other anchor weight of hand k above LEAK at f while `drive` leads it, or null. */
+function leakOf(X, k, f, drive) {
+	let best = null;
+	for (const [ch, w] of Object.entries(X.fr(f).c)) {
+		if (ch === drive || !new RegExp(`^w_.+_${k}$`).test(ch) || !(w > LEAK) || (best && w <= best.w)) continue;
+		best = { ch, w };
+	}
+	return best;
+}
+
+/** Leak hint: key the stray weight 0 at the goal's last frame when it rises from 0 there, else at f. */
+function leakHint(X, goal, part, f, why) {
+	const k = part.slice(-1), d = X.hand(k, f), leak = d.anchor ? leakOf(X, k, f, d.ch) : null;
+	if (!leak) return null;
+	const end = Array.isArray(goal.at) ? goal.at[1] : goal.at, prev = X.bracket(leak.ch, f).prev;
+	const at = prev && Math.abs(X.out.baked[leak.ch]?.[Math.round(prev.f)] ?? 1) <= LEAK && end >= f && !(X.bracket(leak.ch, f).next?.f <= end) ? end : f;
+	const share = leak.w / Math.max(1, (X.fr(f).c[d.ch] ?? 1) + leak.w), other = leak.ch.replace(/^w_/, "").replace(/_[lr]$/, "");
+	return { cause: X.cause(leak.ch, f), hint: `${leak.ch} is ${m3(leak.w)} at f${f}, so anchor ${other} takes ${Math.round(share * 100)}% of the hand target from ${d.label}: key ${leak.ch} 0 at f${at}${why}`,
+		fix: { channel: leak.ch, f: at, value: 0 } };
+}
 
 /** The goal a GOAL group reports: the longest name its subject starts with. */
 function goalOf(X, g) {
@@ -88,7 +130,14 @@ export const goalHints = {
 			}
 			return { cause: `goal ${name}`, hint: `neither ${goal[kind][0]} nor ${goal[kind][1]} moves with the body at f${f}; name a joint, prop point or held object` };
 		}
-		const [part, delta] = move, r = moveHint(X, part, f, delta, why), fix = fixFor(X, part, f, delta);
+		const [part, delta] = move;
+		if (part.startsWith("hand_")) {
+			const leak = leakHint(X, goal, part, f, why);
+			if (leak) return leak;
+			const body = atReach(X, part.slice(-1), f) && bodyMove(X, part.slice(-1), f, amount, why);
+			if (body) return { cause: X.cause("root", f), hint: body.hint, fix: body.fix };
+		}
+		const r = moveHint(X, part, f, delta, why), fix = fixFor(X, part, f, delta);
 		return { cause: r.cause, hint: r.hint, ...(fix ? { fix } : {}) };
 	},
 };

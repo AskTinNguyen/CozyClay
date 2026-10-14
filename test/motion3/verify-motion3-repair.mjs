@@ -2,7 +2,8 @@
 // C6 (lane D1): repairSpec tries the QA patches round by round and keeps the ones that lower the
 // summed severity; motion.compile { repair } installs the improved spec and reports what it did.
 // A group just past its limit with no patch gets a small local search (repair-tune.js): the
-// live run3 cup take clears its walkTo thigh hits and its key-pair pop without the agent.
+// live run3 cup take clears its walkTo thigh hits and its key-pair pop without the agent. The two
+// round-2 takes stuck on a grab goal reach qa.ok, and an arm at full reach brings the body closer.
 import { EXITCAR_SPEC, SCENE_OBJECTS } from "./fixtures/exitcar-scene.mjs";
 import { compileSpec } from "../../src/motion3/pipeline.js";
 import { motionScene } from "../../src/motion3/scene.js";
@@ -15,6 +16,8 @@ import { applyPatch } from "../../src/motion3/json-patch.js";
 import { tuneCandidates } from "../../src/motion3/repair-tune.js";
 import { SCENE_OBJECTS as CUP_OBJECTS } from "./fixtures/cup-scene.mjs";
 import { RUN3_SPEC, RUN3_MANUAL } from "./fixtures/cup-run3-spec.mjs";
+import { F275_FULL, F275_REPAIR8, F275_PATCH9, F275_REPAIR9, C8F2_FULL } from "./fixtures/cup-goal-stuck.mjs";
+import { press } from "./fixtures/reach-press.mjs";
 
 let failures = 0;
 function expect(name, condition, detail = "") {
@@ -132,6 +135,50 @@ const fake = s => {
 };
 r = repairSpec({ x: 0 }, { rounds: 4 }, fake);
 expect("guard: a worse total (12 -> 15) and a broken goal (total 0) are both rejected", r.spec.x === 0 && r.repair.applied.length === 0 && r.repair.rejected === 2, json(r.repair));
+
+const swapped = s => ({ qa: { goals: [{ name: "a", ok: s.x === 0 }, { name: "b", ok: s.x !== 0 }], groups: s.x === 0 ? [{ kind: "GOAL", subject: "b: 1 m", count: 1, worst: 0.01, limit: 0, severity: 2, patch: [{ op: "replace", path: "/x", value: 1 }] }] : [] } });
+r = repairSpec({ x: 0 }, { rounds: 4 }, swapped);
+expect("guard: a change that meets one goal but fails another that held is rejected (same failed count, lower total)", r.spec.x === 0 && r.repair.rejected === 1, json(r.repair));
+
+// 9. Live round 2, turn 1 of sessions f275fda4 and c8f2018b: stuck 6-9 cm off "fingers on cup
+//    handle at grab" for 8 and 5 compiles. The spec each agent sent with repair at its first
+//    stuck compile (fixture), its specIds, why it is stuck, and repair now.
+const e3d7 = applyPatch(F275_FULL, F275_REPAIR8), f275 = applyPatch(e3d7, F275_PATCH9);
+expect("stuck fixtures: the session's specIds (f275 compile 8 and 9 stored, c8f2 compile 7 stored with frames resolved)",
+	specIdOf(e3d7) === "spec-e3d720274680" && specIdOf(applyPatch(f275, F275_REPAIR9)) === "spec-34a2b58fe6b9" && specIdOf(cupCompile({ fps: 24, ...C8F2_FULL }).spec) === "spec-f0d208a2cb6d",
+	json([specIdOf(e3d7), specIdOf(applyPatch(f275, F275_REPAIR9)), specIdOf(cupCompile({ fps: 24, ...C8F2_FULL }).spec)]));
+for (const [name, spec, f, leak, value] of [["f275", f275, 114, "w_raise_l", 0.073], ["c8f2", C8F2_FULL, 106, "w_lift_l", 0.09]]) {
+	const c = cupCompile(spec), g = c.qa.groups[0], fr = c.out.frames[f];
+	expect(`${name} stuck: the grab goal misses (${value} m) with the arm inside its reach; ${leak} ramps through f${f}`, g.kind === "GOAL" && g.worstFrame === f && c.qa.goals[0].value === value
+		&& !(fr.diag.reach_over_l > 0) && fr.diag.arm_miss_l < 1e-3 && fr.c[leak] > 0.3 && fr.c.w_handle_l === 1, json({ g, diag: fr.diag, w: fr.c[leak] }));
+	expect(`${name}: the GOAL hint names the stray weight and its patch keys it 0 at f${f}`, new RegExp(`^${leak} is [\\d.]+ at f${f}, so anchor \\w+ takes \\d+% of the hand target from anchor handle: key ${leak} 0 at f${f} `).test(g.hint)
+		&& json(g.patch) === json([{ op: "add", path: "/keys/-", value: { f, set: { [leak]: 0 } } }]), `${g.hint} ${json(g.patch)}`);
+	r = cupRepair(spec);
+	expect(`${name}: repair { rounds: 4 } reaches qa.ok with every goal met, in one round, under 10 s`, r.result.qa.ok && r.result.qa.goals.every(x => x.ok) && r.repair.rounds === 1 && r.ms < 10000
+		&& r.repair.compiles === 1 + r.repair.applied.length + r.repair.rejected, json(r.repair));
+	const again = cupRepair(spec);
+	expect(`${name}: twice the same answer`, json(again.spec) === json(r.spec) && json(again.repair) === json(r.repair) && json(again.result.qa) === json(r.result.qa));
+	expect(`${name}: rounds 3, as the agent sent it, is enough`, cupRepair(spec, 3).result.qa.ok);
+}
+const stuckGoal = cupCompile(f275).qa.groups[0];
+expect("tune: a GOAL group gets the body placement (walkTo firstStep, 3 cm) and the lean of the keys around it (5 deg), 1 then 2 steps",
+	json(tuneCandidates(stuckGoal, f275).map(p => p.map(o => `${o.path} ${o.value}`).join(" & "))) === json(["/use/1/args/firstStep 0.22", "/use/1/args/firstStep 0.28",
+		"/keys/2/set/spine_pitch 35 & /keys/4/set/spine_pitch 35", "/keys/2/set/spine_pitch 25 & /keys/4/set/spine_pitch 25", "/use/1/args/firstStep 0.19", "/use/1/args/firstStep 0.31",
+		"/keys/2/set/spine_pitch 40 & /keys/4/set/spine_pitch 40", "/keys/2/set/spine_pitch 20 & /keys/4/set/spine_pitch 20"]), json(tuneCandidates(stuckGoal, f275)));
+const rootGoal = cupCompile(C8F2_FULL).qa.groups[0], rootTune = tuneCandidates(rootGoal, C8F2_FULL);
+expect("tune: when the agent's root keys hold the body, they move together (x then z)", rootTune.length === 12 && rootTune[0].length === 6 && rootTune[0].every(o => /^\/keys\/\d\/set\/root$/.test(o.path) && o.value[0] === -0.03)
+	&& rootTune[2].every(o => o.value[2] === 0.43), json(rootTune.slice(0, 3)));
+expect("tune: no body placement for a goal more than 10 cm short", !tuneCandidates({ ...stuckGoal, worst: 0.11, excess: 0.11 }, f275).length);
+
+// 10. The arm at full reach: the body comes closer, by what placed it (fixtures/reach-press.mjs).
+const pressCompile = s => compileSpec(s, { sk: ybot, scene: empty });
+for (const [how, z, path] of [["stand", 0.7, /^\/use\/0\/args\/at$/], ["walk", 1.05, /^\/use\/1\/args\/firstStep$/], ["root", 1.05, /^\/keys\/[34]\/set\/root$/]]) {
+	const spec = press(how, z), t0 = performance.now(), rr = repairSpec(spec, { rounds: 4 }, pressCompile), ms = performance.now() - t0;
+	const kinds = rr.result.qa.groups.map(g => g.kind);
+	console.log(`  ${how}: ${Math.round(ms)} ms, ${json(rr.repair.applied.map(a => `${a.kind} ${json(a.patch)}`))}; left ${json(kinds)}`);
+	expect(`press (${how}): repair meets the goal by moving the body (${path.source}), qa.ok`, rr.result.qa.goals.every(g => g.ok)
+		&& rr.result.qa.ok && rr.repair.applied.filter(a => a.kind !== "POP").every(a => a.patch.every(o => path.test(o.path))) && ms < 10000, json(rr.repair));
+}
 
 if (failures) { console.error(`${failures} motion3 repair check(s) failed`); process.exit(1); }
 console.log("motion3 repair: all checks passed");

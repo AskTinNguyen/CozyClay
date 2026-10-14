@@ -4,6 +4,8 @@
 // adds to the spec. A test keeps the names equal to SKILL_NAMES (skills/index.js). `tune` names
 // the numeric args repair may nudge (arg -> one step) when a near-limit QA group names the skill
 // as its cause (repair-tune.js); the start value is the arg as sent, else its schema default.
+// `place` names the args that set where the body stands (arg -> one step, m): repair-tune.js
+// steps them when a GOAL group misses and this skill placed the body last.
 import { WALK_FIELDS } from "../schema/fields.js";
 import { WALK_TYPES, num, int, str, side, ref } from "../schema/types.js";
 import { FINGER_PRESETS } from "../compiler/vocab.js";
@@ -20,13 +22,14 @@ export const SKILL_INFO = {
 		args: { at: xz("[x, z] world m; default the root keyed before f0"), heading: num("degrees (yaw); default the keyed yaw"), until: int("hold the pose to this frame") },
 		needs: "args.at, or a root keyed before f0", frames: "1 (to args.until when given)",
 		adds: ["keys: a standing pose, FK arms down"], example: { f0: 0, args: { at: [0, 0], heading: 0 } },
+		place: { at: 0.03 },
 	},
 	walkTo: {
 		args: { to: xz("[x, z] world m: the heading turns toward it and the steps cover the distance"), ...walkArgs,
 			heading: { oneOf: [num(), WALK_TYPES.heading], description: "degrees: h1, or [h0, h1]" } },
 		needs: "a standing pose keyed before f0 (standIdle or a skill that ends standing)", frames: "16 + steps * period + 18 (194 with steps 8, period 20)",
 		adds: ["keys: a walk (the walk generator), feet together at the end"], example: { f0: 10, args: { to: [0.5, 1.5] } },
-		tune: { lift: 0.01, halfWidth: 0.01, firstStep: 0.01, step: 0.01 },
+		tune: { lift: 0.01, halfWidth: 0.01, firstStep: 0.01, step: 0.01 }, place: { firstStep: 0.03, step: 0.03 },
 	},
 	reachGrip: {
 		args: { anchor: str("the anchor to grip (not ending in _l/_r)"), side: side("the hand"), reach: int("frames to reach", { default: 20 }), hold: int("frames held", { default: 22 }),

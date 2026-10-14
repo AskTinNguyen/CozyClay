@@ -172,6 +172,33 @@ expect("the { range } search finds a hand height that meets the goal, with QA 0"
 r = run(undefined, { keys: [base().keys[0], base().keys[1], open] });
 expect("without the goal the search keeps the midpoint", r.search.values["keys[2].set.hand_l[1]"] === 1.1 && r.search.evals === 1, JSON.stringify(r.search));
 
+// --- lane H3b: the GOAL hint when moving the hand target cannot help ---------------------------
+// (a) another anchor weight of the hand ramps through the goal frame: key it 0 there;
+// (b) the arm is at full reach: move the body (fixtures/reach-press.mjs, an empty scene).
+{
+	const { press } = await import("./fixtures/reach-press.mjs");
+	const spot = { kind: "world", p: [0.2, 1.1, 0.35] }, far = { kind: "world", p: [0.5, 1.4, 0.2] };
+	const leaky = run([{ name: "on spot", near: ["prop:grip.tip", "anchor:spot"], tol: 0.01, at: [30, 34] }], {
+		anchors: { spot, far }, fits: [{ side: "l", anchor: "spot", effector: { prop: "grip", point: "tip" } }],
+		keys: [{ f: 0, set: { armw_l: 1, hand_l: HAND0, w_spot_l: 0, w_far_l: 0, tip: 0 } }, { f: 24, set: { w_spot_l: 1, tip: 0 } }, { f: 47, set: { w_spot_l: 1, w_far_l: 1, tip: 0 } }] });
+	const lg = leaky.qa.groups.find(x => x.kind === "GOAL");
+	console.log(`  leak: ${lg?.hint} ${JSON.stringify(lg?.patch)}`);
+	expect("H3b leak: the hint names the ramping weight and its share, the fix keys it 0 at f34", /^w_far_l is [\d.]+ at f\d+, so anchor far takes \d+% of the hand target from anchor spot: key w_far_l 0 at f34 \(goal "on spot"/.test(lg?.hint ?? "")
+		&& lg.fix?.channel === "w_far_l" && lg.fix.f === 34 && lg.fix.value === 0 && /w_far_l between keys\[0\] f0 and keys\[2\] f47/.test(lg.cause), JSON.stringify(lg));
+	const sealed = run([{ name: "on spot", near: ["prop:grip.tip", "anchor:spot"], tol: 0.01, at: [30, 34] }], {
+		anchors: { spot, far }, fits: [{ side: "l", anchor: "spot", effector: { prop: "grip", point: "tip" } }],
+		keys: [{ f: 0, set: { armw_l: 1, hand_l: HAND0, w_spot_l: 0, w_far_l: 0, tip: 0 } }, { f: 24, set: { w_spot_l: 1, tip: 0 } }, { f: 47, set: { w_spot_l: 1, w_far_l: 1, tip: 0 } }, { f: 34, set: { w_far_l: 0 } }] });
+	expect("H3b leak: keying it as the fix says meets the goal", sealed.qa.goals[0].ok, JSON.stringify(sealed.qa.goals));
+	const pressed = compileSpec(press("stand", 0.7), { sk, scene: { objects: {} } }), pg = pressed.qa.groups.find(x => x.kind === "GOAL"), fr = pressed.out.frames[pg.worstFrame];
+	console.log(`  reach: ${pg.hint} ${JSON.stringify(pg.patch)}`);
+	expect("H3b reach: at full reach the hint moves the body toward the target, the fix is a hold root move, the patch the standIdle at",
+		/^body: move \[[+-][\d.]+, 0, \+[\d.]+\] m toward the target at f\d+, root held since use\[0\] standIdle f0 \(arm l is at full reach\) \(goal "finger on the button"/.test(pg.hint)
+		&& (fr.diag.reach_over_l > 0 || fr.diag.arm_miss_l > 0.002) && pg.fix?.channel === "root" && pg.fix.hold === true && pg.fix.delta[1] === 0 && pg.fix.delta[2] > 0
+		&& pg.patch?.[0]?.path === "/use/0/args/at" && pg.patch[0].value[1] > 0, JSON.stringify(pg));
+	const reach = pressed.qa.groups.find(x => x.kind === "REACH");
+	expect("H3b reach: REACH on an anchor a goal names moves the body too", reach?.fix?.hold === true && /^body: move .* \(out of reach by [\d.]+ m\), or anchor button: move/.test(reach.hint), JSON.stringify(reach));
+}
+
 if (failures) {
 	console.error(`verify-motion3-goals: ${failures} failure(s)`);
 	process.exit(1);
