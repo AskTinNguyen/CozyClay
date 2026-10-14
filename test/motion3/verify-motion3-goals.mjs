@@ -139,6 +139,27 @@ for (const [goals, want] of cases) {
 }
 expect("a valid goal of each kind passes validation, with every ref kind", refusal(() => run([{ name: "n", near: ["prop:grip.tip", "landmark:mouth"], tol: 0.5, at: [0, 47] },
 	{ name: "a", above: ["bone:LeftHand", `object:${CUP.group}.top`], at: 47, mode: "any" }, { name: "m", moved: `object:${CUP.group}.center`, by: 0, at: 0 }])) === "");
+// moved can only name an object: a bare id is taken as object:<id> (lane H3a); refs in fields that
+// take any kind stay strict, and a bare name is refused with the prefixed forms it could mean
+r = run([{ name: "bare", moved: "cylinder", by: 0.02, at: 47 }, { name: "bare group", moved: `${CUP.group}.top`, at: 47 }]);
+const prefixedRun = run([{ name: "bare", moved: "object:cylinder", by: 0.02, at: 47 }, { name: "bare group", moved: `object:${CUP.group}.top`, at: 47 }]);
+expect("a bare moved id is the object: ref (the same result; the filled-in spec holds object:<id>)", JSON.stringify(r.qa.goals) === JSON.stringify(prefixedRun.qa.goals)
+	&& r.qa.goals[0].ok && r.spec.goals[0].moved === "object:cylinder" && r.spec.goals[1].moved === `object:${CUP.group}.top`, JSON.stringify([r.qa.goals, r.spec.goals]));
+const ALL = "joint:<Bone>, bone:<Bone>, prop:<prop>.<point>, anchor:<name>, landmark:mouth, object:<id>[.center|.top|.base]";
+const bareCases = [
+	[[{ moved: "nope", at: 3 }], ['goals[0].moved "object:nope" names object "nope", which is not in the scene; did you mean "cube"?']],
+	[[{ moved: 3, at: 3 }], ['goals[0].moved must be an object id or ref "object:<id>[.center|.top|.base]", got 3']],
+	[[{ near: ["LeftHand", CUP.group], at: 3 }], [`goals[0].near[0] "LeftHand" must be ${ALL}; did you mean "joint:LeftHand"?`,
+		`goals[0].near[1] "${CUP.group}" must be ${ALL}; did you mean "object:${CUP.group}"?`]],
+	[[{ above: ["grip.tip", "spot"], at: 3 }], [`goals[0].above[0] "grip.tip" must be ${ALL}; did you mean "prop:grip.tip"?`,
+		`goals[0].above[1] "spot" must be ${ALL}; did you mean "anchor:spot"?`]],
+	[[{ near: ["mouth", "zzz"], at: 3 }], [`goals[0].near[0] "mouth" must be ${ALL}; did you mean "landmark:mouth"?`,
+		`goals[0].near[1] "zzz" must be ${ALL}`]],
+];
+for (const [goals, want] of bareCases) {
+	const got = invalid(goals);
+	expect(`bare refs: ${want[0].slice(0, 70)}`, JSON.stringify(got) === JSON.stringify(want), JSON.stringify(got));
+}
 const lenient = compileSpec(base({ goals: [{ moved: "object:cylinder", by: 0.02, at: 47, extra: 1 }] }), { sk, scene }, { lenient: true });
 expect("lenient ignores an unknown goal field", lenient.qa.goals[0].ok, JSON.stringify(lenient.qa.goals));
 

@@ -10,7 +10,7 @@
 // Frames are absolute; a frame outside the compiled window (out.f0 ..) answers null.
 import { REF_KINDS } from "./schema/fields.js";
 import { resolveBone } from "./bones.js";
-import { objectBoxesAt } from "./object-pose.js";
+import { objectBoxesAt, partsOf } from "./object-pose.js";
 import { objectOk } from "./compiler/validate-common.js";
 import { resolveAnchor } from "./compiler/anchors.js";
 import { bonePoint } from "./compiler/skeleton.js";
@@ -72,13 +72,32 @@ export function refDistance(out, f, a, b) {
 }
 
 /**
+ * The prefixed refs a bare name could mean in this spec, rig and scene (`; did you mean
+ * "object:empty-2"?`), or "". A field that takes more than one ref kind stays strict.
+ */
+function bareHint(spec, { sk, scene }, ref, kinds) {
+	if (typeof ref !== "string" || !ref) return "";
+	const id = ref.replace(/\.(center|top|base)$/, ""), [prop, point] = ref.split(".");
+	const bone = sk && (kinds.includes("joint") || kinds.includes("bone")) ? resolveBone(sk, ref).bone : null;
+	const known = [
+		kinds.includes("object") && (scene?.objects?.[id] || partsOf(scene, id).length) && `object:${ref}`,
+		bone && `${kinds.includes("joint") ? "joint" : "bone"}:${bone}`,
+		kinds.includes("anchor") && spec.anchors?.[ref] && `anchor:${ref}`,
+		kinds.includes("prop") && spec.props?.[prop] && (point === "origin" || spec.props[prop].points?.[point]) && `prop:${ref}`,
+		kinds.includes("landmark") && ref === "mouth" && "landmark:mouth",
+	].filter(Boolean);
+	return known.length ? `; did you mean ${known.map(k => `"${k}"`).join(" or ")}?` : "";
+}
+
+/**
  * Validates ref against the spec (props, anchors), the rig (bones) and the scene (objects and
  * groups). Reports one exact message through err, prefixed `${at} "${ref}"`, and answers whether
- * the ref is good. kinds limits the grammar (default all of REF_KINDS).
+ * the ref is good. kinds limits the grammar (default all of REF_KINDS). A bare name (no kind:)
+ * is refused with the forms it could mean (bareHint).
  */
 export function checkRef(spec, err, { sk, scene }, at, ref, kinds = REF_KINDS) {
 	const r = parse(ref), tag = `${at} "${ref}"`;
-	if (!r || !kinds.includes(r.kind)) { err(`${tag} must be ${kinds.map(k => SYNTAX[k]).join(", ")}`); return false; }
+	if (!r || !kinds.includes(r.kind)) { err(`${tag} must be ${kinds.map(k => SYNTAX[k]).join(", ")}${r ? "" : bareHint(spec, { sk, scene }, ref, kinds)}`); return false; }
 	if (r.kind === "joint" || r.kind === "bone") {
 		const { bone, hint } = sk ? resolveBone(sk, r.name) : { bone: r.name };
 		if (!bone) err(`${tag}: unknown bone${hint}`);

@@ -71,6 +71,14 @@ expect("every problem is listed at once, one per line", json(lines) === json([
 const tooMany = refused(Array.from({ length: 17 }, (_, i) => ({ name: `p${i}`, position: "joint:Hips" })));
 expect("more than 16 probes are refused", tooMany === "MOTION_SPEC_INVALID: probes has 17 entries; at most 16 per compile", tooMany);
 
+// spec.probes (lane H3a): probes sent inside the spec are measured after the request's, and leave the spec
+const inSpec = compileSpec({ ...spec, probes: [probes[2]] }, { sk, scene }, { probes: [probes[0]] });
+expect("spec.probes join the request's probes and are not in the filled-in spec", json(Object.keys(inSpec.probes)) === '["hands","hips"]'
+	&& json(inSpec.probes.hips) === json(res.hips) && !("probes" in inSpec.spec), json(Object.keys(inSpec.probes ?? {})));
+const bareRef = refused([{ name: "a", distance: ["LeftHand", CUP.group] }]);
+expect("a bare ref in a probe is refused with the prefixed forms it could mean", bareRef.endsWith(`probes[0].distance[1] "${CUP.group}" must be joint:<Bone>, bone:<Bone>, prop:<prop>.<point>, anchor:<name>, landmark:mouth, object:<id>[.center|.top|.base]; did you mean "object:${CUP.group}"?`)
+	&& bareRef.includes('did you mean "joint:LeftHand"?'), bareRef);
+
 // 3. Through motion.compile and motion.sample.
 const takes = new Map(), owner = { replace: (id, take) => takes.set(id, take), motionFor: id => takes.get(id) ?? null };
 const character = { id: "char-a", model: "y-bot-tpose", subject: "Ada", x: 0, y: 0, z: 0, rot: 0, scale: 1 };

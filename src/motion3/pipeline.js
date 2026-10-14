@@ -3,7 +3,8 @@
 // qa/check-names.js), skills expand (skills/), the spec is validated strictly (leniently for a
 // saved take compiled again), the compiler bakes and auto-fixes the frames, QA measures them with
 // a cause and a hint per issue group against the agent's own spec, and the timeline and the
-// requested probes read the result.
+// requested probes read the result. liftRequest first takes what the agent obviously meant:
+// spec.probes are request probes, and a bare goals[].moved id is object:<id>.
 import { compileMotion } from "./compiler/compile.js";
 import { validateSpec } from "./compiler/validate.js";
 import { runMotionQa } from "./qa/index.js";
@@ -14,6 +15,7 @@ import { markFramesAuto } from "./spec-store.js";
 import { findParams, searchParams } from "./search.js";
 import { timelineOf } from "./timeline.js";
 import { runProbes } from "./probes.js";
+import { canonicalGoals } from "./compiler/validate-goals.js";
 
 const ms = t => Math.round(performance.now() - t);
 
@@ -26,11 +28,28 @@ function warpChecks(spec, map) {
 }
 
 /**
+ * liftRequest(spec, probes) -> { spec, probes }. spec.probes (sent inside the spec, or added by
+ * a patch) join the request's probes after them and leave the spec, so they are never stored and
+ * never change its specId; bare goals[].moved ids get their object: prefix (validate-goals.js).
+ * The spec comes back as the same object when nothing changes.
+ */
+export function liftRequest(spec, probes) {
+	if (!spec || typeof spec !== "object" || Array.isArray(spec)) return { spec, probes };
+	const goals = canonicalGoals(spec.goals);
+	if (spec.probes === undefined && goals === spec.goals) return { spec, probes };
+	const { probes: inSpec, ...rest } = spec;
+	const lifted = inSpec === undefined ? probes : probes ? [...probes, ...(Array.isArray(inSpec) ? inSpec : [inSpec])] : inSpec;
+	return { spec: goals === spec.goals ? rest : { ...rest, goals }, probes: lifted };
+}
+
+/**
  * spec -> { out, qa, spec (frames and open values filled in), expanded, used, fixed, search,
  * timeline, probes?, ms }. opts.checks replaces every check (the spec's and its skills') for a
- * re-measure; opts.lenient ignores unknown fields (take-source.js); opts.probes are measured.
+ * re-measure; opts.lenient ignores unknown fields (take-source.js); opts.probes are measured
+ * (with spec.probes, liftRequest).
  */
-export function compileSpec(spec, { sk, scene }, opts = {}) {
+export function compileSpec(sent, { sk, scene }, opts = {}) {
+	const { spec, probes: asked } = liftRequest(sent, opts.probes);
 	const t0 = performance.now(), ctx = { sk, scene, lenient: opts.lenient === true };
 	const checks = opts.checks && nameChecks({ checks: opts.checks }).checks;
 	const expand = s => {
@@ -50,6 +69,6 @@ export function compileSpec(spec, { sk, scene }, opts = {}) {
 	const out = compileMotion({ fps: 24, ...expanded }, ctx);
 	const compileMs = ms(t1), t2 = performance.now();
 	const qa = runMotionQa(sk, out, out.timeMap ? warpChecks(expanded, out.timeMap) : expanded, { userSpec: resolved });
-	const timeline = timelineOf(out, { used, spec: expanded }), probes = opts.probes && runProbes(out, opts.probes, { spec: expanded, sk, scene });
+	const timeline = timelineOf(out, { used, spec: expanded }), probes = asked && runProbes(out, asked, { spec: expanded, sk, scene });
 	return { out, qa, spec: resolved, expanded, used, fixed: out.fixed, search, timeline, ...(probes ? { probes } : {}), ms: { compile: compileMs, qa: ms(t2), total: ms(t0) } };
 }

@@ -8,6 +8,7 @@ import { EXITCAR_SPEC, SCENE_OBJECTS as CAR_OBJECTS, CHARACTER as DRIVER } from 
 import { specIdOf, createSpecStore, SPEC_STORE_SIZE } from "../../src/motion3/spec-store.js";
 import { deltaOf } from "../../src/motion3/delta.js";
 import { MOTION_OUTPUT_BUDGET } from "../../src/motion3/report.js";
+import { MOVED_BARE, BASE_REMEASURE, REMEASURE, BASE_PROBES_IN_SPEC, PROBES_IN_SPEC } from "./fixtures/round2-calls.mjs";
 
 let failures = 0;
 function expect(name, condition, detail = "") {
@@ -131,6 +132,47 @@ expect("a searched spec: specId names the filled-in spec the take stores, and mo
 	&& found.specId !== specIdOf(searched) && run(cup, "motion.qa", { characterId: CHARACTER.id }).specId === found.specId, `${found.specId} ${JSON.stringify(takeSpec.anchors)}`);
 const fromSearched = run(cup, "motion.compile", { characterId: CHARACTER.id, base: found.specId, patch: [{ op: "test", path: "/anchors/spot/p/0", value: takeSpec.anchors.spot.p[0] }], install: false });
 expect("the stored filled-in spec is the base a patch addresses", fromSearched.specId === found.specId);
+
+// ---- 4b. re-measuring a base (lane H3a): patch: [] or none, install: "never", spec.probes --
+const remeasureReg = createStudioAppActions(portsFor(CHARACTER, SCENE_OBJECTS));
+const handProbe = [{ name: "hand", distance: ["joint:LeftHand", "anchor:spot"], frames: [0, 23], every: 4 }];
+const measuredBase = run(remeasureReg, "motion.compile", { characterId: CHARACTER.id, spec, install: true });
+const takeBefore = takes.get(CHARACTER.id);
+const emptyPatch = run(remeasureReg, "motion.compile", { characterId: CHARACTER.id, base: measuredBase.specId, patch: [], probes: handProbe, install: false });
+const noPatch = run(remeasureReg, "motion.compile", { characterId: CHARACTER.id, base: measuredBase.specId, probes: handProbe, install: false });
+const unchanged = o => o.specId === measuredBase.specId && o.delta.resolved + o.delta.new + o.delta.worse + o.delta.better === 0 && o.probes?.hand?.min > 0;
+expect("base + patch: [] re-measures the stored spec with new probes (same specId, no delta, probes answered)", unchanged(emptyPatch) && JSON.stringify(emptyPatch.probes) === JSON.stringify(noPatch.probes)
+	&& unchanged(noPatch), JSON.stringify({ emptyPatch: [emptyPatch.specId, emptyPatch.delta, emptyPatch.probes] }));
+const never = remeasureReg.run("motion.compile", { characterId: CHARACTER.id, base: measuredBase.specId, patch: [], probes: handProbe, install: "never" });
+expect("install: \"never\" is install: false (installed false, no affectedIds, the take untouched)", never.output.installed === false && never.affectedIds.length === 0
+	&& takes.get(CHARACTER.id) === takeBefore && never.output.probes?.hand?.min > 0, JSON.stringify({ installed: never.output.installed, affected: never.affectedIds }));
+const wrongInstall = refusal(() => remeasureReg.run("motion.compile", { characterId: CHARACTER.id, base: measuredBase.specId, install: "no" }));
+expect("any other install string is still refused, and the refusal lists \"never\"", /install must be true, false, "ifClean" or "never", got "no"/.test(wrongInstall), wrongInstall);
+const inPatch = run(remeasureReg, "motion.compile", { characterId: CHARACTER.id, base: measuredBase.specId, patch: [{ op: "add", path: "/probes", value: handProbe }], install: false });
+expect("spec.probes added by a patch are measured like request probes, and are not part of the spec (same specId)", inPatch.specId === measuredBase.specId
+	&& JSON.stringify(inPatch.probes) === JSON.stringify(noPatch.probes), JSON.stringify([inPatch.specId, inPatch.probes]));
+const inSpec = run(remeasureReg, "motion.compile", { characterId: CHARACTER.id, spec: { ...spec, probes: handProbe }, install: true });
+expect("spec.probes sent inside a spec: measured, and the specId and the stored take spec are the spec without them", inSpec.specId === measuredBase.specId
+	&& !("probes" in takes.get(CHARACTER.id).spec) && inSpec.probes?.hand?.min > 0, JSON.stringify([inSpec.specId, Object.keys(takes.get(CHARACTER.id).spec)]));
+const both = run(remeasureReg, "motion.compile", { characterId: CHARACTER.id, base: measuredBase.specId, patch: [{ op: "add", path: "/probes", value: [{ name: "head", position: "joint:Head", frames: 0 }] }], probes: handProbe, install: false });
+expect("spec.probes join the request's probes", Object.keys(both.probes ?? {}).join() === "hand,head", JSON.stringify(both.probes));
+
+// ---- 4c. the round-2 refusals, replayed verbatim on the cup scene (fixtures/round2-calls.mjs) ---
+const replay = createStudioAppActions(portsFor(CHARACTER, SCENE_OBJECTS));
+const bare = replay.run("motion.compile", MOVED_BARE);
+const lifted = bare.output.qa.goals?.find(g => g.name === "cup lifted off the table");
+const prefixed = structuredClone(MOVED_BARE);
+prefixed.spec.goals[1].moved = "object:empty-2";
+expect("replay 95b449d7: goals[1].moved \"empty-2\" compiles as object:empty-2 (the cup is lifted; the same specId as the object: form)", lifted?.kind === "moved" && lifted.ok === true
+	&& bare.output.specId === replay.run("motion.compile", prefixed).output.specId, JSON.stringify(bare.output.qa.goals));
+const baseA = run(replay, "motion.compile", { characterId: CHARACTER.id, spec: BASE_REMEASURE, install: false }).specId;
+const remeasure = replay.run("motion.compile", { ...REMEASURE, base: baseA });
+expect("replay 95b449d7: install \"never\", base + patch: [] + 3 probes answers the probes and installs nothing", remeasure.output.specId === baseA && remeasure.output.installed === false
+	&& remeasure.affectedIds.length === 0 && ["fingers", "shoulder", "cup"].every(n => remeasure.output.probes?.[n]?.at?.length === 12), JSON.stringify(remeasure.output.probes).slice(0, 300));
+const baseB = run(replay, "motion.compile", { characterId: CHARACTER.id, spec: BASE_PROBES_IN_SPEC, install: false }).specId;
+const probesInSpec = replay.run("motion.compile", { ...PROBES_IN_SPEC, base: baseB });
+expect("replay c8f2018b: install \"never\" + a patch adding /probes answers both probes, with the base's specId", probesInSpec.output.specId === baseB && probesInSpec.output.installed === false
+	&& probesInSpec.output.probes?.["fingers-handle"]?.min >= 0 && probesInSpec.output.probes?.wrist?.at?.length === 10, JSON.stringify(probesInSpec.output.probes).slice(0, 300));
 
 // ---- 5. a cut output continues through motion.report -------------------------------------
 const car = createStudioAppActions(portsFor(DRIVER, CAR_OBJECTS));

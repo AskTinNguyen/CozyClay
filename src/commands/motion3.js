@@ -3,7 +3,7 @@
 // installed on the character. Cheap enough to run in a loop until QA reports nothing. The words
 // the agent reads live in motion3/docs.js; the contracts in docs/motion-api-v3.1.md.
 import { fail, characterOf } from "./shared.js";
-import { compileSpec } from "../motion3/pipeline.js";
+import { compileSpec, liftRequest } from "../motion3/pipeline.js";
 import { bakeTake } from "../motion3/take.js";
 import { motionScene } from "../motion3/scene.js";
 import { skeletonFor } from "../motion3/rigs/index.js";
@@ -29,7 +29,9 @@ const list = (items, maxItems) => ({ type: "array", items, minItems: 1, maxItems
 // readOnly: reads the scene and the take, never changes them (C10).
 const declarations = Object.freeze([
 	{ id: "motion.compile", label: "Compile motion", kind: "job", domain: "motion", timeoutMs: 120000, description: HELP.compile,
-		input: input({ characterId: id, spec: openObject, base: specId, patch: list(openObject, 64), install: { oneOf: [{ type: "boolean" }, { const: "ifClean" }], default: true },
+		// patch may be empty: base alone (or patch: []) re-measures the stored spec, with new probes; "never" is install: false
+		input: input({ characterId: id, spec: openObject, base: specId, patch: { type: "array", items: openObject, maxItems: 64 },
+			install: { oneOf: [{ type: "boolean" }, { const: "ifClean" }, { const: "never" }], default: true },
 			probes: list(openObject, 16), repair: input({ rounds: { type: "integer", minimum: 1, maximum: 8, default: 4 } }, []) }, ["characterId"]) },
 	{ id: "motion.qa", label: "Measure motion", kind: "job", domain: "motion", timeoutMs: 120000, readOnly: true, description: HELP.qa,
 		input: input({ characterId: id, checks: openObject }, ["characterId"]) },
@@ -76,10 +78,12 @@ export function register(registry, ports) {
 		return sk;
 	};
 	/** spec -> pipeline result + sk + stored (the spec a take keeps and its specId names: what was sent, or the filled-in spec). */
-	const compile = (character, spec, opts) => {
+	const compile = (character, asked, opts) => {
+		// spec.probes and bare moved ids are lifted before fps is filled in, so the specId stays the spec's own
+		const { spec, probes } = liftRequest(asked, opts.probes);
 		if (spec?.fps !== undefined && spec.fps !== TIMELINE_FPS) fail("INVALID_ARGUMENT", `spec.fps must be ${TIMELINE_FPS}, the timeline rate.`);
 		const sk = rigOf(character), sent = { fps: TIMELINE_FPS, ...spec };
-		const r = asArgument(() => compileSpec(sent, { sk, scene: motionScene(ports.state().objects) }, opts));
+		const r = asArgument(() => compileSpec(sent, { sk, scene: motionScene(ports.state().objects) }, { ...opts, probes }));
 		return { sk, ...r, stored: r.spec === sent ? spec : r.spec };
 	};
 	/** The whole output, kept in the store (motion.report, delta) and cut to the receipt budget (report.js). */
@@ -92,7 +96,8 @@ export function register(registry, ports) {
 	const installed = characterId => owner().motionFor(characterId)?.schema === "cozyclay.take.v3" ? owner().motionFor(characterId)
 		: fail("TARGET_NOT_READY", "This character has no compiled take; run motion.compile first.");
 
-	registry.register({ ...declarations[0], available: mounted, target: args => args.characterId, run({ characterId, spec, base, patch, install = true, probes, repair }, context) {
+	registry.register({ ...declarations[0], available: mounted, target: args => args.characterId, run({ characterId, spec, base, patch, install: asked = true, probes, repair }, context) {
+		const install = asked === "never" ? false : asked;
 		const character = characterOf(ports, characterId);
 		if ((spec === undefined) === (base === undefined)) fail("INVALID_ARGUMENT", "Send exactly one of spec or base (the specId of a compiled spec, with patch).");
 		if (patch !== undefined && base === undefined) fail("INVALID_ARGUMENT", "patch applies to base, the specId of a compiled spec; send base with it, or the whole spec.");

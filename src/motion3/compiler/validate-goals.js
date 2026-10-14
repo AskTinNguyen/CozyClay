@@ -1,6 +1,8 @@
 // Validation of spec.goals (C8), exact messages through err(...):
 //   - each goal names exactly one predicate of near | above | moved (schema/fields.js GOAL_FIELDS)
-//   - near/above take two refs, moved one object ref (refs.js checkRef, the full ref grammar)
+//   - near/above take two refs, moved one object ref (refs.js checkRef, the full ref grammar);
+//     moved can only name an object, so a bare "<id>[.center|.top|.base]" is taken as object:<id>
+//     (canonicalGoals, before validation; the spec a specId names holds the object: form)
 //   - tol (near) and by (above, moved) are numbers, mode "all" | "any", at an absolute frame or
 //     [f0, f1] within 0..frames-1; goal names differ
 //   - unknown fields go through opts.unknown (ignored when lenient)
@@ -10,6 +12,12 @@ import { GOAL_KINDS, goalKinds } from "../qa/goals.js";
 import { didYouMean, fmt } from "./vocab.js";
 
 const SHAPE = "{ name?, near | above | moved, tol?, by?, at, mode? }";
+const bareMoved = g => typeof g?.moved === "string" && g.moved !== "" && !/^[a-z]+:/.test(g.moved);
+
+/** goals with every bare moved id written as "object:<id>"; goals itself when none is bare. */
+export function canonicalGoals(goals) {
+	return Array.isArray(goals) && goals.some(bareMoved) ? goals.map(g => (bareMoved(g) ? { ...g, moved: `object:${g.moved}` } : g)) : goals;
+}
 
 function validateAt(err, at, v, frames, past = "") {
 	const ok = f => Number.isInteger(f);
@@ -32,7 +40,7 @@ function validateGoal(spec, err, opts, g, i, names) {
 	if (!kinds.length) err(`${at} needs one predicate: ${GOAL_KINDS.join(", ")}`);
 	if (kinds.length > 1) err(`${at} names ${kinds.join(" and ")}; a goal takes exactly one of ${GOAL_KINDS.join(", ")} (split it into ${kinds.length} goals)`);
 	if (kinds.length === 1 && kind === "moved") {
-		if (typeof g.moved !== "string") err(`${at}.moved must be an object ref "object:<id>[.center|.top|.base]", got ${fmt(g.moved)}`);
+		if (typeof g.moved !== "string") err(`${at}.moved must be an object id or ref "object:<id>[.center|.top|.base]", got ${fmt(g.moved)}`);
 		else checkRef(spec, err, ctx, `${at}.moved`, g.moved, ["object"]);
 	} else if (kinds.length === 1) {
 		const pair = g[kind];
