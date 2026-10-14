@@ -1,10 +1,11 @@
 // The stage look: the key light the user grabs plus stage.lighting (sky, fog,
-// ambient, fill, exposure, shadow softness) and the recipes that set them in one
-// action. Pure data and arithmetic — no three.js or React — so the scene
+// ambient, fill, exposure, shadow softness, environment light, ambient
+// occlusion) and the recipes that set them in one action. Pure data and arithmetic — no three.js or React — so the scene
 // document, the command layer, the tests and the agent sidecar can all load it.
 // The renderer reads it through stageLook() (room.jsx, stage-sky.jsx).
 import { elementByPath } from "./studio-elements.js";
 import { GRID_BACKGROUND, GRID_FOG, stageBackground } from "./grid-view.js";
+import { environmentSpec } from "./stage-environment.js";
 
 export const LIGHTING_PRESETS = Object.freeze(["studio", "day", "overcast", "golden", "dusk", "night", "interior", "stage"]);
 
@@ -18,8 +19,9 @@ const finite = (value, fallback, { min, max }) => (typeof value === "number" && 
 // look was authorable, so a stage saved earlier (no lighting, no key colour)
 // renders unchanged.
 const DEFAULT_KEY_LIGHT = Object.freeze({ x: 6, y: 9, z: 4, intensity: 1.12, warmth: 0.5, color: null });
-const DEFAULT_LIGHTING = Object.freeze({ preset: "studio", sky: null, skyTop: null, ambient: 1, hemiSky: "#ffffff", hemiGround: "#5a5d64", fill: 1, fog: 0, exposure: 1, shadowSoftness: 0 });
-const LIGHTING_NUMBERS = ["fill", "fog", "exposure", "shadowSoftness"];
+// envLight and ao are 0 in the studio look: no environment map, no occlusion pass.
+const DEFAULT_LIGHTING = Object.freeze({ preset: "studio", sky: null, skyTop: null, ambient: 1, hemiSky: "#ffffff", hemiGround: "#5a5d64", fill: 1, fog: 0, exposure: 1, shadowSoftness: 0, envLight: 0, ao: 0 });
+const LIGHTING_NUMBERS = ["fill", "fog", "exposure", "shadowSoftness", "envLight", "ao"];
 
 /** Clamp a stored key light back into the stage's usable envelope. `color`
  * (a #rrggbb or null) overrides the warmth slider when set. */
@@ -52,25 +54,25 @@ export function normalizeLighting(value) {
 const recipe = (lighting, keyLight) => Object.freeze({ lighting: Object.freeze({ ...DEFAULT_LIGHTING, ...lighting }), keyLight: Object.freeze(keyLight) });
 export const LIGHTING_RECIPES = Object.freeze({
 	studio: recipe({}, { ...DEFAULT_KEY_LIGHT }),
-	day: recipe({ sky: "#bcd2e8", skyTop: "#4f86c6", ambient: 1.15, hemiSky: "#c4dcff", hemiGround: "#6b6253", fill: 0.7, fog: 0.12, shadowSoftness: 0.15 },
+	day: recipe({ sky: "#bcd2e8", skyTop: "#4f86c6", ambient: 1.15, hemiSky: "#c4dcff", hemiGround: "#6b6253", fill: 0.7, fog: 0.12, shadowSoftness: 0.15, envLight: 1, ao: 0.8 },
 		{ x: 5, y: 14, z: 7, intensity: 2.1, color: "#fff3df" }),
-	overcast: recipe({ sky: "#c2c7ce", skyTop: "#8f97a3", ambient: 1.9, hemiSky: "#e3e8ef", hemiGround: "#5c5f64", fill: 1.2, fog: 0.3, exposure: 1.05, shadowSoftness: 1 },
+	overcast: recipe({ sky: "#c2c7ce", skyTop: "#8f97a3", ambient: 1.9, hemiSky: "#e3e8ef", hemiGround: "#5c5f64", fill: 1.2, fog: 0.3, exposure: 1.05, shadowSoftness: 1, envLight: 1, ao: 1 },
 		{ x: 2, y: 14, z: 3, intensity: 0.55, color: "#e8ecf2" }),
-	golden: recipe({ sky: "#f0a868", skyTop: "#6a8cc0", ambient: 0.75, hemiSky: "#9fb3d6", hemiGround: "#6e5136", fill: 0.45, fog: 0.3, shadowSoftness: 0.35 },
+	golden: recipe({ sky: "#f0a868", skyTop: "#6a8cc0", ambient: 0.75, hemiSky: "#9fb3d6", hemiGround: "#6e5136", fill: 0.45, fog: 0.3, shadowSoftness: 0.35, envLight: 1, ao: 0.8 },
 		{ x: 9, y: 3.2, z: 4, intensity: 1.9, color: "#ffad5c" }),
-	dusk: recipe({ sky: "#8a6f8c", skyTop: "#18223f", ambient: 0.8, hemiSky: "#5b6c9c", hemiGround: "#29242e", fill: 0.35, fog: 0.4, shadowSoftness: 0.6 },
+	dusk: recipe({ sky: "#8a6f8c", skyTop: "#18223f", ambient: 0.8, hemiSky: "#5b6c9c", hemiGround: "#29242e", fill: 0.35, fog: 0.4, shadowSoftness: 0.6, envLight: 1, ao: 0.8 },
 		{ x: -9, y: 1.8, z: -4, intensity: 0.7, color: "#ff9466" }),
-	night: recipe({ sky: "#0b1426", skyTop: "#020408", ambient: 0.6, hemiSky: "#34507f", hemiGround: "#0a0c12", fill: 0.25, fog: 0.45, shadowSoftness: 0.75 },
+	night: recipe({ sky: "#0b1426", skyTop: "#020408", ambient: 0.6, hemiSky: "#34507f", hemiGround: "#0a0c12", fill: 0.25, fog: 0.45, shadowSoftness: 0.75, envLight: 1, ao: 0.8 },
 		{ x: -6, y: 6.5, z: 0.5, intensity: 0.6, color: "#9db6e6" }),
-	interior: recipe({ sky: "#2b2621", ambient: 0.7, hemiSky: "#ffe2bf", hemiGround: "#3d3128", fill: 0.55, fog: 0.35, shadowSoftness: 0.55 },
+	interior: recipe({ sky: "#2b2621", ambient: 0.7, hemiSky: "#ffe2bf", hemiGround: "#3d3128", fill: 0.55, fog: 0.35, shadowSoftness: 0.55, envLight: 1, ao: 0.9 },
 		{ x: 2, y: 4.5, z: 2.5, intensity: 1.35, color: "#ffd29c" }),
-	stage: recipe({ sky: "#000000", ambient: 0, hemiSky: "#000000", hemiGround: "#000000", fill: 0, fog: 0.7, shadowSoftness: 0.2 },
+	stage: recipe({ sky: "#000000", ambient: 0, hemiSky: "#000000", hemiGround: "#000000", fill: 0, fog: 0.7, shadowSoftness: 0.2, ao: 0.6 },
 		{ x: 1.5, y: 9, z: 3, intensity: 2.6, color: "#fff0d8" }),
 });
 
 /** What stage.applyLighting { keep } may hold back from the recipe. */
 export const LIGHTING_KEEP_PATHS = Object.freeze(["keyLight.position", "keyLight.intensity", "keyLight.color",
-	...["sky", "skyTop", "ambient", "hemiSky", "hemiGround", "fill", "fog", "exposure", "shadowSoftness"].map((key) => `lighting.${key}`)]);
+	...["sky", "skyTop", "ambient", "hemiSky", "hemiGround", "fill", "fog", "exposure", "shadowSoftness", "envLight", "ao"].map((key) => `lighting.${key}`)]);
 
 /** The stage's { lighting, keyLight } after one recipe: every field written
  * from it except the `keep` paths, which stay as they are. Studio also resets
@@ -112,12 +114,17 @@ export function stageLook({ lighting, keyLight, theme = "dark", grid = false }) 
 	const sky = themed ? (grid ? GRID_BACKGROUND : stageBackground(theme)) : l.sky;
 	const haze = hazeRange(l.fog), base = neutral ? GRID_FOG : { near: 18, far: 54 };
 	const dim = key.intensity / 1.12, lift = Math.min(1, 0.35 + 0.65 * dim);
+	// The environment map takes over the hemisphere's share as envLight rises (stage-environment.js).
+	const skyLight = 0.9 * lift * l.ambient, hemiShare = Math.max(0, 1 - l.envLight);
 	return {
 		sky, skyTop: l.skyTop,
 		fog: { color: sky, near: Math.min(base.near, haze.near), far: Math.min(base.far, haze.far) },
 		// Exports keep their own far horizon until haze asks for a nearer one.
 		captureFog: l.fog > 0 ? haze : null,
-		hemi: { sky: neutral ? "#ffffff" : l.hemiSky, ground: neutral ? "#3a3d42" : lightTheme ? "#d6d8de" : l.hemiGround, intensity: 0.9 * lift * l.ambient },
+		hemi: { sky: neutral ? "#ffffff" : l.hemiSky, ground: neutral ? "#3a3d42" : lightTheme ? "#d6d8de" : l.hemiGround, intensity: skyLight * hemiShare },
+		// three's IBL irradiance is pi x the map, a hemisphere's is its colour x intensity: the 1/pi matches them.
+		env: environmentSpec(l, key, sky), envIntensity: (skyLight * l.envLight) / Math.PI,
+		ao: l.ao,
 		ambient: (neutral ? 0.34 : lightTheme ? 0.32 : 0.18) * lift * l.ambient,
 		fill: 0.36 * dim * l.fill, rim: 0.22 * dim * l.fill,
 		exposure: l.exposure,

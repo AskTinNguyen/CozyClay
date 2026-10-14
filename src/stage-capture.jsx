@@ -65,11 +65,12 @@ export function CaptureRig({ apiRef, camRef, width = CAPTURE_W, height = CAPTURE
 						fog.far = look?.fog?.far ?? CAPTURE_FOG_FAR;
 					}
 					// three tone-maps only the canvas, never a render target, so the
-					// viewport's exposure reaches an export as light: every light is
-					// scaled by it for this draw and put back after.
-					const scaled = [];
+					// viewport's exposure reaches an export as light: every light, and
+					// the environment light, is scaled by it for this draw and put back after.
+					const scaled = [], environmentIntensity = scene.environmentIntensity;
 					if (look && look.exposure !== 1) scene.traverse((node) => { if (node.isLight) scaled.push([node, node.intensity]); });
 					for (const [light, intensity] of scaled) light.intensity = intensity * look.exposure;
+					if (look && look.exposure !== 1) scene.environmentIntensity = environmentIntensity * look.exposure;
 					try {
 						gl.setRenderTarget(target);
 						gl.render(scene, cam);
@@ -81,6 +82,7 @@ export function CaptureRig({ apiRef, camRef, width = CAPTURE_W, height = CAPTURE
 							fog.far = fogFar;
 						}
 						for (const [light, intensity] of scaled) light.intensity = intensity;
+						scene.environmentIntensity = environmentIntensity;
 					}
 					return buffer;
 				},

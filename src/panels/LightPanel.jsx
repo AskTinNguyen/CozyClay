@@ -24,6 +24,8 @@ export default function LightPanel({ keyLightSelected, keyLight, lighting }) {
 						<Slider label={ko("Warm ↔ Cool", "따뜻함 ↔ 차가움")} min={0} max={1} step={0.05} value={keyLight.warmth ?? 0.5} onChange={(value) => run("run.update", { txId: begin("stage.setKeyLight"), args: { keyLight: { warmth: value, color: null } } })} />
 						{lighting && <>
 							<Slider label={ko("Exposure", "노출")} min={0.2} max={3} step={0.05} value={lighting.exposure} onChange={(exposure) => setLighting({ exposure })} />
+							<Slider label={ko("Sky light", "하늘빛")} min={0} max={2} step={0.05} value={lighting.envLight ?? 0} onChange={(envLight) => setLighting({ envLight })} />
+							<Slider label={ko("Ambient occlusion", "앰비언트 오클루전")} min={0} max={1} step={0.05} value={lighting.ao ?? 0} onChange={(ao) => setLighting({ ao })} />
 							<Field label={ko("Sky", "하늘")}>
 								<input type="color" className="object-color object-color-free" value={lighting.sky ?? STAGE_BACKGROUND} title={ko("Sky colour", "하늘 색")} aria-label={ko("Sky colour", "하늘 색")}
 									onChange={(event) => setLighting({ sky: event.target.value })} />

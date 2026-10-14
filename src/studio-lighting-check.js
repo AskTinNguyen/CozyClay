@@ -6,6 +6,7 @@ import { PerspectiveCamera, Vector3 } from "three";
 import { StudioProtocolError } from "./studio-agent-protocol.js";
 import { entityWorldBounds } from "./studio-agent-commands.js";
 import { focalMmToFov } from "./shot.js";
+import { normalizeLighting } from "./stage-lighting.js";
 
 // Rec. 709 weights on the 8-bit sRGB values: luma as a monitor shows it.
 const lumaOf = (data, i) => 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
@@ -84,7 +85,9 @@ export function lightingChecks(ids, state, ports) {
 		const bounds = entityWorldBounds(character, state, ports);
 		return { id: character.id, ...(bounds && !character.hidden ? pixelBox(bounds, state, image.width, image.height) : {}) };
 	});
-	return { coverage: "rendered-shot-frame", frame: state.frame, ...frameLighting(image, boxes) };
+	// What lit the frame beyond the lights: the look, its environment light and its occlusion pass.
+	const { preset, envLight, ao } = normalizeLighting(state.stage?.lighting);
+	return { coverage: "rendered-shot-frame", frame: state.frame, ...frameLighting(image, boxes), look: { preset, envLight, ao } };
 }
 
 /** Puts the lighting check on a verify_result answer, or its reason in unsupportedReasons. */

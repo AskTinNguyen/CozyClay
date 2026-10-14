@@ -1,7 +1,9 @@
-import { useLayoutEffect } from "react";
+import { useLayoutEffect, useRef } from "react";
 import { useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { stageLook } from "./stage-lighting.js";
+import { ENV_HEIGHT, ENV_WIDTH, environmentPixels } from "./stage-environment.js";
+import { installOcclusion } from "./stage-occlusion.js";
 
 // Rows of the equirectangular gradient: v runs from straight down (0) through
 // the horizon (0.5) to straight up (1).
@@ -30,6 +32,21 @@ function gradientSky(bottom, top) {
 	return texture;
 }
 
+/** The look's environment map (stage-environment.js), prefiltered for image-based
+ * lighting. Half floats keep the glow around the key above 1 and filter
+ * everywhere WebGL2 runs. */
+function environmentMap(gl, spec) {
+	const pixels = environmentPixels(spec), half = new Uint16Array(pixels.length);
+	for (let i = 0; i < pixels.length; i++) half[i] = THREE.DataUtils.toHalfFloat(pixels[i]);
+	const texture = new THREE.DataTexture(half, ENV_WIDTH, ENV_HEIGHT, THREE.RGBAFormat, THREE.HalfFloatType);
+	texture.mapping = THREE.EquirectangularReflectionMapping;
+	texture.magFilter = THREE.LinearFilter;
+	texture.minFilter = THREE.LinearFilter;
+	texture.needsUpdate = true;
+	const generator = new THREE.PMREMGenerator(gl);
+	try { return generator.fromEquirectangular(texture); } finally { generator.dispose(); texture.dispose(); }
+}
+
 /**
  * The stage's sky, fog and exposure (stage.lighting through stageLook), set on
  * the one scene and renderer every path draws with: the viewport panes, the
@@ -45,6 +62,11 @@ function gradientSky(bottom, top) {
  * (the plan) keep the flat horizon colour, since a box-mapped sky has no meaning
  * looking straight down. A caller that swaps the background for a pass of its
  * own (render-passes.js) is left alone.
+ *
+ * The environment light (scene.environment) and the ambient occlusion pass
+ * (stage-occlusion.js) are set here too, for the same paths. Both are off in the
+ * studio look, which therefore draws exactly what it drew before them. The map
+ * is rebuilt only when its colours or the key's direction change.
  */
 export function StageAtmosphere({ lighting = null, keyLight, theme = "dark", grid = false }) {
 	// The scene and renderer are read inside the effects: they are three objects
@@ -53,6 +75,7 @@ export function StageAtmosphere({ lighting = null, keyLight, theme = "dark", gri
 	const look = stageLook({ lighting, keyLight, theme, grid });
 	const { sky, skyTop, exposure } = look, { near, far } = look.fog;
 	const hazeNear = look.captureFog?.near ?? null, hazeFar = look.captureFog?.far ?? null;
+	const envKey = look.env ? JSON.stringify(look.env) : null, { envIntensity, ao } = look;
 	useLayoutEffect(() => {
 		const { scene } = get();
 		const flat = new THREE.Color(sky);
@@ -77,5 +100,36 @@ export function StageAtmosphere({ lighting = null, keyLight, theme = "dark", gri
 		scene.userData.stageCapture = { exposure, fog: hazeNear === null ? null : { near: hazeNear, far: hazeFar } };
 		invalidate();
 	}, [get, invalidate, exposure, hazeNear, hazeFar]);
+	useLayoutEffect(() => {
+		if (!envKey) return undefined;
+		const { scene, gl } = get();
+		const target = environmentMap(gl, JSON.parse(envKey));
+		scene.environment = target.texture;
+		invalidate();
+		return () => {
+			if (scene.environment === target.texture) scene.environment = null;
+			target.dispose();
+			invalidate();
+		};
+	}, [get, invalidate, envKey]);
+	useLayoutEffect(() => {
+		get().scene.environmentIntensity = envIntensity;
+		invalidate();
+	}, [get, invalidate, envIntensity]);
+	// The pass stays installed while ao > 0; the slider only changes its strength.
+	const occlusion = useRef({ strength: ao }), occluded = ao > 0;
+	useLayoutEffect(() => {
+		if (!occluded) return undefined;
+		const remove = installOcclusion(get().scene, occlusion.current);
+		invalidate();
+		return () => {
+			remove();
+			invalidate();
+		};
+	}, [get, invalidate, occluded]);
+	useLayoutEffect(() => {
+		occlusion.current.strength = ao;
+		invalidate();
+	}, [invalidate, ao]);
 	return null;
 }

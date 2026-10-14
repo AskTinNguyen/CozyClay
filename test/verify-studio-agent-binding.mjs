@@ -90,7 +90,7 @@ function fixture(options={}) {
  const actionsRef=ref(null);
  const revision=ref(0), clock=ref(0), lastObject=ref(0), history=ref({past:[],future:[]}), studioHistory=ref(new Map()), characterRef=ref(chars), buffer=ref({waypoints:[],motion:null}), state=ref(ik.createIkState()), layers=ref(new Map());
  const stage={shotAspect:'16:9',cameraPresetId:null,sensorId:'fullFrame',hasCharSheet:false,environmentImage:null,environment:'a sunlit modern living room',style:'moody cinematic lighting, 35mm film look',hasEnvSheet:false,keyLight:{x:6,y:9,z:4,intensity:1.12,warmth:0.5,color:null},
-  lighting:{preset:'studio',sky:null,skyTop:null,ambient:1,hemiSky:'#ffffff',hemiGround:'#5a5d64',fill:1,fog:0,exposure:1,shadowSoftness:0}};
+  lighting:{preset:'studio',sky:null,skyTop:null,ambient:1,hemiSky:'#ffffff',hemiGround:'#5a5d64',fill:1,fog:0,exposure:1,shadowSoftness:0,envLight:0,ao:0}};
  const live=ref({characters:chars,objects:[],rigs,shots:[],scenes:[{id:'scene',name:'Fixture',objects:[],shotDocument:null,stage:null}],activeCharacterId:a.id,stage,timeline:{currentFrame:0,frameCount:48},filmback:{sensorId:'fullFrame',aspectRatio:16/9},studioSelection:{kind:'character',id:a.id},studioShotId:null,studioView:{mode:'scene',frame:0,playing:false,lookThrough:false,grid:false,autoColor:false}});
  const camera=new THREE.PerspectiveCamera(45,16/9); camera.position.set(0,1.6,5);
  const values={}, semantic=[], motionStore=options.motionStore??new Map(), motionSet=[];
@@ -270,7 +270,7 @@ const stageEvidence = (patch = {}) => Object.entries({
  // The stage look (stage.lighting) reads back at its studio defaults.
  'stage.keyLight.color': {text:null}, 'stage.lighting.sky': {text:null}, 'stage.lighting.skyTop': {text:null}, 'stage.lighting.ambient': {number:1},
  'stage.lighting.hemiSky': {text:'#ffffff'}, 'stage.lighting.hemiGround': {text:'#5a5d64'}, 'stage.lighting.fill': {number:1}, 'stage.lighting.fog': {number:0},
- 'stage.lighting.exposure': {number:1}, 'stage.lighting.shadowSoftness': {number:0},
+ 'stage.lighting.exposure': {number:1}, 'stage.lighting.shadowSoftness': {number:0}, 'stage.lighting.envLight': {number:0}, 'stage.lighting.ao': {number:0},
  ...patch,
 }).map(([path,value])=>({path,...value}));
 async function railCameraUndo(f, interleaveObject) {

@@ -8,7 +8,7 @@ import { stageFixture } from './stage-fixture.mjs';
 import { ShaderChunk } from 'three';
 import { installSoftShadows } from '../../src/soft-shadows.js';
 
-const STUDIO = { preset: 'studio', sky: null, skyTop: null, ambient: 1, hemiSky: '#ffffff', hemiGround: '#5a5d64', fill: 1, fog: 0, exposure: 1, shadowSoftness: 0 };
+const STUDIO = { preset: 'studio', sky: null, skyTop: null, ambient: 1, hemiSky: '#ffffff', hemiGround: '#5a5d64', fill: 1, fog: 0, exposure: 1, shadowSoftness: 0, envLight: 0, ao: 0 };
 const STUDIO_KEY = { x: 6, y: 9, z: 4, intensity: 1.12, warmth: 0.5, color: null };
 
 // Normalization: an old stage (no lighting, no key colour) gets the studio look.
@@ -101,7 +101,7 @@ try {
   const measured = await verify();
   assert.deepEqual(measured.unsupportedChecks, [], JSON.stringify(measured));
   assert.deepEqual({ ...measured.checks.lighting, subjects: measured.checks.lighting.subjects.map(row => row.id) },
-    { coverage: 'rendered-shot-frame', frame: f.binding.refresh().view.frame, meanLuma: 0.2, clippedPct: 0, crushedPct: 0, subjects: ['actor-a'] });
+    { coverage: 'rendered-shot-frame', frame: f.binding.refresh().view.frame, meanLuma: 0.2, clippedPct: 0, crushedPct: 0, subjects: ['actor-a'], look: { preset: 'studio', envLight: 0, ao: 0 } });
   assert.deepEqual(rendered, [f.binding.refresh().view.frame], 'one render of the playhead frame');
   f.ports.renderFrameBuffer = renderer;
   console.log('PASS verify_result lighting through the binding: refused without a renderer, measured from the rendered frame');
@@ -124,7 +124,7 @@ const frame = { width: 64, height: 36, data: new Uint8Array(64 * 36 * 4) };
 for (let i = 0; i < 64 * 36; i++) frame.data.set(i % 64 >= 24 && i % 64 < 40 ? [200, 200, 200, 255] : [10, 10, 10, 255], i * 4);
 const ports = { renderFrameBuffer: f => (assert.equal(f, 3), frame), bounds: ({ entity }) => ({ min: { x: entity.x - 0.3, y: 0, z: -0.2 }, max: { x: entity.x + 0.3, y: 1.8, z: 0.2 } }) };
 const measured = lightingChecks([], state, ports);
-assert.deepEqual({ ...measured, subjects: undefined }, { coverage: 'rendered-shot-frame', frame: 3, meanLuma: 0.225, clippedPct: 0, crushedPct: 0, subjects: undefined });
+assert.deepEqual({ ...measured, subjects: undefined }, { coverage: 'rendered-shot-frame', frame: 3, meanLuma: 0.225, clippedPct: 0, crushedPct: 0, subjects: undefined, look: { preset: 'studio', envLight: 0, ao: 0 } });
 assert.deepEqual(measured.subjects.map(row => row.id), ['char-a', 'char-b'], 'visible characters by default');
 assert.deepEqual(measured.subjects[0], { id: 'char-a', meanLuma: 0.784, contrast: 0 }, 'the 0.6 m wide box 3.8 m out lands on the lit middle columns (x 25..39)');
 assert.deepEqual(measured.subjects[1], { id: 'char-b', meanLuma: null, contrast: null }, 'an off-frame character reads null');
