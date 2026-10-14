@@ -436,9 +436,13 @@ export function frameDraft(command, state, ports) {
   const created = !shot && !state.shotDocument.shots.length && !command.args.shotId;
   if (created) shot = createShot('Shot 1', 0, state.frameCount - 1);
   if (!shot) fail('AMBIGUOUS_TARGET', 'No shot owns this frame; select an existing shot explicitly.');
-  const still = shot.kind === 'still';
+  // The shot's camera keys are what the contact sheet and the export render, so
+  // every framing lands in them. Without keyAtFrame, a shot that holds one
+  // framing (a still, or a clip with at most one key) is reframed whole; a clip
+  // that already moves takes the framing as a key at the playhead.
   const existingKey = shot.cameraKeys[0];
-  const frame = still ? (existingKey?.frame ?? shot.startFrame) : command.args.keyAtFrame ?? state.frame;
+  const hold = shot.kind === 'still' || (command.args.keyAtFrame === undefined && shot.cameraKeys.length <= 1);
+  const frame = hold ? (existingKey?.frame ?? shot.startFrame) : command.args.keyAtFrame ?? state.frame;
   if (frame < shot.startFrame || frame > shot.endFrame || shot.endFrame >= state.frameCount) fail('INVALID_RANGE', 'Framing/key frame must be inside the shot range.');
   const intent = command.args.framing.intent;
   let camera = command.args.framing.exact;
@@ -457,19 +461,17 @@ export function frameDraft(command, state, ports) {
   const direction = vector(camera.lookAt).sub(vector(camera.position));
   if (direction.length() <= EPS) fail('INVALID_ARGUMENT', 'Camera position and aim must differ.');
   const framing = captureFraming({ pos: camera.position, yaw: Math.atan2(-direction.x, -direction.z), pitch: Math.atan2(direction.y, Math.hypot(direction.x, direction.z)), fovDeg: fov / DEG });
-  let keyId;
-  let keys = shot.cameraKeys;
-  if (still || command.args.keyAtFrame !== undefined) {
-    keyId = (still ? existingKey?.id : keys.find(k => k.frame === frame)?.id) ?? createStableItemId('camera-key');
-    keys = still ? [{ id: keyId, frame, framing }] : [...keys.filter(k => k.frame !== frame), { id: keyId, frame, framing }].sort((a, b) => a.frame - b.frame);
-  }
+  const keyId = (hold ? existingKey?.id : shot.cameraKeys.find(k => k.frame === frame)?.id) ?? createStableItemId('camera-key');
+  const keys = hold ? [{ id: keyId, frame, framing }] : [...shot.cameraKeys.filter(k => k.frame !== frame), { id: keyId, frame, framing }].sort((a, b) => a.frame - b.frame);
   const nextShot = { ...shot, cameraKeys: keys, camera: { ...shot.camera, mode: 'keys' } };
   const shots = created ? [nextShot] : state.shotDocument.shots.map(s => s.id === shot.id ? nextShot : s);
   const { screenBounds, checks: projected } = projectSubject(points, camera, fov, state.filmback.aspectRatio), derivedSize = projected.derivedSize;
   const sight = sightChecks([subject], [points], camera.position, state, ports), checks = { ...projected, ...sight.checks };
   const resolvedCamera = { ...camera, sensorId: state.filmback.sensorId, slate: derivedSize };
-  const draft = { shotDocument: { ...state.shotDocument, shots }, camera: resolvedCamera, manual: true };
-  return { domain: 'shot', draft, affectedIds: [shot.id, ...(keyId ? [keyId] : [])],
+  // Not a manual override: the keys drive the live shot camera from here, so a
+  // later playhead move shows what the export renders at that frame.
+  const draft = { shotDocument: { ...state.shotDocument, shots }, camera: resolvedCamera, manual: false };
+  return { domain: 'shot', draft, affectedIds: [shot.id, keyId],
     checks,
     warnings: sight.occluders.slice(0, 5).map(item => ({ code: 'OCCLUDED', id: item.byObjectId })), details: { created, shotId: shot.id, keyId, frame, framing, screenBounds, subjectIds: [subject.id] } };
 }
