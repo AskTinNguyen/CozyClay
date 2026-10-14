@@ -18,6 +18,10 @@ export const MOTION_ACTION_HELP = {
 		+ "objects, channels and reachGrip also say what each field means; checks names its lists), skills (each with typed args, needs, frames, adds), notes (a carry example) }. "
 		+ "topic spec, skills, anchors, props, objects, checks, goals, probes, channels, refs or fix answers { topic, schema, example, notes } "
 		+ "with each field's meaning; skills answers the skill list, and with name one skill's args schema and a use example. Changes nothing.",
+	keyObject: "Key an object the installed take moves (objectId) at frame, then compile and install it whatever QA says (a user edit, one undo entry). "
+		+ "A carried object takes pos [x, y, z] and rot [x, y, z, w], the world pose of its base (a group: its root), grab..release only: objects.<id>.keys; the object leads, the hand follows. "
+		+ "A hinge takes angle (degrees) or rot (its turn about the axis). remove: true deletes the key at frame. Refused where the take neither holds nor hinges it (a plain drag then). "
+		+ "Answers keyed and the motion.compile output; REACH \"<id>: n cm off its keys\" is what the hand missed.",
 	report: "Page through the parts of a motion.compile or motion.qa answer that did not fit (output.more): part is groups, timeline or probes, from the item index to start at; "
 		+ "answers { specId, part, from, items, next } (next = the index to ask for next, null at the end). Changes nothing.",
 };

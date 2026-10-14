@@ -18,6 +18,8 @@ import { applyPatch } from "../motion3/json-patch.js";
 import { deltaOf } from "../motion3/delta.js";
 import { repairSpec } from "../motion3/repair.js";
 import { fitOutput, reportPage } from "../motion3/report.js";
+import { keyObject } from "../motion3/key-edit.js";
+import { expandUse } from "../motion3/skills/index.js";
 
 const TIMELINE_FPS = 24;
 const id = { type: "string", minLength: 1 };
@@ -25,6 +27,7 @@ const specId = { type: "string", pattern: "^spec-[0-9a-f]{12}$" };
 const openObject = { type: "object", properties: {}, required: [], additionalProperties: true };
 const input = (properties, required = Object.keys(properties)) => ({ type: "object", properties, required, additionalProperties: false });
 const list = (items, maxItems) => ({ type: "array", items, minItems: 1, maxItems });
+const numbers = n => ({ type: "array", items: { type: "number" }, minItems: n, maxItems: n });
 
 // readOnly: reads the scene and the take, never changes them (C10).
 const declarations = Object.freeze([
@@ -42,6 +45,9 @@ const declarations = Object.freeze([
 		input: input({ topic: { type: "string", enum: DESCRIBE_TOPICS }, name: id }, ["topic"]) },
 	{ id: "motion.report", label: "Read motion report", kind: "job", domain: "motion", timeoutMs: 10000, readOnly: true, description: HELP.report,
 		input: input({ specId, part: { type: "string", enum: ["groups", "timeline", "probes"] }, from: { type: "integer", minimum: 0, default: 0 } }, ["specId", "part"]) },
+	{ id: "motion.keyObject", label: "Key held object", kind: "job", domain: "motion", timeoutMs: 120000, description: HELP.keyObject,
+		input: input({ characterId: id, objectId: id, frame: { type: "integer", minimum: 0 }, pos: numbers(3), rot: numbers(4), angle: { type: "number" },
+			remove: { type: "boolean", default: false } }, ["characterId", "objectId", "frame"]) },
 ]);
 export { declarations };
 
@@ -93,6 +99,11 @@ export function register(registry, ports) {
 		return fitOutput({ ...head, specId: specIdValue, qa: r.qa, observations: r.observations, ...extra, ...(r.probes ? { probes: r.probes } : {}), timeline: r.timeline,
 			fixed: r.fixed, ...(r.search ? { search: r.search } : {}), ...(r.used.length ? { skills: r.used } : {}), ms: r.ms });
 	};
+	/** The take of compile result r on the character, installed as one undo entry. */
+	const installOf = (character, r, label, context) => {
+		const take = bakeTake(r.sk, r.out, { position: [character.x ?? 0, character.y ?? 0, character.z ?? 0], yaw: character.rot ?? 0 }, { spec: r.stored, prompt: label ?? "" });
+		return { take, put: () => { const apply = () => owner().replace(character.id, { ...take, frames: take.frameCount }); if (context?.commit) context.commit(apply); else apply(); } };
+	};
 	const installed = characterId => owner().motionFor(characterId)?.schema === "cozyclay.take.v3" ? owner().motionFor(characterId)
 		: fail("TARGET_NOT_READY", "This character has no compiled take; run motion.compile first.");
 
@@ -104,18 +115,17 @@ export function register(registry, ports) {
 		const source = spec ?? asArgument(() => applyPatch(store.get(base) ?? unknownSpec("base", base), patch ?? []));
 		const once = s => compile(character, s, { probes });
 		const fixed = repair ? repairSpec(source, repair, once) : { spec: source, result: once(source) };
-		const r = fixed.result, { sk, out, qa } = r;
+		const r = fixed.result, { out, qa } = r;
 		// ifClean: install only a clean final result (qa.ok includes the goals; after repair when asked)
 		const wanted = install === "ifClean" ? qa.ok : install;
 		let installs = wanted, kept = false;
 		if (wanted) {
 			// open ranges are stored with the values the search chose, so motion.qa re-measures this take
-			const take = bakeTake(sk, out, { position: [character.x ?? 0, character.y ?? 0, character.z ?? 0], yaw: character.rot ?? 0 }, { spec: r.stored, prompt: fixed.spec.label ?? "" });
+			const { take, put } = installOf(character, r, fixed.spec.label, context);
 			// ifClean of the take already installed changes nothing (no undo entry; IK edits on it stay)
 			kept = install === "ifClean" && sameTake(owner().motionFor(characterId), take);
 			installs = !kept;
-			const apply = () => owner().replace(characterId, { ...take, frames: take.frameCount });
-			if (installs) { if (context?.commit) context.commit(apply); else apply(); }
+			if (installs) put();
 		}
 		const delta = base === undefined ? {} : { delta: deltaOf(store.parts(base)?.groups ?? [], qa.groups, base) };
 		const how = kept ? "; already installed, unchanged" : install === "ifClean" ? (installs ? "; installed" : "; not installed") : "";
@@ -148,5 +158,15 @@ export function register(registry, ports) {
 	registry.register({ ...declarations[4], available: always, run({ specId: wanted, part, from = 0 }) {
 		const page = reportPage(store.parts(wanted) ?? unknownSpec("specId", wanted, "compile it again"), wanted, part, from);
 		return { affectedIds: [], summary: `${page.items.length} ${part} from ${from}.`, output: page };
+	} });
+	// motion.keyObject (C14): one key of a held object (or a hinge angle) in the installed take's spec, compiled
+	// and installed whatever QA says (a user edit), as one undo entry
+	registry.register({ ...declarations[5], available: mounted, target: args => args.characterId, run({ characterId, ...args }, context) {
+		const character = characterOf(ports, characterId), take = installed(characterId), scene = motionScene(ports.state().objects);
+		const { spec, keyed } = asArgument(() => keyObject(take.spec, scene, args, expandUse(take.spec, { sk: rigOf(character), scene, lenient: true }).spec.objects));
+		const r = compile(character, spec, { lenient: true });
+		installOf(character, r, take.prompt, context).put();
+		return { affectedIds: [characterId], summary: `${keyed.removed ? "Removed the key of" : "Keyed"} ${keyed.objectId} at f${keyed.f}; QA ${r.qa.ok ? "clean" : `${r.qa.total} issues`}; installed.`,
+			output: report(r, { frames: r.out.frameCount, fps: TIMELINE_FPS, installed: true, keyed }) };
 	} });
 }

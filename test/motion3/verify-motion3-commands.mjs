@@ -4,6 +4,11 @@ import { createStudioAppActions } from "../../src/commands/index.js";
 import { skeletonFor } from "../../src/motion3/rigs/index.js";
 import { compileSpec } from "../../src/motion3/pipeline.js";
 import { specIdOf } from "../../src/motion3/spec-store.js";
+import { keyObject } from "../../src/motion3/key-edit.js";
+import { expandUse } from "../../src/motion3/skills/index.js";
+import { motionScene } from "../../src/motion3/scene.js";
+import { SCENE_OBJECTS as CAR_OBJECTS } from "./fixtures/exitcar-scene.mjs";
+import { SCENE_OBJECTS as CUP_OBJECTS } from "./fixtures/cup-scene.mjs";
 
 let failures = 0;
 function expect(name, condition, detail = "") {
@@ -93,6 +98,18 @@ r = boardReg.run("motion.compile", { characterId: "char-2", spec: held, install:
 const repaired = boardTakes.get("char-2");
 expect("ifClean + repair: repaired to clean, the repaired spec is installed and output.specId names it", r.output.qa.ok && r.output.installed === true && r.output.repair.applied.length >= 1
 	&& repaired?.spec?.fix?.penetration === 0.02 && r.output.specId === specIdOf(repaired.spec) && r.output.specId !== specIdOf(held), JSON.stringify(r.output.repair));
+
+// motion.keyObject's edit (key-edit.js, C14): a door a skill hinges takes its channel key; a part of a carried group names the group.
+const carScene = motionScene(CAR_OBJECTS), sat = { schema: "cozyclay.motion-spec.v1", fps: 24, frames: 300,
+	use: [{ skill: "sitInSeat", f0: 0, args: { car: "Car" } }, { skill: "exitCar", f0: 0, args: { car: "Car", side: "l" } }] };
+const skillObjects = expandUse(sat, { sk: skeletonFor("x-bot-tpose"), scene: carScene }).spec.objects, [door, hinge] = Object.entries(skillObjects).find(([, o]) => o.channel);
+const doorKey = keyObject(sat, carScene, { objectId: door, frame: 120, angle: -25 }, skillObjects);
+expect("keyObject: a door the exitCar skill hinges takes a key on its channel in spec.keys (the skill's entry stays the skill's)", JSON.stringify(doorKey.keyed) === JSON.stringify({ objectId: door, kind: "hinge", channel: hinge.channel, f: 120, angle: -25 })
+	&& JSON.stringify(doorKey.spec.keys) === JSON.stringify([{ f: 120, set: { [hinge.channel]: -25 } }]) && doorKey.spec.objects === undefined, JSON.stringify(doorKey));
+const cupHeld = { schema: "cozyclay.motion-spec.v1", fps: 24, frames: 100, props: { grip: { hand: "l", origin: ["LeftHandIndex2"] } }, objects: { "empty-2": { prop: "grip", grab: 34 } } };
+let part = "";
+try { keyObject(cupHeld, motionScene(CUP_OBJECTS), { objectId: "cube-6", frame: 50, pos: [0, 1, 0], rot: [0, 0, 0, 1] }); } catch (error) { part = error.message; }
+expect("keyObject: a part of a carried group names the group to key", part === 'MOTION_SPEC_INVALID: "cube-6" moves with "empty-2" (spec.objects.empty-2); key "empty-2" with its root pose', part);
 
 if (failures) { console.error(`${failures} motion3 command check(s) failed`); process.exit(1); }
 console.log("motion3 commands: all checks passed");

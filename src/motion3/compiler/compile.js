@@ -7,7 +7,8 @@
 //   fits:       [{ side, anchor, effector: { prop, point } | { joints: [...] }, offset? }]
 //               moves the wrist so the effector lands on the anchor whenever that weight is on
 //   objects:    { id: { pivot: [x,y,z], axis: [x,y,z], channel: "door" } }  hinge angle in degrees
-//               { id: { prop, grab?, release?, at?, along?, visible? } }   carried (../object-pose.js)
+//               { id: { prop, grab?, release?, at?, along?, visible?, keys? } }   carried (../object-pose.js);
+//               keys lead the holding hand (../object-keys.js, hold.js)
 //               id is a body or a group (Empty); a group moves every body under it
 //   generators: [{ type: "walk", f0, ... }]  (walk.js)
 //   fix:        { reach, slide, penetration, retime }  deterministic auto-fixes (../fix/)
@@ -19,6 +20,7 @@ import { bakeChannels, channelsAt } from "./channels.js";
 import { resolveAnchor, measureProps } from "./anchors.js";
 import { expandGenerators } from "./walk.js";
 import { fixOptions, applyFixes } from "../fix/index.js";
+import { holdHook } from "../object-keys.js";
 
 const smooth = x => x * x * (3 - 2 * x);
 
@@ -56,10 +58,12 @@ function effectorPoint(sk, s, diag, eff) {
 	return scale(js.map(j => s.P[sk.index[j]]).reduce((a, p) => add(a, p), [0, 0, 0]), 1 / js.length);
 }
 
-function hooksFor(ctx, c, f, inFit = false) {
+/** `lead` false solves without the object keys; a fit's own hand is solved without them (the keys override it). */
+function hooksFor(ctx, c, f, inFit = false, lead = true, fitSide = null) {
 	const { sk } = ctx;
 	return {
 		softReach: ctx.softReach,
+		hold: lead && ctx.hold ? k => (k === fitSide ? null : ctx.hold.lead(k, f)) : undefined,
 		// auto-fix offsets ride on the final pose only, so a fit never cancels them
 		push: inFit ? undefined : k => ctx.push?.[k]?.get(f),
 		handTarget(k, s, diag) {
@@ -93,8 +97,8 @@ function hooksFor(ctx, c, f, inFit = false) {
 	};
 }
 
-/** One frame with every active fit solved (fits run in spec order). */
-export function solveFrame(ctx, c0, f) {
+/** One frame with every active fit solved (fits run in spec order); lead false leaves the object keys out. */
+export function solveFrame(ctx, c0, f, lead = true) {
 	const c = { ...c0 };
 	for (const fit of ctx.spec.fits ?? []) {
 		const wch = `w_${fit.anchor}_${fit.side}`;
@@ -104,7 +108,7 @@ export function solveFrame(ctx, c0, f) {
 		let corr = [0, 0, 0];
 		for (let i = 0; i < 6; i++) {
 			full[`fit_${fit.anchor}_${fit.side}`] = corr;
-			const { s, diag } = pose(ctx.sk, full, hooksFor(ctx, full, f, true));
+			const { s, diag } = pose(ctx.sk, full, hooksFor(ctx, full, f, true, lead, fit.side));
 			const eff = effectorPoint(ctx.sk, s, diag, fit.effector);
 			const goal = add(resolveAnchor(ctx, fit.anchor, s, diag, full), fit.offset ?? [0, 0, 0]);
 			if (!eff) break;
@@ -112,7 +116,7 @@ export function solveFrame(ctx, c0, f) {
 		}
 		c[`fit_${fit.anchor}_${fit.side}`] = corr;
 	}
-	const { s, diag } = pose(ctx.sk, c, hooksFor(ctx, c, f));
+	const { s, diag } = pose(ctx.sk, c, hooksFor(ctx, c, f, false, lead));
 	return { s, diag, c };
 }
 
@@ -139,8 +143,11 @@ export function compileMotion(spec, { sk, scene }, opts = {}) {
 		solve(frames) { for (const f of frames) if (f >= a && f <= b) out.frames[f - a] = solveFrame(ctx, channelsAt(out.baked, f), f); },
 		all: () => Array.from({ length: b - a + 1 }, (_, i) => a + i),
 	};
+	ctx.hold = holdHook(ctx, out, f => solveFrame(ctx, channelsAt(out.baked, f), f, false));
 	engine.rebake(opts.keys ?? expandGenerators(spec, sk));
 	engine.solve(engine.all());
 	out.fixed = opts.fixes === false ? {} : applyFixes(out, fix, engine, { whole: !opts.window });
+	// a retime maps the key frames only once it is done: solve the keyed frames again on the final map
+	if (ctx.hold && out.timeMap) engine.solve(engine.all());
 	return out;
 }

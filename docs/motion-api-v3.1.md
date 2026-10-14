@@ -21,6 +21,7 @@ The wave-0 PR (W0) wires every hot file once. After W0 these files are frozen fo
 | F | readOnly in `src/command-bus.js` and the `registry.list()` row, the revision fix, `qa/check-names.js` |
 | G | `compiler/validate-goals.js`, `qa/goals.js`, `qa/hints-goal.js` |
 | P | `bin/agent/studio-prompt.mjs`, `docs.js` (the words), supervisor default (off) |
+| J2 | C14: `object-keys.js`, `key-edit.js`, `compiler/hold.js`, `compiler/quat.js`, `qa/key-checks.js`, `motion.keyObject` in `src/commands/motion3.js` |
 
 Paths without a folder are under `src/motion3/`. Every lane test is already registered in `tools/run-tests.mjs` as a placeholder that prints `pending (lane X)`.
 
@@ -267,6 +268,82 @@ QA errors are kept for what is broken whatever the motion is for. Quantities tha
 - `balance.min` skips frames carried by a declared support and frames where no foot counts; `air` lists the runs with both soles 2 cm or more above the floor.
 - Budget (C7): observations are tier 1 (always kept) and bounded (10 joints, 4 limbs, at most about 1 KB).
 
+## C14. Held-object keys and motion.keyObject (lane J2)
+
+A carried object can be posed while it is in hand. The object leads; the holding hand follows.
+
+```jsonc
+spec.objects[id] = { "prop": "batGrip", "grab": 30, "release": 90,
+  "keys": [{ "f": 40, "pos": [x, y, z], "rot": [qx, qy, qz, qw] }, ...] }    // carry entries only
+```
+
+**A key** is the world pose of the object's root at absolute frame `f`: the body's base pivot, or the group root for a group id. `rot` is a unit quaternion in three.js order (the take track's `quat`).
+
+**Validation** (strict; a lenient reload ignores only unknown key fields). The exact messages:
+
+- `objects.<id>.keys must be an array of { f, pos: [x, y, z], rot: [x, y, z, w] }`
+- `objects.<id>.keys[i] has unknown field "rott"; did you mean "rot"?; a key is { f, pos: [x, y, z], rot: [x, y, z, w] }`
+- `objects.<id>.keys[i].f must be a whole frame, got 3.5`
+- `objects.<id>.keys[i].f = 20 is outside grab..release (34..80); keys pose the object only while it is in hand` (no grab: 0; no release: the last frame)
+- `objects.<id>.keys[i].f = 50: keys[0] is at that frame already; one key per frame`
+- `objects.<id>.keys[i].pos must be [x, y, z], the world position of the object's base (a group: its root), got ...`
+- `objects.<id>.keys[i].rot must be a unit quaternion [x, y, z, w], got ...` (length within 0.01 of 1)
+- on a hinge: `objects.<id>.keys: only a carried object (prop) takes keys; a hinge turns by its channel "door", keyed in spec.keys`
+
+**Between keys** (`object-keys.js`):
+
+- Position: a cubic Hermite.
+- Rotation: `q_i * exp(v(u))`, with `v` a Hermite in the frame of `q_i`, from 0 to `log(q_i^-1 q_i+1)`. This is squad-like.
+- Inner keys take parabola (Catmull-Rom) tangents, so the object does not stop at them. The first and last key take zero tangents.
+- With `fix.retime`, key frames go through `out.timeMap`.
+
+**Blend.** The lead weight is 1 from the first to the last key. Over `KEY_BLEND` = 8 frames before the first key and after the last key it ramps by smoothstep, cut to grab..release. The hand blends from the plain carry: wrist position by lerp, hand rotation by slerp. Nothing jumps; QA finds no POP.
+
+- A frame with weight 0 is bit for bit the take without keys.
+- A carry without keys is bit for bit the take before C14 (`test/motion3/verify-motion3-carried.mjs` pins the hash).
+
+**Hand from object** (`compiler/hold.js`, called by `pose.js` after the plain arm, wrist channels and fingers):
+
+- `palm = key o attach^-1`. The palm frame is `carriedPose(..., { prop })` at the prop origin.
+- `attach` is the plain carry's offset: the `at`/`along` transform, or the grab-frame palm offset solved without the keys (a group, or `grab` without `at`/`along`). The keys never feed back into it.
+- The arm IK reaches for the wrist position that puts the grip on the key. The elbow stays in the bend plane the channels gave it.
+- The hand turns about the wrist within the limits, relative to its rest on the forearm. Twist about the forearm: -85..85. Flex: -70..70. Deviation: -35..20 (+ toward the thumb). The solve runs 3 times.
+- On keyed frames the hand ignores `hand_<side>` and a fit on the holding hand. The other hand's fit to a prop point (`kind: "prop"` anchor) follows the keyed object.
+- `diag.hold_<side> = { w, miss, twist, flex, dev }` holds what the hand needed: metres, then degrees before the clamp. `diag.arm_miss_<side>` is scaled by `1 - w`.
+
+**The object stays in the hand.** The take track, refs, probes, goals and QA read `palm o attach` (`object-pose.js`). What the hand could not reach shows as a residual on the object, not as a gap between hand and object.
+
+**QA** (`qa/key-checks.js`, from the first to the last key). The residual is the farthest part-box corner between the keyed pose and the drawn pose:
+
+- `REACH "<id>: 6.2 cm off its keys"`, `limit` = `checks.limits.reach` (0.01 m).
+- `cause` = `"objects.<id>.keys[2] f47"`, the key nearest the worst frame.
+- `hint` names the reason: `the arm is 6.0 cm short`, or `the wrist twist about the forearm needs -94deg (limit -85..85)`. No fix and no patch: only the user or the agent decides the pose.
+
+**`motion.keyObject`** (job, not readOnly):
+
+```jsonc
+{ "characterId": "char-a", "objectId": "cylinder", "frame": 47, "pos": [x, y, z], "rot": [x, y, z, w] }   // carry
+{ "characterId": "char-a", "objectId": "door", "frame": 30, "angle": -40 }                                 // hinge: angle, or rot
+{ "characterId": "char-a", "objectId": "cylinder", "frame": 47, "remove": true }
+// output: what motion.compile answers (frames, fps, installed: true, specId, qa, observations, ...) plus
+"keyed": { "objectId": "cylinder", "kind": "carry", "f": 47, "keys": [40, 47], "removed"?: true }
+       | { "objectId": "door", "kind": "hinge", "channel": "door", "f": 30, "angle": -40 | "removed": true }
+```
+
+- It edits a copy of the installed take's `spec` (`key-edit.js`) and compiles it leniently. It installs whatever QA says: this is a user edit. That makes one undo entry, and `affectedIds` is `[characterId]`.
+- **Carry:** the key is upserted at `frame`, keys stay sorted, and `pos` and `rot` are rounded to 0.1 mm and 1e-5. Removing the last key drops `keys`, so the spec is again the one it started from (same specId).
+- **Hinge:** `angle` (degrees), or the turn of `rot` about the hinge axis from the scene pose (the drawn world rotation; `pos` is ignored). It is written as `spec.keys[{ f, set: { <channel>: angle } }]`, and a user key already at `frame` takes the channel. `remove` drops the channel from that key, and the key too when nothing is left.
+- The frames are the spec's absolute frames. They equal the take's unless `fix.retime` moved keys.
+- Refusals (`INVALID_ARGUMENT`), with the exact text:
+  - `frame 120 is outside the take (0..95)`
+  - `"<id>" is in hand only f30..f95 (grab..release); at f20 the take does not hold it, so drag it as a scene object, or change objects.<id>.grab/release first`
+  - `keying "<id>" (carried) needs pos [x, y, z] and rot [x, y, z, w]: the world pose of its base (a group: its root)`
+  - `keying "<id>" (a hinge on channel "door") needs angle (degrees) or rot [x, y, z, w] (its drawn world rotation; the turn about the hinge axis is kept)`
+  - `"<id>" has no key at f47; its keys: f40, f53`, and for a hinge: `"<id>" (hinge, channel "door") has no key at f20; door is keyed at f0, f40`
+  - `"cube-6" moves with "empty-2" (spec.objects.empty-2); key "empty-2" with its root pose` (a part of a moved group)
+  - `"<id>" is not in this take's spec.objects (cylinder, cube): the take neither carries nor hinges it, so drag it as a scene object`
+- `TARGET_NOT_READY` when the character has no compiled take.
+
 ## Pipeline (`pipeline.js` `compileSpec(spec, { sk, scene }, opts)`)
 
 1. `resolveFrames` (`skills/frames-auto.js`).
@@ -279,6 +356,8 @@ QA errors are kept for what is broken whatever the motion is for. Quantities tha
 It answers `{ out, qa, observations, spec, expanded, used, fixed, search, timeline, probes?, ms }`. `opts`: `checks` (replace every check), `lenient`, `probes`.
 
 ## Fixture
+
+`test/motion3/fixtures/bat-swing.mjs` holds the baseball swing of session 294ac65a (C14): the bat `cylinder`, the plate `cube`, the installed spec `spec-3a5803641a71` and four bat keys.
 
 `test/motion3/fixtures/cup-scene.mjs` holds the table group `empty` (top `cube`, legs `cube-2` to `cube-5`), the cup group `empty-2` under it (`cylinder`, handle `cube-6/7/8`) and `char-a` (Y Bot at the origin, yaw 0), with the ids and values of the baseline session.
 

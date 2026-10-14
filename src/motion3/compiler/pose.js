@@ -5,6 +5,7 @@
 import { add, sub, scale, norm, len, apply, mul, rx, ry, rz } from "./math.js";
 import { restState, rotateSubtree } from "./skeleton.js";
 import { twoBone, orientFoot, wrist, fingers } from "./limbs.js";
+import { holdHand } from "./hold.js";
 
 export const SIDES = { l: "Left", r: "Right" };
 const KNEE_REST = [0, 0, 1], ELBOW_REST = [0, 0, -1];
@@ -40,6 +41,7 @@ function softReach(sk, s, a, fa, h, target, diag, k) {
  * hooks.afterArm(side, s, diag) lets the caller measure props carried by that hand.
  * hooks.push(side) -> [x,y,z] | undefined, a world offset added to the IK target (auto-fix).
  * hooks.softReach clamps unreachable wrist targets smoothly (auto-fix).
+ * hooks.hold(side) -> { w, palm, measure } | null: a held object's keys lead the hand (hold.js).
  */
 export function pose(sk, c, hooks = {}) {
 	const s = restState(sk);
@@ -76,6 +78,7 @@ export function pose(sk, c, hooks = {}) {
 	for (const k of hooks.armOrder ?? ["r", "l"]) {
 		const side = SIDES[k], w = num(c[`armw_${k}`]);
 		const a = sk.index[`${side}Arm`], fa = sk.index[`${side}ForeArm`], h = sk.index[`${side}Hand`];
+		const poleIk = norm(apply(body, v3(c[`elbow_${k}`], [0, -1, -0.3])));
 		diag[`arm_miss_${k}`] = 0;
 		if (w > 1e-4 && hooks.handTarget) {
 			const fkHand = s.P[h].slice();
@@ -85,12 +88,13 @@ export function pose(sk, c, hooks = {}) {
 			if (push) target = add(target, push);
 			if (hooks.softReach) target = softReach(sk, s, a, fa, h, target, diag, k);
 			const poleFk = norm(sub(s.P[fa], scale(add(s.P[a], fkHand), 0.5)));
-			const poleIk = norm(apply(body, v3(c[`elbow_${k}`], [0, -1, -0.3])));
 			const pole = add(scale(poleFk, 1 - w), scale(poleIk, w));
 			diag[`arm_miss_${k}`] = twoBone(sk, s, a, fa, h, target, pole, ELBOW_REST);
 		}
 		wrist(sk, s, side, num(c[`wtwist_${k}`]), num(c[`wflex_${k}`]));
 		fingers(sk, s, side, c[`fingers_${k}`]);
+		const held = hooks.hold?.(k);
+		if (held) holdHand(sk, s, side, held, poleIk, ELBOW_REST, diag, k);
 		hooks.afterArm?.(k, s, diag);
 	}
 	return { s, diag };

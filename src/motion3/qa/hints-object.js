@@ -5,7 +5,10 @@
 //            moves the hand to the object (moveHint) with a fix on what drives the hand
 //   COLLIDE  for a carried object ("<part> x <id>", "<id> x <other>") moves the holding hand,
 //            so the object comes out; any other COLLIDE is the body hint (hints-contact.js)
+//   REACH    for a keyed object ("<id>: 6.2 cm off its keys", key-checks.js); else the arm and leg hint (hints-motion.js)
 import { contactHints, moveHint } from "./hints-contact.js";
+import { motionHints } from "./hints-motion.js";
+import { keyHint } from "./key-checks.js";
 import { CAPSULES, segPoints, sdBox, boxNormal } from "./geometry.js";
 import { grabGap, boxOverlap } from "./object-checks.js";
 import { isCarried, propOrigin } from "../carried.js";
@@ -35,6 +38,7 @@ function closest(box, p) {
 }
 
 export const objectHints = {
+	REACH: (X, g) => keyHint(X, g) ?? motionHints.REACH(X, g),
 	/** GRAB(X, g) -> { cause, hint, fix? } */
 	GRAB(X, g) {
 		const id = g.subject.split(":")[0], grab = g.worstFrame, o = X.spec?.objects?.[id];

@@ -9,7 +9,9 @@
 //            support it stood on at grab excused for +-3 frames around grab and release. The
 //            depths and checks.allow work as for the body (checks.js); <id> is the spec.objects
 //            key, so a group reads as one object.
+//   REACH    "<id>: 6.2 cm off its keys": a keyed object the hand could not hold where its keys ask (key-checks.js)
 import { QA_LIMITS, allowance } from "./checks.js";
+import { keyIssues } from "./key-checks.js";
 import { CAPSULES, segPoints, sdBox } from "./geometry.js";
 import { isCarried, propOrigin } from "../carried.js";
 import { objectBoxesAt, partsOf, spanOf } from "../object-pose.js";
@@ -112,5 +114,6 @@ export function objectChecks(sk, out, spec) {
 			}
 		}
 	}
+	keyIssues(out, L, push);
 	return issues;
 }

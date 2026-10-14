@@ -2,7 +2,7 @@
 // field name. The field lists themselves stay in fields.js: describe.js walks those lists and
 // looks each field up here, and throws when one is missing, so a new field needs a type here.
 // Shared shapes are $refs into DEFS (describe.js adds the ones an answer uses).
-import { REF_KINDS } from "./fields.js";
+import { REF_KINDS, OBJECT_KEY_FIELDS } from "./fields.js";
 import { CONVENTIONS } from "../compiler/vocab.js";
 import { QA_LIMITS } from "../qa/checks.js";
 import { CAPSULES } from "../qa/geometry.js";
@@ -79,10 +79,14 @@ export const FIT_TYPES = {
 	offset: ref("vec3", "world offset, m"),
 };
 
+const OBJECT_KEY_TYPES = { f: int(), pos: ref("vec3"), rot: { type: "array", items: { type: "number" }, minItems: 4, maxItems: 4, description: "quaternion x, y, z, w" } };
+
 export const OBJECT_TYPES = {
 	pivot: ref("vec3", "world hinge point, m"), axis: ref("vec3", "hinge axis, default [0, 1, 0]"), channel: str("the angle channel (degrees) your keys set"),
 	prop: str("a spec.props name: the object follows that hand"), at: palm("fixed offset (bodies only):"), along: palm("fixed direction (bodies only):"),
-	visible: str("a channel: shown above 0.5"), grab: int("frame the hand takes it (default 0)"), release: int("frame it is put down (default the end)"),
+	visible: str("a channel: shown above 0.5"), grab: int("frame the hand takes it", { default: 0 }), release: int("frame it is put down (else the end)"),
+	keys: { type: "array", items: { type: "object", properties: Object.fromEntries(OBJECT_KEY_FIELDS.map(f => [f, OBJECT_KEY_TYPES[f]])), required: OBJECT_KEY_FIELDS, additionalProperties: false },
+		description: "world pose at frame f (a group: its root), grab..release; the hand follows" },
 };
 
 export const CHECK_ENTRY_TYPES = {

@@ -17,6 +17,11 @@ import { groupKey } from "../../src/motion3/qa/severity.js";
 import { sceneObjectsAt, sceneObjectTravelMatrixAt } from "../../src/object-travel.js";
 import { goalChecks } from "../../src/motion3/qa/goals.js";
 import { grabReleases } from "../../src/motion3/beats.js";
+import { rootPoseAt } from "../../src/motion3/object-pose.js";
+import { propOrigin } from "../../src/motion3/carried.js";
+import { axisRot, mul, apply, sub, add } from "../../src/motion3/compiler/math.js";
+import { compileTakeSource } from "../../src/domains/motion/take-source.js";
+import { sdBox } from "../../src/motion3/qa/geometry.js";
 
 let failures = 0;
 function expect(name, condition, detail = "") {
@@ -147,6 +152,35 @@ turn.keys[0].set.cupTurn = 0;
 const turned = compileSpec(turn, { sk, scene }), turnTake = bakeTake(sk, turned.out);
 const handle = objectBoxesAt(turned.out, CUP.group, 99).find(b => b.id === "cube-6").pos;
 expect("a group hinge: one root track, the handle swings about the root", JSON.stringify(Object.keys(turnTake.objects)) === `["${CUP.group}"]` && gap(handle, [0.2, 0.77, 0.85 - 0.068]) < 1e-6, JSON.stringify(handle));
+
+// ---- C14: keys on a held group (the cup tilted about the hand that holds it) -------------------
+const tilt = (f, deg) => {
+	const p = rootPoseAt(out, CUP.group, f), G = propOrigin(sk, out.ctx.spec, out.frames[f].s, { prop: "grip" }), R = axisRot([0, 0, 1], deg);
+	return { f, pos: add(G, apply(R, sub(p.pos, G))).map(v => +v.toFixed(4)), rot: quatFromMat(mul(R, p.R)).map(v => +v.toFixed(5)) };
+};
+const cupKeys = [tilt(50, 0), tilt(58, -35), tilt(66, -35)], held = cupSpec({ objects: { [CUP.group]: { prop: "grip", grab: GRAB, release: RELEASE, keys: cupKeys } } });
+const kr = compileSpec(held, { sk, scene }), kt = bakeTake(sk, kr.out), kq = (t, f) => Array.from(t.objects[CUP.group].quat.subarray(f * 4, f * 4 + 4));
+const turnOf = (a, b) => 2 * Math.acos(Math.min(1, Math.abs(a.reduce((n, v, i) => n + v * b[i], 0)))) * 180 / Math.PI;
+const keyMiss = Math.max(...cupKeys.map(k => Math.max(gap(Array.from(kt.objects[CUP.group].pos.subarray(k.f * 3, k.f * 3 + 3)), k.pos) * 1000, turnOf(kq(kt, k.f), k.rot))));
+expect("group keys: one root track still, drawn on the keys (<= 1 mm, <= 0.1 deg), the cup tipped 35 deg from the plain carry", JSON.stringify(Object.keys(kt.objects)) === `["${CUP.group}"]` && keyMiss <= 0.1
+	&& Math.abs(turnOf(kq(kt, 58), kq(take, 58)) - 35) < 0.1, `${keyMiss} ${turnOf(kq(kt, 58), kq(take, 58))}`);
+let onHandle = 0;
+for (let f = GRAB; f <= RELEASE; f++) onHandle = Math.max(onHandle, sdBox(propOrigin(sk, kr.out.ctx.spec, kr.out.frames[f].s, { prop: "grip" }), objectBoxesAt(kr.out, CUP.group, f).find(b => b.id === "cube-6")));
+const plainGap = Math.max(...Array.from({ length: RELEASE - GRAB + 1 }, (_, i) => sdBox(propOrigin(sk, out.ctx.spec, out.frames[GRAB + i].s, { prop: "grip" }), objectBoxesAt(out, CUP.group, GRAB + i).find(b => b.id === "cube-6"))));
+expect("the hand stays on the handle while the keys lead (as without keys), and reaches every key", Math.abs(onHandle - plainGap) < 0.001 && !groups(kr).some(g => g.startsWith("REACH empty-2")), `${onHandle} vs ${plainGap}; ${groups(kr).join(" | ")}`);
+const reloaded = compileTakeSource({ schema: "cozyclay.take.v3", rig: CHARACTER.model, spec: held, placement: { position: [0, 0, 0], yaw: 0 }, scene });
+expect("a keyed take reloads (lenient) to the same group track, bit for bit", ["pos", "quat", "hold"].every(k => reloaded.objects[CUP.group][k].every((v, i) => v === kt.objects[CUP.group][k][i])));
+const keyRefusal = (o, extra = {}) => refusal(() => validateSpec({ ...base, ...extra, objects: { [CUP.group]: { prop: "grip", grab: GRAB, release: RELEASE, ...o } } }, { sk, scene }));
+const k0 = cupKeys[0];
+expect("keys outside grab..release are refused", keyRefusal({ keys: [{ ...k0, f: 20 }] }).includes("objects.empty-2.keys[0].f = 20 is outside grab..release (34..80); keys pose the object only while it is in hand"));
+expect("a bad rot, a repeated frame and a non-array are refused by name", keyRefusal({ keys: [{ ...k0, rot: [0, 0, 0, 2] }] }).includes("objects.empty-2.keys[0].rot must be a unit quaternion [x, y, z, w], got [0,0,0,2]")
+	&& keyRefusal({ keys: [k0, { ...k0 }] }).includes("objects.empty-2.keys[1].f = 50: keys[0] is at that frame already; one key per frame") && keyRefusal({ keys: k0 }).includes("objects.empty-2.keys must be an array of { f, pos: [x, y, z], rot: [x, y, z, w] }"));
+expect("an unknown key field is refused, and ignored on a lenient reload", keyRefusal({ keys: [{ ...k0, rott: 1 }] }).includes('objects.empty-2.keys[0] has unknown field "rott"; did you mean "rot"?')
+	&& refusal(() => validateSpec({ ...base, objects: { [CUP.group]: { prop: "grip", keys: [{ ...k0, rott: 1 }] } } }, { sk, scene, lenient: true })) === "");
+expect("a hinge takes no keys (its channel is keyed)", /objects\.empty-2\.keys: only a carried object \(prop\) takes keys; a hinge turns by its channel "cupTurn"/.test(refusal(() => validateSpec({ ...base, objects: { [CUP.group]: { pivot: [0.2, 0.75, 0.85], channel: "cupTurn", keys: [k0] } } }, { sk, scene }))));
+const auto = compileSpec({ ...held, frames: "auto" }, { sk, scene });
+expect("frames: \"auto\" with keys: resolves to the last key + 1, stores the number and bakes the same take", auto.spec.frames === 100 && auto.out.frameCount === 100
+	&& bakeTake(sk, auto.out).objects[CUP.group].pos.every((v, i) => v === kt.objects[CUP.group].pos[i]));
 
 if (failures) { console.error(`${failures} grab check(s) failed`); process.exit(1); }
 console.log("motion3 grab/release and groups: all checks passed");

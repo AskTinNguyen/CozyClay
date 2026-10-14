@@ -15,6 +15,8 @@
 //                         against the palm axes at grab (no jump); at/along (bodies only) pin an offset
 //   f > release           frozen at the release pose
 //   no grab: in hand from frame 0; no release: in hand to the end (PR #14 behaviour)
+//   keys (C14, object-keys.js): the object leads and the hand follows; the object is still drawn
+//                         in the hand, so what the hand cannot reach shows as a residual (QA)
 // Carried objects are OBSTACLES at every frame, at their pose that frame (qa/object-checks.js).
 import { isCarried, carriedPose, compose, relative } from "./carried.js";
 import { groupsOf } from "./scene.js";
@@ -78,6 +80,8 @@ function carriedAt(out, id, o, f) {
 	if (cache.has(id)) return cache.get(id);
 	let pose;
 	if (!keepsOffset(scene, id, o)) pose = carriedPose(sk, spec, fr.s, o);
+	// keyed (object-keys.js): the grab-frame offset solved without the keys, which the hand followed
+	else if (o.keys?.length && out.ctx.hold) pose = compose(carriedPose(sk, spec, fr.s, { prop: o.prop }), out.ctx.hold.attach(id));
 	else {
 		const palm = s => carriedPose(sk, spec, s, { prop: o.prop });
 		const grab = spanOf(out, o)[0], offset = relative(palm(frameAt(out, grab).s), restPose(scene, id));

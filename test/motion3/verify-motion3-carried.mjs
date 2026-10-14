@@ -2,7 +2,8 @@
 // Carried props: spec.objects[id] = { prop, at, along, visible } puts a scene record on a held
 // prop every frame (the cigarette between the fingers, the lighter in the other hand), shows it
 // only while its visibility channel is on, keeps it out of the collision scene, and leaves the
-// car-exit scene at QA 0.
+// car-exit scene at QA 0. C14: keys on the baseball swing of session 294ac65a (the bat leads, the
+// hands follow; the bat was stuck at 90 degrees to the forearm).
 import { EXITCAR_SPEC, SCENE_OBJECTS, CHARACTER } from "./fixtures/exitcar-scene.mjs";
 import { compileMotion } from "../../src/motion3/compiler/compile.js";
 import { validateSpec } from "../../src/motion3/compiler/validate.js";
@@ -11,7 +12,14 @@ import { motionScene } from "../../src/motion3/scene.js";
 import { skeletonFor } from "../../src/motion3/rigs/index.js";
 import { bakeTake } from "../../src/motion3/take.js";
 import { sceneObjectsAt, sceneObjectTravelMatrixAt, trackShown } from "../../src/object-travel.js";
-import { dist, apply } from "../../src/motion3/compiler/math.js";
+import { dist, apply, angle, matFromQuat, quatFromMat, mul, axisRot, sub, add, scale, dot, len } from "../../src/motion3/compiler/math.js";
+import { createHash } from "node:crypto";
+import { SCENE_OBJECTS as BAT_SCENE, CHARACTER as BATTER, SWING_SPEC, SWING_KEYS, INSTALLED_SPEC_ID, BAT } from "./fixtures/bat-swing.mjs";
+import { compileSpec } from "../../src/motion3/pipeline.js";
+import { specIdOf } from "../../src/motion3/spec-store.js";
+import { rootPoseAt } from "../../src/motion3/object-pose.js";
+import { propOrigin } from "../../src/motion3/carried.js";
+import { KEY_BLEND } from "../../src/motion3/object-keys.js";
 
 let failures = 0;
 function expect(name, condition, detail = "") {
@@ -63,6 +71,44 @@ const m = sceneObjectTravelMatrixAt(records, "Cigarette", f5, take5);
 expect("the renderer shows it on the hand once taken out", at(f5).hidden !== true && trackShown("Cigarette", f5, take5) && !trackShown("Cigarette", 0, take5)
 	&& dist([m.elements[12], m.elements[13], m.elements[14]], Array.from(cig.pos.subarray(f5 * 3, f5 * 3 + 3))) < 1e-6);
 void apply;
+
+// ---- C14: the bat keyed at four frames ------------------------------------------------------
+const bsk = skeletonFor(BATTER.model), bscene = motionScene(BAT_SCENE), I = bsk.index;
+const hashOf = t => { const h = createHash("sha256"); for (const a of [t.rot, t.hips, ...Object.values(t.objects).flatMap(o => Object.values(o))]) h.update(Buffer.from(a.buffer, a.byteOffset, a.byteLength)); return h.digest("hex").slice(0, 16); };
+const keyedSpec = keys => { const sp = structuredClone(SWING_SPEC); sp.objects[BAT].keys = keys; return sp; };
+const plain = compileSpec(SWING_SPEC, { sk: bsk, scene: bscene }), keyed = compileSpec(keyedSpec(SWING_KEYS), { sk: bsk, scene: bscene });
+const col = (R, i) => [R[0][i], R[1][i], R[2][i]], batY = (r, f) => col(rootPoseAt(r.out, BAT, f).R, 1);
+const forearm = (r, f) => sub(r.out.frames[f].s.P[I.RightHand], r.out.frames[f].s.P[I.RightForeArm]);
+const span = (r, a, b) => { const v = []; for (let f = a; f <= b; f++) v.push(angle(batY(r, f), forearm(r, f))); return Math.max(...v) - Math.min(...v); };
+expect("the fixture is the installed take's spec (spec-3a5803641a71)", specIdOf(SWING_SPEC) === INSTALLED_SPEC_ID);
+expect("without keys the bat holds one angle to the right forearm all swing (the defect)", span(plain, 34, 81) < 0.01, `${span(plain, 34, 81)}`);
+expect("without keys the take is bit for bit the take of v3@98be6b73", hashOf(bakeTake(bsk, plain.out)) === "9c85b9fdc41890ce", hashOf(bakeTake(bsk, plain.out)));
+expect("keyed: the angle between bat and forearm varies through the swing (>= 30 deg)", span(keyed, 40, 53) >= 30, `${span(keyed, 40, 53).toFixed(1)} deg`);
+let hit = 0;
+for (const k of SWING_KEYS) { const p = rootPoseAt(keyed.out, BAT, k.f), R = matFromQuat(k.rot); hit = Math.max(hit, dist(p.pos, k.pos) * 1000, angle(col(R, 1), col(p.R, 1)), angle(col(R, 0), col(p.R, 0))); }
+expect("at each key the drawn bat is the keyed pose (<= 1 mm, <= 0.1 deg)", hit <= 0.1, `${hit}`);
+let turn = 0, tipPath = 0, gripPath = 0, right = 0, left = 0;
+const grip = f => propOrigin(bsk, keyed.out.ctx.spec, keyed.out.frames[f].s, { prop: "batGrip" }), tip = f => keyed.out.frames[f].diag.props.batGrip.tip;
+for (let f = 41; f <= 53; f++) { turn += angle(batY(keyed, f - 1), batY(keyed, f)); tipPath += dist(tip(f), tip(f - 1)); gripPath += dist(grip(f), grip(f - 1)); }
+expect("the tip swings around the grip: the bat turns >= 170 deg over f40-f53, the tip travels >= 2.4x the grip", turn >= 170 && tipPath >= 2.4 * gripPath, `${turn.toFixed(1)} deg, ${tipPath.toFixed(2)} / ${gripPath.toFixed(2)} m`);
+for (let f = 0; f < 96; f++) {
+	const p = rootPoseAt(keyed.out, BAT, f), y = col(p.R, 1), handle = add(p.pos, scale(y, 0.14)), lg = keyed.out.frames[f].diag.props.lGrip.fingers, t = dot(sub(lg, p.pos), y);
+	right = Math.max(right, dist(grip(f), handle)); left = Math.max(left, len(sub(sub(lg, p.pos), scale(y, t))) + (t < 0 || t > 0.3 ? 1 : 0));
+}
+expect("both hands stay on the handle: the right grip on its point (<= 1 mm), the left fingers on the bat axis within 0.3 m of the knob (<= 5 mm)", right <= 0.001 && left <= 0.005, `${(right * 1000).toFixed(2)} / ${(left * 1000).toFixed(2)} mm`);
+const tp = bakeTake(bsk, plain.out), tk = bakeTake(bsk, keyed.out), B = tp.bones.length, a = SWING_KEYS[0].f - KEY_BLEND, b = SWING_KEYS[3].f + KEY_BLEND;
+const same = f => tp.rot.subarray(f * B * 4, (f + 1) * B * 4).every((v, i) => v === tk.rot[f * B * 4 + i]) && [0, 1, 2].every(i => tp.objects[BAT].pos[f * 3 + i] === tk.objects[BAT].pos[f * 3 + i]);
+const differ = Array.from({ length: 96 }, (_, f) => f).filter(f => !same(f));
+expect(`the hands blend in and out over ${KEY_BLEND} frames: only f${a + 1}..f${b - 1} change, and QA finds no pop`, differ[0] === a + 1 && differ[differ.length - 1] === b - 1 && !keyed.qa.groups.some(g => g.kind === "POP"),
+	`${differ[0]}..${differ[differ.length - 1]} ${keyed.qa.groups.map(g => g.kind)}`);
+expect("the keyed swing adds no QA issue (the stance goal and the stride float were there before)", keyed.qa.total === plain.qa.total && keyed.qa.groups.every(g => g.kind !== "REACH"), keyed.qa.groups.map(g => `${g.kind} ${g.subject}`).join(" | "));
+expect("deterministic: the same keys bake the same take", hashOf(tk) === hashOf(bakeTake(bsk, compileSpec(keyedSpec(SWING_KEYS), { sk: bsk, scene: bscene }).out)));
+// a key the wrist cannot reach: the contact pose turned a further 110 deg about the forearm
+const R47 = matFromQuat(SWING_KEYS[2].rot), turned = mul(axisRot(forearm(keyed, 47), 110), R47), knob = add(SWING_KEYS[2].pos, apply(R47, [0, 0.14, 0]));
+const far = SWING_KEYS.map((k, i) => (i === 2 ? { f: 47, pos: sub(knob, apply(turned, [0, 0.14, 0])), rot: quatFromMat(turned) } : k));
+const missed = compileSpec(keyedSpec(far), { sk: bsk, scene: bscene }), reach = missed.qa.groups.find(g => g.kind === "REACH");
+expect("QA reports what the wrist cannot reach: REACH \"cylinder: n cm off its keys\", caused by keys[2], the hint names the wrist limit", /^cylinder: [\d.]+ cm off its keys$/.test(reach?.subject)
+	&& reach.worst > 0.05 && reach.cause === "objects.cylinder.keys[2] f47" && /the wrist .* needs -?\d+deg \(limit/.test(reach.hint) && !missed.qa.ok, JSON.stringify(reach));
 
 if (failures) { console.error(`${failures} carried-prop check(s) failed`); process.exit(1); }
 console.log("motion3 carried props: all checks passed");
