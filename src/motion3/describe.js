@@ -7,11 +7,13 @@
 //   other topic                 { topic, schema (JSON Schema 2020-12 fragment), example, notes }
 //   topic "skills"              { topic, skills: [{ name, args, needs, frames, adds }] }
 //   topic "skills", name        { topic, name, schema (the skill's args), example (a use entry), notes }
+//   topic "examples"            { topic, examples: [{ name, scene, spec }] (whole specs, schema/spec-examples.js), notes }
 import { SPEC_FIELDS, KEY_FIELDS, USE_FIELDS, ANCHOR_FIELDS, PROP_FIELDS, FIT_FIELDS, OBJECT_FIELDS, WALK_FIELDS, CHECK_FIELDS, CHECK_ENTRY_FIELDS,
 	GOAL_FIELDS, PROBE_FIELDS, REF_KINDS, DESCRIBE_TOPICS } from "./schema/fields.js";
 import { DEFS, SPEC_TYPES, KEY_TYPES, USE_TYPES, WALK_TYPES, ANCHOR_TYPES, ANCHOR_REQUIRED, PROP_TYPES, FIT_TYPES, OBJECT_TYPES, CHECK_ENTRY_TYPES, CHECK_REQUIRED, CHECKS_TYPES,
 	GOAL_TYPES, PROBE_TYPES, FIX_TYPES, REF_DOCS } from "./schema/types.js";
 import { EXAMPLES, NOTES } from "./schema/topics.js";
+import { SPEC_EXAMPLES, EXAMPLE_NOTES } from "./schema/spec-examples.js";
 import { briefType } from "./schema/brief.js";
 import { VEC_CHANNELS, NUM_CHANNELS, MAP_CHANNELS, FINGER_PRESETS, CHANNEL_DOCS, channelFamily, rangeOf, didYouMean } from "./compiler/vocab.js";
 import { FIX_KEYS } from "./fix/index.js";
@@ -146,6 +148,7 @@ function essentials() {
 export function describe(topic, name) {
 	if (!DESCRIBE_TOPICS.includes(topic)) bad(`topic "${topic}" is not a describe topic${didYouMean(String(topic), DESCRIBE_TOPICS)} (topics: ${DESCRIBE_TOPICS.join(", ")})`);
 	if (topic === "essentials") return essentials();
+	if (topic === "examples") return { topic, examples: SPEC_EXAMPLES, notes: EXAMPLE_NOTES };
 	if (topic !== "skills") return { topic, schema: rooted(SCHEMAS[topic]()), example: EXAMPLES[topic], notes: NOTES[topic] };
 	if (name === undefined) return { topic, skills: SKILL_NAMES.map(n => ({ name: n, args: skillArgs(n), needs: SKILL_INFO[n].needs, frames: SKILL_INFO[n].frames, adds: SKILL_INFO[n].adds })) };
 	if (!SKILL_NAMES.includes(name)) bad(`skill "${name}" is not a skill${didYouMean(String(name), SKILL_NAMES)} (skills: ${SKILL_NAMES.join(", ")})`);

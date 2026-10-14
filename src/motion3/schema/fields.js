@@ -38,5 +38,5 @@ export const GOAL_FIELDS = ["name", "near", "above", "moved", "tol", "by", "at",
 export const PROBE_FIELDS = ["name", "distance", "position", "frames", "every"];
 /** Point reference kinds (C2, refs.js). */
 export const REF_KINDS = ["joint", "bone", "prop", "anchor", "landmark", "object"];
-/** motion.describe topics (C9). */
-export const DESCRIBE_TOPICS = ["essentials", "spec", "skills", "anchors", "props", "objects", "checks", "goals", "probes", "channels", "refs", "fix"];
+/** motion.describe topics (C9); examples: whole specs that compile (schema/spec-examples.js). */
+export const DESCRIBE_TOPICS = ["essentials", "spec", "skills", "anchors", "props", "objects", "checks", "goals", "probes", "channels", "refs", "fix", "examples"];

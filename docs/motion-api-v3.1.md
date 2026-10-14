@@ -193,6 +193,7 @@ qa.groups[i] = { "kind": "COLLIDE", "subject": "thigh_r x cube", "count": 6, "fi
 - `motion.describe { topic, name? }` answers `{ topic, schema (JSON Schema 2020-12 fragment), example (passes validation), notes[] }`.
 - `topic: "skills"` answers `{ topic, skills: [{ name, args, needs, frames, adds }] }`. With `name` it answers that skill's full args schema and a `use` example.
 - `topic: "essentials"` answers `{ topic, types, skills, notes }` in one call: `types` has one type line per topic and per shared shape (vec3, key, ref, ...), built from the same schemas (`schema/brief.js`); `skills` lists each skill with typed args, needs, frames and adds. The full topics stay one call each for meanings, examples and notes.
+- `topic: "examples"` answers `{ topic, examples: [{ name, scene, spec }], notes }`: four whole specs (`schema/spec-examples.js`), a reachGrip carry, a squat smoke dressed by `smokeCigarette` `args.kit`, an aim-keyed held sword, a hinged door pushed by its knob. Each compiles at QA 0 on the scene its `scene` line names, on both rigs (`test/bus/verify-motion3-examples.mjs`). It is not part of essentials.
 - Every answer is at most 6,000 bytes, except essentials: at most `DESCRIBE_BUDGET` (`describe.js`, 8,192 − 768 = 7,424 bytes; a describe receipt's head is about 570 B). It is a readOnly job.
 
 ## C10. readOnly
@@ -406,9 +407,11 @@ object.createKit { "kit": "cigarette", "name"?: "Smoke", "position"?: { "x": 0.5
 | bat | body (sculpt: knob, handle, taper frustums, barrel, end cap; 0.84 m), trail (effect on the barrel, width 0.3 along it) | root at the knob, +Y along the bat; props.batGrip of the swing fixture, at -0.14 u, along u = [0, 0.5, 0.866] |
 | ball | body (7.4 cm sphere) | props.ballGrip |
 | sword | body (sculpt: pommel, grip, guard, blade, tip; 1 m), trail | root at the grip; props.swordGrip |
-| pistol | body (sculpt), flash (glow), light | root at the grip, barrel along +X; props.gunGrip; flash and light switch on `muzzle_vis` |
+| pistol | body (sculpt), flash (glow), light | root at the grip, barrel along +X; props.gunGrip; flash and light switch on `muzzle_vis` and are `showOnlyInTake` (hidden in a static scene) |
 
 A part whose kind the build does not have is left out and named in `skipped`.
+
+A part marked `showOnlyInTake` (a record field the normalizer keeps, `object-look.js`) draws only on the frames a take's visible channel shows it; with no take, or a take that does not bind it, it is hidden (`object-travel.js` `trackShown`, `sceneObjectsAt`).
 
 A glowing part (the ember, the flame, the muzzle flash) casts no shadow: any record with `glow` is self-lit (lane K9), so a light inside it shines out. A light that renders a shadow from inside a record that casts one lights almost nothing; the receipt that places, switches or moves either says `LIGHT_BLOCKED` with the light's id and `Blocked: inside <name> (<id>), which casts shadows, so it lights almost nothing. Move it out or set shadow false.` (`src/light-blockers.js`; primitives by their drawn shape, other records by their box).
 

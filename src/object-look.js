@@ -101,6 +101,8 @@ export function objectLookFields(record, entry) {
 	if ((entry.renderer ?? entry.kind) === LIGHT_KIND) out.light = normalizeObjectLight(record.light, record.light?.type ?? entry.light?.type);
 	const glow = normalizeObjectGlow(record.glow);
 	if (glow) out.glow = glow;
+	// A kit part a take switches on (a muzzle flash and its light) stays hidden without one (object-travel.js trackShown).
+	if (record.showOnlyInTake === true) out.showOnlyInTake = true;
 	return out;
 }
 

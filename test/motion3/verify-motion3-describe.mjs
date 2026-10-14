@@ -48,7 +48,7 @@ for (const topic of DESCRIBE_TOPICS) {
 	const a = describe(topic);
 	const budget = topic === "essentials" ? DESCRIBE_BUDGET : MOTION_OUTPUT_BUDGET;
 	expect(`describe ${topic}: ${bytes(a)} B <= ${budget}`, bytes(a) <= budget, bytes(a));
-	if (topic === "skills" || topic === "essentials") continue;
+	if (topic === "skills" || topic === "essentials" || topic === "examples") continue; // examples: test/bus/verify-motion3-examples.mjs
 	expect(`describe ${topic}: { topic, schema (2020-12), example, notes }`, a.topic === topic && /2020-12/.test(a.schema.$schema) && a.example && a.notes.length > 0 && a.notes.every(n => typeof n === "string"));
 	const refs = JSON.stringify(a.schema).match(/"#\/\$defs\/[A-Za-z]+"/g) ?? [];
 	expect(`describe ${topic}: every $ref resolves`, refs.every(r => a.schema.$defs?.[r.slice(9, -1)]), refs.join());
@@ -88,7 +88,7 @@ expect("an unknown skill name is refused with a suggestion", /skill "walkto" is 
 const ess = describe("essentials"), essText = JSON.stringify(ess);
 expect("essentials answers { topic, types, skills, notes }", JSON.stringify(Object.keys(ess)) === '["topic","types","skills","notes"]' && ess.notes.every(n => typeof n === "string"));
 expect("essentials has a type line for every topic but skills, and for every shared shape it names, no other",
-	DESCRIBE_TOPICS.filter(t => t !== "skills" && t !== "essentials").every(t => typeof ess.types[t] === "string")
+	DESCRIBE_TOPICS.filter(t => t !== "skills" && t !== "essentials" && t !== "examples").every(t => typeof ess.types[t] === "string")
 	&& ["vec3", "frameSpan", "ref", "key", "use", "walk"].every(n => typeof ess.types[n] === "string") && ["checkRef", "part", "when"].every(n => !(n in ess.types)), Object.keys(ess.types).join());
 /** f is named as a field: `{f: `, `, f?: `, or folded with others of one type, `a|f|b?: ` (`f_l|r?: ` for a pair). */
 const named = (f, text) => new RegExp(`(?:[{|]|, )${f}(?:\\|\\w+)*\\??: `).test(text);

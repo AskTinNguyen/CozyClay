@@ -14,10 +14,10 @@ export const MOTION_ACTION_HELP = {
 		+ "Answers specId and qa as motion.compile does (goals, ranked groups with cause, hint and patch); output.more pages with motion.report. Changes nothing.",
 	sample: "World positions (metres) of named bones of the installed take at up to 64 frames. Bone names may be loose (any case, a mixamorig: prefix, aliases such as hips or hand_l); an unknown one answers a did-you-mean. "
 		+ "Before a take is installed, use motion.compile probes instead. Changes nothing.",
-	describe: "The motion spec reference. topic essentials answers in one call everything a first spec needs: { types (every field and type of every topic, one line each; "
-		+ "objects, channels and reachGrip also say what each field means; checks names its lists), skills (each with typed args, needs, frames, adds), notes (a carry example) }. "
-		+ "topic spec, skills, anchors, props, objects, checks, goals, probes, channels, refs or fix answers { topic, schema, example, notes } "
-		+ "with each field's meaning; skills answers the skill list, and with name one skill's args schema and a use example. Changes nothing.",
+	describe: "The motion spec reference. topic essentials answers in one call all a first spec needs: { types (every field and type of every topic, one line each; "
+		+ "objects, channels and reachGrip also say what each field means), skills (typed args, needs, frames, adds), notes }. "
+		+ "topic spec, skills, anchors, props, objects, checks, goals, probes, channels, refs or fix answers { topic, schema, example, notes }; "
+		+ "skills answers the skill list, with name one skill's args and a use example. topic examples answers whole specs that compile: a carry, a squat smoke with kits, aim keys, a hinge. Changes nothing.",
 	keyObject: "Key an object the installed take moves (objectId) at frame, then compile and install it whatever QA says (a user edit, one undo). "
 		+ "A carried object takes pos [x, y, z] and rot [x, y, z, w], or aim [x, y, z] (its +Y) and roll?: its base's world pose (a group: its root), grab..release only (objects.<id>.keys); the hand follows. "
 		+ "A hinge takes angle (degrees) or rot (its turn about the axis). remove: true deletes the key at frame. Refused where the take neither holds nor hinges it (drag it then). "

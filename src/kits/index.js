@@ -59,7 +59,8 @@ export function buildKit(kit, existing = [], { name, position = {} } = {}) {
 	for (const part of def.parts) {
 		const all = [...existing, ...records], partName = uniqueName(`${rootName} ${part.role}`, all), fresh = freshPart(part, all, partName);
 		const record = fresh && normalizeSceneObject({ ...fresh, ...placed(rootMatrix, part), name: partName, parent: root.id,
-			...(part.color ? { color: part.color } : {}), ...(part.glow ? { glow: part.glow } : {}), ...(part.effect ? { effect: part.effect } : {}), ...(part.light ? { light: part.light } : {}) });
+			...(part.color ? { color: part.color } : {}), ...(part.glow ? { glow: part.glow } : {}), ...(part.effect ? { effect: part.effect } : {}), ...(part.light ? { light: part.light } : {}),
+			...(part.showOnlyInTake ? { showOnlyInTake: true } : {}) });
 		if (!record) { skipped.push(part.role); continue; }
 		records.push(record);
 		parts[part.role] = record.id;

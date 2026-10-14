@@ -62,6 +62,7 @@ export const sword = {
 };
 
 // The barrel points along the palm's d axis (forward out of the fist), the grip runs along l.
+// The flash and its light are showOnlyInTake: hidden in a static scene, shown only on frames a take's muzzle_vis is on.
 const MUZZLE = [0.155, 0.08, 0];
 export const pistol = {
 	label: "Pistol", prop: "gunGrip",
@@ -76,8 +77,8 @@ export const pistol = {
 			{ id: "guard", shape: "torus", size: [0.045, 0.035, 0.007], position: [0.035, 0.095, 0], color: "#2f3236" },
 			{ id: "trigger", shape: "box", size: [0.006, 0.018, 0.006], position: [0.03, 0.095, 0], roundness: 0.3, color: "#1f2124" }] } },
 		{ role: "flash", kind: "sphere", at: [MUZZLE[0] + 0.025, MUZZLE[1] - 0.015, 0], scale: [0.05, 0.03, 0.03], color: "#ffe08a",
-			glow: { color: "#ffc04a", intensity: 8, halo: 2.5 }, switch: { visible: "muzzle_vis" } },
+			glow: { color: "#ffc04a", intensity: 8, halo: 2.5 }, switch: { visible: "muzzle_vis" }, showOnlyInTake: true },
 		{ role: "light", kind: "point-light", at: [MUZZLE[0] + 0.04, MUZZLE[1], 0], light: { type: "point", color: "#ffd27a", intensity: 4, range: 6, flicker: 0, shadow: false },
-			switch: { visible: "muzzle_vis" } },
+			switch: { visible: "muzzle_vis" }, showOnlyInTake: true },
 	],
 };

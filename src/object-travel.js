@@ -80,21 +80,23 @@ function trackMatrix(object, frame, take, out) {
 	return out.compose(scratchPos, scratchQuat, scratchScale);
 }
 
-const ownShown = (id, frame, take) => {
+// A record marked showOnlyInTake (a kit's muzzle flash and its light) stays hidden until a take's vis track shows it.
+const ownShown = (id, frame, take, record) => {
 	const track = take?.objectTracks?.get?.(id);
-	return !track?.vis || track.vis[trackFrame(track, frame)] === 1;
+	return track?.vis ? track.vis[trackFrame(track, frame)] === 1 : record?.showOnlyInTake !== true;
 };
 
 // False while a compiled take carries the record out of sight (a cigarette still in the pocket),
 // or hides a record it is grouped under: with `objects` (the authored records, a Map by id or the
 // list) every ancestor's vis track counts too, so a group's visible channel hides its parts.
 export function trackShown(id, frame, take, objects = null) {
-	if (!ownShown(id, frame, take)) return false;
-	if (!objects || !take?.objectTracks?.size) return true;
-	const lookup = asLookup(objects), seen = new Set([id]);
+	const lookup = objects && asLookup(objects);
+	if (!ownShown(id, frame, take, lookup?.get(id))) return false;
+	if (!lookup || !take?.objectTracks?.size) return true;
+	const seen = new Set([id]);
 	for (let parent = lookup.get(id)?.parent; typeof parent === "string" && !seen.has(parent); parent = lookup.get(parent)?.parent) {
 		seen.add(parent);
-		if (!ownShown(parent, frame, take)) return false;
+		if (!ownShown(parent, frame, take, lookup.get(parent))) return false;
 	}
 	return true;
 }
@@ -234,7 +236,7 @@ const wrapDegrees = (value) => {
  * records are returned as-is, and so is the list when nothing moves.
  */
 export function sceneObjectsAt(objects, frame, take = {}) {
-	if (!objects.some((object) => object.path || take?.objectTracks?.has?.(object.id))) return objects;
+	if (!objects.some((object) => object.path || object.showOnlyInTake || take?.objectTracks?.has?.(object.id))) return objects;
 	const lookup = asLookup(objects);
 	const matrix = new Matrix4();
 	const position = new Vector3();

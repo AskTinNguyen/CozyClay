@@ -1,4 +1,4 @@
-import { normalizeSceneObject } from '../../scene-objects.js';
+import { normalizeSceneObject, updateSceneObject } from '../../scene-objects.js';
 import { STUDIO_ELEMENTS } from '../../studio-elements.js';
 import { registerElementKind } from '../elements.js';
 
@@ -19,4 +19,8 @@ function normalizeObjectSet(record) {
   // The owning collection consumes this lifecycle intent before persistence.
   return record.remove === true ? { ...item, remove: true } : item;
 }
-registerElementKind('object', { collection: true, documentKey: 'objects', elements, normalize: normalizeObjectSet });
+// A set that moves or turns a record carries its descendants exactly as object.update, the
+// inspector and the gizmo do (updateSceneObject): rigidly about the record's pivot, scale not carried.
+const TRANSFORM = ['x', 'y', 'z', 'rotX', 'rot', 'rotZ'];
+const carryDescendants = (rows, id, after) => after ? updateSceneObject(rows, id, Object.fromEntries(TRANSFORM.map(key => [key, after[key]]))) : rows;
+registerElementKind('object', { collection: true, documentKey: 'objects', elements, normalize: normalizeObjectSet, carry: carryDescendants });
