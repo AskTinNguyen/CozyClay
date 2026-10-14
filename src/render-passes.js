@@ -105,6 +105,15 @@ export function renderPass(capture, scene, camera, kind, toDataUrl = null, optio
 	const previousMaterial = scene.overrideMaterial;
 	const previousBackground = scene.background;
 	let buffer = null;
+	// A glow halo (userData.beautyOnly) is light, not a surface: drawn with the
+	// pass material it would be a solid quad in the depth or normal plate.
+	const hidden = [];
+	scene.traverse?.((node) => {
+		if (node.userData?.beautyOnly && node.visible) {
+			hidden.push(node);
+			node.visible = false;
+		}
+	});
 	try {
 		scene.overrideMaterial = material;
 		// Empty sky is infinitely far away, so on a depth plate it is black. The
@@ -118,6 +127,7 @@ export function renderPass(capture, scene, camera, kind, toDataUrl = null, optio
 		// threw.
 		scene.overrideMaterial = previousMaterial;
 		scene.background = previousBackground;
+		for (const node of hidden) node.visible = true;
 		material.dispose();
 	}
 	if (!buffer) return null;

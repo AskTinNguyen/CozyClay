@@ -1,7 +1,7 @@
 // Studio composites prepare private domain drafts; the App owns publication,
 // history, gesture fences and semantic revision/telemetry. No UI callbacks here.
 import { Euler, Vector3, Quaternion, PerspectiveCamera } from 'three';
-import { createSceneObject, updateSceneObject, removeSceneObject, setSceneObjectParent, descendantsOf, isEffectivelyHidden, supportHeightForObject, OBJECT_LIBRARY } from './scene-objects.js';
+import { createSceneObject, updateSceneObject, removeSceneObject, setSceneObjectParent, descendantsOf, isEffectivelyHidden, supportHeightForObject, OBJECT_MENU_ENTRIES } from './scene-objects.js';
 import { createCharacterEntry } from './scenes.js';
 import { createShot, shotAtFrame } from './cuts.js';
 import { captureFraming } from './camera-move.js';
@@ -514,7 +514,8 @@ export function createStudioCommandJournal({ host, now = Date.now, isRetained = 
   };
 }
 export function studioObjectCatalogue() {
-  return freezeStudioData({ objects: OBJECT_LIBRARY.map(({ kind, footprint, height, supportY }) => ({ kind, footprint: { ...footprint }, height, supportY: supportY ?? height })), imageRefs: [],
+  // Every creatable kind: the sized library, the Empty and the two practical lights (zero footprint).
+  return freezeStudioData({ objects: OBJECT_MENU_ENTRIES.map(({ kind, footprint, height, supportY }) => ({ kind, footprint: { ...footprint }, height, supportY: supportY ?? height })), imageRefs: [],
     // The patchable vocabulary, so a caller reads the paths and their declared
     // ranges instead of guessing them from a rejection.
     patchable: Object.fromEntries(STUDIO_PATCH_KINDS.map(kind => [kind, STUDIO_PATCH_DESCRIPTORS.filter(descriptor => descriptor.path.startsWith(`${kind}.`))])) });

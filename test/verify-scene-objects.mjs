@@ -44,9 +44,11 @@ import {
 
 let failures = 0;
 const propsSource = readFileSync(new URL("../src/props.jsx", import.meta.url), "utf8");
-const carSource = propsSource.slice(
-	propsSource.indexOf("export function Car"),
-	propsSource.indexOf("export function SmallPlane"),
+// The hand-built set pieces live in their own module (set-pieces.jsx).
+const setPiecesSource = readFileSync(new URL("../src/set-pieces.jsx", import.meta.url), "utf8");
+const carSource = setPiecesSource.slice(
+	setPiecesSource.indexOf("export function Car"),
+	setPiecesSource.indexOf("export function SmallPlane"),
 );
 function expect(name, condition, detail = "") {
 	console.log(`${condition ? "PASS" : "FAIL"} ${name}${condition ? "" : ` — ${detail}`}`);
@@ -69,7 +71,7 @@ const defaultIds = new Set(DEFAULT_SCENE_OBJECTS.map((object) => object.id));
 expect("default objects have unique IDs", defaultIds.size === DEFAULT_SCENE_OBJECTS.length);
 expect("default registry excludes the car", !DEFAULT_SCENE_OBJECTS.some((object) => object.renderer === "car"));
 expect("default registry excludes the chair", !DEFAULT_SCENE_OBJECTS.some((object) => object.renderer === "chair"));
-expect("only the chair renderer applies the 90 percent scale", propsSource.includes("export function Chair") && propsSource.includes('rotation={[0, rotY, 0]} scale={0.9}') && !carSource.includes("scale={0.9}"));
+expect("only the chair renderer applies the 90 percent scale", setPiecesSource.includes("export function Chair") && setPiecesSource.includes('rotation={[0, rotY, 0]} scale={0.9}') && !carSource.includes("scale={0.9}"));
 expect("default player scene excludes the small plane", !DEFAULT_SCENE_OBJECTS.some((object) => object.renderer === "small-plane"));
 expect("default player scene contains no props", DEFAULT_SCENE_OBJECTS.length === 0);
 const hierarchy = buildHierarchyNodes(objects);

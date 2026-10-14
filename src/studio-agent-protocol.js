@@ -1,5 +1,6 @@
 // Shared by the browser and sidecar. No Node, React, renderer or provider imports.
 import { STUDIO_ELEMENTS, isSettableElement } from "./studio-elements.js";
+import { STUDIO_ERROR_CODES } from "./studio-error-codes.js";
 import { wrongType, unknownField, missingField, arrayRefusal, duplicateItem, stringRefusal, enumRefusal, numberRefusal, unionRefusal } from "./studio-schema-errors.js";
 // Mirrors PREVIS_MODES (project.js) and POSTURES (scenes.js). Neither is imported:
 // both pull in three.js, which the agent sidecar must not load. The protocol test pins the lists to their owners.
@@ -28,12 +29,7 @@ export const STUDIO_TOOLS = Object.freeze(Object.keys(STUDIO_TOOL_LABELS));
  * object→objects, shot→shot, stage→stage. */
 export const STUDIO_PATCH_KINDS = Object.freeze(["character", "object", "shot", "stage"]);
 export const STUDIO_PATCH_DOMAINS = Object.freeze({ character: "cast", object: "objects", shot: "shot", stage: "stage" });
-export const STUDIO_ERROR_CODES = Object.freeze([
-	"INVALID_ARGUMENT", "INVALID_CONTEXT", "INVALID_IDENTITY", "INVALID_TURN_ID", "INVALID_SESSION_ID", "INVALID_RECEIPT", "INVALID_RANGE", "INVALID_REQUEST",
-	"UNKNOWN_TOOL", "UNKNOWN_VARIANT", "DUPLICATE_NAME", "CONTEXT_LIMIT", "CONTEXT_TOO_LARGE", "AMBIGUOUS_TARGET", "AMBIGUOUS_BASIS", "TARGET_NOT_READY", "TARGET_BUSY",
-	"STALE_TARGET", "STALE_SCENE", "STALE_ENVIRONMENT", "STALE_CURSOR", "CAPABILITY_MISSING", "LIVE_HUB_UNAVAILABLE", "AUTH_REQUIRED", "GENERATION_LIMIT", "RATE_LIMITED", "BACKEND_UNAVAILABLE",
-	"VERIFICATION_FAILED", "REPAIR_REGRESSED", "CANCELLED", "UNCERTAIN_APPLY", "UNDO_CONFLICT", "CONFIRMATION_REQUIRED", "TIMEOUT", "UNDO_EXPIRED",
-]);
+export { STUDIO_ERROR_CODES };
 export const STUDIO_VARIANTS = freezeStudioData({
 	selectionKinds: ["scene", "object", "character", "rig", "camera"], modes: ["scene", "pose", "camera", "motion"], shotModes: ["keys", "follow", "rail"],
 	framingSizes: ["extreme close-up", "close-up", "medium close-up", "medium shot", "medium-wide shot", "wide shot", "extreme wide shot"],
@@ -129,8 +125,11 @@ const cameraKey = object({ frame: integer(), framing: object({ pos: vec3, yaw: n
 // rules; this only carries the shape through untouched.
 const routeMark = union(number(0, 1), object({ t: number(0, 1) }, { bank: number(-90, 90), pitch: number(-90, 90) }));
 const objectRoute = nullable(object({ points: array(vec3, 64, 2) }, { speed: number(0, 50), faceTravel: bool, loop: bool, extend: bool, marks: array(routeMark, 6) }));
+// A practical light and a glow (src/object-look.js owns the defaults and the repair).
+const objectLight = object({}, { type: choices(["point", "spot"]), color: { ...text(32), pattern: "^#[0-9a-fA-F]{6}$" }, intensity: number(0, 1000), range: number(0, 100), angle: number(1, 89), softness: number(0, 1), shadow: bool, flicker: number(0, 1), aim: nullable(vec3) });
+const objectGlow = nullable(object({}, { color: { ...text(32), pattern: "^#[0-9a-fA-F]{6}$" }, intensity: number(0, 20), halo: number(0, 4) }));
 const PATCH_VALUE_SCHEMAS = {
-	"character.pose": nullable(id), "character.identityImage": nullable(dataImage),
+	"character.pose": nullable(id), "character.identityImage": nullable(dataImage), "object.light": objectLight, "object.glow": objectGlow,
 	"object.parent": nullable(id), "object.path": objectRoute, "stage.environmentImage": nullable(dataImage),
 	"shot.cameraKeys": array(cameraKey, 64), "shot.targetModel": nullable(id),
 };

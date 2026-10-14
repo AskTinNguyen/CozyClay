@@ -8,15 +8,19 @@ const changed = (receipt) => { assert.equal(receipt.ok, true, JSON.stringify(rec
 const patches = {
   renderer: 'sphere', position: { x: 2, y: 3, z: 4 }, rotation: { x: 10, y: 20, z: 30 }, scale: { x: 2, y: 3, z: 4 },
   name: 'Renamed', color: '#123456', opacity: 0.3, parent: 'sphere', path: { points: [{ x: 0, y: 0, z: 0 }, { x: 2, y: 0, z: 1 }], speed: 2 }, remove: true,
+  glow: { color: '#ff5a1f', intensity: 6, halo: 2 }, light: { intensity: 0.45, flicker: 0.6 },
 };
+// A light is set on a light record (a cube has none); every other path on the cube.
+const targetFor = (f, path) => path === 'light' ? changed(f.run('object.add', { kind: 'point-light' }, 'agent')).affectedIds[0] : 'cube';
 assert.deepEqual(Object.keys(patches).sort(), STUDIO_ELEMENTS.filter(e => e.path.startsWith('object.') && isSettableElement(e)).map(e => e.path.slice(7)).sort());
 for (const [path, value] of Object.entries(patches)) {
   const f = objectsFixture();
   try {
-    const direct = changed(f.run('object.set', { id: 'cube', set: { [path]: value } }, 'agent'));
+    const id = targetFor(f, path);
+    const direct = changed(f.run('object.set', { id, set: { [path]: value } }, 'agent'));
     const after = structuredClone(f.objects.store.objects);
     assert.equal(f.run('edit.undo', { receiptId: direct.receiptId }).status, 'undone');
-    const alias = changed(f.binding.handlers.patch_elements(f.request('patch_elements', { ops: [{ target: { kind: 'object', id: 'cube' }, set: { [path]: value } }] })));
+    const alias = changed(f.binding.handlers.patch_elements(f.request('patch_elements', { ops: [{ target: { kind: 'object', id }, set: { [path]: value } }] })));
     assert.deepEqual(f.objects.store.objects, after, `generic/patch parity ${path}`);
     assert.equal(alias.status, 'applied', JSON.stringify(alias));
     if (path === 'remove') assert.deepEqual(alias.delta[0].after.patched, [{ path: 'object.remove', flag: true }]);

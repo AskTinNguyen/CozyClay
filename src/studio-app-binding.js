@@ -6,7 +6,7 @@ import { readElementDocument, elementReadback, elementPatchArgs, elementTarget, 
 import { physicsKeyStamp } from "./motion/physics-review.js";
 import { shotAtFrame } from "./cuts.js";
 import { isProxyFigure } from "./scenes.js";
-import { CUTOUT_KIND, MESH_KIND, OBJECT_LIBRARY, supportHeightForObject } from "./scene-objects.js";
+import { CUTOUT_KIND, MESH_KIND, OBJECT_MENU_ENTRIES, supportHeightForObject } from "./scene-objects.js";
 import { buildStudioContext, physicsFingerprintInput, studioEntityCursor, validateStudioCursor } from "./studio-agent-context.js";
 import { createStudioCommandJournal, entityWorldBounds, framingChecks, localTransformReadback, placementChecks, sampledFramingResult, studioObjectCatalogue } from "./studio-agent-commands.js";
 import { verifyInstalledTake } from "./studio-agent-motion.js";
@@ -134,7 +134,7 @@ export function createStudioAppBinding(ports) {
 	const frameRange = row => ({ startFrame: row.startFrame, endFrameExclusive: row.endFrame + 1 });
 	function assetList(s) {
 		const catalogue = studioObjectCatalogue().objects.map(({ kind }) => {
-			const entry = OBJECT_LIBRARY.find(row => row.kind === kind);
+			const entry = OBJECT_MENU_ENTRIES.find(row => row.kind === kind);
 			return { kind, name: entry?.label ?? kind, type: entry?.group === "Primitives" ? "primitive" : "set-piece" };
 		});
 		const imported = new Map();

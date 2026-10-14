@@ -97,13 +97,18 @@ export function elementPatchArgs(kind, args) {
   });
   return collection ? ops.length === 1 ? ops[0] : { ops } : ops.reduce((patch, op) => mergeElementSet(patch, op.set), {});
 }
+// Unasked, an optional structured value (a glow, a light) is listed only where
+// the item has one, so every plain object's receipt stays as short as before.
+const listed = (element, item, paths) => paths ? paths.includes(element.path) : element.type !== 'object' || readElement(item, element.path) != null;
 export function elementReadback(kind, item, paths, document) {
-  return patchElements(projectionKind(kind)).filter(element => !paths || paths.includes(element.path)).map(element => {
+  return patchElements(projectionKind(kind)).filter(element => listed(element, item, paths)).map(element => {
     const path = element.path;
     if (element.readback) return { path, ...element.readback(item, document) };
     const value = readElement(item, path);
     if (value === null || value === undefined || value === '') return { path, text: null };
     if (element.type === 'image') return { path, bytes: utf8ByteLength(value) };
+    // A small structured value (a light, a glow) reads back whole, as compact JSON.
+    if (element.type === 'object') return { path, text: JSON.stringify(value).slice(0, 512) };
     if (element.type === 'vec3') return { path, vec: value };
     if (element.type === 'array') return { path, count: Array.isArray(value) ? value.length : value.points?.length ?? 0 };
     return { path, [typeof value === 'number' ? 'number' : typeof value === 'boolean' ? 'flag' : 'text']: value };

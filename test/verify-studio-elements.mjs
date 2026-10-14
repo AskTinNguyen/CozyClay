@@ -13,7 +13,7 @@ const normalizers = {
 	normalizeSceneObject,
 	repairCamera: (camera) => createShotAuthoringDocument({ frameCount: 96, shots: [{ id: "shot-test", startFrame: 0, endFrame: 95, camera }] }).shots[0].camera,
 };
-const allowedTypes = new Set(["number", "string", "boolean", "vec3", "color", "enum", "id", "image", "array"]);
+const allowedTypes = new Set(["number", "string", "boolean", "vec3", "color", "enum", "id", "image", "array", "object"]);
 const allowedDomains = new Set(["cast", "objects", "shot", "stage", null]);
 const allowedNormalizers = new Set([...Object.keys(normalizers), null]);
 
@@ -144,6 +144,8 @@ function makeCase(entry) {
 		if (field === "attach") input.attach = { characterId: "char-test", bone: "rightHand" };
 		if (field === "path") input.path = { points: [{ x: 1, y: 0, z: 2 }, { x: 4, y: 1, z: 5 }] };
 		if (field === "cutout") Object.assign(input, { renderer: "cutout", assetId: "image-authored", aspect: 1.5, height: 2 });
+		if (field === "light") Object.assign(input, { renderer: "light", light: { type: "spot", color: "#FFAA00", intensity: 40, range: 12, angle: 35, softness: 0.5, shadow: true, flicker: 0.2, aim: { x: 0, y: 0, z: 1 } } });
+		if (field === "glow") input.glow = { color: "#ff5a1f", intensity: 6, halo: 2 };
 		return {
 			input,
 			output: normalizeSceneObject(input),
@@ -201,6 +203,8 @@ const expected = new Map([
 	["object.attach", { characterId: "char-test", bone: "rightHand" }],
 	["object.path", { points: [{ x: 1, y: 0, z: 2 }, { x: 4, y: 1, z: 5 }], marks: [], timing: null, speed: 0, faceTravel: true, loop: false, extend: false }],
 	["object.cutout", "image-authored"],
+	["object.light", { type: "spot", color: "#ffaa00", intensity: 40, range: 12, angle: 35, softness: 0.5, shadow: true, flicker: 0.2, aim: { x: 0, y: 0, z: 1 } }],
+	["object.glow", { color: "#ff5a1f", intensity: 6, halo: 2 }],
 ]);
 
 let verified = 0;
@@ -226,6 +230,7 @@ const sample = {
 	image: () => "data:image/png;base64,AAAA",
 	vec3: () => ({ x: 1, y: 2, z: 3 }),
 	string: () => "sample text",
+	object: (entry) => (entry.path === "object.light" ? { type: "point", intensity: 0.45, flicker: 0.6, aim: null } : { color: "#ff5a1f", intensity: 6, halo: 2 }),
 	array: (entry) => (entry.path === "object.path"
 		? { points: [{ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 1 }] }
 		: entry.path === "shot.cameraKeys"

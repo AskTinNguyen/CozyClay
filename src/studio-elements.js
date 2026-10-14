@@ -34,7 +34,7 @@ const entries = [
 	
 	{ path: "character.sessionMotion", type: "array", persisted: false, undoDomain: "cast", normalizer: "createCharacterEntry", note: "dropped by createCharacterEntry" },
 	{ path: "character.ikKeys", type: "array", persisted: false, undoDomain: "cast", normalizer: "createCharacterEntry", actions: ["character.setIkKey", "character.removeIkKey", "character.clearIkKeys"], note: "dropped by createCharacterEntry; keys travel as JSON quaternions/positions" },
-	{ path: "object.renderer", type: "enum", persisted: true, undoDomain: "objects", normalizer: "normalizeSceneObject", enum: ["cube", "sphere", "capsule", "cylinder", "cone", "plane", "chair", "car", "small-plane", "empty"] },
+	{ path: "object.renderer", type: "enum", persisted: true, undoDomain: "objects", normalizer: "normalizeSceneObject", enum: ["cube", "sphere", "capsule", "cylinder", "cone", "plane", "chair", "car", "small-plane", "empty", "light"], note: "light is made from catalogue kind point-light or spot-light" },
 	{ path: "object.position", type: "vec3", persisted: true, undoDomain: "objects", normalizer: "normalizeSceneObject", min: { x: -240, y: 0, z: -240 }, max: { x: 240, y: 240, z: 240 }, note: "y is the object's base: y=0 rests on the floor; height/supportY rise from it" },
 	{ path: "object.rotation", type: "vec3", persisted: true, undoDomain: "objects", normalizer: "normalizeSceneObject", min: { x: -180, y: -180, z: -180 }, max: { x: 180, y: 180, z: 180 }, note: "rot/rotX/rotZ degrees, wrapped at the upper bound" },
 	{ path: "object.scale", type: "vec3", persisted: true, undoDomain: "objects", normalizer: "normalizeSceneObject", min: { x: 0.01, y: 0.01, z: 0.01 }, max: { x: 100, y: 100, z: 100 } },
@@ -46,6 +46,8 @@ const entries = [
 	{ path: "object.path", type: "array", persisted: true, undoDomain: "objects", normalizer: "normalizeSceneObject" },
 	{ path: "object.remove", type: "boolean", persisted: true, undoDomain: "objects", normalizer: null, note: "lifecycle operation, not a document field" },
 	{ path: "object.cutout", type: "image", persisted: true, undoDomain: "objects", normalizer: "normalizeSceneObject", actions: ["asset.import"], note: "assetId-backed cutout record; imported pictures and models are placed by asset.import" },
+	{ path: "object.light", type: "object", persisted: true, undoDomain: "objects", normalizer: "normalizeSceneObject", note: "renderer light only. { type point|spot, color, intensity 0..1000 candela (lighter 0.45, candle 0.3, desk lamp 5, street lamp 40), range m (0 none), angle 1..89 deg spot half-angle, softness 0..1, shadow (first 2 lights only), flicker 0..1 (lighter 0.6), aim {x,y,z} world point or null = local -Y }, e.g. { intensity: 40, aim: { x: 0, y: 0, z: 1 } }; a take level track scales it" },
+	{ path: "object.glow", type: "object", persisted: true, undoDomain: "objects", normalizer: "normalizeSceneObject", note: "any record: self-lit colour plus additive halo, same under any stage light. { color, intensity 0..20, halo 0..4 x the record's radius }, e.g. ember { color: \"#ff5a1f\", intensity: 6, halo: 2 }; null removes; a take level track scales it" },
 	{ path: "stage.keyLight.x", type: "number", persisted: true, undoDomain: "stage", normalizer: "createSceneStage", min: -30, max: 30 },
 	{ path: "stage.keyLight.y", type: "number", persisted: true, undoDomain: "stage", normalizer: "createSceneStage", min: 0.5, max: 30 },
 	{ path: "stage.keyLight.z", type: "number", persisted: true, undoDomain: "stage", normalizer: "createSceneStage", min: -30, max: 30 },

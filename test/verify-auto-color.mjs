@@ -45,6 +45,7 @@ expect(
 import { readStudioSource } from "./bus/verify-domain-modules.mjs";
 const app = readStudioSource();
 const props = readFileSync(new URL("../src/props.jsx", import.meta.url), "utf8");
+const setPieces = readFileSync(new URL("../src/set-pieces.jsx", import.meta.url), "utf8");
 const planview = readFileSync(new URL("../src/planview.jsx", import.meta.url), "utf8");
 
 expect(
@@ -70,7 +71,7 @@ expect(
 );
 expect(
 	"auto-colored surfaces use the flat solid-view response, not the lit clay one",
-	props.includes("function autoFlat") && props.includes("emissive: hex") && props.includes("roughness: 1"),
+	setPieces.includes("function autoFlat") && setPieces.includes("emissive: hex") && setPieces.includes("roughness: 1") && props.includes("autoFlat(autoColor)"),
 );
 expect(
 	"the plan board agrees with the viewport",

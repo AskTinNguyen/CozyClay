@@ -8,6 +8,7 @@ import { expandSculptParts, normalizeSculptRecipe, patchSculptRecipe } from '../
 import { rankingRow, scoreSculptAgainstReference } from '../sculpt-compare.js';
 import { browserSculptImages, shrinkRgba } from './sculpt-images.js';
 import { clampWarning } from '../receipt-findings.js';
+import { withShadowCapWarnings } from '../object-look.js';
 import { STUDIO_TOOL_SCHEMAS, StudioSchemas } from '../studio-agent-protocol.js';
 
 const id = StudioSchemas.TargetGuard.properties.targetId;
@@ -80,7 +81,7 @@ export function register(registry, ports) {
 			// goes to the top where it is seen, not below a long expanded group.
 			const next = args.first ? [placed, ...before] : [...before, placed];
 			owned().write(args.parent === undefined ? next : setSceneObjectParent(next, placed.id, args.parent));
-			return result(before, 'Added object.');
+			return withShadowCapWarnings(result(before, 'Added object.'), owned().read());
 		},
 		'object.sculpt': args => {
 			const before = owned().read();
@@ -156,7 +157,7 @@ export function register(registry, ports) {
 		},
 		'objects.arrange': args => {
 			const plan = owned().arrange(args);
-			return { affectedIds: plan.affectedIds, summary: 'Arranged objects.', checks: plan.checks, warnings: plan.warnings };
+			return withShadowCapWarnings({ affectedIds: plan.affectedIds, summary: 'Arranged objects.', checks: plan.checks, warnings: plan.warnings }, owned().read());
 		},
 	};
 	// Scalar scale is a convenience at the command boundary; the registry still
@@ -173,7 +174,7 @@ export function register(registry, ports) {
 				if (object.attach) fail('CAPABILITY_MISSING', 'Use object.group to preserve an attached object world transform.');
 				draft = setSceneObjectParent(draft, id, parent);
 			}
-			return entry.run(args.ops ? { ops } : ops[0]);
+			return withShadowCapWarnings(entry.run(args.ops ? { ops } : ops[0]), owned().read());
 		} });
 	} }, ports, semantic[0]);
 	for (const declaration of semantic.slice(1)) registry.register({ ...declaration, available, run: methods[declaration.id] });

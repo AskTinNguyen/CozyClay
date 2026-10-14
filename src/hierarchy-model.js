@@ -121,7 +121,7 @@ function objectRow(object, label) {
 		kind: "object",
 		hidden: object.hidden === true,
 		// The record's kind, so a row can say it is a node with nothing to draw.
-		...(object.renderer === "empty" ? { renderer: "empty" } : {}),
+		...(object.renderer === "empty" || object.renderer === "light" ? { renderer: object.renderer } : {}),
 	};
 }
 
