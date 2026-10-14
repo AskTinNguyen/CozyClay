@@ -30,6 +30,8 @@ export function createSkeleton(rigJson) {
 		mouth: toHead(L.mouth),
 		headCentre: toHead(L.headEllipsoid.centre),
 		headRadii: L.headEllipsoid.radii.map(v => v * CM),
+		// how far the skin's sole lies below the ToeBase / Toe_End joints at bind (m; qa/geometry.js solePoints)
+		sole: { ball: (L.sole?.ball ?? 0) * CM, tip: (L.sole?.tip ?? 0) * CM },
 	};
 	return { model: rigJson.model, names, index, parent, children, subtree, restLocalPos, restLocalRot, restWorldPos, restWorldRot, landmarks };
 }

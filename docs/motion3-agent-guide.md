@@ -55,7 +55,7 @@ The compiler fixes small mechanical errors itself and reports each fix in `outpu
 | Fix | Default | What it does |
 |---|---|---|
 | `reach` | on | A wrist target up to 5 cm past the arm's reach goes onto it through a soft knee, so the arm never snaps straight. An ankle target up to 5 cm past the leg's reach lowers the hips just enough, eased over 6 frames. Farther misses stay for QA (`REACH`). |
-| `slide` | on | A planted heel or ball that drifts less than 1 cm stays where it landed. |
+| `slide` | on | A sole point under the floor lifts its ankle onto the floor (`fixed.ground`), so a squat with the heels up stands on the balls of the feet. A planted heel or ball that drifts less than 1 cm stays where it landed. A foot that turns (`fyaw`, `fpitch`) on its planted ball with the heel up, or on its planted heel, pivots about that point whatever the drift (`fixed.slide.pivots`): a batter's back foot turns on its ball. |
 | `penetration` | off; `0.02` or `true` | A hand or forearm inside a scene box by at most this much past its allowance moves out along the box normal, eased. FK arms (`armw` 0) are counted as `skipped`. |
 | `retime` | off; `true` | Key intervals around a speed or acceleration spike get longer, borrowed from the neighbouring key intervals. The frame count stays. Frame-range checks follow. |
 
@@ -78,7 +78,7 @@ Example: walking off past an open door. `turnDistance: { range: [0.2, 2.0] }` fo
 - `aswing` + swings the arm forward; `abend` + bends the elbow.
 - `wtwist`/`wflex` are clamped to ±85 and ±70. A mirrored pose negates them.
 - A hinge angle turns about its axis by the right-hand rule: about `[0, 1, 0]`, + turns +Z toward +X.
-- `root` is the hips joint. Standing hips height is about 1.03 m on the X Bot and 0.99 m on the Y Bot. **`foot_*` is the ankle**: it stands 0.087 m (X Bot) above the floor, not 0.
+- `root` is the hips joint. Standing hips height is about 1.03 m on the X Bot and 0.99 m on the Y Bot. **`foot_*` is the ankle**: it stands 0.087 m (X Bot) or 0.105 m (Y Bot) above the floor, not 0.
 - Anchor names must not end in `_l` or `_r`: the side goes on the weight channel (`w_handle_l`).
 
 The compiler validates the spec strictly and lists every problem with an exact message, one per line, e.g. `keys[3] (f32) sets unknown channel "fpitch_left"; did you mean "fpitch_l"?` or `keys[6] (f54) knee_l = [0,0,-1] points backward; knees bend toward +z.` Unknown channels, wrong vector arity, frames out of range, `fps` other than 24, unknown anchors, bones, objects, fields and skills are all refused.

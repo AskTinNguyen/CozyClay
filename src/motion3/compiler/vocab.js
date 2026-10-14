@@ -26,7 +26,7 @@ export const CONVENTIONS = {
 	yaw: "yaw 0 faces +Z and + turns toward +X",
 	fyaw: "foot heading in degrees, as yaw",
 	pole: "a body-frame direction (turned by the root yaw only): +z forward, +x the character's left, +y up",
-	foot: "the ANKLE target in world metres; a standing ankle is 0.087 m above the floor",
+	foot: "the ANKLE target in world metres (standing: 0.087 X Bot, 0.105 Y Bot)",
 	hand: "the WRIST target in world metres",
 	root: "the hips joint in world metres (standing: 1.03 X Bot, 0.99 Y Bot)",
 };
@@ -35,7 +35,7 @@ export const CONVENTIONS = {
 export const CHANNEL_DOCS = {
 	root: CONVENTIONS.root, yaw: `degrees; ${CONVENTIONS.yaw}`, pitch: "whole-body pitch, degrees", roll: "whole-body roll, degrees",
 	spine_yaw: "degrees", spine_pitch: "degrees, + bends forward", spine_roll: "degrees", head_yaw: "degrees", head_pitch: "degrees, + looks down", head_roll: "degrees",
-	arm_rest: "FK arms down from the T-pose (default 72)", foot: CONVENTIONS.foot, fyaw: CONVENTIONS.fyaw, fpitch: "toe-down pitch, degrees",
+	arm_rest: "FK arms down from the T-pose (default 72)", foot: CONVENTIONS.foot, fyaw: CONVENTIONS.fyaw, fpitch: "toe-down pitch, degrees, + heel up",
 	knee: `knee pole, ${CONVENTIONS.pole}`, armw: "0 = FK arm, 1 = IK to hand_* / the anchors", hand: CONVENTIONS.hand, elbow: `elbow pole, ${CONVENTIONS.pole}`,
 	wtwist: "wrist twist, degrees", wflex: "wrist flex, degrees", aswing: "FK arm swing, degrees, + forward", abend: "FK elbow bend, degrees",
 	fingers: "{ preset: weight 0..1 }",

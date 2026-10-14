@@ -53,12 +53,31 @@ const hb = { x: ext(0), y: ext(1), z: ext(2) };
 const mouthY = hb.y[0] + 0.16 * (hb.y[1] - hb.y[0]);
 const near = rows.filter(r => r.front > 0).sort((a, b) => Math.abs(a.y - mouthY) - Math.abs(b.y - mouthY)).slice(0, 3);
 const mouthZ = Math.max(...near.map(r => r.front)) + 0.3;
+// The left foot's skin (every skinned mesh, vertices at least half weighted to LeftFoot/LeftToe*,
+// the membership the verify_result floor measure uses). QA's ball and tip sole points ride the
+// ToeBase and Toe_End joints this far down (cm, to the mm; < 0: the skin is above the joint):
+// ball = the lowest skin under the toe pad (from ToeBase halfway to Toe_End), tip = the lowest
+// skin in the front 1.5 cm of the foot.
+const footSkin = [];
+root.traverse(m => {
+	const g = m.isSkinnedMesh && m.geometry.attributes, wp = new THREE.Vector3();
+	if (!g?.skinIndex) return;
+	for (let i = 0; i < g.position.count; i++) {
+		let w = 0;
+		for (let j = 0; j < 4; j++) if (/LeftFoot|LeftToe/.test(m.skeleton.bones[g.skinIndex.getComponent(i, j)]?.name ?? "")) w += g.skinWeight.getComponent(i, j);
+		if (w >= 0.5) footSkin.push(wp.fromBufferAttribute(g.position, i).applyMatrix4(m.matrixWorld).toArray());
+	}
+});
+const toe = B("LeftToeBase"), toeEnd = B("LeftToe_End"), front = Math.max(...footSkin.map(p => p[2]));
+const lowest = (z0, z1) => Math.min(...footSkin.filter(p => p[2] >= z0 && p[2] <= z1).map(p => p[1]));
+const mm = x => Math.round(x * 10) / 10 || 0;
 out.landmarks = {
 	// all in bind-pose world cm; the compiler re-expresses them in the Head bone frame
 	mouth: [0, mouthY, mouthZ],
 	headEllipsoid: { centre: [(hb.x[0] + hb.x[1]) / 2, (hb.y[0] + hb.y[1]) / 2, (hb.z[0] + hb.z[1]) / 2],
 		radii: [(hb.x[1] - hb.x[0]) / 2, (hb.y[1] - hb.y[0]) / 2, (hb.z[1] - hb.z[0]) / 2] },
 	headJoint: head, headTop: top,
+	sole: { ball: mm(toe[1] - lowest(toe[2], (toe[2] + toeEnd[2]) / 2)), tip: mm(toeEnd[1] - lowest(front - 1.5, front)) },
 };
 const file = path.resolve("src/motion3/rigs", `${model}.json`);
 fs.mkdirSync(path.dirname(file), { recursive: true });

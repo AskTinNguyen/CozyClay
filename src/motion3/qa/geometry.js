@@ -44,13 +44,24 @@ export function headDepth(sk, s, p) {
 	return (1 - v) * Math.min(...r);
 }
 
-/** Sole points carried by a foot: heel (below the ankle) and toe tip, from the rest pose. */
+/** The rig's standing ankle height (m): where foot_* stands a flat foot on the floor (X Bot 0.087, Y Bot 0.105). */
+export const ankleY = sk => Math.round(sk.restWorldPos[sk.index.LeftFoot][1] * 1000) / 1000;
+
+/** A point `drop` m straight below bone b's joint at bind, carried by b (the joint itself when 0). */
+const below = (sk, s, b, drop) => (drop ? bonePoint(s, b, apply(T(sk.restWorldRot[b]), [0, -drop, 0])) : s.P[b]);
+
+/**
+ * Sole points carried by a foot, on the skin's sole (the surface verify_result's floor measure
+ * reads): heel 4.5 cm behind and 0.5 cm above the bottom of the ankle at bind; ball under the
+ * ToeBase joint at the toe pad; tip at the front edge. The rig's sole landmark says how far the
+ * skin lies below the joints (X Bot: on the ball joint; Y Bot: 3.3 cm under it).
+ */
 export function solePoints(sk, s, side) {
-	const I = sk.index, P = sk.restWorldPos;
-	const foot = I[`${side}Foot`], toeEnd = I[`${side}Toe_End`] ?? I[`${side}ToeBase`];
+	const I = sk.index, P = sk.restWorldPos, drop = sk.landmarks.sole ?? {};
+	const foot = I[`${side}Foot`], toe = I[`${side}ToeBase`], toeEnd = I[`${side}Toe_End`] ?? toe;
 	const heelRest = [P[foot][0], 0.005, P[foot][2] - 0.045];
 	const heelLocal = apply(T(sk.restWorldRot[foot]), sub(heelRest, P[foot]));
-	return { heel: bonePoint(s, foot, heelLocal), ball: s.P[I[`${side}ToeBase`]], tip: s.P[toeEnd] };
+	return { heel: bonePoint(s, foot, heelLocal), ball: below(sk, s, toe, drop.ball), tip: below(sk, s, toeEnd, drop.tip) };
 }
 
 /** Outward unit normal of a box at p (the nearest face from inside, the closest direction from outside). */

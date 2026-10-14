@@ -8,7 +8,7 @@ import { channelsAt } from "../compiler/channels.js";
 import { resolveAnchor } from "../compiler/anchors.js";
 import { carried } from "../compiler/limbs.js";
 import { pointOf } from "./spec-checks.js";
-import { solePoints } from "./geometry.js";
+import { solePoints, ankleY } from "./geometry.js";
 import { vec, m3 } from "./fmt.js";
 import { moveHint } from "./hints-contact.js";
 import { bodyMove } from "./hints-goal.js";
@@ -112,13 +112,18 @@ export const motionHints = {
 		const k = sideOf(g.subject), S = k === "l" ? "Left" : "Right", key = g.subject.includes("heel") ? "heel" : "ball";
 		const f0 = Math.max(0, g.first - 1), at = f => solePoints(X.sk, X.fr(f).s, S)[key];
 		const slid = Math.hypot(at(g.last)[0] - at(f0)[0], at(g.last)[2] - at(f0)[2]), hold = X.out.baked[`foot_${k}`]?.[f0];
+		// the ankle stays and the foot turns flat on the floor (fyaw): the turn is the slide
+		const turn = X.out.baked[`fyaw_${k}`], end = X.out.baked[`foot_${k}`]?.[g.last];
+		if (turn && hold && end && Math.hypot(end[0] - hold[0], end[2] - hold[2]) < slid / 2 && Math.abs(turn[g.last] - turn[f0]) > 1) return { cause: X.cause(`fyaw_${k}`, g.worstFrame),
+			hint: `fyaw_${k}: the flat foot turns ${m3(turn[f0])} -> ${m3(turn[g.last])} deg over f${f0}-f${g.last} and the ${key} slides ${m3(slid)} m; key fyaw_${k} ${m3(turn[f0])} at f${g.last} so it turns once the foot is up, or lift the heel first (fpitch_${k} +) so it pivots on the ball`,
+			fix: { channel: `fyaw_${k}`, f: g.last, value: turn[f0] } };
 		return { cause: X.cause(`foot_${k}`, g.worstFrame), hint: `foot_${k}: hold it still over f${f0}-f${g.last}${hold ? ` (key ${vec(hold)} at both ends)` : ""}; the ${key} slides ${m3(slid)} m${slid < 0.01 ? "; fix.slide locks this when on" : ""}`,
 			fix: hold && { channel: `foot_${k}`, f: g.last, value: hold } };
 	},
 	SPEED: (X, g) => speedHint(X, g, 1),
 	POP: (X, g) => speedHint(X, g, 0.5),
 	ACC: (X, g) => speedHint(X, g, 0.5),
-	FLOAT: (X, g) => ({ cause: X.cause("root", g.worstFrame), hint: `over f${g.first}-f${g.last} lower the root or key foot_l/foot_r back to the floor (ankle y 0.087); a jump needs the hips to rise and fall; a seat or ledge the body rests on goes in checks.supports` }),
+	FLOAT: (X, g) => ({ cause: X.cause("root", g.worstFrame), hint: `over f${g.first}-f${g.last} lower the root or key foot_l/foot_r back to the floor (ankle y ${ankleY(X.sk)}); a jump needs the hips to rise and fall; a seat or ledge the body rests on goes in checks.supports` }),
 	LENGTH: () => ({ cause: "compiler", hint: "a bone changed length: report the spec, this is a compiler fault" }),
 	CONTACT(X, g) {
 		const ck = (X.spec.checks?.contacts ?? []).find(c => g.subject.startsWith(`${c.name}:`)), f = g.worstFrame, i = X.rel(f);

@@ -2,7 +2,7 @@
 // other limb. Each answers a world move (direction x amount) for whatever drives that part.
 import { add, sub, scale, norm, dot, len, clamp, apply, ry, T } from "../compiler/math.js";
 import { bonePoint } from "../compiler/skeleton.js";
-import { CAPSULES, segPoints, sdBox, boxNormal, headDepth, segDist, solePoints } from "./geometry.js";
+import { CAPSULES, segPoints, sdBox, boxNormal, headDepth, segDist, solePoints, ankleY } from "./geometry.js";
 import { vec, m3 } from "./fmt.js";
 
 const MARGIN = 0.003;
@@ -80,7 +80,7 @@ export const contactHints = {
 	GROUND(X, g) {
 		const k = g.subject.startsWith("Left") ? "l" : "r", f = g.worstFrame, c = X.fr(f).c;
 		const pitch = c[`fpitch_${k}`] ? `, or less fpitch_${k} (now ${m3(c[`fpitch_${k}`])} deg; + lifts the heel)` : "";
-		return { cause: X.cause(`foot_${k}`, f), hint: `foot_${k}: raise ${m3(g.worst + 0.001)} m at f${f} (foot_* is the ankle; it stands 0.087 m above the floor)${pitch}`,
+		return { cause: X.cause(`foot_${k}`, f), hint: `foot_${k}: raise ${m3(g.worst + 0.001)} m at f${f} (foot_* is the ankle; it stands ${ankleY(X.sk)} m above the floor)${pitch}`,
 			fix: { channel: `foot_${k}`, f, delta: [0, g.worst + 0.001, 0] } };
 	},
 	FACE(X, g) {
@@ -123,7 +123,7 @@ export const contactHints = {
 	},
 	BALANCE(X, g) {
 		const f = g.worstFrame, { s } = X.fr(f), P = s.P, I = X.I;
-		if (g.subject === "no foot on the ground") return { cause: X.cause("root", f), hint: `at f${f} lower foot_l or foot_r to the floor (ankle y 0.087), or declare checks.supports for the seat the hips rest on` };
+		if (g.subject === "no foot on the ground") return { cause: X.cause("root", f), hint: `at f${f} lower foot_l or foot_r to the floor (ankle y ${ankleY(X.sk)}), or declare checks.supports for the seat the hips rest on` };
 		const com = scale(["Hips", "Spine1", "Spine2", "Head"].reduce((acc, j) => add(acc, P[I[j]]), [0, 0, 0]), 0.25);
 		const feet = ["Left", "Right"].flatMap(S => Object.values(solePoints(X.sk, s, S)));
 		const xs = feet.map(p => p[0]), zs = feet.map(p => p[2]), mg = 0.08 - 0.01;

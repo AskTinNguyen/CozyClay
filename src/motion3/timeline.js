@@ -9,8 +9,8 @@
 // generators, and the runs of keys no skill or generator covers; a retime (out.timeMap) moves
 // them with the keys. end is the pose at f[1]: root = the Hips joint, hand_* = the wrists,
 // on_* = the "object:<id>" that hand holds there (object-pose.js inHandAt), else the
-// "anchor:<a>" whose w_<a>_<k> > 0.5 (the largest). planted = heel and ball below
-// QA_LIMITS.plantH and still, for 3 frames or more (the first, the last and the longest others
+// "anchor:<a>" whose w_<a>_<k> > 0.5 (the largest). planted = the heel or the ball below
+// QA_LIMITS.plantH and still (a foot on its ball, heel up, is planted), for 3 frames or more (the first, the last and the longest others
 // when there are more than 4). Events: grab/release when an object enters or leaves a hand,
 // show/hide when a visibility channel (a carry's or a switch's `visible`, or any *_vis channel)
 // crosses 0.5; `object` is the object id (one event per object the channel shows), or the
@@ -40,7 +40,7 @@ function beatsOf(out, used, spec) {
 	return beats.sort((a, b) => a.f[0] - b.f[0]).slice(0, MAX_BEATS);
 }
 
-/** planted[side][f]: heel and ball low and still at absolute frame f (false outside the window). */
+/** planted[side][f]: the heel or the ball low and still at absolute frame f (false outside the window). */
 function plantedFlags(out) {
 	const { sk } = out.ctx, n = out.frameCount, a = out.f0 ?? 0, flags = { l: new Uint8Array(n), r: new Uint8Array(n) };
 	for (const [k, S] of [["l", "Left"], ["r", "Right"]]) {
@@ -48,7 +48,7 @@ function plantedFlags(out) {
 		sole.forEach((p, i) => {
 			const q = sole[i > 0 ? i - 1 : i + 1];
 			if (!p || !q) return;
-			const ok = ["heel", "ball"].every(key => p[key][1] < QA_LIMITS.plantH && Math.abs(p[key][1] - q[key][1]) < STILL_Y
+			const ok = ["heel", "ball"].some(key => p[key][1] < QA_LIMITS.plantH && Math.abs(p[key][1] - q[key][1]) < STILL_Y
 				&& Math.hypot(p[key][0] - q[key][0], p[key][2] - q[key][2]) <= QA_LIMITS.slide);
 			flags[k][a + i] = ok ? 1 : 0;
 		});
