@@ -11,6 +11,9 @@
  *     the record's radius. It writes no depth, casts no shadow and is never
  *     raycast, so it cannot occlude, shadow or be picked.
  * Both scale with `gain` (the take's level, times a light's flicker).
+ * A glowing record is self-lit, so its meshes cast no shadow while it glows: a
+ * practical light placed inside a glowing bulb or flame lights the set instead
+ * of being shut in by the bulb's own faces (light-blockers.js).
  *
  * State is kept per group in a WeakMap, never in `userData` (React replaces a
  * group's userData on every render). Removing the glow restores each
@@ -66,13 +69,14 @@ function makeHalo() {
 	return halo;
 }
 
-/** Each lit material the record draws on the default layer (editor markers and
- * the halo itself are left alone). */
-function forEachGlowMaterial(group, visit) {
+/** Each mesh the record draws on the default layer, and each of its lit
+ * materials (editor markers and the halo itself are left alone). */
+function forEachGlowMesh(group, visitMesh, visitMaterial) {
 	group.traverse((node) => {
 		if (!node.isMesh || !node.layers.isEnabled(0)) return;
+		visitMesh(node);
 		for (const material of Array.isArray(node.material) ? node.material : [node.material]) {
-			if (material?.emissive?.isColor) visit(material);
+			if (material?.emissive?.isColor) visitMaterial(material);
 		}
 	});
 }
@@ -82,6 +86,7 @@ function clearGlow(group, state) {
 		material.emissive.copy(base.emissive);
 		material.emissiveIntensity = base.intensity;
 	}
+	for (const mesh of state.shadowless) mesh.castShadow = true;
 	state.halo.removeFromParent();
 	state.halo.material.dispose();
 	glowStates.delete(group);
@@ -108,12 +113,17 @@ export function placeObjectGlow(group, object, gain) {
 		return;
 	}
 	if (!state) {
-		state = { halo: makeHalo(), bases: new Map() };
+		state = { halo: makeHalo(), bases: new Map(), shadowless: new Set() };
 		glowStates.set(group, state);
 	}
 	if (state.halo.parent !== group) group.add(state.halo);
 	const strength = glow.intensity * gain;
-	forEachGlowMaterial(group, (material) => {
+	forEachGlowMesh(group, (mesh) => {
+		// a mesh rebuilt while glowing (a new kind, a loaded file) casts again until this pass
+		if (!mesh.castShadow) return;
+		mesh.castShadow = false;
+		state.shadowless.add(mesh);
+	}, (material) => {
 		if (!state.bases.has(material)) state.bases.set(material, { emissive: material.emissive.clone(), intensity: material.emissiveIntensity });
 		material.emissive.set(glow.color);
 		material.emissiveIntensity = strength;

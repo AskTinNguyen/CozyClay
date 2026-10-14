@@ -269,6 +269,7 @@ QA errors are kept for what is broken whatever the motion is for. Quantities tha
 - Peak acceleration includes the centripetal part: a swing's wrist peaks near its fastest frame.
 - `balance.min` skips frames carried by a declared support and frames where no foot counts; `air` lists the runs with both soles 2 cm or more above the floor.
 - Budget (C7): observations are tier 1 (always kept) and bounded (10 joints, 4 limbs, at most about 1 KB).
+- `paced` (only when a skill paced its beats to fit a short span, C15): one line per such skill, `"smokeCigarette paced 0.90 to fit f1..f239"`.
 
 ## C14. Held-object keys and motion.keyObject (lane J2)
 
@@ -402,13 +403,16 @@ object.createKit { "kit": "cigarette", "name"?: "Smoke", "position"?: { "x": 0.5
 
 A part whose kind the build does not have is left out and named in `skipped`.
 
+A glowing part (the ember, the flame, the muzzle flash) casts no shadow: any record with `glow` is self-lit (lane K9), so a light inside it shines out. A light that renders a shadow from inside a record that casts one lights almost nothing; the receipt that places, switches or moves either says `LIGHT_BLOCKED` with the light's id and `Blocked: inside <name> (<id>), which casts shadows, so it lights almost nothing. Move it out or set shadow false.` (`src/light-blockers.js`; primitives by their drawn shape, other records by their box).
+
 ### smokeCigarette: args.kit, channels, any posture
 
 - `args.kit: { cig: <rootId>, lighter: <rootId>, exhale?: <the exhale kit's rootId, or an effect id> }`. The skill adds the `spec.objects` entries itself: the cigarette root `{ prop: "cig", grab: f0+28, at: [0, 0, 0], along: [0, 0, 1], visible: "cig_vis" }`, the lighter root `{ prop: "lighter", grab: f0+35, release: f0+102, at: [0, 0, 0], along: [0, 1, 0], visible: "lit_vis" }`, and switches found by what the parts are: under the cigarette a glowing body and a light `{ visible: "ember_vis", level: "ember" }` and an effect `{ visible: "ember_vis" }`; under the lighter a glowing body and a light `{ visible: "flame_vis" }`; the exhale `{ follow: "landmark:mouth", aim: "face", visible: "exhale" }` (C16, amended by lane K6: it was a switch on an emitter the agent placed at the mouth, which a moving or squatting head left behind).
 - The exhale emitter needs no placing: `object.createKit { kit: "exhale" }` (an Empty root and an exhale effect part on it) answers the rootId to pass, and the follow entry puts the root on the mouth every frame. It also allows the kits 3 cm (cigarette, right thigh) and 4.5 cm (lighter, left thigh) into the thigh their pocket is on.
 - Refusal: `use[i] smokeCigarette: args.kit.cig "<id>" is not a group in the scene; object.createKit { kit: "cigarette" } answers its rootId` (and for lighter, an unknown field), and `use[i] smokeCigarette: args.kit.exhale "<id>" is not a scene object; object.createKit { kit: "exhale" } answers its rootId (it follows the mouth)`.
 - New channels (in `spec.channels` of the expanded spec): `exhale` (1 over f0+116..137 and f0+238..259) and `ember` (0 before f0+73, 1 when it catches, 2 on each drag f0+80..90 and f0+200..212, 0.6 between).
-- Any posture keyed before f0 (`needs: a pose keyed before f0: standing or squatting`):
+- **Pacing (lane K9).** The skill runs f0..f0+264 (265 frames, 11.0 s). When `args.until` (default: the spec's last frame) leaves a span of 198..263 frames after f0 (199..264 frames, at least 75%), every beat's frame is scaled by span / 264 and rounded: the keys keep their order, the switch steps are not stretched, and the frames above (and the kit's grab/release) scale the same way. The answer says so in `output.observations.paced` (`["smokeCigarette paced 0.90 to fit f1..f239"]`) and `output.skills[i].paced`. A shorter span is refused: `use[i] smokeCigarette: needs frames f1..f199 at least: 199 frames, 8.3 s at 24 fps, paced 0.75 (265 frames, 11.0 s, at its own pace); it has f1..f198, so set frames >= 200 or frames: "auto"` (with `args.until`: `so set args.until >= 199`). `motion.describe` skills: `frames: "265 nominal; fits 199..264 by pacing"`. With 265 frames or more after f0 nothing changes: the takes bake bit for bit as before.
+- Any posture keyed before f0 (`needs: a stand or squat keyed before f0`):
   - head_pitch keys are offsets from the head pitch keyed before f0 (standing: 0, unchanged);
   - the right arm's elbow poles (to the lips, holding) turn with the torso lean, `pitch + spine_pitch`, so the reach to the lips comes from the body (the lighter arm stays upright);
   - a squat (the hips below 0.7 of the rig's standing height) rests the cigarette hand over the right knee (`anchors.hold` from the knee joint at f0, pulled in to 0.88 of the arm's reach), moves the hand between the lips and the knee through `anchors.mouthOut` (20 cm straight ahead of the mouth), and brings the lighter back to the pocket over 20 frames instead of 16. The hand's detour circle around the torso (`detourRadius`) jumps where a path leaves it sideways, which a straight lips-to-knee move does over a leaning torso. The compiler is unchanged: standing takes compile bit for bit as before.

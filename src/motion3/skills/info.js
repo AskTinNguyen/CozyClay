@@ -53,10 +53,10 @@ export const SKILL_INFO = {
 		example: { f0: 0, args: { car: "Car" } },
 	},
 	smokeCigarette: {
-		args: { until: int("hold to this frame; default the last frame"),
+		args: { until: int("hold to this frame; default the last frame; under f0+264 the beats are paced to fit"),
 			kit: { type: "object", properties: { cig: str("the cigarette kit's rootId (object.createKit)"), lighter: str("the lighter kit's rootId"), exhale: str("the exhale kit's rootId (or an effect): it follows the mouth") },
 				required: ["cig", "lighter"], additionalProperties: false, description: "kits the skill carries and lights: it adds their spec.objects entries itself" } },
-		needs: "a pose keyed before f0: standing or squatting", frames: "265 (to args.until)",
+		needs: "a stand or squat keyed before f0", frames: "265 nominal; fits 199..264 by pacing",
 		adds: ["anchors lpocket, rpocket, hold, mouth, flame", "props cig, lighter", "channels cig_vis, lit_vis, flame_vis, ember_vis, exhale, ember",
 			"checks contacts, orient, below, appear, mouthPoints"],
 		example: { f0: 0, args: {} },

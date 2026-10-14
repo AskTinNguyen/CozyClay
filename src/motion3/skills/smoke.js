@@ -5,7 +5,8 @@
 // stands, and from any pose keyed before f0 (a squat): the head turns from its own pitch, the
 // right arm's poles lean with the torso (pitch + spine_pitch), and a squat rests the hand over
 // the knee (smoke-kit.js). Channels exhale (1 while breathing out) and ember (the tip's level:
-// 0.6 idle, 2 on a drag) drive kits; args.kit binds them (smoke-kit.js). Needs 265 frames after f0.
+// 0.6 idle, 2 on a drag) drive kits; args.kit binds them (smoke-kit.js). It runs 265 frames from
+// f0 (f0..f0+264); a shorter span down to 75% of that (199 frames) paces every beat to fit.
 import { keyBook, skillError } from "./book.js";
 import { kitObjects, squatAnchors } from "./smoke-kit.js";
 import { apply, rx } from "../compiler/math.js";
@@ -16,15 +17,21 @@ const EL_MOUTH_R = [0.4, -1, 0.6], EL_HOLD_R = [-0.4, -1, -0.3], EL_LIGHT_L = [0
 const ALL = ["armw_r", "armw_l", "w_rpocket_r", "w_lpocket_l", "w_hold_r", "w_mouth_r", "w_flame_l", "elbow_r", "elbow_l",
 	"wtwist_r", "wflex_r", "wtwist_l", "wflex_l", "head_pitch", "head_yaw", "spine_pitch", "root", "fingers_l", "fingers_r",
 	"cig_vis", "lit_vis", "flame_vis", "ember_vis", "exhale", "ember"];
+/** The last key at its own pace is f0 + NOMINAL; a span down to PACE_MIN of it is paced to fit. */
+const NOMINAL = 264, PACE_MIN = 0.75, MIN_SPAN = Math.ceil(NOMINAL * PACE_MIN);
+/** motion.compile takes only the timeline rate (motion3.js), so seconds in a refusal are at 24 fps. */
+const secs = n => (n / 24).toFixed(1);
 const DEFAULTS = { armw_r: 0, armw_l: 0, w_rpocket_r: 0, w_lpocket_l: 0, w_hold_r: 0, w_mouth_r: 0, w_flame_l: 0, elbow_r: [-0.5, -0.4, -1], elbow_l: [0.5, -0.4, -1],
 	wtwist_r: 0, wflex_r: 0, wtwist_l: 0, wflex_l: 0, head_pitch: 0, head_yaw: 0, spine_pitch: 0, fingers_l: { grip: 0, fist: 0 }, fingers_r: { cigarette: 0 },
 	cig_vis: 0, lit_vis: 0, flame_vis: 0, ember_vis: 0, exhale: 0, ember: 0 };
 
 export function smokeCigarette(ctx) {
-	// by default it holds to the last frame (or ends with its own motion while frames is "auto"); too
-	// few frames are named by the expander
-	const until = ctx.args.until ?? (ctx.auto ? ctx.f0 + 264 : Math.max(ctx.frames - 1, ctx.f0 + 264));
-	if (until < ctx.f0 + 264) skillError(ctx.tag, `needs frames f${ctx.f0}..f${ctx.f0 + 264} at least (args.until ${until})`);
+	// by default it holds to the last frame (or ends with its own motion while frames is "auto"); a
+	// span short of NOMINAL down to MIN_SPAN is paced, a shorter one refused with what it needs
+	const until = ctx.args.until ?? (ctx.auto ? ctx.f0 + NOMINAL : ctx.frames - 1), span = until - ctx.f0;
+	if (span < MIN_SPAN) skillError(ctx.tag, `needs frames f${ctx.f0}..f${ctx.f0 + MIN_SPAN} at least: ${MIN_SPAN + 1} frames, ${secs(MIN_SPAN + 1)} s at 24 fps, paced ${PACE_MIN} `
+		+ `(${NOMINAL + 1} frames, ${secs(NOMINAL + 1)} s, at its own pace); it has f${ctx.f0}..f${until}, `
+		+ (ctx.args.until === undefined ? `so set frames >= ${ctx.f0 + MIN_SPAN + 1} or frames: "auto"` : `so set args.until >= ${ctx.f0 + MIN_SPAN}`));
 	if (!Array.isArray(ctx.state.root)) skillError(ctx.tag, "needs a pose keyed before f0 (root): standing or squatting");
 	const fresh = Object.fromEntries(Object.entries(DEFAULTS).filter(([c]) => ctx.state[c] === undefined));
 	if (Object.keys(fresh).length) Object.assign(ctx.state, structuredClone(fresh));
@@ -34,7 +41,13 @@ export function smokeCigarette(ctx) {
 	const EL_MOUTH = lean ? apply(rx(lean), EL_MOUTH_R) : EL_MOUTH_R, EL_HOLD = lean ? apply(rx(lean), EL_HOLD_R) : EL_HOLD_R;
 	const squat = squatAnchors(ctx);
 	if (squat) ctx.state.w_mouthOut_r = 0;
-	const k = keyBook(ctx.state, ctx.f0), root0 = ctx.state.root.slice(), yaw = ctx.state.yaw ?? 0;
+	// a short span scales every beat's frame by `pace` (>= 0.75): rounding keeps the keys in order,
+	// and a gap of 2 frames or more stays at least 1 (the lighter reaches the tip 3 frames before
+	// the flame shows, the pocket 2 before it hides), so each switch still happens with the hand
+	// where the contacts and appear checks want it; the steps themselves are not stretched
+	const pace = span < NOMINAL ? span / NOMINAL : 1, t = f => Math.round(f * pace), book = keyBook(ctx.state, ctx.f0);
+	const k = pace === 1 ? book : { ...book, at: (f, set) => book.at(t(f), set), hold: (f, ...names) => book.hold(t(f), ...names), step: (f, ch, v) => book.step(t(f), ch, v) };
+	const root0 = ctx.state.root.slice(), yaw = ctx.state.yaw ?? 0;
 	/** The hand from the lips to the rest over f0+a..f0+b, and back; in a squat through mouthOut (smoke-kit.js). */
 	const raise = (a, b) => {
 		k.hold(a, "w_mouth_r", "w_hold_r", "wtwist_r", "wflex_r", "elbow_r", "head_pitch", "root", ...(squat ? ["w_mouthOut_r"] : []));
@@ -104,10 +117,10 @@ export function smokeCigarette(ctx) {
 	lower(212, 236);
 	k.at(246, { head_pitch: H(-14) });
 	k.at(264, { head_pitch: H(0) });
-	k.hold(until - ctx.f0, ...ALL, ...(squat ? ["w_mouthOut_r"] : []));
-	const kit = kitObjects(ctx, { cig: ctx.f0 + 28, lit: ctx.f0 + 35, unlit: ctx.f0 + 102 });
+	book.hold(span, ...ALL, ...(squat ? ["w_mouthOut_r"] : []));
+	const kit = kitObjects(ctx, { cig: ctx.f0 + t(28), lit: ctx.f0 + t(35), unlit: ctx.f0 + t(102) });
 	return {
-		keys: k.keys, end: until, channels: ["exhale", "ember"], ...(kit ? { objects: kit.objects } : {}),
+		keys: book.keys, end: until, ...(pace < 1 ? { paced: Math.floor(pace * 100) / 100 } : {}), channels: ["exhale", "ember"], ...(kit ? { objects: kit.objects } : {}),
 		anchors: {
 			lpocket: { kind: "body", p: [0.13, -0.035, 0.08] }, rpocket: { kind: "body", p: [-0.13, -0.035, 0.08] }, hold: { kind: "body", p: squat?.hold ?? [-0.24, 0.03, 0.06] },
 			...(squat ? { mouthOut: { kind: "body", p: squat.mouthOut } } : {}),

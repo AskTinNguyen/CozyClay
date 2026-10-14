@@ -41,7 +41,7 @@ function argsOk(u, i, lenient) {
 }
 
 /**
- * spec with `use` -> { spec: plain spec (no use), used: [{ skill, f0, end }] }; lenient ignores
+ * spec with `use` -> { spec: plain spec (no use), used: [{ skill, f0, end, paced? }] }; lenient ignores
  * unknown use[i] fields and args. auto (frames-auto.js) lets a skill that holds to the last
  * frame end where its own motion ends.
  */
@@ -67,7 +67,7 @@ export function expandUse(spec, { sk, scene, lenient = false, auto = false }) {
 		for (const fit of part.fits ?? []) if (!merged.fits.some(x => same(x, fit))) merged.fits.push(fit);
 		for (const ch of part.channels ?? []) if (!merged.channels.includes(ch)) merged.channels.push(ch);
 		mergeChecks(merged.checks, part.checks);
-		used.push({ skill: u.skill, f0: u.f0, end: part.end });
+		used.push({ skill: u.skill, f0: u.f0, end: part.end, ...(part.paced ? { paced: part.paced } : {}) });
 	});
 	const out = { ...spec, keys: [...skillKeys, ...own], anchors: { ...merged.anchors, ...spec.anchors }, props: { ...merged.props, ...spec.props },
 		objects: { ...merged.objects, ...spec.objects } };

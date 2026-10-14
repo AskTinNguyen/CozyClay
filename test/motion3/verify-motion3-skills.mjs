@@ -75,10 +75,14 @@ let msg = "";
 try { compileSpec({ ...exitcar(), use: [{ skill: "exitCar", f0: 0, args: { seat: "Nope" } }] }, { sk, scene: car }); } catch (error) { msg = error.message; }
 expect("a skill names its bad argument", msg.includes("use[0] exitCar: args.seat \"Nope\" is not a scene object"), msg);
 
-// 5. Too few frames names what the skill needs; frames "auto" ends where the last skill ends.
+// 5. Too few frames names what the skill needs (smokeCigarette first paces down to 75% of its
+//    length); frames "auto" ends where the last skill ends.
+msg = "";
+try { compileSpec({ ...exitcar(), frames: 420 }, { sk, scene: car }); } catch (error) { msg = error.message; }
+expect("a skill past the last frame says how many frames it needs", msg.includes('use[2] walkTo needs 194 frames from f246 (to f440), past the last frame f419; set frames >= 441 or frames: "auto"'), msg);
 msg = "";
 try { compileSpec({ ...exitcar(), frames: 600 }, { sk, scene: car }); } catch (error) { msg = error.message; }
-expect("a skill past the last frame says how many frames it needs", msg.includes('use[3] smokeCigarette needs 264 frames from f440 (to f704), past the last frame f599; set frames >= 705 or frames: "auto"'), msg);
+expect("smokeCigarette short of its paced minimum says the frames and seconds it needs", msg.includes('use[3] smokeCigarette: needs frames f440..f638 at least: 199 frames, 8.3 s at 24 fps, paced 0.75 (265 frames, 11.0 s, at its own pace); it has f440..f599, so set frames >= 639 or frames: "auto"'), msg);
 expect("frames auto: smokeCigarette (holding to the end) ends with its own motion", resolveFrames({ ...exitcar(), frames: "auto" }, { sk, scene: car }).frames === 705);
 
 // 6. The spec store keeps the "auto" intent beside the resolved number (spec-store.js): get()
