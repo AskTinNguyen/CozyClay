@@ -309,10 +309,17 @@ spec.objects[id] = { "prop": "batGrip", "grab": 30, "release": 90,
 
 - `palm = key o attach^-1`. The palm frame is `carriedPose(..., { prop })` at the prop origin.
 - `attach` is the plain carry's offset: the `at`/`along` transform, or the grab-frame palm offset solved without the keys (a group, or `grab` without `at`/`along`). The keys never feed back into it.
-- The arm IK reaches for the wrist position that puts the grip on the key. The elbow stays in the bend plane the channels gave it.
-- The hand turns about the wrist within the limits, relative to its rest on the forearm. Twist about the forearm: -85..85. Flex: -70..70. Deviation: -35..20 (+ toward the thumb). The solve runs 3 times.
-- On keyed frames the hand ignores `hand_<side>` and a fit on the holding hand. The other hand's fit to a prop point (`kind: "prop"` anchor) follows the keyed object.
-- `diag.hold_<side> = { w, miss, twist, flex, dev }` holds what the hand needed: metres, then degrees before the clamp. `diag.arm_miss_<side>` is scaled by `1 - w`.
+- The arm IK reaches for the wrist position that puts the grip on the key.
+- **The whole arm follows the object (lane K8, `compiler/arm-orient.js`).** Before K8 the elbow stayed in the bend plane the channels gave it and the wrist alone turned the object, so most bat angles a person holds were out of reach (session 16d12ba9: the wrist deviation needed 121 deg). Now:
+  - **Swivel.** The elbow swings about the shoulder-wrist axis. A pole is scored by the wrist strain it leaves (each turn's squared share of its half range, plus 400 times the squared share past a limit), a light pull toward the channels' bend plane (0.5 (1 - cos); a keyed `elbow_<side>` is a preference, no longer a rule) and the same steep price more than 100 deg from it (the upper arm's own roll).
+  - **Twist.** The turn about the forearm (pronation and supination, -85..85) is shared: the forearm bone turns half of it about its own axis, the hand the rest, so the skin twists along the forearm.
+  - **Wrist.** The hand adds the rest within the limits, relative to its rest on the forearm: flex -70..70, deviation -35..20 (+ toward the thumb). The solve runs 3 times. Only what is still past a limit after the swivel and the twist is a residual.
+  - **The elbow's path** (`hold-plan.js`). On every frame the keys lead, the soft minimum of 72 poles (5 deg apart) is read on the plain pose of that frame; the path then minimises, over the whole keyed span, each frame's cost plus 1000 times the squared elbow acceleration (Gauss-Newton, a 5-diagonal solve). The best pole can move 20 deg a frame while a bat whips through the zone; following it would jerk (POP). Every frame reads the same plan, so a frame still solves on its own (windowed compiles, frames solved on demand) and the same spec gives the same take.
+  - **Blend.** The swing from the channels' bend plane scales with the lead weight `w`, so the elbow eases out of and back into the plain arm.
+- **The second hand** (`second-hand.js`). A left hand with a weight on a `kind: "prop"` anchor of the carry's prop (the right hand holds it), with or without a fit, turns with the keyed object too. Its grip is the holding hand's mirrored across the plane of the object's +Y and the holding fingers (the object's +Y runs through the left palm frame as through the right one, knuckles in line), turned about +Y to the roll its wrist holds most easily (36 rolls; the roll's path is planned like the elbow's, on the frames solved with the holding hand). The anchor keeps its meaning: the wrist stays where it put the hand (with a fit, the palm, the fit's effector), the elbow in its plane. A grip the wrist cannot hold fades out (weight `exp(-max(0, strain - 3) / 10)`, smoothed over the frames), so the hand stays nearer the plain arm instead of flipping at a limit. QA excuses that hand against the object on the frames it grips (COLLIDE, `diag.hold_l.second`).
+- On keyed frames the hand ignores `hand_<side>` and a fit on the holding hand.
+- `diag.hold_<side> = { w, miss, twist, flex, dev, swivel, second? }` holds what the hand needed: metres, then degrees before the clamp, and the degrees the elbow swung from the channels' bend plane (`second`: the object a second hand grips). `diag.arm_miss_<side>` is scaled by `1 - w`.
+- Frames the keys do not lead (`w` 0) and takes without object keys are bit for bit the takes before K8.
 
 **The object stays in the hand.** The take track, refs, probes, goals and QA read `palm o attach` (`object-pose.js`). What the hand could not reach shows as a residual on the object, not as a gap between hand and object.
 
@@ -320,7 +327,7 @@ spec.objects[id] = { "prop": "batGrip", "grab": 30, "release": 90,
 
 - `REACH "<id>: 6.2 cm off its keys"`, `limit` = `checks.limits.reach` (0.01 m).
 - `cause` = `"objects.<id>.keys[2] f47"`, the key nearest the worst frame.
-- `hint` names the reason: `the arm is 6.0 cm short`, or `the wrist twist about the forearm needs -94deg (limit -85..85)`. No fix and no patch: only the user or the agent decides the pose.
+- `hint` names the reason: `the arm is 6.0 cm short`, or what the wrist still needs once the arm turned, `the wrist twist about the forearm needs -94deg (limit -85..85) after the elbow swung 40deg and the forearm turned`; then `key a pose nearer the hand, or bring the body to it (root, yaw, spine_yaw)`, and for a rot key or an aim key with roll `; an aim key without roll takes the roll the arm holds most easily`. No fix and no patch: only the user or the agent decides the pose.
 
 **`motion.keyObject`** (job, not readOnly):
 
@@ -467,8 +474,9 @@ spec.objects[id] = { "follow": "landmark:mouth", "offset"?: [x, y, z], "aim"?: "
 ```
 
 - **aim** is the world direction the object's +Y points (a bat: knob to barrel; a kit root's +Y). It is named like the follow `aim` (where +Y points). A spot light's `light.aim` (K2) is a world point, which is different.
-- **The turn** is the shortest turn from where the plain carry (no keys) holds the object at that key's frame onto aim, then **roll** degrees about aim (right-handed). So roll 0 keeps the hand's own roll, and the wrist can follow.
+- **The turn** is the shortest turn from where the plain carry (no keys) holds the object at that key's frame onto aim, then **roll** degrees about aim (right-handed). A given roll (0 included) is used exactly.
   - The orchestrator asked for "the minimal twist from the previous key". Over a swing that piles the roll up: the J2 fixture's four keys written as 2-decimal aims missed by 45.5 cm (REACH, 32.4 deg off at f53) when each key turned from the key before it. Turned from the plain carry, the same aims draw every key within 0.0 deg and 0.0 cm, with the same QA as the rot keys.
+- **No roll: the roll the arm holds most easily** (lane K8, `key-aim.js`). Roll 0 kept the plain carry's roll, and a wrist that cannot reach it left session 16d12ba9 at 77.0 cm REACH. Now 24 rolls 15 deg apart are scored by the arm that would hold them at that key's frame (`compiler/hold.js` `holdCost`: the strain at the soft-minimum pole of C14's swivel, plus 1 per squared centimetre the arm is short); a pass over the keys in order (dynamic programming) picks one per key with 0.2 times the squared turn (radians) from the key before, so equally easy rolls do not alternate; a golden-section search settles each pick within its 15 deg. On 16d12ba9 every key is then drawn within 1 deg (REACH 5.3 cm where three keys are beyond the arm's reach, QA 115 -> 65); the same keys with `roll: 0` stay at 75.6 cm.
 - **Hemisphere continuity and grid.** The quaternion is rounded to 1e-5 (the grid `motion.keyObject` writes) and kept on the hemisphere of the key before it. `rot` keys are used as given, so every rot-key take bakes bit for bit as before.
 - **Validation** (exact messages):
   - `objects.<id>.keys[i] gives both rot and aim; give one: rot [x, y, z, w], or aim [x, y, z] (the world direction its +Y points) with roll`
@@ -486,6 +494,8 @@ spec.objects[id] = { "follow": "landmark:mouth", "offset"?: [x, y, z], "aim"?: "
 ## Fixture
 
 `test/motion3/fixtures/bat-swing.mjs` holds the baseball swing of session 294ac65a (C14): the bat `cylinder`, the plate `cube`, the installed spec `spec-3a5803641a71` and four bat keys.
+
+`test/motion3/fixtures/bat-aim-swing.mjs` holds the bat-kit swings of sessions 16d12ba9 (`spec-c66116660dc4`, nine aim keys without roll) and 6912547c (`spec-86cfd6cf7fae`, 38 rot keys), rebuilt from the logs (lane K8).
 
 `test/motion3/fixtures/cup-scene.mjs` holds the table group `empty` (top `cube`, legs `cube-2` to `cube-5`), the cup group `empty-2` under it (`cylinder`, handle `cube-6/7/8`) and `char-a` (Y Bot at the origin, yaw 0), with the ids and values of the baseline session.
 

@@ -6,7 +6,9 @@
 //            only from grab on appears in the hand (a cigarette out of a pocket): nothing to pick up.
 //   COLLIDE  "<part> x <id>": a body capsule in a carried object (every part box of a group) at
 //            any frame it is shown, the holding hand and forearm excused (the fingers ride on the
-//            hand); "<id> x <other>": a carried object in another scene box from grab on, the
+//            hand), and a second hand on the frames it grips the object at weight 0.5 or more
+//            (../second-hand.js);
+//            "<id> x <other>": a carried object in another scene box from grab on, the
 //            support it stood on at grab excused for +-3 frames around grab and release. The
 //            depths and checks.allow work as for the body (checks.js); <id> is the spec.objects
 //            key, so a group reads as one object.
@@ -94,8 +96,9 @@ export function objectChecks(sk, out, spec) {
 			const f = i + f0, boxes = objectBoxesAt(out, id, f);
 			if (!boxes || !shownAt(out, o, f)) continue;
 			const ids = boxes.map(b => b.id), spheres = boxes.map(b => [b, centre(b), len(b.half)]), { s } = out.frames[i];
+			const grips = Object.entries(out.frames[i].diag).filter(([k, v]) => /^hold_[lr]$/.test(k) && v?.second === id && v.w >= 0.5).map(([k]) => `hand_${k.slice(-1)}`);
 			for (const [part, a, b, r] of CAPSULES) {
-				if (excused.has(part)) continue;
+				if (excused.has(part) || grips.includes(part)) continue;
 				const A = s.P[I[a]], B = s.P[I[b]], mid = scale(add(A, B), 0.5), reach = r + dist(A, B) / 2, l = lim([part], [id, ...ids]);
 				let pts = null, pen = -Infinity;
 				for (const [box, c, rb] of spheres) {

@@ -6,9 +6,10 @@ import { add, sub, scale, norm, len, apply, mul, rx, ry, rz } from "./math.js";
 import { restState, rotateSubtree } from "./skeleton.js";
 import { twoBone, orientFoot, wrist, fingers } from "./limbs.js";
 import { holdHand } from "./hold.js";
+import { ELBOW_REST } from "./arm-orient.js";
 
 export const SIDES = { l: "Left", r: "Right" };
-const KNEE_REST = [0, 0, 1], ELBOW_REST = [0, 0, -1];
+const KNEE_REST = [0, 0, 1];
 
 const v3 = (x, d = [0, 0, 0]) => (Array.isArray(x) || ArrayBuffer.isView(x) ? [x[0], x[1], x[2]] : d);
 const num = (x, d = 0) => (typeof x === "number" && Number.isFinite(x) ? x : d);
@@ -41,7 +42,7 @@ function softReach(sk, s, a, fa, h, target, diag, k) {
  * hooks.afterArm(side, s, diag) lets the caller measure props carried by that hand.
  * hooks.push(side) -> [x,y,z] | undefined, a world offset added to the IK target (auto-fix).
  * hooks.softReach clamps unreachable wrist targets smoothly (auto-fix).
- * hooks.hold(side) -> { w, palm, measure } | null: a held object's keys lead the hand (hold.js).
+ * hooks.hold(side, s) -> { w, palm, measure, pole?, second? } | null: a held object's keys lead the hand (hold.js).
  */
 export function pose(sk, c, hooks = {}) {
 	const s = restState(sk);
@@ -93,7 +94,7 @@ export function pose(sk, c, hooks = {}) {
 		}
 		wrist(sk, s, side, num(c[`wtwist_${k}`]), num(c[`wflex_${k}`]));
 		fingers(sk, s, side, c[`fingers_${k}`]);
-		const held = hooks.hold?.(k);
+		const held = hooks.hold?.(k, s);
 		if (held) holdHand(sk, s, side, held, poleIk, ELBOW_REST, diag, k);
 		hooks.afterArm?.(k, s, diag);
 	}

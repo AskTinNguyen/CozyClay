@@ -4,14 +4,15 @@
 // farthest corner of its part boxes from where the keys put it:
 //   REACH  "<id>: 6.2 cm off its keys", value metres, limit checks.limits.reach (default 0.01)
 // The hint names the key and why the hand fell short (diag.hold_<side>, compiler/hold.js): the
-// arm out of reach, or a wrist turn past its limit.
+// arm out of reach, or a wrist turn past its limit after the elbow swung and the forearm turned
+// (lane K8: the whole arm follows the object, compiler/arm-orient.js).
 // Measured, not judged (C16, output.observations.held): every key as drawn, so the agent sees how
 // far each one is from what the hand can hold without a probe.
 import { keyedEntries, curveIn, keyedPose } from "../object-keys.js";
 import { rootPoseAt, partsOf } from "../object-pose.js";
 import { relative } from "../carried.js";
 import { groupsOf } from "../scene.js";
-import { WRIST_LIMITS } from "../compiler/hold.js";
+import { WRIST_LIMITS } from "../compiler/arm-orient.js";
 import { add, apply, dist, norm, angle, matFromQuat } from "../compiler/math.js";
 
 const SUBJECT = /^(.+): [\d.]+ cm off its keys$/;
@@ -46,10 +47,13 @@ export function keyHint(X, g) {
 	if (!o?.keys?.length) return null;
 	const f = g.worstFrame, k = X.spec.props?.[o.prop]?.hand, h = X.fr(f).diag[`hold_${k}`] ?? {};
 	const near = o.keys.reduce((best, key, i) => (Math.abs(key.f - f) < Math.abs(o.keys[best].f - f) ? i : best), 0);
-	const why = [...(h.miss > 0.005 ? [`the arm is ${(h.miss * 100).toFixed(1)} cm short`] : []),
-		...Object.entries(WRIST_LIMITS).filter(([n, [lo, hi]]) => h[n] < lo || h[n] > hi).map(([n, [lo, hi]]) => `the wrist ${WRIST_WORDS[n]} needs ${Math.round(h[n])}deg (limit ${lo}..${hi})`)];
+	const wrist = Object.entries(WRIST_LIMITS).filter(([n, [lo, hi]]) => h[n] < lo || h[n] > hi).map(([n, [lo, hi]]) => `the wrist ${WRIST_WORDS[n]} needs ${Math.round(h[n])}deg (limit ${lo}..${hi})`);
+	// the arm already swung the elbow and turned the forearm (compiler/arm-orient.js): say so with what the wrist still needs
+	if (wrist.length) wrist[wrist.length - 1] += ` after the elbow swung ${Math.round(h.swivel ?? 0)}deg and the forearm turned`;
+	const why = [...(h.miss > 0.005 ? [`the arm is ${(h.miss * 100).toFixed(1)} cm short`] : []), ...wrist];
+	const roll = o.keys[near].aim && o.keys[near].roll === undefined ? "" : "; an aim key without roll takes the roll the arm holds most easily";
 	return { cause: `objects.${id}.keys[${near}] f${o.keys[near].f}`,
-		hint: `${id} at f${f}: ${why.length ? why.join(", ") : "the hand cannot hold it there"}; key a pose nearer the hand (turned back toward the forearm), or bring the body to it (root, yaw, spine_yaw)` };
+		hint: `${id} at f${f}: ${why.length ? why.join(", ") : "the hand cannot hold it there"}; key a pose nearer the hand, or bring the body to it (root, yaw, spine_yaw)${roll}` };
 }
 
 const r1 = v => Math.round(v * 10) / 10, r2 = v => Math.round(v * 100) / 100;

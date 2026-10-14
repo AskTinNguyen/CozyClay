@@ -65,7 +65,7 @@ function hooksFor(ctx, c, f, inFit = false, lead = true, fitSide = null) {
 	const { sk } = ctx;
 	return {
 		softReach: ctx.softReach,
-		hold: lead && ctx.hold ? k => (k === fitSide ? null : ctx.hold.lead(k, f)) : undefined,
+		hold: lead && ctx.hold ? (k, s) => (k === fitSide ? null : ctx.hold.lead(k, f, s, c)) : undefined,
 		// auto-fix offsets ride on the final pose only, so a fit never cancels them
 		push: inFit ? undefined : k => ctx.push?.[k]?.get(f),
 		handTarget(k, s, diag) {
@@ -145,7 +145,7 @@ export function compileMotion(spec, { sk, scene }, opts = {}) {
 		solve(frames) { for (const f of frames) if (f >= a && f <= b) out.frames[f - a] = solveFrame(ctx, channelsAt(out.baked, f), f); },
 		all: () => Array.from({ length: b - a + 1 }, (_, i) => a + i),
 	};
-	ctx.hold = holdHook(ctx, out, f => solveFrame(ctx, channelsAt(out.baked, f), f, false));
+	ctx.hold = holdHook(ctx, out, f => solveFrame(ctx, channelsAt(out.baked, f), f, false), f => solveFrame(ctx, channelsAt(out.baked, f), f));
 	engine.rebake(opts.keys ?? expandGenerators(spec, sk));
 	engine.solve(engine.all());
 	out.fixed = opts.fixes === false ? {} : applyFixes(out, fix, engine, { whole: !opts.window });

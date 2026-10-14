@@ -4,7 +4,7 @@
 // baseball swing of session 294ac65a (the J2 fixture): its four rot keys written as aims compile to
 // the same take, bit for bit; roll turns the object about aim; both rot and aim is refused; the
 // compile output measures every key as drawn (observations.held); motion.keyObject writes aim keys.
-// The take hashes of v3@9674cdcf (the plain and keyed swing, the car exit) stay.
+// The take hashes of v3@9674cdcf (the plain swing, the car exit) stay; the keyed swing changed with lane K8 (the arm follows).
 import { createHash } from "node:crypto";
 import { SCENE_OBJECTS, CHARACTER, SWING_SPEC, SWING_KEYS, BAT } from "../motion3/fixtures/bat-swing.mjs";
 import { EXITCAR_SPEC, SCENE_OBJECTS as CAR_OBJECTS, CHARACTER as DRIVER } from "../motion3/fixtures/exitcar-scene.mjs";
@@ -15,7 +15,7 @@ import { motionScene } from "../../src/motion3/scene.js";
 import { skeletonFor } from "../../src/motion3/rigs/index.js";
 import { rootPoseAt } from "../../src/motion3/object-pose.js";
 import { keyObject } from "../../src/motion3/key-edit.js";
-import { quatFromMat, matFromQuat, mul, axisRot, angle } from "../../src/motion3/compiler/math.js";
+import { quatFromMat, matFromQuat, mul, axisRot, angle, norm, sub } from "../../src/motion3/compiler/math.js";
 import { qmul, qconj, qrot, qnorm, qdot, arcQuat } from "../../src/motion3/compiler/quat.js";
 
 let failures = 0;
@@ -30,12 +30,12 @@ const withKeys = keys => { const sp = structuredClone(SWING_SPEC); sp.objects[BA
 const compile = keys => compileSpec(withKeys(keys), { sk, scene });
 const Y = [0, 1, 0], col = (R, i) => [R[0][i], R[1][i], R[2][i]];
 
-// 1. the take hashes of v3@9674cdcf stay
+// 1. the plain swing and the car exit bake the takes of v3@9674cdcf; the keyed swing is lane K8's (the arm follows the bat)
 const plain = compileSpec(SWING_SPEC, { sk, scene }), keyed = compile(SWING_KEYS), dsk = skeletonFor(DRIVER.model);
 const car = compileSpec({ fps: 24, ...EXITCAR_SPEC }, { sk: dsk, scene: motionScene(CAR_OBJECTS) });
 const hashes = { plain: hashOf(bakeTake(sk, plain.out)), keyed: hashOf(bakeTake(sk, keyed.out)), exitcar: hashOf(bakeTake(dsk, car.out)) };
-expect("the swing (plain and with the J2 rot keys) and the car exit bake the takes of v3@9674cdcf, bit for bit",
-	hashes.plain === "9c85b9fdc41890ce" && hashes.keyed === "6530d01ffda568cc" && hashes.exitcar === "9e35eb6aa9a2c9f8", JSON.stringify(hashes));
+expect("the swing without keys and the car exit bake the takes of v3@9674cdcf, bit for bit; with the J2 rot keys the take of lane K8",
+	hashes.plain === "9c85b9fdc41890ce" && hashes.keyed === "e127b1261a3b836a" && hashes.exitcar === "9e35eb6aa9a2c9f8", JSON.stringify(hashes));
 
 // 2. the same keys as aims: +Y of each rot; roll = its turn about aim from where the plain carry holds the bat at that frame
 const rollFrom = (q, from, aim) => {
@@ -67,8 +67,11 @@ let rollOff = 0;
 for (let f = 30; f <= 70; f++) rollOff = Math.max(rollOff, ...[0, 1, 2].map(c => angle(col(rootPoseAt(byRot.out, BAT, f).R, c), col(rootPoseAt(byRoll.out, BAT, f).R, c))));
 expect("roll turns an aim key about aim: roll + 30 draws the rot key turned 30 deg about the bat (<= 0.01 deg, f30-f70)", rollOff <= 0.01, `${rollOff}`);
 
-// 5. far from feasible: the barrel asked to point at the batter's back at contact -> REACH, and the key row says how far
-const back = compile(SWING_KEYS.map((k, i) => (i === 2 ? { f: k.f, pos: k.pos, aim: [0, 0, -1] } : k))), row = back.observations.held[BAT][2];
+// 5. far from feasible: the barrel asked to point out along the arm at contact (the shoulder to the grip; the wrist would
+// fold back on the forearm whatever the elbow and the roll do) -> REACH, and the key row says how far (lane K8: the barrel at
+// the batter's back, the old case here, is now held: the elbow swings, the forearm turns and the key takes the easiest roll)
+const outward = norm(sub(SWING_KEYS[2].pos, plain.out.frames[47].s.P[sk.index.RightArm]));
+const back = compile(SWING_KEYS.map((k, i) => (i === 2 ? { f: k.f, pos: k.pos, aim: outward } : k))), row = back.observations.held[BAT][2];
 expect("a key the hand cannot hold: REACH, and its row gives the degrees off, the drawn +Y and the resolved rot", back.qa.groups.some(g => g.kind === "REACH") && row.deg > 20 && row.got?.length === 3 && row.rot?.length === 4,
 	JSON.stringify(row));
 
