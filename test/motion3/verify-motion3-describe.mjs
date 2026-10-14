@@ -4,7 +4,9 @@
 // every level with a suggestion and the field list (and ignored on a lenient reload); the skill
 // info matches the skills; frames: "auto" resolves to the last frame any part needs, plus 1.
 // Lane G4: topic essentials answers every field, type and skill in one receipt.
+// Lane H3c: and every meaning the round-2 sessions read in follow-up calls (reachGrip, objects, channels).
 import { describe, DESCRIBE_BUDGET } from "../../src/motion3/describe.js";
+import { literal } from "../../src/motion3/schema/brief.js";
 import { DESCRIBE_TOPICS, PROBE_FIELDS, SPEC_FIELDS, KEY_FIELDS, USE_FIELDS, ANCHOR_FIELDS, PROP_FIELDS, FIT_FIELDS, OBJECT_FIELDS, WALK_FIELDS, CHECK_FIELDS,
 	CHECK_ENTRY_FIELDS, GOAL_FIELDS, REF_KINDS } from "../../src/motion3/schema/fields.js";
 import { VEC_CHANNELS, NUM_CHANNELS, MAP_CHANNELS } from "../../src/motion3/compiler/vocab.js";
@@ -81,29 +83,56 @@ for (const name of SKILL_NAMES) {
 }
 expect("an unknown skill name is refused with a suggestion", /skill "walkto" is not a skill; did you mean "walkTo"\?/.test(refusal(() => describe("skills", "walkto"))));
 
-// 2b. essentials: one call names every field, type, channel, skill and skill arg; it fits one receipt
+// 2b. essentials: one call names every field, type, channel, skill and skill arg; it fits one receipt.
+// Lane H3c: checks names its lists only (topic checks has the entry fields); objects, channels and reachGrip carry meanings.
 const ess = describe("essentials"), essText = JSON.stringify(ess);
 expect("essentials answers { topic, types, skills, notes }", JSON.stringify(Object.keys(ess)) === '["topic","types","skills","notes"]' && ess.notes.every(n => typeof n === "string"));
-expect("essentials has a type line for every topic but skills, and for every shared shape it names",
+expect("essentials has a type line for every topic but skills, and for every shared shape it names, no other",
 	DESCRIBE_TOPICS.filter(t => t !== "skills" && t !== "essentials").every(t => typeof ess.types[t] === "string")
-	&& ["vec3", "frameSpan", "ref", "checkRef", "part", "when", "key", "use", "walk"].every(n => typeof ess.types[n] === "string"), Object.keys(ess.types).join());
+	&& ["vec3", "frameSpan", "ref", "key", "use", "walk"].every(n => typeof ess.types[n] === "string") && ["checkRef", "part", "when"].every(n => !(n in ess.types)), Object.keys(ess.types).join());
+/** f is named as a field: `{f: `, `, f?: `, or folded with others of one type, `a|f|b?: ` (`f_l|r?: ` for a pair). */
+const named = (f, text) => new RegExp(`(?:[{|]|, )${f}(?:\\|\\w+)*\\??: `).test(text);
 const tables = { SPEC_FIELDS, KEY_FIELDS, USE_FIELDS, ANCHOR_FIELDS: Object.values(ANCHOR_FIELDS).flat(), PROP_FIELDS, FIT_FIELDS, OBJECT_FIELDS: Object.values(OBJECT_FIELDS).flat(),
-	WALK_FIELDS, CHECK_FIELDS, CHECK_ENTRY_FIELDS: Object.values(CHECK_ENTRY_FIELDS).flat(), GOAL_FIELDS, PROBE_FIELDS };
-const missing = Object.entries(tables).flatMap(([table, fields]) => fields.filter(f => !new RegExp(`[{,] ${f}\\??: `).test(essText)).map(f => `${table}.${f}`));
-expect("essentials names every field of every field table with its type", missing.length === 0, missing.join());
-const channels = [...VEC_CHANNELS, ...NUM_CHANNELS, ...MAP_CHANNELS].filter(ch => !essText.includes(` ${ch}?:`) && !essText.includes(` ${ch.replace(/_[lr]$/, "_l|r")}?:`));
+	WALK_FIELDS, CHECK_FIELDS, GOAL_FIELDS, PROBE_FIELDS };
+const missing = Object.entries(tables).flatMap(([table, fields]) => fields.filter(f => !named(f, essText)).map(f => `${table}.${f}`));
+expect("essentials names every field of every field table with its type (checks entries: topic checks)", missing.length === 0, missing.join());
+expect("essentials: checks names every check list; topic checks still types every entry field", CHECK_FIELDS.every(f => named(f, ess.types.checks))
+	&& Object.values(CHECK_ENTRY_FIELDS).flat().every(f => JSON.stringify(describe("checks").schema).includes(`"${f}":`)), ess.types.checks);
+const channels = [...VEC_CHANNELS, ...NUM_CHANNELS, ...MAP_CHANNELS].filter(ch => !named(ch.replace(/_r$/, "_l"), ess.types.channels));
 expect("essentials names every channel (a left/right pair as x_l|r)", channels.length === 0, channels.join());
 expect("essentials names every ref kind", REF_KINDS.every(k => ess.types.refs.includes(`${k}:`)), ess.types.refs);
 expect("essentials lists exactly SKILL_NAMES, each with needs, frames, adds and every arg typed", JSON.stringify(ess.skills.map(s => s.name)) === JSON.stringify(SKILL_NAMES)
 	&& ess.skills.every(s => s.needs === SKILL_INFO[s.name].needs && s.frames === SKILL_INFO[s.name].frames && s.adds === SKILL_INFO[s.name].adds
-		&& Object.keys(SKILL_INFO[s.name].args).every(a => new RegExp(`[{,] ${a}\\??: `).test(s.args))));
+		&& Object.keys(SKILL_INFO[s.name].args).every(a => named(a, s.args))));
 const rg = ess.skills.find(s => s.name === "reachGrip").args;
-expect("essentials: reachGrip args are typed, required ones without ?, defaults shown", /anchor: string, side: 'l'\|'r', reach\?: int=20/.test(rg) && /fingers\?: .*='grip'/.test(rg), rg);
-expect("essentials: a goal is a list entry with one of near|above|moved", /^\(\{ name: string, near\?: \[ref, ref\].*\(one of near\|above\|moved\)\)\[\]$/.test(ess.types.goals), ess.types.goals);
-expect("essentials: objects maps an id to a hinge or a carry", /hinge \{ pivot: vec3.*\| carry \{ prop: string/.test(ess.types.objects), ess.types.objects);
+expect("essentials: reachGrip args are typed, required ones without ?, defaults shown", /anchor: string \(.*\), side: 'l'\|'r' \(the hand\), reach\?: int=20 \(frames to reach\)/.test(rg) && /fingers\?: .*='grip'/.test(rg), rg);
+expect("essentials: a goal is a list entry with one of near|above|moved", /^\(\{name: string, near\|above\?: \[ref, ref\].*\(one of near\|above\|moved\)\)\[\]$/.test(ess.types.goals), ess.types.goals);
+expect("essentials: objects maps an id to a hinge or a carry", /hinge \{pivot: vec3.*\| carry \{prop: string/.test(ess.types.objects), ess.types.objects);
 expect("essentials: the notes say how to read a whole topic or one skill", /motion\.describe \{ topic \}/.test(ess.notes.join()) && /'skills', name/.test(ess.notes.join()));
+expect("essentials: the spec line names the topic lines, the walk generator the walkTo args", /anchors\?: anchors, props\?: props\.props, fits\?: props\.fits, objects\?: objects/.test(ess.types.spec)
+	&& ess.types.walk === "{type: 'walk', f0: int, heading?: [number, number], ...walkTo args but to}", `${ess.types.spec}\n${ess.types.walk}`);
+// Round 2 (three live sessions): after essentials every run read skills reachGrip, objects and channels.
+// Each meaning those answers gave (a field's description, but a bare unit) is in essentials, verbatim or as
+// "<head>, as <field>" where its tail repeats an earlier field's; so do the carry example and its no-jump note.
+const FOLLOW_UPS = [["skills", "reachGrip"], ["objects"], ["channels"]];
+const meanings = s => (!s || typeof s !== "object" ? [] : [...(typeof s.description === "string" && !/^(degrees|m)$/.test(s.description) ? [s.description] : []),
+	...Object.entries(s).filter(([k]) => k !== "description" && k !== "$defs").flatMap(([, v]) => (Array.isArray(v) ? v.flatMap(meanings) : meanings(v)))]);
+/** a map's "<key> -> <value>" description is the line's `[<key>]: ...` */
+const covered = d => essText.includes(d) || essText.includes(`[${d.match(/^(?:[^:]*: )?(.+?) -> /)?.[1]}]: `) || [...d.matchAll(/[,:] /g)].some(m => essText.includes(`${d.slice(0, m.index)}, as `) && essText.includes(d.slice(m.index + 2)));
+let facts = 0, followBytes = 0;
+for (const [topic, name] of FOLLOW_UPS) {
+	const a = describe(topic, name), ds = [...new Set(meanings(a.schema))];
+	facts += ds.length; followBytes += bytes(a);
+	const lost = ds.filter(d => !covered(d));
+	expect(`essentials holds every meaning of describe ${topic}${name ? ` ${name}` : ""} (${ds.length})`, lost.length === 0, lost.join(" | "));
+}
+const carry = describe("objects");
+expect("essentials holds the carry example (a grip prop's origin bones, grab, release) and the no-jump note",
+	essText.includes(literal({ props: carry.example.props, objects: { cup: carry.example.objects.cup } })) && carry.notes.some(n => n.includes("so it does not jump") && essText.includes(n.slice(n.indexOf("Without at/along")))));
+expect("essentials: reachGrip's needs, frames and adds are the skill answer's notes", describe("skills", "reachGrip").notes.every(n => essText.includes(n.replace(/^(needs|frames from f0|adds): /, "").split("; ")[0])));
+console.log(`  sizes: the round-2 follow-ups (${FOLLOW_UPS.map(f => f.join(" ")).join(", ")}) took ${followBytes} B in 3 calls for ${facts} meanings; essentials has them all in ${bytes(ess)} B (budget ${DESCRIBE_BUDGET})`);
 // What the three live sessions read in 2-3 calls each (topics, then skills by name): the sum cannot fit
-// one 8 KiB receipt; essentials covers each field of it in one, and the full topics stay one call each.
+// one 8 KiB receipt; essentials covers each field of it (checks entries but by name) in one, and the full topics stay one call each.
 const READ = ["spec", "skills", "goals", "objects", "anchors", "props", "channels", "refs", "checks"], SKILLS_READ = ["reachGrip", "walkTo"];
 const readBytes = READ.reduce((n, t) => n + bytes(describe(t)), 0) + SKILLS_READ.reduce((n, k) => n + bytes(describe("skills", k)), 0);
 console.log(`  sizes: the sessions read ${readBytes} B in full (${READ.join(", ")}, skills ${SKILLS_READ.join(", ")}); essentials ${bytes(ess)} B (budget ${DESCRIBE_BUDGET})`);

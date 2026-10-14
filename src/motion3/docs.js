@@ -15,8 +15,9 @@ export const MOTION_ACTION_HELP = {
 		+ "Answers specId and qa as motion.compile does (goals, ranked groups with cause, hint and patch); output.more pages with motion.report. Changes nothing.",
 	sample: "World positions (metres) of named bones of the installed take at up to 64 frames. Bone names may be loose (any case, a mixamorig: prefix, aliases such as hips or hand_l); an unknown one answers a did-you-mean. "
 		+ "Before a take is installed, use motion.compile probes instead. Changes nothing.",
-	describe: "The motion spec reference. topic essentials answers in one call everything a first spec needs: { types (every field and type of every topic, one line each), "
-		+ "skills (each with typed args, needs, frames, adds), notes }. topic spec, skills, anchors, props, objects, checks, goals, probes, channels, refs or fix answers { topic, schema, example, notes } "
+	describe: "The motion spec reference. topic essentials answers in one call everything a first spec needs: { types (every field and type of every topic, one line each; "
+		+ "objects, channels and reachGrip also say what each field means; checks names its lists), skills (each with typed args, needs, frames, adds), notes (a carry example) }. "
+		+ "topic spec, skills, anchors, props, objects, checks, goals, probes, channels, refs or fix answers { topic, schema, example, notes } "
 		+ "with each field's meaning; skills answers the skill list, and with name one skill's args schema and a use example. Changes nothing.",
 	report: "Page through the parts of a motion.compile or motion.qa answer that did not fit (output.more): part is groups, timeline or probes, from the item index to start at; "
 		+ "answers { specId, part, from, items, next } (next = the index to ask for next, null at the end). Changes nothing.",

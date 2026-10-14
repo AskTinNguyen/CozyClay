@@ -4,6 +4,7 @@
 // test/motion3/verify-motion3-describe.mjs checks that. Object ids are examples: use the scene's.
 import { CONVENTIONS } from "../compiler/vocab.js";
 import { FIX_KEYS } from "../fix/index.js";
+import { literal } from "./brief.js";
 
 const SPOT = { kind: "world", p: [-0.2, 1.1, 0.35] };
 const GRIP = { hand: "r", origin: ["RightHandIndex2", "RightHandMiddle2"], points: { fingers: [0, 0, 0] } };
@@ -39,10 +40,17 @@ export const EXAMPLES = {
 	fix: { fix: { reach: true, slide: true, penetration: 0.02, retime: false } },
 };
 
+const UNITS = `World metres, +Y up; ${CONVENTIONS.yaw}; the character's left is +X at yaw 0. Angles in degrees.`;
+const NO_JUMP = "Without at/along the object keeps its grab-frame offset to the palm, so it does not jump.";
+const RE_MEASURE = "base alone or patch: [] re-measures (new probes); install: 'never' = false; spec.probes are measured, not stored.";
+/** The objects example's carry: a grip prop and the object it holds. */
+const CARRY = { props: EXAMPLES.objects.props, objects: { cup: EXAMPLES.objects.objects.cup } };
+
 export const NOTES = {
-	essentials: ["types: ? optional, =v default, lo..hi range, A | B one of, [key]: T a map, x_l|r a left/right pair; names such as vec3 or key are spelled under types.",
-		"motion.describe { topic } adds each field's meaning, a valid example and notes; { topic: 'skills', name } one skill's arg meanings and a use example."],
-	spec: [`World metres, +Y up; ${CONVENTIONS.yaw}; the character's left is +X at yaw 0. Angles in degrees.`,
+	essentials: ["types: ? optional, =v default, lo..hi range, A | B one of, [key]: T a map, a|b?: T both fields, x_l|r left and right, (text) the meaning.",
+		`A carried object: ${literal(CARRY)}. ${NO_JUMP}`, `motion.compile: ${RE_MEASURE}`,
+		"motion.describe { topic } or { topic: 'skills', name } has the rest: meanings, a valid example, notes."],
+	spec: [UNITS,
 		"frames: an integer, or \"auto\" (the last skill end, generator end or key f, plus 1); the stored spec keeps the number.",
 		"Any number may be { range: [lo, hi] } (int: true for frames): the compiler searches it, QA 0 first, at most search.budget compiles.",
 		"use expands skills (topic skills) into keys, anchors, props, fits and checks first; your own keys win on the same frame and your anchors/props replace a skill's.",
@@ -56,7 +64,7 @@ export const NOTES = {
 		"reachGrip adds props.<anchor>Grip and its fit. Carry a scene object with objects.<id>.prop (topic objects)."],
 	objects: ["A hinge turns the object (a body or a group) about pivot/axis by the angle channel your keys set (degrees).",
 		"A carry follows the prop's hand: before grab the scene pose, grab..release in the hand, after release frozen where it was let go.",
-		"No grab: in hand from frame 0; no release: to the end. Without at/along the object keeps its grab-frame offset to the palm, so it does not jump.",
+		`No grab: in hand from frame 0; no release: to the end. ${NO_JUMP}`,
 		"A group (Empty) id moves all its parts; at/along are for bodies only. A carried object is an obstacle for the body and the scene."],
 	checks: ["Each entry adds QA groups: contacts CONTACT, orient ORIENT, below BELOW, clearance CLEARANCE, appear APPEAR; supports skip BALANCE where a part rests on an object.",
 		"when: a weight channel (active above 0.99) or [f0, f1]; clearance uses frames.", "Check points take joint:, prop: and anchor: only; goals and probes take every ref (topic refs).",
@@ -64,7 +72,7 @@ export const NOTES = {
 		"motion.qa { checks } replaces every check for a re-measure."],
 	goals: ["Exactly one of near (distance <= tol), above (a.y - b.y >= by) or moved (the object base moved at least by).",
 		"at is an absolute frame or [f0, f1]; mode all (every frame) or any (one frame). A failed goal is a GOAL group first in qa.groups and makes qa.ok false."],
-	probes: ["motion.compile { probes } (at most 16), not a spec field; answered whether or not it installs.",
+	probes: ["motion.compile { probes } (at most 16); spec.probes are measured too, not stored; answered whether or not it installs.",
 		"distance [a, b] -> { min, minAt, max, maxAt, mean, first, last } in m; a bare object:<id> measures to its surface. position -> { at: [{ f, p }] }, at most 16 rows."],
 	channels: ["key.set names channels; values ease between keys and hold after the last key. step: [channel] jumps at f instead.",
 		"w_<anchor>_<side> (0..1) weights a hand onto an anchor; the weights of one hand add up to at most 1.",

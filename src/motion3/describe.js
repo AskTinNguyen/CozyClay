@@ -3,6 +3,7 @@
 // compiler/vocab.js, FIX_KEYS from fix/index.js, the skills from skills/index.js and
 // skills/info.js; examples and notes from schema/topics.js. Every answer fits DESCRIBE_BUDGET.
 //   topic "essentials"          { topic, types: { <topic or shared shape>: type line }, skills: [{ name, args (type line), needs, frames, adds }], notes }
+//                               (the lines of MEANT parts carry each field's meaning; SHALLOW topics name their parts only)
 //   other topic                 { topic, schema (JSON Schema 2020-12 fragment), example, notes }
 //   topic "skills"              { topic, skills: [{ name, args, needs, frames, adds }] }
 //   topic "skills", name        { topic, name, schema (the skill's args), example (a use entry), notes }
@@ -90,21 +91,52 @@ function describeSkill(name) {
 		example: { skill: name, ...info.example }, notes: [`needs: ${info.needs}`, `frames from f0: ${info.frames}`, `adds: ${info.adds.join("; ")}`] };
 }
 
-const shapeLine = s => briefType(s) + (s.description ? ` (${s.description})` : "");
+/** The parts round-2 sessions read again right after essentials (topics objects and channels, skill
+ * reachGrip): in essentials their fields also say what they mean, so a first spec needs no second read. */
+const MEANT = { topics: ["objects", "channels"], skills: ["reachGrip"] };
+/** Topics no round-2 session needed for a first spec: essentials names their parts, the full topic has the fields. */
+const SHALLOW = ["checks"];
+
+/** A shared shape whose fields are mostly a skill's args (walk, walkTo): its own fields and `...<skill> args`. */
+function shapeLine(d) {
+	for (const [skill, { args }] of Object.entries(SKILL_INFO)) {
+		const own = Object.entries(d.properties ?? {}).filter(([k, v]) => JSON.stringify(args[k]) !== JSON.stringify(v)), shared = Object.keys(d.properties ?? {}).length - own.length;
+		if (shared <= own.length) continue;
+		const not = Object.keys(args).filter(a => !d.properties[a]);
+		return briefType({ ...d, properties: Object.fromEntries(own) }).replace(/\}$/, `, ...${skill} args${not.length ? ` but ${not.join(", ")}` : ""}}`);
+	}
+	return briefType(d) + (d.description ? ` (${d.description})` : "");
+}
+
+/** The spec schema with each field a topic spells ("topic anchors") named by that topic's type line: `anchors?: anchors`, `fits?: props.fits`. */
+function pointed(spec) {
+	const at = (f, t) => (t === f && !SCHEMAS[t]().properties?.[f] ? t : `${t}.${f}`);
+	return { ...spec, properties: Object.fromEntries(Object.entries(spec.properties).map(([f, s]) => {
+		const t = s.description?.match(/\btopic (\w+)\)?$/)?.[1];
+		return [f, t && SCHEMAS[t] && t !== "skills" ? { $ref: `#/types/${at(f, t)}` } : s];
+	})) };
+}
 
 /** Every topic's schema and every skill's args as one type line each, and the shared shapes they name. */
 function essentials() {
 	const types = {}, shared = {};
 	for (const topic of DESCRIBE_TOPICS.filter(t => SCHEMAS[t])) {
-		const { $defs = {}, ...schema } = rooted(SCHEMAS[topic]());
-		types[topic] = briefType(schema);
+		const { $defs = {}, ...schema } = rooted(topic === "spec" ? pointed(SCHEMAS.spec()) : SCHEMAS[topic]());
+		types[topic] = briefType(schema, { means: MEANT.topics.includes(topic), depth: SHALLOW.includes(topic) ? 1 : undefined });
 		Object.assign(shared, $defs);
 	}
-	for (const [name, d] of Object.entries(shared)) types[name] = shapeLine(d);
+	// use.skill without the enum: the skills list below names them
+	if (shared.use) shared.use = objectOf(USE_FIELDS, USE_TYPES, "use", ["skill", "f0"]);
 	const skills = SKILL_NAMES.map(n => {
 		const { args, required = [], needs, frames, adds } = SKILL_INFO[n] ?? bad(`describe: skill ${n} has no entry in skills/info.js`);
-		return { name: n, args: briefType({ type: "object", properties: args, required }), needs, frames, adds };
+		return { name: n, args: briefType({ type: "object", properties: args, required }, { means: MEANT.skills.includes(n) }), needs, frames, adds };
 	});
+	// the shared shapes a line names as a type (": vec3", "| frameSpan", "[ref, ref]"); a shallow topic names fewer than its schema has
+	const named = name => new RegExp(`(?:[:|] |[[(])${name}\\b`).test(JSON.stringify([types, skills.map(k => k.args)]));
+	for (let more = true; more;) {
+		more = false;
+		for (const [name, d] of Object.entries(shared)) if (!types[name] && named(name)) { types[name] = shapeLine(d); more = true; }
+	}
 	return { topic: "essentials", types, skills, notes: NOTES.essentials };
 }
 
