@@ -27,7 +27,7 @@ check("the motion part states the procedure", () => {
 	for (const rule of [/Before the first spec, read run_action motion\.describe/, /never probe the schema/, /reachGrip/, /grab\/release/, /frames: "auto"/,
 		/group \(Empty\) is carried or hinged as one unit/, /at least one goals entry per motion request/, /install: "ifClean" and repair: \{ rounds \}/, /topic: "essentials"/, /never sweep values by hand/,
 		/base .*plus patch/, /probes and output\.timeline instead of .*motion\.sample/, /qa\.ok, which includes the goals\) installs in that call/,
-		/visual: "contact_sheet", frames: "beats"/, /visual: "trace"/, /Report the QA numbers, the goals and output\.fixed/]) assert.match(motion, rule);
+		/visual: "contact_sheet", frames: "beats"/, /visual: "trace"/, /Report the QA numbers, the goals and output\.fixed/, /output\.observations, not QA/, /views, focus, trail/]) assert.match(motion, rule);
 });
 check("no sentence describes objects only as hinged doors", () => {
 	assert.doesNotMatch(prompt, /\(doors\)/);
