@@ -20,6 +20,7 @@ const app = readStudioSource()
 const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
 const planview = readFileSync(new URL("../src/planview.jsx", import.meta.url), "utf8");
 const timeline = readFileSync(new URL("../src/motion/timeline.jsx", import.meta.url), "utf8");
+const takeSegments = readFileSync(new URL("../src/motion/take-segments.jsx", import.meta.url), "utf8");
 const dualview = readFileSync(new URL("../src/dualview.jsx", import.meta.url), "utf8");
 const offscreenExport = readFileSync(new URL("../src/offscreen-export.js", import.meta.url), "utf8");
 const ui = readFileSync(new URL("../src/ui.jsx", import.meta.url), "utf8");
@@ -296,9 +297,10 @@ expect(
 	app.includes("compileTakeSource(take.source)"),
 );
 expect(
-	"the timeline receives the active take as one passive Body strip",
-	app.includes('motion={motion ? { frames: motion.frames, label: motion.prompt || ko("Compiled take", "컴파일된 테이크") } : null}') &&
-	timeline.includes('className="tl-motion-clip"') && !timeline.includes("onMotionTrim") && !timeline.includes("tl-motion-clip-handle"),
+	"the timeline draws the active take as timing segments: Cut, an amber retime grip, trim grips and right-click remove",
+	app.includes('motion={timelineTake(motion, characters[activeCharIndex]?.id, runStudioAction)}') &&
+	timeline.includes("<TakeSegmentClips") && timeline.includes("<TakeSegmentTools") && takeSegments.includes('className={"tl-motion-clip"') &&
+	takeSegments.includes('grip("speed"') && takeSegments.includes('grip("start"') && takeSegments.includes('grip("end"') && takeSegments.includes("motion.remove(segment.id)"),
 );
 // Foot snap and Body contact only reinterpret an IK drag (R7).
 expect(

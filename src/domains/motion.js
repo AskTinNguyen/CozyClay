@@ -42,7 +42,7 @@ import { applyRangePin, captureRangePinTarget, normalizeRangePin, rangePinTarget
 import { rangePinObjectMatrixAt } from "../range-pin-object-transform.js";
 import { ensureRangePinState, overlappingRangePin, rangePinConflictFrames, rangePinOverlapMessage } from "./motion/motion-range-pin-rules.js";
 
-import { takeSource, normalizeTakeSource, compileTakeSource } from "./motion/take-source.js";
+import { takeSource, normalizeTakeSource, compileTakeSource, renderTakeEdit } from "./motion/take-source.js";
 import { sameMotionIntent, emptyMotionLayer, encodeMotionKeys, decodeMotionKeys, cloneRangePin, encodeRangePins, decodeRangePins, encodeRangePinResiduals, decodeRangePinResiduals } from "./motion/motion-intent-codec.js";
 // Plain intent owns take identities and JSON keys. Decoded buffers and rig
 // preimages are copy-on-record runtime resources, never mutable store values.
@@ -62,10 +62,10 @@ export function createMotionDomain(appContext, characters) {
 		if (take.resourceId) return { ...take };
 		if (stored) takes.set(resourceId, structuredClone(take));
 		source ??= takeSource(take, appContext.shared.storeRef?.current?.objects ?? appContext.shared.sceneObjects);
-		return { resourceId, frames: take.frames, fps: take.fps, prompt: take.prompt ?? '', studioTakeId: take.studioTakeId ?? resourceId, ...(source ? { source } : {}) };
+		return { resourceId, frames: take.frames, fps: take.fps, prompt: take.prompt ?? '', studioTakeId: take.studioTakeId ?? resourceId, ...(source ? { source } : {}), ...(take.edit ? { edit: take.edit } : {}) };
 	}
-	const restoredTake = (id, { takeId, ...source }) => snapshotTake({ schema: source.schema, frames: Math.round(source.spec.frames), fps: 24,
-		prompt: source.spec.label ?? '', studioTakeId: takeId }, `restore:${id}:${takeId ?? 'take-v3'}`, source, false);
+	const restoredTake = (id, { takeId, edit, ...source }) => snapshotTake({ schema: source.schema, frames: Math.round(source.spec.frames), fps: 24,
+		prompt: source.spec.label ?? '', studioTakeId: takeId, edit }, `restore:${id}:${takeId ?? 'take-v3'}`, source, false);
 	const normalize = rows => rows.map(row => ({ ...emptyMotionLayer(row.id), ...row,
 		take: snapshotTake(row.take), fullTake: snapshotTake(row.fullTake ?? row.take),
 		ikKeys: row.ikKeys ?? [], ikPins: row.ikPins ?? [], ikPinResiduals: row.ikPinResiduals ?? [], committedIkEdits: row.committedIkEdits ?? [] }));
@@ -84,7 +84,7 @@ export function createMotionDomain(appContext, characters) {
 		if (!take || !takes.has(take.resourceId)) return null;
 		if (!decoded.has(take)) {
 			const { resourceId, ...metadata } = take;
-			decoded.set(take, { ...takes.get(resourceId), ...metadata });
+			decoded.set(take, renderTakeEdit({ ...takes.get(resourceId), ...metadata }));
 		}
 		return decoded.get(take);
 	}

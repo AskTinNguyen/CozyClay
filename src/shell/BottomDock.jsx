@@ -5,7 +5,7 @@ import "./dock.css";
 import LibrarySlot from "./LibrarySlot.jsx";
 import BoardSlot from "./BoardSlot.jsx";
 import { ko } from "../locale.js";
-import Timeline from "../motion/timeline.jsx";
+import Timeline, { timelineTake } from "../motion/timeline.jsx";
 import { DEFAULT_PLAYBACK_SPEED, SHOT_ASPECT_PRESETS, sceneObjectNameDisplayKo } from "../app-stage.jsx";
 
 import { trackFeature } from "../analytics.js";
@@ -225,7 +225,7 @@ export default function BottomDock({ tab: requestedTab = "animation", onTabChang
 			badge={stateBadge}
 			ikMode={ikMode}
 			ikDisabled={!ikChains}
-			motion={motion ? { frames: motion.frames, label: motion.prompt || ko("Compiled take", "컴파일된 테이크") } : null}
+			motion={timelineTake(motion, characters[activeCharIndex]?.id, runStudioAction)}
 			ikFrames={ikFrames}
 			rangePins={rangePins}
 			selectedPinId={rangePinSelection}

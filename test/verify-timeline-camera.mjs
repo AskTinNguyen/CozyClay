@@ -30,7 +30,7 @@ expect("preview ranges underline the Body track", timeline.includes("previewRang
 expect("ruler labels step in 10-frame units", timeline.includes("const LABEL_STEPS = [10, 20, 50, 100, 200, 500, 1000];"));
 expect("lane gridlines ride one 10-frame cadence", timeline.includes("const GRID_STEP_FRAMES = 10;") && timeline.includes("f += GRID_STEP_FRAMES"));
 expect("gridlines render from the ruler's framePct", timeline.includes('className="tl-grid"') && timeline.includes('style={{ "--tl-f": framePct(f, displayFrameCount) }}'));
-expect("the take strip and markers share one frame scale", !timeline.includes("promptFramePct") && timeline.includes("clipPct(0)"));
+expect("the take strip and markers share one frame scale", !timeline.includes("promptFramePct") && timeline.includes("clipPct={clipPct}"));
 
 expect("camera keys render as dots, not a chip", timeline.includes('className="tl-marker cam"') && !timeline.includes("tl-chip camera"));
 expect("block key strip keys framing while a dedicated crane graph authors Rail points", timeline.includes("handlers.current.onCameraKeyframeAdd?.(target, shot.id)") && timeline.includes("onCranePointAdd?.(t, shot.id)") && timeline.includes('className="tl-crane-editor"') && app.includes("onCameraKeyframeAdd={addCameraKeyframe}"));

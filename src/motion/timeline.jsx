@@ -9,7 +9,9 @@ import { insertPathMark, pathMarks, pathMetrics, pathProgressAt, MAX_PATH_LEAN }
 import { NumberField } from "../ui.jsx";
 import { flatTiming, timingIsFlat, envelopeDrag, insertCut, removeCut, CUT_MIN_GAP } from "../speed-envelope.js";
 import { checkShotAgainstPreset, presetById } from "../model-presets.js";
+import { TakeSegmentClips, TakeSegmentTools } from "./take-segments.jsx";
 import "./timeline.css";
+export { timelineTake } from "./take-segments.jsx";
 
 /**
  * ARDY Viser-style animation timeline — the live motion workspace.
@@ -1021,7 +1023,7 @@ export default function Timeline({
 	ikDisabled = false, // a loaded motion owns the rig
 	// The ACTIVE cast member's loaded take, drawn as a passive strip on the
 	// Full-Body lane. Frames are already on the timeline's 24 fps clock.
-	motion = null, // { frames, label } | null
+	motion = null, // { frames, label, segments, cut, speed, remove, trim, reset } (take-segments.jsx timelineTake) | null
 	ikFrames = [], // sorted full-body key frames
 	rangePins = [], // active character's inclusive pin ranges
 	previewRanges = [], // amber preview spans shown under the Body track
@@ -1701,6 +1703,7 @@ export default function Timeline({
 						</div>
 						{onClearMotion && (
 							<div className="tl-head-group tl-motion-tools" role="group" aria-label={ko("Motion controls", "모션 컨트롤")}>
+								{motion?.segments && motionTools && <TakeSegmentTools motion={motion} frame={frame} />}
 								<button
 									type="button"
 									className="tl-btn clear"
@@ -2107,15 +2110,7 @@ export default function Timeline({
 							aria-label={ko(`Pending pin range ${geometry.startFrame}–${geometry.endFrame}`, `대기 중인 고정 범위 ${geometry.startFrame}–${geometry.endFrame}`)}
 						/>;
 					})()}
-					{name === IK_LANE && motion && (
-										<div
-											className="tl-motion-clip"
-											style={{ "--tl-f-start": clipPct(0), "--tl-f-end": clipPct(Math.min(motion.frames, displayFrameCount)) }}
-											title={isKo ? `컴파일된 테이크 — ${motion.frames}프레임` : `Compiled take — ${motion.frames} frames`}
-										>
-											<span className="tl-motion-clip-label">{motion.label}</span>
-										</div>
-									)}
+					{name === IK_LANE && motion?.segments && <TakeSegmentClips motion={motion} frame={frame} frameCount={frameCount} displayFrameCount={displayFrameCount} clipPct={clipPct} tools={motionTools} />}
 
 									{name === IK_LANE &&
 										ikRuns.flatMap((run) => (run.length < KEY_RUN_MIN

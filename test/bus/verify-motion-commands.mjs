@@ -18,6 +18,11 @@ const cases = {
   'motion.clear': () => ({ characterId: 'actor-a' }),
   'motion.set': () => ({ id: 'actor-a', set: { take: { prompt: 'Renamed take' } } }),
   'ik.applyPose': () => ({ characterId: 'actor-a', frame: 0, pose: { bones: {}, rootY: 0 } }),
+  'motion.cut': () => ({ characterId: 'actor-a', frame: 20 }),
+  'motion.setSegmentSpeed': () => ({ characterId: 'actor-a', segmentId: 'motion-0', speed: 0.5 }),
+  'motion.removeSegment': () => ({ characterId: 'actor-a', segmentId: 'motion-0-a' }),
+  'motion.trim': () => ({ characterId: 'actor-a', start: 4, end: 40 }),
+  'motion.resetTiming': () => ({ characterId: 'actor-a' }),
   ...Object.fromEntries(['ik.setKey', 'character.setIkKey'].map(id => [id, () => ({ characterId: 'actor-a', frame: 0, tracks })])),
   ...Object.fromEntries(['ik.removeKey', 'character.removeIkKey'].map(id => [id, () => ({ characterId: 'actor-a', frame: 0 })])),
   ...Object.fromEntries(['ik.clearKeys', 'character.clearIkKeys'].map(id => [id, () => ({ characterId: 'actor-a' })])),
@@ -25,6 +30,7 @@ const cases = {
 async function prepare(f, command) {
   seed(f);
   if (command === 'motion.rangePin.remove') ok(f.run('motion.rangePin.apply', { characterId: 'actor-a', pin }));
+  if (command === 'motion.removeSegment' || command === 'motion.resetTiming') ok(f.run('motion.cut', { characterId: 'actor-a', frame: 20 }));
   if (command.includes('removeKey') || command.includes('removeIkKey') || command.includes('clearKeys') || command.includes('clearIkKeys')) ok(f.run('ik.setKey', { characterId: 'actor-a', frame: 0, tracks: { head: { q: [unit] } } }));
 }
 

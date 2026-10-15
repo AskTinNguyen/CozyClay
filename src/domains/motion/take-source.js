@@ -8,6 +8,8 @@ import { bakeTake } from "../../motion3/take.js";
 import { motionScene } from "../../motion3/scene.js";
 import { skeletonFor } from "../../motion3/rigs/index.js";
 import { isTakeV3 } from "../../motion3/playback.js";
+import { normalizeTakeEdit } from "../../motion3/take-edit.js";
+export { renderTakeEdit } from "../../motion3/take-edit.js";
 
 const TAKE_SCHEMA = "cozyclay.take.v3";
 const SPEC_SCHEMA = "cozyclay.motion-spec.v1";
@@ -31,11 +33,12 @@ export function normalizeTakeSource(value) {
 	const objects = plain(value.scene?.objects) ? value.scene.objects : {}, others = plain(value.scene?.others) ? { others: value.scene.others } : {};
 	return structuredClone({ schema: TAKE_SCHEMA, rig: value.rig, spec: value.spec,
 		placement: { position: value.placement.position, yaw: value.placement.yaw }, scene: { objects, ...others },
-		...(typeof value.takeId === "string" && value.takeId ? { takeId: value.takeId } : {}) });
+		...(typeof value.takeId === "string" && value.takeId ? { takeId: value.takeId } : {}),
+		...(normalizeTakeEdit(value.edit, value.spec.frames) ? { edit: normalizeTakeEdit(value.edit, value.spec.frames) } : {}) });
 }
 
-/** What a scene saves for a motion layer's take descriptor: its source and take id, or null. */
-export const savedTakeSource = descriptor => descriptor?.source ? { ...descriptor.source, takeId: descriptor.studioTakeId } : null;
+/** What a scene saves for a motion layer's take descriptor: its source, take id and timing edit (take-edit.js), or null. */
+export const savedTakeSource = descriptor => descriptor?.source ? { ...descriptor.source, takeId: descriptor.studioTakeId, ...(descriptor.edit ? { edit: descriptor.edit } : {}) } : null;
 
 /** Compile a source back into the installed take (with `frames`, as motion.compile installs it).
  * Leniently: a field a later, stricter validator does not know never blocks loading a saved take. */

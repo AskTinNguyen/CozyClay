@@ -2,6 +2,7 @@
 import { STUDIO_IK_CHAIN_TRACKS, studioActionDeclaration } from "../studio-actions.js";
 import { fail, characterOf } from "./shared.js";
 import { elementSetSchema, registerElementSet } from './elements.js';
+import { registerTiming, timingDeclarations } from './motion-timing.js';
 import './elements/motion.js';
 import './elements/character.js';
 const id = { type: 'string', minLength: 1 }, frame = { type: 'integer', minimum: 0 };
@@ -31,7 +32,7 @@ const ik = legacyIk.map((entry, index) => ({ ...entry, id: ['ik.setKey', 'ik.rem
 
 const clear = { id: 'motion.clear', label: 'Clear motion', description: 'Clear the character\'s compiled take and its IK corrections.',
 	kind: 'mutation', undoDomain: 'motion', input: { type: 'object', properties: { characterId: { type: 'string' } }, required: ['characterId'], additionalProperties: false } };
-export const declarations = Object.freeze([...tools, ...rangePins, ...edits, ...legacyIk, ...ik, clear]);
+export const declarations = Object.freeze([...tools, ...rangePins, ...edits, ...timingDeclarations, ...legacyIk, ...ik, clear]);
 
 export function register(registry, ports) {
 	const owner = () => ports.storeDomain('motion');
@@ -55,6 +56,7 @@ export function register(registry, ports) {
 		for (const op of args.ops ?? [args]) take(op.id);
 		return entry.run(args);
 	} }); } }, ports, edits[0]);
+	registerTiming(registry, ports, mounted);
 	for (const [index, declaration] of [...legacyIk, ...ik].entries()) registry.register({ ...declaration,
 		available: state => state.characters.length > 0 || 'There are no characters in this scene.', run(args) {
 			const character = characterOf(ports, args.characterId), kind = index % 3;
