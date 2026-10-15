@@ -31,8 +31,8 @@ export function bodyMove(X, k, f, need, why = "") {
 	return { delta, hint: `body: move ${vec(delta)} m toward the target at f${f}, ${X.cause("root", f)} (arm ${k} is at full reach)${why}`, fix: { channel: "root", f, delta, hold: true } };
 }
 
-/** Arm k cannot reach its wrist target at f (soft reach clamped it, or the IK missed). */
-const atReach = (X, k, f) => (X.fr(f).diag[`reach_over_${k}`] ?? 0) > 1e-3 || (X.fr(f).diag[`arm_miss_${k}`] ?? 0) > 2e-3;
+/** Arm k cannot reach its wrist target at f (soft reach clamped it, or the IK missed; not a target inside the elbow's fold, arm_fold). */
+const atReach = (X, k, f) => (X.fr(f).diag[`reach_over_${k}`] ?? 0) > 1e-3 || ((X.fr(f).diag[`arm_miss_${k}`] ?? 0) > 2e-3 && !X.fr(f).diag[`arm_fold_${k}`]);
 
 /** The largest other anchor weight of hand k above LEAK at f while `drive` leads it, or null. */
 function leakOf(X, k, f, drive) {

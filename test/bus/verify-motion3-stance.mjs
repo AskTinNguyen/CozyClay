@@ -76,9 +76,11 @@ const pick = group(compileSpec(late, { sk, scene }), "GRAB", /^empty: hand/);
 expect("a grab at f1 of the kit on the floor still is a GRAB group", pick?.worstFrame === 1 && pick.worst > 0.1, JSON.stringify(pick));
 
 // ---- 5. session f0f2be59 stays clean ----------------------------------------------------------------
-const clean = compileSpec(CLEAN_SPEC, { sk, scene: motionScene(batKit(CLEAN_KIT_AT)) });
-console.log(`  f0f2be59: QA ${clean.qa.total} (was 0); keys ${JSON.stringify(clean.observations.held[BAT].map(h => [h.f, h.deg, h.cm]))}`);
-expect("f0f2be59 stays at QA 0 with every key drawn within 1 deg and 0.5 cm", clean.qa.total === 0 && clean.observations.held[BAT].every(h => h.deg <= 1 && h.cm <= 0.5), kinds(clean).join(" | "));
+// lane P3: the elbow stops at 150 deg; the stance key f0 asks the right elbow for 152 deg, so it alone is drawn 1.2 cm off
+const clean = compileSpec(CLEAN_SPEC, { sk, scene: motionScene(batKit(CLEAN_KIT_AT)) }), held0 = clean.observations.held[BAT];
+console.log(`  f0f2be59: QA ${clean.qa.total} (was 0); keys ${JSON.stringify(held0.map(h => [h.f, h.deg, h.cm]))}`);
+expect("f0f2be59 draws every key within 1 deg and 0.5 cm but the stance key f0, whose elbow fold is past the stop (REACH f0-f3, 1.2 cm)",
+	clean.qa.groups.length === 1 && group(clean, "REACH", /^empty: 1\.2 cm off its keys$/)?.last === 3 && held0.every(h => h.deg <= 1 && h.cm <= (h.f === 0 ? 1.5 : 0.5)), kinds(clean).join(" | "));
 
 // ---- 6. deterministic, and every frame solves on its own ----------------------------------------------
 let alone = 0;

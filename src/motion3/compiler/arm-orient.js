@@ -15,7 +15,7 @@
 // arm it starts from, so the forearm's frame for a pole is its rest frame aligned onto it.
 import { add, sub, scale, norm, dot, cross, len, mul, T, apply, align, clamp, quatFromMat, matFromQuat } from "./math.js";
 import { qmul, qconj, qlog, qexp } from "./quat.js";
-import { palmAxes } from "./limbs.js";
+import { palmAxes, foldPoint, backOf } from "./limbs.js";
 
 /** Wrist limits in degrees, relative to the hand at rest on the forearm (twist: the forearm's turn). */
 export const WRIST_LIMITS = { twist: [-85, 85], flex: [-70, 70], dev: [-35, 20] };
@@ -53,12 +53,14 @@ function strainOf(need, margin = 0) {
  * arm of `side`): at(th) -> { pv, need, elbow, cost } for the elbow th radians about the shoulder-wrist
  * axis from `ref` (the bend direction the channels gave), angleOf(world direction) -> th,
  * softmin() -> the th of the Boltzmann-weighted mean of POLES poles, miss the metres the arm is
- * short of W. `margin` tightens the wrist limits the strain prices (strainOf).
+ * short of W (a wrist nearer the shoulder than the elbow folds is no miss here; hold.js holdCost
+ * prices it). `margin` tightens the wrist limits the strain prices (strainOf).
  */
 export function landscape(sk, s, side, goal, W, ref, restBend, margin = 0) {
 	const I = sk.index, a = I[`${side}Arm`], fa = I[`${side}ForeArm`], h = I[`${side}Hand`], S = s.P[a];
 	const A = len(sub(s.P[fa], S)), B = len(sub(s.P[h], s.P[fa]));
-	const v = sub(W, S), d = len(v), u = scale(v, 1 / Math.max(d, 1e-9)), dc = clamp(d, Math.abs(A - B) + 1e-4, (A + B) * 0.9995);
+	// the elbow where twoBone puts it: the wrist no further folded than limbs.js foldPoint lets it
+	const v = sub(foldPoint(S, W, A, B, backOf(sk, s)), S), d = len(v), u = scale(v, 1 / Math.max(d, 1e-9)), dc = clamp(d, Math.abs(A - B) + 1e-4, (A + B) * 0.9995);
 	const along = (A * A - B * B + dc * dc) / (2 * dc), rad = Math.sqrt(Math.max(A * A - along * along, 0));
 	const off = x => sub(x, scale(u, dot(x, u))), e1 = norm(len(off(ref)) > 1e-6 ? off(ref) : cross(u, Math.abs(u[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0]));
 	const e2 = cross(u, e1), Wn = add(S, scale(u, dc));

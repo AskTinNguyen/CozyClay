@@ -1,12 +1,12 @@
-// Hints for motion-type issues (reach, knees, pole flips, sliding, pops, floating, opted-in
-// speed and acceleration) and for the spec's own checks (contacts, orient, below, appear). Orient and
-// below try small changes of the wrist or elbow channels on the worst frame and scale the best
-// one to the needed amount.
+// Hints for motion-type issues (reach, knees, elbows past their stop, pole flips, sliding, pops,
+// floating, opted-in speed and acceleration) and for the spec's own checks (contacts, orient,
+// below, appear). Orient and below try small changes of the wrist or elbow channels on the worst
+// frame and scale the best one to the needed amount.
 import { add, sub, scale, norm, len, dist, angle, apply, ry, clamp, dot } from "../compiler/math.js";
 import { solveFrame } from "../compiler/compile.js";
 import { channelsAt } from "../compiler/channels.js";
 import { resolveAnchor } from "../compiler/anchors.js";
-import { carried } from "../compiler/limbs.js";
+import { carried, reachAt, ELBOW_FOLD, ELBOW_STOP } from "../compiler/limbs.js";
 import { pointOf } from "./spec-checks.js";
 import { solePoints, ankleY } from "./geometry.js";
 import { vec, m3 } from "./fmt.js";
@@ -74,7 +74,13 @@ export const motionHints = {
 				: `or root ${vec(scale(norm(side), len(side) - R * 0.95))} m toward the foot (the foot is ${m3(len(side))} m sideways of the hip: the root and foot keys disagree)`;
 			return { cause: X.cause(`foot_${k}`, f), hint: `foot_${k}: move ${vec(scale(norm(sub(H, T)), need))} m toward the hip at f${f}, ${alt}`, fix: { channel: `foot_${k}`, f, delta: scale(norm(sub(H, T)), need) } };
 		}
-		const S = k === "l" ? "Left" : "Right", { s } = X.fr(f), dir = norm(sub(s.P[X.I[`${S}Hand`]], s.P[X.I[`${S}Arm`]]));
+		const S = k === "l" ? "Left" : "Right", { s, diag } = X.fr(f), dir = norm(sub(s.P[X.I[`${S}Hand`]], s.P[X.I[`${S}Arm`]]));
+		// a target nearer the shoulder than the elbow folds (compiler/limbs.js): out from the shoulder, or the body back from it
+		const fold = diag[`arm_fold_${k}`];
+		if (fold) {
+			const r = moveHint(X, `hand_${k}`, f, scale(dir, need), ` (the hand target is ${m3(g.worst)} m inside the forearm's reach: the elbow would fold ${Math.round(fold)}deg; it bends to ${ELBOW_FOLD}deg and stops at ${ELBOW_STOP}deg)`);
+			return { cause: r.cause, hint: `${r.hint}, or bring root ${vec(scale([-dir[0], 0, -dir[2]], need))} m back from it`, fix: r.fix };
+		}
 		const r = moveHint(X, `hand_${k}`, f, scale(dir, -need), "");
 		// a hand on a point the scene or the spec pins (an object anchor, one a goal or contact check names) stays: the body comes closer
 		const a = X.hand(k, f).anchor, refs = JSON.stringify([X.spec.goals ?? [], X.spec.checks?.contacts ?? []]);
@@ -98,10 +104,22 @@ export const motionHints = {
 		return { cause: X.cause(`foot_${k}`, f), hint: `foot_${k}: move ${vec(scale(norm(sub(A, H)), want - dist(H, A)))} m away from the hip at f${f} (the knee folds ${m3(g.worst)} deg, limit ${g.limit})`,
 			fix: { channel: `foot_${k}`, f, delta: scale(norm(sub(A, H)), want - dist(H, A)) } };
 	},
+	// the solver stops every elbow at ELBOW_STOP, so a fold past it comes from outside the solver: the hand out from the shoulder
+	ELBOW(X, g) {
+		const k = sideOf(g.subject), S = k === "l" ? "Left" : "Right", f = g.worstFrame, P = X.fr(f).s.P, I = X.I;
+		const A = P[I[`${S}Arm`]], E = P[I[`${S}ForeArm`]], W = P[I[`${S}Hand`]], delta = scale(norm(sub(W, A)), reachAt(dist(A, E), dist(E, W), ELBOW_FOLD) - dist(A, W));
+		return moveHint(X, `hand_${k}`, f, delta, ` (the elbow folds ${m3(g.worst)}deg, past its ${g.limit}deg stop; it bends freely to ${ELBOW_FOLD}deg)`);
+	},
 	FLIP(X, g) {
 		const [, S, limb] = /^(Left|Right)(Leg|ForeArm) /.exec(g.subject) ?? [], f = g.worstFrame;
 		if (!limb) return null;
 		const k = sideOf(S), [r, m, e, pole] = LIMB[limb], I = X.I, gap = +(/ over (\d+) frames$/.exec(g.subject)?.[1] ?? 1);
+		// an elbow on its stop: the target passes near the shoulder and the stopped hand swings round it, whatever the pole
+		const fd = X.fr(f).diag, asked = limb === "ForeArm" && (fd[`arm_fold_${k}`] ?? fd[`hold_${k}`]?.fold);
+		if (asked) {
+			const held = fd[`hold_${k}`]?.fold && Object.entries(X.spec.objects ?? {}).find(([, o]) => o.keys?.length && X.spec.props?.[o.prop]?.hand === k)?.[0];
+			return { cause: held ? `objects.${held}.keys` : X.cause(X.hand(k, f).ch, f), hint: `the ${held ? `keys of ${held} ask` : "hand target asks"} the elbow to fold ${Math.round(asked)}deg at f${f}, past its ${ELBOW_STOP}deg stop, so the hand swings round the shoulder on the stop: move ${held ? "the keyed pose" : "the target"} out from the shoulder (REACH says how far)` };
+		}
 		const bendAt = q => { const P = X.fr(q).s.P; return angle(sub(P[I[`${S}${m}`]], P[I[`${S}${r}`]]), sub(P[I[`${S}${e}`]], P[I[`${S}${m}`]])); };
 		// a flip over several frames passed through the straight (or folded) frames between: the straightest names it
 		const fb = Array.from({ length: Math.max(1, gap - 1) }, (_, i) => (gap > 1 ? f - 1 - i : f)).reduce((p, q) => (bendAt(q) < bendAt(p) ? q : p)), bend = bendAt(fb);
@@ -135,7 +153,11 @@ export const motionHints = {
 		const { diag } = X.fr(f), over = Math.max(diag[`reach_over_${k}`] ?? 0, diag[`arm_miss_${k}`] ?? 0);
 		const anchor = /^anchor:(.+)$/.exec(ck.target)?.[1], fit = (X.spec.fits ?? []).findIndex(ft => ft.side === k && ft.anchor === anchor);
 		const cause = fit >= 0 ? `fits[${fit}] (${k} -> anchor ${anchor})` : moveHint(X, `hand_${k}`, f, delta).cause;
-		const toRoot = scale(norm([delta[0], 0, delta[2]]), over + 0.01);
+		const toRoot = scale(norm([delta[0], 0, delta[2]]), over + 0.01), fold = diag[`arm_fold_${k}`];
+		if (over > 0.002 && fold) {
+			const S = X.fr(f).s.P[X.I[`${k === "l" ? "Left" : "Right"}Arm`]], back = scale(norm([S[0] - b[0], 0, S[2] - b[2]]), over + 0.01);
+			return { cause, hint: `inside the forearm's reach by ${m3(over)} m at f${f} (the elbow would fold ${Math.round(fold)}deg; it stops at ${ELBOW_STOP}deg): bring root ${vec(back)} m back from ${anchor ?? "the target"}, or move the target out from the shoulder`, fix: { channel: "root", f, delta: back } };
+		}
 		if (over > 0.002) return { cause, hint: `out of reach by ${m3(over)} m at f${f}: bring root ${vec(toRoot)} m toward ${anchor ?? "the target"}, or move the target`, fix: { channel: "root", f, delta: toRoot } };
 		const r = moveHint(X, `hand_${k}`, f, delta);
 		return { cause, hint: `${r.hint}${fit < 0 && anchor ? `; or add fits: [{ side: "${k}", anchor: "${anchor}", effector: ${prop ? `{ prop: "${prop[1]}", point: "${ck.point.split(".")[1]}" }` : "{ joints: [...] }"} }]` : ""}`, fix: r.fix };

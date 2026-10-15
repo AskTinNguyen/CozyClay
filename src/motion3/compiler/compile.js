@@ -65,6 +65,8 @@ function hooksFor(ctx, c, f, inFit = false, lead = true, fitSide = null) {
 	const { sk } = ctx;
 	return {
 		softReach: ctx.softReach,
+		// a fit's passes find where the wrist must go with the elbow unstopped; the final pose stops its fold (limbs.js) and leaves the residual
+		foldFree: inFit,
 		hold: lead && ctx.hold ? (k, s) => (k === fitSide ? null : ctx.hold.lead(k, f, s, c)) : undefined,
 		// auto-fix offsets ride on the final pose only, so a fit never cancels them
 		push: inFit ? undefined : k => ctx.push?.[k]?.get(f),

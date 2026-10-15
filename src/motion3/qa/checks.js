@@ -1,18 +1,22 @@
 // General motion checks (every take): scene collisions, ground, IK reach, planted-foot slide,
-// bone length, one-frame pops (style.js), knee and elbow flips, knees bending backward, self
-// contact, hands and held props entering the head (and the torso, contact-checks.js). Speed,
-// acceleration, knee bend and balance are style: style.js measures them and checks them only
-// when the spec names their limit (checks.limits).
+// bone length, one-frame pops (style.js), knee and elbow flips, knees bending backward, elbows
+// folded past their stop (ELBOW: the forearm in the upper arm, compiler/limbs.js), self contact,
+// hands and held props entering the head (and the torso, contact-checks.js). Speed, acceleration,
+// knee bend and balance are style: style.js measures them and checks them only when the spec
+// names their limit (checks.limits).
 import { add, sub, scale, apply, len, dist, cross, norm, dot, angle } from "../compiler/math.js";
 import { CAPSULES, segPoints, sdBox, segDist, headDepth, solePoints } from "./geometry.js";
 import { contactChecks } from "./contact-checks.js";
 import { popChecks } from "./style.js";
+import { ELBOW_STOP } from "../compiler/limbs.js";
 
 export const QA_LIMITS = { allow: 0.005, groundAllow: 0.01, reach: 0.01, slide: 0.0015, plantH: 0.012,
 	speedCore: 0.04, speedLimb: 0.16, accCore: 0.015, accLimb: 0.05, flip: 60, knee: 150, headAllow: 0.003, self: 0,
 	body: 0.005, hands: 0.01, object: 0.005, grab: 0.03, balance: 0.08 };
 /** FLIP reads a bend plane only where the limb is bent this far (deg) from straight and from folded flat. */
 const FLIP_BEND = 20;
+/** ELBOW: degrees past ELBOW_STOP that count (the arm IK sits on the stop to rounding). */
+const ELBOW_TOL = 0.01;
 
 export const allowance = (allow, part, obj) => {
 	for (const a of allow ?? []) if (part.startsWith(a.part) && (a.object === obj || (a.object.endsWith("*") && obj.startsWith(a.object.slice(0, -1))))) return a.depth;
@@ -57,6 +61,9 @@ export function generalChecks(sk, out, opts = {}) {
 			const toeDir = sub(s.P[I[`${S}ToeBase`]], an); toeDir[1] = 0;
 			const mid = sub(kn, [(th[0] + an[0]) / 2, (th[1] + an[1]) / 2, (th[2] + an[2]) / 2]);
 			if (bend > 3 && dot(mid, toeDir) < -0.002) push("KNEE", `${S} knee bends backward`, f, bend, 0);
+			// an elbow folded past its stop puts the forearm in the upper arm (the solver stops at ELBOW_STOP)
+			const fold = angle(sub(s.P[I[`${S}ForeArm`]], s.P[I[`${S}Arm`]]), sub(s.P[I[`${S}Hand`]], s.P[I[`${S}ForeArm`]]));
+			if (fold > ELBOW_STOP + ELBOW_TOL) push("ELBOW", `${S} elbow folds ${fold.toFixed(0)}deg`, f, fold, ELBOW_STOP);
 		}
 	}
 	contactChecks(sk, out, L, push);

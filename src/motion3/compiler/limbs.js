@@ -7,12 +7,74 @@ import { rotateSubtree } from "./skeleton.js";
 /** Direction fixed to bone b that points along `restDir` in the rest pose. */
 export const carried = (sk, s, b, restDir) => apply(s.R[b], apply(T(sk.restWorldRot[b]), restDir));
 
+// Elbow flexion: degrees between the upper arm and the forearm (0 straight), read on the joints as QA
+// reads it (Arm->ForeArm against ForeArm->Hand). Active flexion ends near 145 deg (clinical norms
+// 140-150: AMA 140, Kendall 145, AAOS 150), where the forearm's muscle meets the upper arm's; the
+// passive fold stops a few degrees on. An arm IK follows its wrist target freely to ELBOW_FOLD, eases
+// onto ELBOW_STOP (armReach) and leaves a target nearer the shoulder as a residual (REACH), like one
+// out of reach. Before, twoBone folded an arm flat: the forearm lay in the upper arm and the bend plane
+// was any plane at all (session df6acdcc, 171 deg).
+export const ELBOW_FOLD = 145, ELBOW_STOP = 150;
+/** The flexion (deg) that puts the wrist d metres from the shoulder of an arm with bones a, b (180 at |a - b| or nearer). */
+export const flexionAt = (a, b, d) => (Math.acos(clamp((d * d - a * a - b * b) / (2 * a * b), -1, 1)) * 180) / Math.PI;
+/** The shoulder-wrist distance of an arm with bones a, b folded `deg` degrees. */
+export const reachAt = (a, b, deg) => Math.sqrt(a * a + b * b + 2 * a * b * Math.cos((deg * Math.PI) / 180));
+/**
+ * The shoulder-wrist distance an arm with bones a, b takes for a wrist target d metres away: d while
+ * the elbow folds ELBOW_FOLD or less (d >= k), then d + (k - d)^2 / 4w (w = k - the ELBOW_STOP distance)
+ * down to d = k - 2w, and the stop beyond. The wrist slows at a constant rate (C1, no kink as it
+ * engages: half the peak deceleration of an exponential ease as wide) and sits on the stop once the
+ * target is 2w inside.
+ */
+export function armReach(a, b, d) {
+	const k = reachAt(a, b, ELBOW_FOLD);
+	if (d >= k) return d;
+	const w = k - reachAt(a, b, ELBOW_STOP);
+	return d > k - 2 * w ? d + ((k - d) * (k - d)) / (4 * w) : k - w;
+}
+/**
+ * The wrist point an arm (shoulder S, bones a, b) reaches for a wrist target T: T while the elbow
+ * folds ELBOW_FOLD or less, else the point armReach(|T - S|) from the shoulder on the ray from the fold
+ * centre C through T. No point can stand for every target inside the stop and still move smoothly (a
+ * ball has no continuous retraction onto its boundary): the nearest point (the ray from the shoulder)
+ * whips round the shoulder as a target passes near it (session df6acdcc: 120 deg in 2 frames). So C
+ * sits on the stop's sphere straight behind the shoulder (`back`, the chest's -Z), in the back, where
+ * no hand reaches, and a target passing in front of, above, below or beside the shoulder glides.
+ */
+export function foldPoint(S, T, a, b, back) {
+	const k = reachAt(a, b, ELBOW_FOLD), d = len(sub(T, S));
+	if (d >= k) return T;
+	const r = armReach(a, b, d), m = scale(back, reachAt(a, b, ELBOW_STOP)), C = add(S, m), e = sub(T, C);
+	const u = len(e) > 1e-9 ? norm(e) : scale(back, -1), em = dot(u, m);
+	return add(C, scale(u, -em + Math.sqrt(Math.max(0, em * em - dot(m, m) + r * r))));
+}
+/** The direction behind the shoulders on pose s (the chest bone's rest -Z), where foldPoint's rays start. */
+export const backOf = (sk, s) => carried(sk, s, sk.index.Spine2 ?? sk.index.Hips, [0, 0, -1]);
+/** The flexion (deg) an arm with bones a, b takes when `deg` is asked (armReach as an angle). */
+export const elbowFold = (a, b, deg) => flexionAt(a, b, armReach(a, b, reachAt(a, b, deg)));
+/** The flexion (deg) a wrist target asks of the arm of `side` on pose s. */
+export function askedFold(sk, s, side, target) {
+	const S = s.P[sk.index[`${side}Arm`]], E = s.P[sk.index[`${side}ForeArm`]], W = s.P[sk.index[`${side}Hand`]];
+	return flexionAt(len(sub(E, S)), len(sub(W, E)), len(sub(target, S)));
+}
+
+/** Ease an elbow folded past ELBOW_FOLD (an FK abend) back as the IK would (elbowFold), the forearm turning in its bend plane. */
+export function limitFold(sk, s, side) {
+	const a = sk.index[`${side}Arm`], fa = sk.index[`${side}ForeArm`], up = sub(s.P[fa], s.P[a]), down = sub(s.P[sk.index[`${side}Hand`]], s.P[fa]);
+	const deg = (Math.acos(clamp(dot(norm(up), norm(down)), -1, 1)) * 180) / Math.PI, n = cross(up, down);
+	if (deg > ELBOW_FOLD && len(n) > 1e-12) rotateSubtree(sk, s, fa, s.P[fa].slice(), axisRot(n, elbowFold(len(up), len(down), deg) - deg));
+}
+
 /** Solve root-mid-end so `end` lands on `target` (clamped to reach), bending toward `pole`.
- * `pole0` is the limb's current bend reference carried by the upper bone. Returns the miss (m). */
-export function twoBone(sk, s, root, mid, end, target, pole, restBend) {
+ * `pole0` is the limb's current bend reference carried by the upper bone. Returns the miss (m).
+ * `arm`: the mid joint is an elbow; it folds no further than armReach allows (foldPoint), and the
+ * miss is the residual either way (out of reach, or nearer the shoulder than the fold). */
+export function twoBone(sk, s, root, mid, end, target, pole, restBend, arm = false) {
 	const Rt = s.P[root], M = s.P[mid], E = s.P[end];
 	const a = len(sub(M, Rt)), b = len(sub(E, M));
-	const v = sub(target, Rt), d = len(v), u = scale(v, 1 / Math.max(d, 1e-9));
+	// an elbow folds no further than armReach lets it: the wrist goes to foldPoint, and misses the target by the rest
+	const W = arm ? foldPoint(Rt, target, a, b, backOf(sk, s)) : target, inside = W === target ? 0 : len(sub(W, target));
+	const v = sub(W, Rt), d = len(v), u = scale(v, 1 / Math.max(d, 1e-9));
 	const dc = clamp(d, Math.abs(a - b) + 1e-4, (a + b) * 0.9995);
 	const l = (a * a - b * b + dc * dc) / (2 * dc), h = Math.sqrt(Math.max(a * a - l * l, 0));
 	const pv = norm(sub(pole, scale(u, dot(pole, u))));
@@ -22,7 +84,7 @@ export function twoBone(sk, s, root, mid, end, target, pole, restBend) {
 	const p1 = carried(sk, s, mid, restBend);
 	const Tn = add(Rt, scale(u, dc));
 	rotateSubtree(sk, s, mid, s.P[mid].slice(), align(sub(s.P[end], s.P[mid]), p1, sub(Tn, s.P[mid]), pv));
-	return d - dc;
+	return inside || d - dc;
 }
 
 /** Aim a foot: Foot->ToeBase along yaw/pitch of its rest direction, sole kept level. */

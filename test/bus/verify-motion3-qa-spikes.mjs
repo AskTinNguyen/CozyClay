@@ -50,17 +50,21 @@ const clean = compileSpec(noLimits(CLEAN_SPEC), { sk, scene: motionScene(batKit(
 const l2 = compileSpec(L2_SWING, { sk, scene: motionScene(batScene()) });
 console.log(`  df6acdcc: QA ${fold.qa.total} (was 4): ${kinds(fold).join(" | ")}`);
 console.log(`  f0f2be59 without limits: QA ${clean.qa.total}; 9dcf19c5: QA ${l2.qa.total}, ${[...new Set(l2.qa.groups.map(g => g.kind))].join(" ")}`);
-expect("f0f2be59's swing is clean without the limits the agent set (accLimb 0.35, flip 75)", clean.qa.ok, kinds(clean).join(" | "));
+// lane P3: the elbow stops at 150 deg; f0f2be59's stance key asks the right elbow for 152 deg, so the bat is drawn 1.2 cm off it
+expect("f0f2be59's swing is clean without the limits the agent set (accLimb 0.35, flip 75) but for its stance key's elbow fold (REACH f0-f3, lane P3)",
+	clean.qa.groups.length === 1 && has(clean, "REACH", /^empty: 1\.\d cm off its keys$/) && clean.qa.groups[0].last === 3 && /inside the forearm's reach/.test(clean.qa.groups[0].hint), kinds(clean).join(" | "));
 expect("no POP on any of the three swings (df6acdcc had LeftForeArm 5.95 cm/f^2 at f31)", ![fold, clean, l2].some(r => has(r, "POP")), [fold, l2].map(r => kinds(r).join(" | ")).join(" || "));
 expect("df6acdcc: no FLIP on the folded right elbow (was 71 deg at f35)", !has(fold, "FLIP", /^RightForeArm/), kinds(fold).join(" | "));
-expect("df6acdcc: what is left is real: the left hand jerking onto the handle (FLIP LeftForeArm f11) and the bat in the chest (COLLIDE f30)",
-	fold.qa.total === 2 && has(fold, "FLIP", /^LeftForeArm bend plane jumps 60deg$/) && has(fold, "COLLIDE", /^torso_hi x empty$/), kinds(fold).join(" | "));
+// lane P3: the right elbow stops at 150 deg, so the keys that drive the wrist into the shoulder are a REACH residual (10.9 cm)
+expect("df6acdcc: what is left is real: the keys folding the right elbow (REACH), the left hand jerking onto the handle (FLIP LeftForeArm f12) and the bat in the chest (COLLIDE f30)",
+	fold.qa.groups.length === 3 && has(fold, "REACH", /^empty: 10\.9 cm off its keys$/) && has(fold, "FLIP", /^LeftForeArm bend plane jumps 61deg$/) && has(fold, "COLLIDE", /^torso_hi x empty$/), kinds(fold).join(" | "));
 
 // ---- 2. why the right elbow's plane turned: folded flat, not flipped -------------------------------
 const P = f => fold.out.frames[f].s.P, elbowMove = dist(P(35)[I.RightForeArm], P(34)[I.RightForeArm]);
 console.log(`  df6acdcc right elbow: bend f33-f36 ${[33, 34, 35, 36].map(f => bendAt(fold.out, f, "Right").toFixed(0)).join(" ")} deg, moved ${(elbowMove * 100).toFixed(1)} cm into f35`);
-expect("the df6acdcc right elbow is folded past 160 deg at f34 and f35 and moves under 5 cm into f35 (no visible flip)",
-	bendAt(fold.out, 34, "Right") > 160 && bendAt(fold.out, 35, "Right") > 160 && elbowMove < 0.05, `${bendAt(fold.out, 34, "Right")} ${bendAt(fold.out, 35, "Right")} ${elbowMove}`);
+// lane P3: it folded to 165-171 deg there; the elbow now stops at 150 deg (compiler/limbs.js ELBOW_STOP)
+expect("the df6acdcc right elbow stops at 150 deg at f34 and f35 (it folded to 165-171 deg)",
+	[34, 35].every(f => bendAt(fold.out, f, "Right") > 149.9 && bendAt(fold.out, f, "Right") < 150.01), `${bendAt(fold.out, 34, "Right")} ${bendAt(fold.out, 35, "Right")} ${elbowMove}`);
 
 // ---- 3. a hard burst is not a pop; a spike still is --------------------------------------------------
 const stance = compileSpec(STANCE_SPEC, { sk, scene: motionScene(batKit(STANCE_KIT_AT)) });
@@ -86,7 +90,9 @@ const slow = [[idle.out, "RightHand", 60, 0.03, false], [idle.out, "RightHand", 
 expect("injected pops in a slow take still pop: hand 3 cm glitch and 5 cm step, hips 2 cm glitch and 3 cm step, elbow 3 cm glitch", !popsNear(idle.out, "RightHand", 60) && slow.length === 0, JSON.stringify(slow.map(s => s.slice(1))));
 const fastCases = [[clean.out, "RightHand"], [clean.out, "LeftHand"], [fold.out, "RightHand"], [l2.out, "RightHand"]].map(([out, j]) => [out, j, fastest(out, j)]);
 console.log(`  fastest frames: ${fastCases.map(([out, j, f]) => `${j} f${f} ${(dist(out.frames[f].s.P[I[j]], out.frames[f - 1].s.P[I[j]]) * 100).toFixed(1)} cm/frame`).join(", ")}`);
-const missed = fastCases.flatMap(([out, j, f]) => [[0.1, false], [0.15, true]].filter(([d, step]) => !popsNear(inject(out, j, f, across(out, j, f, d), step), j, f)).map(([d, step]) => `${j} f${f} ${step ? "step" : "glitch"} ${d}`));
+// df6acdcc's fastest frame (f38) follows the right hand leaving the elbow stop (lane P3: f36 12 cm/f^2 as the held wrist
+// rejoins its target), a burst a 15 cm step hides in; its 10 cm glitch still pops
+const missed = fastCases.flatMap(([out, j, f]) => [[0.1, false], [0.15, true]].filter(([, step]) => !(step && out === fold.out)).filter(([d, step]) => !popsNear(inject(out, j, f, across(out, j, f, d), step), j, f)).map(([d, step]) => `${j} f${f} ${step ? "step" : "glitch"} ${d}`));
 expect("injected pops at the fastest frame of a swing still pop (a 10 cm glitch and a 15 cm step across the hand's path)", missed.length === 0, missed.join(", "));
 
 // ---- 4. a flipped pole still is a FLIP ------------------------------------------------------------------
@@ -115,7 +121,8 @@ expect("an elbow that goes straight for a frame and comes back on the other side
 expect("a walking knee turned 120 deg for one frame is a FLIP", flipAt(swivel(walk.out, ["LeftUpLeg", "LeftLeg", "LeftFoot"], kneeFrame, 120, "glitch"), "LeftLeg", kneeFrame));
 
 // ---- 5. QA does not change takes: the swings bake as before -------------------------------------------
-const HASHES = { df6acdcc: [fold, "cba7efc1642eee3a"], "f0f2be59 without limits": [clean, "08c504de5c6a48b9"], "9dcf19c5": [l2, "a7ffbc022b463875"] };
+// lane P3 changed all three: each folds an elbow past 145 deg (df6acdcc right 171, f0f2be59 right 152, 9dcf19c5 left 151), where the elbow now eases onto its stop
+const HASHES = { df6acdcc: [fold, "f3d9e1c7e86e7d08"], "f0f2be59 without limits": [clean, "881d97a81ca23b8e"], "9dcf19c5": [l2, "ad773fd24b96b59b"] };
 const changed = Object.entries(HASHES).map(([k, [r, h]]) => [k, hashOf(bakeTake(sk, r.out)), h]).filter(([, got, h]) => got !== h);
 expect("the three swings bake bit for bit as before (df6acdcc and f0f2be59 retime: what QA calls a pop did not change there)", changed.length === 0, JSON.stringify(changed));
 

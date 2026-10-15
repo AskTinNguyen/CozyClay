@@ -4,7 +4,7 @@
 // rotated by the root yaw only.
 import { add, sub, scale, norm, len, apply, mul, rx, ry, rz } from "./math.js";
 import { restState, rotateSubtree } from "./skeleton.js";
-import { twoBone, orientFoot, wrist, fingers } from "./limbs.js";
+import { twoBone, orientFoot, wrist, fingers, limitFold, askedFold, ELBOW_FOLD } from "./limbs.js";
 import { holdHand } from "./hold.js";
 import { ELBOW_REST } from "./arm-orient.js";
 
@@ -42,7 +42,9 @@ function softReach(sk, s, a, fa, h, target, diag, k) {
  * hooks.afterArm(side, s, diag) lets the caller measure props carried by that hand.
  * hooks.push(side) -> [x,y,z] | undefined, a world offset added to the IK target (auto-fix).
  * hooks.softReach clamps unreachable wrist targets smoothly (auto-fix).
+ * hooks.foldFree lets the arm IK fold past the elbow's stop (a fit's measuring passes, compile.js).
  * hooks.hold(side, s) -> { w, palm, measure, pole?, second? } | null: a held object's keys lead the hand (hold.js).
+ * diag.arm_fold_<k>: the flexion (deg) the wrist target asked when past ELBOW_FOLD (arm_miss_<k> is then how far inside).
  */
 export function pose(sk, c, hooks = {}) {
 	const s = restState(sk);
@@ -57,7 +59,8 @@ export function pose(sk, c, hooks = {}) {
 	for (const [k, side] of Object.entries(SIDES)) {
 		const bd = num(c[`abend_${k}`]), sw = num(c[`aswing_${k}`]);
 		const fa = sk.index[`${side}ForeArm`], a = sk.index[`${side}Arm`];
-		if (bd) rotateSubtree(sk, s, fa, s.P[fa].slice(), rx(-bd));
+		// an FK bend past the fold eases to its stop like the IK (limbs.js elbowFold)
+		if (bd) { rotateSubtree(sk, s, fa, s.P[fa].slice(), rx(-bd)); limitFold(sk, s, side); }
 		if (sw) rotateSubtree(sk, s, a, s.P[a].slice(), rx(-sw));
 	}
 	spread(sk, s, ["Neck", "Head"], num(c.head_yaw), num(c.head_pitch), num(c.head_roll));
@@ -90,7 +93,10 @@ export function pose(sk, c, hooks = {}) {
 			if (hooks.softReach) target = softReach(sk, s, a, fa, h, target, diag, k);
 			const poleFk = norm(sub(s.P[fa], scale(add(s.P[a], fkHand), 0.5)));
 			const pole = add(scale(poleFk, 1 - w), scale(poleIk, w));
-			diag[`arm_miss_${k}`] = twoBone(sk, s, a, fa, h, target, pole, ELBOW_REST);
+			// a target nearer the shoulder than the elbow folds leaves a residual too; arm_fold says what it asked
+			diag[`arm_miss_${k}`] = twoBone(sk, s, a, fa, h, target, pole, ELBOW_REST, !hooks.foldFree);
+			const fold = askedFold(sk, s, side, target);
+			if (fold > ELBOW_FOLD && !hooks.foldFree) diag[`arm_fold_${k}`] = fold;
 		}
 		wrist(sk, s, side, num(c[`wtwist_${k}`]), num(c[`wflex_${k}`]));
 		fingers(sk, s, side, c[`fingers_${k}`]);

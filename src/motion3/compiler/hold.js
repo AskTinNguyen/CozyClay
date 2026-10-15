@@ -10,7 +10,7 @@
 // left as a residual: QA measures it on the object (qa/key-checks.js) and reads the reasons from
 // diag.hold_<side>.
 import { add, sub, scale, norm, dot, len, mul, T, apply, axisRot, angle, quatFromMat, matFromQuat } from "./math.js";
-import { twoBone, palmAxes, carried } from "./limbs.js";
+import { twoBone, palmAxes, carried, askedFold, reachAt, ELBOW_FOLD } from "./limbs.js";
 import { rotateSubtree } from "./skeleton.js";
 import { slerp } from "./quat.js";
 import { WRIST_LIMITS, FOREARM_SHARE, ELBOW_REST, wristNeed, swivel, landscape } from "./arm-orient.js";
@@ -22,11 +22,11 @@ import { WRIST_LIMITS, FOREARM_SHARE, ELBOW_REST, wristNeed, swivel, landscape }
 // limit 100 deg from it ruled out an elbow pointing down (session d5c110a7's batting stance).
 // ROLL_MARGIN: the share of each wrist half range by which holdCost tightens the limits, so the
 // roll picked for a key leaves the frames between keys (they turn between the picks) some room.
-// FOLD: the most an elbow folds (rad, active flexion 145 deg). twoBone folds an arm flat (the wrist
-// on the shoulder) and a flat arm turns the hand any way at all, so without a price the roll of a
-// stance key at the shoulder folded it (session d5c110a7: wrist 6-9 cm from the shoulder, 162 deg),
-// and the frames between keys, where the wrist moves a few cm, broke away from it.
-const ITERATIONS = 3, REACH_PRICE = 1, STRAIGHT = 0.005, ROLL_MARGIN = 0.15, FOLD = (145 * Math.PI) / 180;
+// The fold price (holdCost): an arm folded near flat turns the hand any way at all, so without a price
+// the roll of a stance key at the shoulder folded it (session d5c110a7: wrist 6-9 cm from the shoulder,
+// 162 deg), and the frames between keys, where the wrist moves a few cm, broke away from it. twoBone
+// now stops the fold (limbs.js ELBOW_FOLD, ELBOW_STOP); the price still steers the roll off it.
+const ITERATIONS = 3, REACH_PRICE = 1, STRAIGHT = 0.005, ROLL_MARGIN = 0.15;
 const clampTo = (v, [lo, hi]) => Math.min(hi, Math.max(lo, v));
 
 /**
@@ -81,12 +81,15 @@ export function holdHand(sk, s, side, held, restBend, diag, k) {
 	const I = sk.index, a = I[`${side}Arm`], fa = I[`${side}ForeArm`], h = I[`${side}Hand`], { w } = held;
 	const { goal, plane, wristAt } = aimArm(sk, s, side, held.palm, held.measure(s), w, held.pin);
 	const arm = swivel(sk, s, side, goal, wristAt(goal), plane, restBend, { toward: held.pole, w });
-	let miss = 0, need = { twist: 0, flex: 0, dev: 0 };
+	let miss = 0, fold = 0, need = { twist: 0, flex: 0, dev: 0 };
 	for (let i = 0; i < ITERATIONS; i++) {
-		miss = twoBone(sk, s, a, fa, h, wristAt(i ? s.R[h] : goal), arm.pole, restBend);
+		const W = wristAt(i ? s.R[h] : goal);
+		fold = askedFold(sk, s, side, W);
+		miss = twoBone(sk, s, a, fa, h, W, arm.pole, restBend, true);
 		need = orient(sk, s, side, h, fa, goal);
 	}
-	diag[`hold_${k}`] = { w, miss: Math.max(0, miss), ...need, swivel: swungFrom(s, a, fa, h, plane), ...(held.second ? { second: held.second } : {}) };
+	// fold: the flexion (deg) the wrist asked when past ELBOW_FOLD; miss is then how far inside the fold it is
+	diag[`hold_${k}`] = { w, miss: Math.max(0, miss), ...need, swivel: swungFrom(s, a, fa, h, plane), ...(fold > ELBOW_FOLD ? { fold } : {}), ...(held.second ? { second: held.second } : {}) };
 	diag[`arm_miss_${k}`] *= 1 - w;
 }
 
@@ -103,14 +106,14 @@ export function holdLandscape(sk, s, side, held) {
  * The arm's cost of holding the palm frame `palm` on pose s (the plain arm of `side`, `now` its
  * palm frame there): the wrist strain at the pole holdHand would take, its limits ROLL_MARGIN
  * tighter, plus REACH_PRICE per squared centimetre the arm is short or the wrist nearer the shoulder
- * than the elbow folds (FOLD). An aim key without roll takes the cheapest roll (key-aim.js).
+ * than the elbow folds (ELBOW_FOLD). An aim key without roll takes the cheapest roll (key-aim.js).
  */
 export function holdCost(sk, s, side, palm, now) {
 	const { goal, plane, wristAt } = aimArm(sk, s, side, palm, now, 1), W = wristAt(goal);
 	const arm = swivel(sk, s, side, goal, W, plane, ELBOW_REST, { margin: ROLL_MARGIN });
-	// the wrist no nearer the shoulder than the elbow folds (FOLD): an arm folded flat holds anything, and nothing between keys
+	// the wrist no nearer the shoulder than the elbow folds (ELBOW_FOLD): an arm folded flat holds anything, and nothing between keys
 	const I = sk.index, S = s.P[I[`${side}Arm`]], A = len(sub(s.P[I[`${side}ForeArm`]], S)), B = len(sub(s.P[I[`${side}Hand`]], s.P[I[`${side}ForeArm`]]));
-	const fold = Math.max(0, Math.sqrt(A * A + B * B + 2 * A * B * Math.cos(FOLD)) - len(sub(W, S)));
+	const fold = Math.max(0, reachAt(A, B, ELBOW_FOLD) - len(sub(W, S)));
 	return arm.cost + REACH_PRICE * ((arm.miss * 100) ** 2 + (fold * 100) ** 2);
 }
 
