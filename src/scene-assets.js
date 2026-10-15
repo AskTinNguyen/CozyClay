@@ -18,6 +18,7 @@
  * Everything above the storage adapter is pure and testable in node; the
  * adapter is the only part that needs a browser.
  */
+import { isHdrAssetId, normalizeHdrAsset } from "./stage-hdr.js";
 
 /** Content-addressed, so the same bytes always land on the same id. */
 export const ASSET_ID_PREFIX = "img-";
@@ -85,7 +86,7 @@ export function isMeshAssetId(value) {
 }
 
 export function isAssetId(value) {
-	return isImageAssetId(value) || isMeshAssetId(value);
+	return isImageAssetId(value) || isMeshAssetId(value) || isHdrAssetId(value);
 }
 
 async function sha256Hex(bytes, subtle) {
@@ -149,6 +150,8 @@ export function normalizeAsset(record) {
 	if (!record || typeof record !== "object" || Array.isArray(record)) return null;
 	const bytes = record.bytes instanceof ArrayBuffer ? record.bytes : null;
 	if (!bytes || !bytes.byteLength) return null;
+	// An `hdr-` id is an HDR environment file (stage-hdr.js), stored verbatim.
+	if (isHdrAssetId(record.id)) return normalizeHdrAsset(record, bytes);
 	// Prefix and MIME must agree: a mesh id with an image type (or the reverse)
 	// is a cross-wired record and cannot be drawn as either kind.
 	if (isMeshAssetId(record.id)) {
@@ -309,12 +312,11 @@ export async function importImageFile(file, {
  */
 export function referencedAssetIds(scenes) {
 	const ids = new Set(assetUsageCounts(scenes).keys());
-	// A storyboard panel's stylized picture is held by its shot, not by an object.
+	// A storyboard panel's stylized picture is held by its shot, not by an object;
+	// a scene's HDR environment file by its stage look (stage.lighting.hdr).
 	for (const scene of Array.isArray(scenes) ? scenes : []) {
-		const shots = scene?.shotDocument?.shots;
-		for (const shot of Array.isArray(shots) ? shots : []) {
-			if (isImageAssetId(shot?.stylizedAssetId)) ids.add(shot.stylizedAssetId);
-		}
+		for (const shot of Array.isArray(scene?.shotDocument?.shots) ? scene.shotDocument.shots : []) if (isImageAssetId(shot?.stylizedAssetId)) ids.add(shot.stylizedAssetId);
+		if (isHdrAssetId(scene?.stage?.lighting?.hdr)) ids.add(scene.stage.lighting.hdr);
 	}
 	return ids;
 }

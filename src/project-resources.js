@@ -21,6 +21,7 @@
  * library entry or a garbage id produce fewer items, never a throw.
  */
 import { isImageAssetId, isMeshAssetId } from "./scene-assets.js";
+import { isHdrAssetId } from "./stage-hdr.js";
 
 /** Lineage fields on a scene object, in `assetUsageCounts` order: the card's
  * rendered picture, the photograph it was cut from, and the selection mask. */
@@ -175,6 +176,7 @@ export function resourceManifest(options) {
 
 	const images = collector("image");
 	const meshes = collector("mesh");
+	const environments = collector("environment");
 	
 	const poses = collector("pose");
 	const outputs = collector("workflow-output");
@@ -194,6 +196,12 @@ export function resourceManifest(options) {
 				meshes.note(object.assetId, resolveImage(object.assetId, assetsById, storedIds), { sceneId, objectId, field: "assetId" });
 			}
 		}
+	}
+
+	/* ---- environments: a scene look's HDR file (stage.lighting.hdr) ---- */
+	for (const scene of scenes) {
+		const id = scene?.stage?.lighting?.hdr;
+		if (isHdrAssetId(id)) environments.note(id, resolveImage(id, assetsById, storedIds), { sceneId: nonEmptyString(scene?.id) ?? undefined, field: "stage.lighting.hdr" });
 	}
 
 	/* ---- poses: the library is embedded; a character wearing one is a ref ---- */
@@ -255,7 +263,7 @@ export function resourceManifest(options) {
 		}
 	}
 
-	const items = [...images.items.values(), ...meshes.items.values(), ...poses.items.values(), ...outputs.items.values()];
+	const items = [...images.items.values(), ...meshes.items.values(), ...environments.items.values(), ...poses.items.values(), ...outputs.items.values()];
 	const totals = { embedded: 0, external: 0, missing: 0, bytes: 0 };
 	for (const item of items) {
 		totals[item.status] += 1;

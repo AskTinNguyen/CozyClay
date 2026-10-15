@@ -8,7 +8,7 @@ import { stageFixture } from './stage-fixture.mjs';
 import { ShaderChunk } from 'three';
 import { installSoftShadows } from '../../src/soft-shadows.js';
 
-const STUDIO = { preset: 'studio', sky: null, skyTop: null, ambient: 1, hemiSky: '#ffffff', hemiGround: '#5a5d64', fill: 1, fog: 0, exposure: 1, shadowSoftness: 0, envLight: 0, ao: 0 };
+const STUDIO = { preset: 'studio', sky: null, skyTop: null, ambient: 1, hemiSky: '#ffffff', hemiGround: '#5a5d64', fill: 1, fog: 0, exposure: 1, shadowSoftness: 0, envLight: 0, ao: 0, hdr: null, hdrRotation: 0, hdrIntensity: 1, hdrBackground: true };
 const STUDIO_KEY = { x: 6, y: 9, z: 4, intensity: 1.12, warmth: 0.5, color: null };
 
 // Normalization: an old stage (no lighting, no key colour) gets the studio look.

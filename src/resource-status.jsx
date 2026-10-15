@@ -15,6 +15,7 @@ const KIND_LABELS = {
 	image: () => ko("Image", "이미지"),
 	motion: () => ko("Motion", "모션"),
 	pose: () => ko("Pose", "포즈"),
+	environment: () => ko("HDR environment", "HDR 환경"),
 	"workflow-output": () => ko("Workflow output", "워크플로 출력"),
 };
 

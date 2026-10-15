@@ -4959,7 +4959,7 @@ export default function App() {
 								onChange={(patch) => changeKeyLight("puck", patch)}
 								onDragEnd={endGestureUndo}
 							/>
-							{gridView ? <GridFloor layer={GIZMO_LAYER} /> : <Room light={uiTheme === "light" && !lighting.sky} />}
+							{gridView ? <GridFloor layer={GIZMO_LAYER} /> : <Room light={uiTheme === "light" && !lighting.sky && !(lighting.hdr && lighting.hdrBackground)} />}
 							<SetProps
 								objects={stageSceneObjects}
 								authoredObjects={sceneObjects}

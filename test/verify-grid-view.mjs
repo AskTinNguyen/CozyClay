@@ -44,7 +44,7 @@ assert.ok(floor.includes("receiveShadow={false}"), "a reference overlay joins no
 
 // --- App wiring pins -------------------------------------------------------
 const app = ["../src/App.jsx", "../src/shell/ViewportToolbar.jsx"].map(path => readFileSync(new URL(path, import.meta.url), "utf8")).join("\n");
-assert.ok(app.includes('{gridView ? <GridFloor layer={GIZMO_LAYER} /> : <Room light={uiTheme === "light" && !lighting.sky} />}'), "grid replaces the deck on the export-stripped gizmo layer");
+assert.ok(app.includes('{gridView ? <GridFloor layer={GIZMO_LAYER} /> : <Room light={uiTheme === "light" && !lighting.sky && !(lighting.hdr && lighting.hdrBackground)} />}'), "grid replaces the deck on the export-stripped gizmo layer");
 const look = readFileSync(new URL("../src/stage-lighting.js", import.meta.url), "utf8");
 assert.ok(app.includes("<StageAtmosphere lighting={lighting} keyLight={keyLight} theme={uiTheme} grid={gridView} />")
 	&& look.includes("const sky = themed ? (grid ? GRID_BACKGROUND : stageBackground(theme)) : l.sky;"), "the grid view keeps the void colour; the stage follows the UI theme");

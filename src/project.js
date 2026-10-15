@@ -17,7 +17,7 @@
 
 import { SCENES_VERSION } from "./scenes.js";
 import { ASSET_MAX_SOURCE_BYTES, assetIdForBytes, isAssetId, isImageAssetId, isMeshAssetId, meshIdForBytes, normalizeAsset, referencedAssetIds } from "./scene-assets.js";
-import { ko } from "./locale.js";
+import { ko } from "./locale.js"; import { hdrIdForBytes, isHdrAssetId } from "./stage-hdr.js";
 
 export const PROJECT_VERSION = 5;
 // A project is authored either as a storyboard (stills) or as animation
@@ -249,7 +249,7 @@ export async function verifyEmbeddedAsset(record, subtle) {
 	const bytes = asArrayBuffer(record?.bytes);
 	if (!bytes) return false;
 	try {
-		const expected = isMeshAssetId(record.id) ? await meshIdForBytes(bytes, subtle) : await assetIdForBytes(bytes, subtle);
+		const expected = isHdrAssetId(record.id) ? await hdrIdForBytes(bytes, subtle) : isMeshAssetId(record.id) ? await meshIdForBytes(bytes, subtle) : await assetIdForBytes(bytes, subtle);
 		return expected === record.id;
 	} catch {
 		return false;

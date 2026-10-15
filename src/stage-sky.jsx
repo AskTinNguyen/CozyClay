@@ -1,9 +1,11 @@
-import { useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { stageLook } from "./stage-lighting.js";
 import { ENV_HEIGHT, ENV_WIDTH, environmentPixels } from "./stage-environment.js";
 import { installOcclusion } from "./stage-occlusion.js";
+import { useHdrMap } from "./stage-hdr-map.js";
+import { refreshHdrLibrary } from "./stage-hdr-library.js";
 
 // Rows of the equirectangular gradient: v runs from straight down (0) through
 // the horizon (0.5) to straight up (1).
@@ -43,8 +45,13 @@ function environmentMap(gl, spec) {
 	texture.magFilter = THREE.LinearFilter;
 	texture.minFilter = THREE.LinearFilter;
 	texture.needsUpdate = true;
+	try { return prefiltered(gl, texture); } finally { texture.dispose(); }
+}
+
+/** An equirectangular map prefiltered for image-based lighting (PMREM). */
+function prefiltered(gl, texture) {
 	const generator = new THREE.PMREMGenerator(gl);
-	try { return generator.fromEquirectangular(texture); } finally { generator.dispose(); texture.dispose(); }
+	try { return generator.fromEquirectangular(texture); } finally { generator.dispose(); }
 }
 
 /**
@@ -67,6 +74,12 @@ function environmentMap(gl, spec) {
  * (stage-occlusion.js) are set here too, for the same paths. Both are off in the
  * studio look, which therefore draws exactly what it drew before them. The map
  * is rebuilt only when its colours or the key's direction change.
+ *
+ * An HDR environment (stage.lighting.hdr, stage-hdr-map.js) replaces that map
+ * once it has loaded: its prefiltered texture is the light (prefiltered again
+ * only when the map changes; rotation and intensity are uniforms), and with
+ * hdrBackground the map itself is the perspective backdrop, the deck fading
+ * into the map's horizon colour. Until a file loads, the look's own sky lights.
  */
 export function StageAtmosphere({ lighting = null, keyLight, theme = "dark", grid = false }) {
 	// The scene and renderer are read inside the effects: they are three objects
@@ -76,34 +89,41 @@ export function StageAtmosphere({ lighting = null, keyLight, theme = "dark", gri
 	const { sky, skyTop, exposure } = look, { near, far } = look.fog;
 	const hazeNear = look.captureFog?.near ?? null, hazeFar = look.captureFog?.far ?? null;
 	const envKey = look.env ? JSON.stringify(look.env) : null, { envIntensity, ao } = look;
+	const hdrMap = useHdrMap(look.hdr?.id ?? null), hdr = hdrMap ? look.hdr : null;
+	const backdrop = hdr?.background ? hdrMap : null, backdropIntensity = backdrop ? hdr.intensity : 1;
+	const hdrLight = hdr ? hdr.envIntensity : null, hdrTurn = hdr ? (hdr.rotation * Math.PI) / 180 : 0;
+	useEffect(() => { void refreshHdrLibrary(); }, []);
 	useLayoutEffect(() => {
 		const { scene } = get();
-		const flat = new THREE.Color(sky);
-		const gradient = skyTop ? gradientSky(sky, skyTop) : null;
+		const flat = backdrop ? new THREE.Color().setRGB(...backdrop.horizon.map((value) => value * backdropIntensity), THREE.LinearSRGBColorSpace) : new THREE.Color(sky);
+		const gradient = skyTop ? gradientSky(sky, skyTop) : null, map = backdrop?.texture ?? null;
 		scene.background = flat;
-		scene.fog = new THREE.Fog(sky, near, far);
+		scene.backgroundIntensity = backdropIntensity;
+		scene.fog = new THREE.Fog(flat, near, far);
 		scene.onBeforeRender = (_renderer, _scene, camera) => {
-			if (scene.background === flat || scene.background === gradient) scene.background = gradient && camera.isPerspectiveCamera ? gradient : flat;
+			if (scene.background === flat || scene.background === gradient || (map && scene.background === map)) scene.background = camera.isPerspectiveCamera ? map ?? gradient ?? flat : flat;
 		};
 		invalidate();
 		return () => {
 			scene.onBeforeRender = () => {};
 			gradient?.dispose();
 		};
-	}, [get, invalidate, sky, skyTop, near, far]);
+	}, [get, invalidate, sky, skyTop, near, far, backdrop, backdropIntensity]);
 	useLayoutEffect(() => {
 		// The viewport applies exposure in tone mapping. Exports render into a
 		// target, which three never tone-maps, so CaptureRig reads it from here
 		// and scales the lights for its draw instead (same pass, same scene).
 		const { scene, gl } = get();
 		gl.toneMappingExposure = exposure;
-		scene.userData.stageCapture = { exposure, fog: hazeNear === null ? null : { near: hazeNear, far: hazeFar } };
+		// An HDR backdrop is light as well, so exports scale it (and the horizon the deck fades into) too.
+		scene.userData.stageCapture = { exposure, fog: hazeNear === null ? null : { near: hazeNear, far: hazeFar }, backdrop: Boolean(backdrop) };
 		invalidate();
-	}, [get, invalidate, exposure, hazeNear, hazeFar]);
+	}, [get, invalidate, exposure, hazeNear, hazeFar, backdrop]);
+	const hdrTexture = hdrMap?.texture ?? null, envSource = hdrTexture ? null : envKey;
 	useLayoutEffect(() => {
-		if (!envKey) return undefined;
+		if (!hdrTexture && !envSource) return undefined;
 		const { scene, gl } = get();
-		const target = environmentMap(gl, JSON.parse(envKey));
+		const target = hdrTexture ? prefiltered(gl, hdrTexture) : environmentMap(gl, JSON.parse(envSource));
 		scene.environment = target.texture;
 		invalidate();
 		return () => {
@@ -111,11 +131,15 @@ export function StageAtmosphere({ lighting = null, keyLight, theme = "dark", gri
 			target.dispose();
 			invalidate();
 		};
-	}, [get, invalidate, envKey]);
+	}, [get, invalidate, hdrTexture, envSource]);
 	useLayoutEffect(() => {
-		get().scene.environmentIntensity = envIntensity;
+		const { scene } = get();
+		scene.environmentIntensity = hdrLight ?? envIntensity;
+		// The light and the backdrop turn together: +90 deg carries +x to -z.
+		scene.environmentRotation.set(0, hdrTurn, 0);
+		scene.backgroundRotation.set(0, hdrTurn, 0);
 		invalidate();
-	}, [get, invalidate, envIntensity]);
+	}, [get, invalidate, envIntensity, hdrLight, hdrTurn]);
 	// The pass stays installed while ao > 0; the slider only changes its strength.
 	const occlusion = useRef({ strength: ao }), occluded = ao > 0;
 	useLayoutEffect(() => {

@@ -4,6 +4,7 @@ import { Dropdown, Field, Slider } from "../ui.jsx";
 import { createKeyLight, LIGHTING_PRESETS } from "../stage-lighting.js";
 import { STAGE_BACKGROUND } from "../grid-view.js";
 import { useStageTransaction } from "../domains/stage.js";
+import HdrEnvironmentControls from "./HdrEnvironmentControls.jsx";
 
 const LOOK_LABELS = { studio: ["Studio", "스튜디오"], day: ["Day", "낮"], overcast: ["Overcast", "흐린 날"], golden: ["Golden hour", "골든아워"],
 	dusk: ["Dusk", "해 질 녘"], night: ["Night", "밤"], interior: ["Interior", "실내"], stage: ["Stage spotlight", "무대 조명"] };
@@ -30,6 +31,7 @@ export default function LightPanel({ keyLightSelected, keyLight, lighting }) {
 								<input type="color" className="object-color object-color-free" value={lighting.sky ?? STAGE_BACKGROUND} title={ko("Sky colour", "하늘 색")} aria-label={ko("Sky colour", "하늘 색")}
 									onChange={(event) => setLighting({ sky: event.target.value })} />
 							</Field>
+							<HdrEnvironmentControls lighting={lighting} run={run} setLighting={setLighting} />
 						</>}
 						</div>
 						<div className="readout v2-details-readout">

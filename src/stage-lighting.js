@@ -6,6 +6,7 @@
 import { elementByPath } from "./studio-elements.js";
 import { GRID_BACKGROUND, GRID_FOG, stageBackground } from "./grid-view.js";
 import { environmentSpec } from "./stage-environment.js";
+import { HDR_FIELDS, normalizeHdrFields } from "./stage-hdr.js";
 
 export const LIGHTING_PRESETS = Object.freeze(["studio", "day", "overcast", "golden", "dusk", "night", "interior", "stage"]);
 
@@ -20,7 +21,8 @@ const finite = (value, fallback, { min, max }) => (typeof value === "number" && 
 // renders unchanged.
 const DEFAULT_KEY_LIGHT = Object.freeze({ x: 6, y: 9, z: 4, intensity: 1.12, warmth: 0.5, color: null });
 // envLight and ao are 0 in the studio look: no environment map, no occlusion pass.
-const DEFAULT_LIGHTING = Object.freeze({ preset: "studio", sky: null, skyTop: null, ambient: 1, hemiSky: "#ffffff", hemiGround: "#5a5d64", fill: 1, fog: 0, exposure: 1, shadowSoftness: 0, envLight: 0, ao: 0 });
+// No look names an HDR environment (stage-hdr.js); the user or the agent picks one.
+const DEFAULT_LIGHTING = Object.freeze({ preset: "studio", sky: null, skyTop: null, ambient: 1, hemiSky: "#ffffff", hemiGround: "#5a5d64", fill: 1, fog: 0, exposure: 1, shadowSoftness: 0, envLight: 0, ao: 0, ...normalizeHdrFields() });
 const LIGHTING_NUMBERS = ["fill", "fog", "exposure", "shadowSoftness", "envLight", "ao"];
 
 /** Clamp a stored key light back into the stage's usable envelope. `color`
@@ -44,6 +46,7 @@ export function normalizeLighting(value) {
 		hemiSky: color(source.hemiSky, DEFAULT_LIGHTING.hemiSky),
 		hemiGround: color(source.hemiGround, DEFAULT_LIGHTING.hemiGround),
 		...Object.fromEntries(LIGHTING_NUMBERS.map((key) => [key, number(key)])),
+		...normalizeHdrFields(source),
 	};
 }
 
@@ -70,9 +73,10 @@ export const LIGHTING_RECIPES = Object.freeze({
 		{ x: 1.5, y: 9, z: 3, intensity: 2.6, color: "#fff0d8" }),
 });
 
-/** What stage.applyLighting { keep } may hold back from the recipe. */
+/** What stage.applyLighting { keep } may hold back from the recipe. "lighting.hdr"
+ * keeps the HDR environment with its rotation, intensity and backdrop switch. */
 export const LIGHTING_KEEP_PATHS = Object.freeze(["keyLight.position", "keyLight.intensity", "keyLight.color",
-	...["sky", "skyTop", "ambient", "hemiSky", "hemiGround", "fill", "fog", "exposure", "shadowSoftness", "envLight", "ao"].map((key) => `lighting.${key}`)]);
+	...["sky", "skyTop", "ambient", "hemiSky", "hemiGround", "fill", "fog", "exposure", "shadowSoftness", "envLight", "ao", "hdr"].map((key) => `lighting.${key}`)]);
 
 /** The stage's { lighting, keyLight } after one recipe: every field written
  * from it except the `keep` paths, which stay as they are. Studio also resets
@@ -84,6 +88,7 @@ export function applyLightingRecipe(stage, preset, keep = []) {
 	const before = { lighting: normalizeLighting(stage?.lighting), keyLight: createKeyLight(stage?.keyLight) };
 	const lighting = { ...chosen.lighting, preset };
 	for (const path of keep) if (path.startsWith("lighting.")) lighting[path.slice(9)] = before.lighting[path.slice(9)];
+	if (keep.includes("lighting.hdr")) for (const key of HDR_FIELDS) lighting[key] = before.lighting[key];
 	const keyLight = { ...before.keyLight, ...chosen.keyLight };
 	if (keep.includes("keyLight.position")) Object.assign(keyLight, { x: before.keyLight.x, y: before.keyLight.y, z: before.keyLight.z });
 	if (keep.includes("keyLight.intensity")) keyLight.intensity = before.keyLight.intensity;
@@ -106,10 +111,13 @@ export function hazeRange(fog) {
  * A null sky keeps the UI theme's studio stage — its grey, its deck and its
  * ground bounce — so the default renders exactly as before under both themes;
  * the grid view's neutral rig applies only then. An explicit sky makes the look
- * theme-independent: what the shot camera exports is the same for every user.
+ * theme-independent: what the shot camera exports is the same for every user,
+ * and so does an HDR backdrop (stage.lighting.hdr with hdrBackground).
  */
 export function stageLook({ lighting, keyLight, theme = "dark", grid = false }) {
-	const l = normalizeLighting(lighting), key = createKeyLight(keyLight);
+	const normalized = normalizeLighting(lighting), key = createKeyLight(keyLight);
+	// An HDR backdrop is no UI theme's stage either: a null sky under it is the dark stage's grey.
+	const l = normalized.sky === null && normalized.hdr && normalized.hdrBackground ? { ...normalized, sky: stageBackground("dark") } : normalized;
 	const themed = l.sky === null, neutral = grid && themed, lightTheme = themed && theme === "light";
 	const sky = themed ? (grid ? GRID_BACKGROUND : stageBackground(theme)) : l.sky;
 	const haze = hazeRange(l.fog), base = neutral ? GRID_FOG : { near: 18, far: 54 };
@@ -124,6 +132,9 @@ export function stageLook({ lighting, keyLight, theme = "dark", grid = false }) 
 		hemi: { sky: neutral ? "#ffffff" : l.hemiSky, ground: neutral ? "#3a3d42" : lightTheme ? "#d6d8de" : l.hemiGround, intensity: skyLight * hemiShare },
 		// three's IBL irradiance is pi x the map, a hemisphere's is its colour x intensity: the 1/pi matches them.
 		env: environmentSpec(l, key, sky), envIntensity: (skyLight * l.envLight) / Math.PI,
+		// An HDR environment replaces that map once it has loaded (stage-sky.jsx): its light is
+		// the file's radiance x hdrIntensity x envLight, its backdrop the file x hdrIntensity.
+		hdr: l.hdr ? { id: l.hdr, rotation: l.hdrRotation, intensity: l.hdrIntensity, background: l.hdrBackground, envIntensity: l.envLight * l.hdrIntensity } : null,
 		ao: l.ao,
 		ambient: (neutral ? 0.34 : lightTheme ? 0.32 : 0.18) * lift * l.ambient,
 		fill: 0.36 * dim * l.fill, rim: 0.22 * dim * l.fill,

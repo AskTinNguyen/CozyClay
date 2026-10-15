@@ -128,7 +128,7 @@ function makeCase(entry) {
 		if (field === "style") input.style = "handheld 16mm, sodium streetlight";
 		if (field === "hasEnvSheet") input.hasEnvSheet = true;
 		if (field.startsWith("keyLight.")) input.keyLight = { x: -1.5, y: 7.25, z: 2.5, intensity: 2.75, warmth: 0.25, color: "#9db6e6" };
-		if (field.startsWith("lighting.")) input.lighting = { preset: "night", sky: "#0b1426", skyTop: "#020408", ambient: 0.6, hemiSky: "#34507f", hemiGround: "#0a0c12", fill: 0.25, fog: 0.45, exposure: 1.4, shadowSoftness: 0.75, envLight: 1.3, ao: 0.8 };
+		if (field.startsWith("lighting.")) input.lighting = { preset: "night", sky: "#0b1426", skyTop: "#020408", ambient: 0.6, hemiSky: "#34507f", hemiGround: "#0a0c12", fill: 0.25, fog: 0.45, exposure: 1.4, shadowSoftness: 0.75, envLight: 1.3, ao: 0.8, hdr: "builtin:night-street", hdrRotation: 30, hdrIntensity: 1.5, hdrBackground: false };
 		return { input, output: createSceneStage(input), read: (output) => field.includes(".") ? get(output, field) : field === "camera" ? output.shotAspect : output[field] };
 	}
 	if (entry.normalizer === "normalizeSceneObject") {
@@ -202,6 +202,10 @@ const expected = new Map([
 	["stage.lighting.shadowSoftness", 0.75],
 	["stage.lighting.envLight", 1.3],
 	["stage.lighting.ao", 0.8],
+	["stage.lighting.hdr", "builtin:night-street"],
+	["stage.lighting.hdrRotation", 30],
+	["stage.lighting.hdrIntensity", 1.5],
+	["stage.lighting.hdrBackground", false],
 	["stage.environmentImage", "data:image/png;base64,BBBB"],
 	["stage.environment", "a rainy rooftop at dusk"],
 	["stage.style", "handheld 16mm, sodium streetlight"],

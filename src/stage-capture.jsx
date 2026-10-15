@@ -67,10 +67,15 @@ export function CaptureRig({ apiRef, camRef, width = CAPTURE_W, height = CAPTURE
 					// three tone-maps only the canvas, never a render target, so the
 					// viewport's exposure reaches an export as light: every light, and
 					// the environment light, is scaled by it for this draw and put back after.
-					const scaled = [], environmentIntensity = scene.environmentIntensity;
+					const scaled = [], environmentIntensity = scene.environmentIntensity, backgroundIntensity = scene.backgroundIntensity, fogColor = fog?.color.clone();
 					if (look && look.exposure !== 1) scene.traverse((node) => { if (node.isLight) scaled.push([node, node.intensity]); });
 					for (const [light, intensity] of scaled) light.intensity = intensity * look.exposure;
 					if (look && look.exposure !== 1) scene.environmentIntensity = environmentIntensity * look.exposure;
+					// An HDR backdrop (stage.lighting.hdrBackground) is light too, and so is the horizon the deck fades into.
+					if (look?.backdrop && look.exposure !== 1) {
+						scene.backgroundIntensity = backgroundIntensity * look.exposure;
+						fog?.color.multiplyScalar(look.exposure);
+					}
 					try {
 						gl.setRenderTarget(target);
 						gl.render(scene, cam);
@@ -83,6 +88,8 @@ export function CaptureRig({ apiRef, camRef, width = CAPTURE_W, height = CAPTURE
 						}
 						for (const [light, intensity] of scaled) light.intensity = intensity;
 						scene.environmentIntensity = environmentIntensity;
+						scene.backgroundIntensity = backgroundIntensity;
+						if (fogColor) fog.color.copy(fogColor);
 					}
 					return buffer;
 				},
