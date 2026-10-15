@@ -2,7 +2,7 @@
 // held prop points entering the torso, the two hands overlapping, and hinged scene objects
 // (spec.objects, e.g. a door) passing through the rest of the scene. Corners only for objects.
 import { add, sub, scale, dot, len, apply, clamp } from "../compiler/math.js";
-import { CAPSULES, segPoints, sdBox, segDist } from "./geometry.js";
+import { CAPSULES, sdBox, segDist } from "./geometry.js";
 import { movesRecord } from "../carried.js";
 
 const TORSO = CAPSULES.filter(c => c[0].startsWith("torso"));
@@ -20,13 +20,13 @@ function corners(o) {
 	return out;
 }
 
-/** L: limits { body, hands, object } (m); push(kind, msg, frame, value, limit). */
-export function contactChecks(sk, out, L, push) {
+/** L: limits { body, hands, object } (m); push(kind, msg, frame, value, limit); allowed(part, into): a declared depth or null. */
+export function contactChecks(sk, out, L, push, allowed = () => null) {
 	const I = sk.index, hinged = Object.entries(out.ctx.spec.objects ?? {}).filter(([, o]) => movesRecord(o)).map(([id]) => id);
 	for (let f = 0; f < out.frames.length; f++) {
 		const { s, diag } = out.frames[f], P = s.P;
+		// hands into the torso: body-checks.js, on the fitted skin; held prop points stay on the capsules
 		const probes = [];
-		for (const S of ["Left", "Right"]) for (const p of segPoints(P[I[`${S}Hand`]], P[I[`${S}HandMiddle3`]], 5)) probes.push([`hand_${S[0].toLowerCase()}`, p, HAND_R]);
 		for (const [pn, pts] of Object.entries(diag.props ?? {})) for (const [k, p] of Object.entries(pts)) if (Array.isArray(p) && k !== "origin") probes.push([`prop_${pn}`, p, PROP_R]);
 		for (const [part, a, b, r] of TORSO) {
 			const worst = new Map();
@@ -34,7 +34,8 @@ export function contactChecks(sk, out, L, push) {
 			for (const [nm, d] of worst) if (d > L.body) push("BODY", `${nm} into ${part}`, f, d, L.body);
 		}
 		const overlap = 2 * HAND_R - segDist(P[I.LeftHand], P[I.LeftHandMiddle3], P[I.RightHand], P[I.RightHandMiddle3]);
-		if (overlap > L.hands) push("SELF", "hands overlap", f, overlap, L.hands);
+		const handsLim = Math.max(allowed("hand_l", "hand_r") ?? 0, L.hands);
+		if (overlap > handsLim) push("SELF", "hands overlap", f, overlap, handsLim);
 		if (!hinged.length) continue;
 		const objs = out.objectsAt(f);
 		for (const id of hinged) {

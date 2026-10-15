@@ -22,7 +22,9 @@ import { bakeChannels, channelsAt } from "./channels.js";
 import { resolveAnchor, measureProps } from "./anchors.js";
 import { expandGenerators } from "./walk.js";
 import { fixOptions, applyFixes } from "../fix/index.js";
+import { fitWeight } from "../fix/self.js";
 import { holdHook } from "../object-keys.js";
+import { HAND_CLEAR, keepOut, wristBody } from "../body.js";
 
 const smooth = x => x * x * (3 - 2 * x);
 
@@ -70,6 +72,8 @@ function hooksFor(ctx, c, f, inFit = false, lead = true, fitSide = null) {
 		hold: lead && ctx.hold ? (k, s) => (k === fitSide ? null : ctx.hold.lead(k, f, s, c)) : undefined,
 		// auto-fix offsets ride on the final pose only, so a fit never cancels them
 		push: inFit ? undefined : k => ctx.push?.[k]?.get(f),
+		swivel: inFit ? undefined : k => ctx.swivel?.[k]?.get(f),
+		skinPush: inFit ? undefined : k => ctx.skinPush?.[k]?.get(f),
 		handTarget(k, s, diag) {
 			diag.frame = f;
 			const fkHand = s.P[sk.index[k === "l" ? "LeftHand" : "RightHand"]];
@@ -95,8 +99,23 @@ function hooksFor(ctx, c, f, inFit = false, lead = true, fitSide = null) {
 					target = add(target, scale(sub(add(q, scale(dir, r)), target), trans));
 				}
 			}
+			// a wrist target inside the body (a pocket on a squatting thigh, a path through the chest) goes out onto its skin
 			return target;
 		},
+		// the wrist target, blended with the FK hand, inside the body goes out onto its skin, twice at most (out of
+		// one bone, then the next): a pocket the squat moved into the thigh, a path through the chest, a hand leaving
+		// a thigh for its FK rest. A measured target (a fit's anchor: the mouth; or a prop another hand's fit is on:
+		// the cigarette under the flame) stays where its goal needs it, and the move fades in and out with its weight;
+		// an arm coming in from FK moves it no more than its IK weight.
+		keepOut: ctx.keepOut && !inFit ? (k, s, target) => {
+			const free = (1 - fitWeight(ctx.spec, c, k)) * Math.min(1, Math.max(0, c[`armw_${k}`] ?? 0));
+			for (let i = 0; i < 2 && free > 1e-3; i++) {
+				const moved = keepOut(ctx.keepOut.body, sk, s, target, HAND_CLEAR, ctx.keepOut.skip);
+				if (moved === target) break;
+				target = add(target, scale(sub(moved, target), free));
+			}
+			return target;
+		} : undefined,
 		afterArm: (k, s, diag) => measureProps(ctx, k, s, diag),
 	};
 }
@@ -134,7 +153,7 @@ export function compileMotion(spec, { sk, scene }, opts = {}) {
 	if (!(frameCount >= 1 && frameCount <= 20000)) throw new Error("MOTION_SPEC_INVALID: frames must be 1..20000");
 	const fix = fixOptions(spec.fix);
 	const [a, b] = opts.window ? [Math.max(0, opts.window[0]), Math.min(frameCount - 1, opts.window[1])] : [0, frameCount - 1];
-	const ctx = { sk, spec, scene, softReach: fix.reach, push: { l: new Map(), r: new Map() } };
+	const ctx = { sk, spec, scene, softReach: fix.reach, push: { l: new Map(), r: new Map() }, swivel: { l: new Map(), r: new Map() }, skinPush: { l: new Map(), r: new Map() }, keepOut: fix.self ? wristBody(sk) : null };
 	const out = { ctx, fps: spec.fps ?? 30, frameCount, f0: a, frames: [] };
 	const engine = {
 		rebake(keys) {

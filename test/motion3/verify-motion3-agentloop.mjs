@@ -88,14 +88,17 @@ show("hand 1.5 cm into a board, penetration 0.02", penOn);
 expect("penetration fix: the board hit is gone, pushes reported", penOff.qa.groups.some(g => g.kind === "COLLIDE") && penOn.qa.ok && penOn.fixed.penetration?.frames > 0, JSON.stringify(penOn.fixed));
 // retime: a hand thrown 0.5 m in 4 frames. Smooth and fast is style (C13): retime stretches only
 // what QA reports, here the speed and acceleration limits the spec opts into.
-const throwHand = (fix, limits) => ({ ...stand({ fix, frames: 120, ...(limits ? { checks: { limits } } : {}) }), keys: [{ f: 30, set: { armw_r: 0 } }, { f: 36, set: { armw_r: 1, hand_r: [-0.25, 1.1, 0.25] } }, { f: 50, set: { hand_r: [-0.25, 1.1, 0.25] } }, { f: 54, set: { hand_r: [0.1, 1.45, 0.3] } }, { f: 90, set: { hand_r: [0.1, 1.45, 0.3] } }] });
+// the throw's hand is in front of the chest: its arm goes into it (BODY), the rest is retime's
+const onlyBody = r => r.qa.groups.every(g => g.kind === "BODY");
+// the throw tests retime alone: fix.self (elbows turned out of the body) would add its own motion to the arm
+const throwHand = (fix, limits) => ({ ...stand({ fix: { ...fix, self: false }, frames: 120, ...(limits ? { checks: { limits } } : {}) }), keys: [{ f: 30, set: { armw_r: 0 } }, { f: 36, set: { armw_r: 1, hand_r: [-0.25, 1.1, 0.25] } }, { f: 50, set: { hand_r: [-0.25, 1.1, 0.25] } }, { f: 54, set: { hand_r: [0.1, 1.45, 0.3] } }, { f: 90, set: { hand_r: [0.1, 1.45, 0.3] } }] });
 const everyday = { speedLimb: 0.16, accLimb: 0.05 };
 const fastOff = compile(throwHand(undefined, everyday), empty), fastOn = compile(throwHand({ retime: true }, everyday), empty);
 show("hand thrown, everyday limits, no retime", fastOff);
 show("hand thrown, everyday limits, retime", fastOn);
-expect("retime: opted-in speed/acc issues gone, stretch reported", fastOff.qa.groups.some(g => g.kind === "ACC" || g.kind === "SPEED") && fastOn.qa.ok && fastOn.fixed.retime?.maxStretch > 1, JSON.stringify(fastOn.fixed));
+expect("retime: opted-in speed/acc issues gone, stretch reported", fastOff.qa.groups.some(g => g.kind === "ACC" || g.kind === "SPEED") && onlyBody(fastOn) && fastOn.fixed.retime?.maxStretch > 1, JSON.stringify(fastOn.fixed));
 const fastFree = compile(throwHand({ retime: true }), empty);
-expect("retime: without the opt-in a smooth fast throw is clean and keeps its speed", fastFree.qa.ok && !fastFree.fixed.retime && fastFree.observations.peaks.RightHand.speed[0] > 3.8, JSON.stringify(fastFree.observations.peaks));
+expect("retime: without the opt-in a smooth fast throw is clean (but its arm in the chest, BODY) and keeps its speed", onlyBody(fastFree) && !fastFree.fixed.retime && fastFree.observations.peaks.RightHand.speed[0] > 3.8, JSON.stringify(fastFree.observations.peaks));
 // the exitcar fixture itself stays clean with the default fixes on
 r = compile(EXITCAR_SPEC);
 expect("exitcar: QA 0 with the default fixes, and the fixes report their counts", r.qa.ok && typeof r.fixed === "object", JSON.stringify(r.qa.groups.slice(0, 2)));

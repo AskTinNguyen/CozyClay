@@ -15,6 +15,7 @@ import { groupsOf } from "../scene.js";
 import { pose } from "../compiler/pose.js";
 import { bonePoint } from "../compiler/skeleton.js";
 import { add, sub, scale, len, apply, ry } from "../compiler/math.js";
+import { HAND_CLEAR, keepOut, wristBody } from "../body.js";
 
 const KIT_FIELDS = ["cig", "lighter", "exhale"];
 /** The exhale emitter's entry: at the lips, its +Y (the puff) along the face, shown while breathing out. */
@@ -28,6 +29,10 @@ const OVER_KNEE = [-0.05, 0.07, 0.1];
 const REST_REACH = 0.88;
 /** Where the hand goes first from the lips in a squat: this far straight ahead of the mouth (m, body frame). */
 const OUT_AHEAD = 0.2;
+/** A squat's side pocket from the root (body frame, the left side; m): out, up, ahead. */
+const SIDE_POCKET = [0.245, 0.08, 0.02];
+/** The pockets on the standing body (body frame: left +x), where the hands fetch the kit. */
+export const POCKET = { l: [0.13, -0.035, 0.08], r: [-0.13, -0.035, 0.08] };
 
 /** [id, entry, body] of every record under group `root` in a motion scene (bodies and box-less records). */
 function partsUnder(scene, root) {
@@ -41,12 +46,16 @@ function rootOf(ctx, kit, role) {
 	return id;
 }
 
-/** How deep a kit may sit in the thigh its pocket is on: it comes out of (and goes back into) the pocket there. */
+/** How deep a kit may sit in the thigh its pocket is on, and in the hip over it (a squat folds the pocket into the hip crease): it comes out of (and goes back into) the pocket there. */
 const POCKET_DEPTH = { cig: 0.03, lighter: 0.045 };
+/** Squatting, the kit comes out of a side pocket past the fat leg capsules (thigh, hips, shin) the scene check reads. */
+const SQUAT_POCKET = 0.07;
+/** ...and the hand in a side pocket touches the thigh and the hip that deep (m). */
+const POCKET_TOUCH = 0.04;
 
 /**
  * The spec.objects entries args.kit asks for and the pocket allowances (null without it). at:
- * absolute frames { cig, lit, unlit } the cigarette and the lighter appear and the lighter goes back.
+ * absolute frames { cig, lit, unlit } the cigarette and the lighter appear and the lighter goes back; squat: the squat pockets.
  */
 export function kitObjects(ctx, at) {
 	const kit = ctx.args.kit;
@@ -69,7 +78,11 @@ export function kitObjects(ctx, at) {
 		}
 		objects[kit.exhale] = { ...EXHALE };
 	}
-	const allow = [{ part: "thigh_r", object: cig, depth: POCKET_DEPTH.cig }, { part: "thigh_l", object: lighter, depth: POCKET_DEPTH.lighter }];
+	const deep = d => (at.squat ? SQUAT_POCKET : d);
+	const allow = [["thigh_r", cig, deep(POCKET_DEPTH.cig)], ["thigh_l", lighter, deep(POCKET_DEPTH.lighter)], ["hips", cig, deep(POCKET_DEPTH.cig)], ["hips", lighter, deep(POCKET_DEPTH.lighter)],
+		...(at.squat ? [["shin", cig, SQUAT_POCKET], ["shin", lighter, SQUAT_POCKET],
+			// the hands in the side pockets brush the thigh and the hip (qa/body-checks.js)
+			["hand_l", "thigh_l", POCKET_TOUCH], ["hand_r", "thigh_r", POCKET_TOUCH], ["hand", "hips", POCKET_TOUCH]] : [])].map(([part, object, depth]) => ({ part, object, depth }));
 	return { objects, allow };
 }
 
@@ -85,6 +98,12 @@ export function squatAnchors(ctx) {
 	const over = add(s.P[I.RightLeg], apply(ry(yaw), OVER_KNEE)), far = len(sub(over, shoulder));
 	const hold = body(far > REST_REACH * arm ? add(shoulder, scale(sub(over, shoulder), REST_REACH * arm / far)) : over);
 	const out = add(body(bonePoint(s, I.Head, sk.landmarks.mouth)), [0, 0, OUT_AHEAD]);
+	// squatting, the front pockets fold into the hip crease under the thighs: with fix.self (smoke.js) the hands go to the side pockets,
+	// SIDE_POCKET from the root (body frame), kept off the skin (the hand comes in from the side)
+	const skin = wristBody(sk), pocket = (side, sg) => {
+		const at = add(state.root, apply(ry(yaw), [sg * SIDE_POCKET[0], SIDE_POCKET[1], SIDE_POCKET[2]]));
+		return body(skin ? keepOut(skin.body, sk, s, at, HAND_CLEAR, skin.skip) : at);
+	};
 	const r3 = p => p.map(v => Math.round(v * 1000) / 1000);
-	return { hold: r3(hold), mouthOut: r3(out) };
+	return { hold: r3(hold), mouthOut: r3(out), lpocket: r3(pocket("Left", 1)), rpocket: r3(pocket("Right", -1)) };
 }

@@ -5,7 +5,7 @@
 // observations.paced says so; below that it refuses with the frames and seconds it needs. At its
 // own length nothing changes: the exitcar take and the standing smoke bake bit for bit as v3@6b8b3669.
 import { createHash } from "node:crypto";
-import { compileSpec } from "../../src/motion3/pipeline.js";
+import { compileSpec } from "../motion3/fixtures/legacy-compile.mjs";
 import { motionScene } from "../../src/motion3/scene.js";
 import { skeletonFor } from "../../src/motion3/rigs/index.js";
 import { bakeTake } from "../../src/motion3/take.js";

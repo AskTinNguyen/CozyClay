@@ -2,7 +2,7 @@
 // Open parameters: { range: [lo, hi] } in place of a number is searched deterministically
 // within a compile budget, stops at QA 0, and reports the chosen values and the time.
 import { SCENE_OBJECTS } from "./fixtures/exitcar-scene.mjs";
-import { compileSpec } from "../../src/motion3/pipeline.js";
+import { compileSpec } from "./fixtures/legacy-compile.mjs";
 import { motionScene } from "../../src/motion3/scene.js";
 import { skeletonFor } from "../../src/motion3/rigs/index.js";
 import { I3 } from "../../src/motion3/compiler/math.js";

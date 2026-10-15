@@ -4,7 +4,7 @@
 // the car when it is moved, turned or mirrored (side "r"); standIdle, walkTo { to } and
 // reachGrip work on their own; the agent's own keys win over a skill's.
 import { EXITCAR_SPEC, SCENE_OBJECTS } from "./fixtures/exitcar-scene.mjs";
-import { compileSpec } from "../../src/motion3/pipeline.js";
+import { compileSpec, legacySpec } from "./fixtures/legacy-compile.mjs";
 import { compileMotion } from "../../src/motion3/compiler/compile.js";
 import { expandUse } from "../../src/motion3/skills/index.js";
 import { resolveFrames } from "../../src/motion3/skills/frames-auto.js";
@@ -34,7 +34,8 @@ console.log(`  compiled from skills: QA ${r.qa.total}, skills ${JSON.stringify(r
 expect("the exitcar scene rebuilt from skills compiles to QA 0", r.qa.ok, JSON.stringify(r.qa.groups.slice(0, 3)));
 expect("the skills report where each ends", JSON.stringify(r.used.map(u => u.end)) === "[0,246,440,729]", JSON.stringify(r.used));
 for (const part of ["anchors", "props", "fits", "objects"]) expect(`same ${part} as the fixture`, JSON.stringify(r.expanded[part]) === JSON.stringify(EXITCAR_SPEC[part]), JSON.stringify(r.expanded[part]).slice(0, 200));
-const ref = compileMotion(JSON.parse(JSON.stringify(EXITCAR_SPEC)), { sk, scene: car });
+// the skills rebuild the fixture with the earlier lanes' compiler (fix.self: verify-motion3-self.mjs)
+const ref = compileMotion(legacySpec(JSON.parse(JSON.stringify(EXITCAR_SPEC))), { sk, scene: car });
 let worst = 0;
 for (let f = 0; f < 730; f++) for (let j = 0; j < sk.names.length; j++) worst = Math.max(worst, dist(ref.frames[f].s.P[j], r.out.frames[f].s.P[j]));
 console.log(`  largest joint difference to the fixture over 730 frames: ${(worst * 1000).toFixed(1)} mm (the skills use the rig's ankle height 0.0873 m, the fixture 0.087)`);

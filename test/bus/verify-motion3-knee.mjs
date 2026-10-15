@@ -7,7 +7,7 @@
 // a hint to bring the root up. QA calls a knee past the stop a hard KNEE issue; the opt-in style KNEE stays.
 // Takes whose knees stay within 150 deg bake bit for bit as before.
 import { createHash } from "node:crypto";
-import { compileSpec } from "../../src/motion3/pipeline.js";
+import { compileSpec } from "../motion3/fixtures/legacy-compile.mjs";
 import { generalChecks } from "../../src/motion3/qa/checks.js";
 import { runMotionQa } from "../../src/motion3/qa/index.js";
 import { motionScene } from "../../src/motion3/scene.js";

@@ -13,7 +13,7 @@
 //      so its palm is 10-24 cm off the bat; at f29 and f41 the anchor is 7-11 cm from the right palm.
 // QA also excuses a second hand whose palm is inside the object it grips (the QA-0 run's allow is not needed).
 import { createHash } from "node:crypto";
-import { compileSpec } from "../../src/motion3/pipeline.js";
+import { compileSpec } from "../motion3/fixtures/legacy-compile.mjs";
 import { motionScene } from "../../src/motion3/scene.js";
 import { skeletonFor } from "../../src/motion3/rigs/index.js";
 import { bakeTake } from "../../src/motion3/take.js";

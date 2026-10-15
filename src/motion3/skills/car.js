@@ -31,6 +31,12 @@ function carFrame(ctx, seat, side) {
 	return fr;
 }
 
+/** The hands on the thighs, pushing to stand up; letting go as the thighs turn under them, the palms and forearms
+ * sweep a few centimetres into them for a few frames (the open case of fix/self.js: it moves wrists, not palms);
+ * the hands, both on the thighs over knees close together, touch. */
+const THIGH_CONTACT = [["hand", "thigh*", 0.07], ["farm", "thigh*", 0.07], ["hand", "hips", 0.07], ["farm", "hips", 0.07], ["hand_l", "hand_r", 0.035]]
+	.map(([part, object, depth]) => ({ part, object, depth }));
+
 const rigHeights = sk => ({ A: sk.restWorldPos[sk.index.LeftFoot][1], H: y => y + (sk.restWorldPos[sk.index.Hips][1] - X_HIPS) });
 
 /** sitInSeat({ car | seat (+ seatBack, wheel), offset = [0, 0.17, 0.02], floor }): seated, hands forward at the wheel. */
@@ -81,7 +87,8 @@ export function exitCar(ctx) {
 		fits: [{ side: hand, anchor: "handle", effector: { prop: "grip", point: "fingers" } }],
 		checks: {
 			contacts: [{ name: "fingers on the door handle", point: "prop:grip.fingers", target: "anchor:handle", tol: 0.04, when: `w_handle_${hand}` }],
-			allow: [{ part: "hand", object: ids.door, depth: 0.03 }, { part: "hand", object: ids.handle, depth: 0.04 }],
+			// the hands rest on the thighs and push on them to stand up: a contact the body check allows (qa/body-checks.js)
+			allow: [{ part: "hand", object: ids.door, depth: 0.03 }, { part: "hand", object: ids.handle, depth: 0.04 }, ...THIGH_CONTACT],
 		},
 		end: ctx.f0 + 246,
 	};

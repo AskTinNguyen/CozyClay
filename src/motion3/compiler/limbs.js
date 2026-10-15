@@ -126,6 +126,13 @@ export function palmAxes(sk, s, side) {
 	return { d, l, n: cross(d, l) };
 }
 
+/** Turn the elbow `deg` about the shoulder-wrist line: the hand keeps its place and its world turn. */
+export function swivelElbow(sk, s, side, deg) {
+	const a = sk.index[`${side}Arm`], h = sk.index[`${side}Hand`], R = axisRot(sub(s.P[h], s.P[a]), deg);
+	rotateSubtree(sk, s, a, s.P[a].slice(), R);
+	rotateSubtree(sk, s, h, s.P[h].slice(), T(R));
+}
+
 /** Wrist twist (about the forearm) and flex (about the knuckle line), degrees, clamped. */
 export function wrist(sk, s, side, twistDeg, flexDeg) {
 	if (!twistDeg && !flexDeg) return;

@@ -75,8 +75,9 @@ void apply;
 // ---- C14: the bat keyed at four frames ------------------------------------------------------
 const bsk = skeletonFor(BATTER.model), bscene = motionScene(BAT_SCENE), I = bsk.index;
 const hashOf = t => { const h = createHash("sha256"); for (const a of [t.rot, t.hips, ...Object.values(t.objects).flatMap(o => Object.values(o))]) h.update(Buffer.from(a.buffer, a.byteOffset, a.byteLength)); return h.digest("hex").slice(0, 16); };
-const keyedSpec = keys => { const sp = structuredClone(SWING_SPEC); sp.objects[BAT].keys = keys; return sp; };
-const plain = compileSpec(SWING_SPEC, { sk: bsk, scene: bscene }), keyed = compileSpec(keyedSpec(SWING_KEYS), { sk: bsk, scene: bscene });
+// lane Q1's carry with fix.self off: the self fix (elbows turned out of the body) is verify-motion3-self's
+const keyedSpec = keys => { const sp = structuredClone(SWING_SPEC); sp.objects[BAT].keys = keys; sp.fix = { ...(sp.fix ?? {}), self: false }; return sp; };
+const plain = compileSpec({ ...SWING_SPEC, fix: { ...(SWING_SPEC.fix ?? {}), self: false } }, { sk: bsk, scene: bscene }), keyed = compileSpec(keyedSpec(SWING_KEYS), { sk: bsk, scene: bscene });
 const col = (R, i) => [R[0][i], R[1][i], R[2][i]], batY = (r, f) => col(rootPoseAt(r.out, BAT, f).R, 1);
 const forearm = (r, f) => sub(r.out.frames[f].s.P[I.RightHand], r.out.frames[f].s.P[I.RightForeArm]);
 const span = (r, a, b) => { const v = []; for (let f = a; f <= b; f++) v.push(angle(batY(r, f), forearm(r, f))); return Math.max(...v) - Math.min(...v); };
@@ -101,7 +102,9 @@ const same = f => tp.rot.subarray(f * B * 4, (f + 1) * B * 4).every((v, i) => v 
 const differ = Array.from({ length: 96 }, (_, f) => f).filter(f => !same(f));
 expect(`the hands blend in and out over ${KEY_BLEND} frames: only f${a + 1}..f${b - 1} change, and QA finds no pop`, differ[0] === a + 1 && differ[differ.length - 1] === b - 1 && !keyed.qa.groups.some(g => g.kind === "POP"),
 	`${differ[0]}..${differ[differ.length - 1]} ${keyed.qa.groups.map(g => g.kind)}`);
-expect("the keyed swing adds no QA issue (the stance goal and the stride float were there before)", keyed.qa.total === plain.qa.total && keyed.qa.groups.every(g => g.kind !== "REACH"), keyed.qa.groups.map(g => `${g.kind} ${g.subject}`).join(" | "));
+// BODY (arms in the body, on the skin) is measured on both swings and is verify-motion3-self's subject
+const notBody = r => r.qa.groups.filter(g => g.kind !== "BODY");
+expect("the keyed swing adds no QA issue but BODY (the stance goal and the stride float were there before)", notBody(keyed).reduce((n, g) => n + g.count, 0) === notBody(plain).reduce((n, g) => n + g.count, 0) && keyed.qa.groups.every(g => g.kind !== "REACH"), keyed.qa.groups.map(g => `${g.kind} ${g.subject}`).join(" | "));
 expect("deterministic: the same keys bake the same take", hashOf(tk) === hashOf(bakeTake(bsk, compileSpec(keyedSpec(SWING_KEYS), { sk: bsk, scene: bscene }).out)));
 // a key the wrist cannot reach: the contact pose turned a further 110 deg about the forearm
 const R47 = matFromQuat(SWING_KEYS[2].rot), turned = mul(axisRot(forearm(keyed, 47), 110), R47), knob = add(SWING_KEYS[2].pos, apply(R47, [0, 0.14, 0]));

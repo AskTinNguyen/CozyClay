@@ -5,7 +5,7 @@
 // target to 145 deg, eases onto a stop at 150 deg and leaves the rest as a REACH residual with a hint. QA
 // calls an elbow past the stop a hard ELBOW issue. Takes whose elbows stay within 145 deg bake as before.
 import { createHash } from "node:crypto";
-import { compileSpec } from "../../src/motion3/pipeline.js";
+import { compileSpec } from "../motion3/fixtures/legacy-compile.mjs";
 import { generalChecks } from "../../src/motion3/qa/checks.js";
 import { runMotionQa } from "../../src/motion3/qa/index.js";
 import { motionScene } from "../../src/motion3/scene.js";

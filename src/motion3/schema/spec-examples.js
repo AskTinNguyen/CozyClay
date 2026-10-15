@@ -19,7 +19,7 @@ export const SPEC_EXAMPLES = [
 		spec: { schema: SCHEMA, fps: 24, frames: 240, label: "squat and smoke",
 			keys: [{ f: 0, set: { root: [0, 0.45, -0.12], yaw: 0, pitch: 22, spine_pitch: 10, head_pitch: -12, foot_l: [0.16, 0.101, 0.02], foot_r: [-0.16, 0.101, 0.02],
 				fyaw_l: 15, fyaw_r: -15, knee_l: [0.45, 0, 1], knee_r: [-0.45, 0, 1] } }],
-			use: [{ skill: "smokeCigarette", f0: 1, args: { kit: { cig: "cig", lighter: "lighter", exhale: "exhale" } } }],
+			use: [{ skill: "smokeCigarette", f0: 1, args: { kit: { cig: "cig", lighter: "lighter", exhale: "exhale" } } }], fix: { retime: true },
 			goals: [{ name: "cigarette at the mouth", near: ["prop:cig.origin", "landmark:mouth"], tol: 0.08, at: [40, 230], mode: "any" }] } },
 	{ name: "aim keys: raise a held sword to guard, then point it at a target",
 		scene: "object.createKit sword answered rootId sword and the props and bind below",

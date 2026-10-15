@@ -42,7 +42,7 @@ export const EXAMPLES = {
 		{ name: "fingers at the spot", near: ["prop:cupGrip.fingers", "anchor:spot"], at: 30 },
 		{ name: "cup at the mouth", near: ["object:cup.top", "landmark:mouth"], tol: 0.06, at: [40, 50] },
 		{ name: "hand above the hips", above: ["joint:RightHand", "bone:Hips"], at: 30 }] },
-	fix: { fix: { reach: true, slide: true, penetration: 0.02, retime: false } },
+	fix: { fix: { reach: true, slide: true, penetration: 0.02, self: true, retime: false } },
 };
 
 const UNITS = `World metres, +Y up; ${CONVENTIONS.yaw}; the character's left is +X at yaw 0. Angles in degrees.`;
@@ -97,5 +97,6 @@ export const NOTES = {
 		"object:<id> takes a body or a group (the box around its parts); in a distance a bare object:<id> means its surface.",
 		"Goals and probes take every kind; spec.checks keep joint:, prop: and anchor:."],
 	fix: [`spec.fix keys: ${FIX_KEYS.join(", ")}; false turns all off. output.fixed reports what each one changed.`,
-		"reach and slide are on by default; penetration and retime are opt-in."],
+		"reach, slide and self are on by default; penetration and retime are opt-in.",
+		"self keeps the arms out of the body on its fitted skin (QA BODY measures the same skin): wrist targets inside it go onto it, elbows turn about the shoulder-wrist line, a hand a little inside is pushed out. A fit's target (the mouth) is never moved; what is left is BODY, with checks.allow { part, object: <body part>, depth } for a contact meant to touch (a hand on a knee)."],
 };

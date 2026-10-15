@@ -8,11 +8,17 @@
 // 0.6 idle, 2 on a drag) drive kits; args.kit binds them (smoke-kit.js). It runs 265 frames from
 // f0 (f0..f0+264); a shorter span down to 75% of that (199 frames) paces every beat to fit.
 import { keyBook, skillError } from "./book.js";
-import { kitObjects, squatAnchors } from "./smoke-kit.js";
+import { kitObjects, squatAnchors, POCKET } from "./smoke-kit.js";
 import { apply, rx } from "../compiler/math.js";
 
 // Wrist twist / flex per hand pose (degrees), found by sweeping them against the QA checks.
 const WR = { TW_M: 40, FX_M: 0, TW_H: 0, FX_H: 10, TW_L: -80, FX_L: -50 };
+// with fix.self on, the wrist at the mouth bends toward the back of the hand (15 deg standing, 20 squatting over the
+// leaning chest): with the filter on the lips that brings the forearm off the chest (straight, it ran 3-6 cm into the
+// body on the fitted skin, qa/body-checks.js); past 20 standing the knuckles reach the face
+const FX_M_SELF = 15, FX_M_SQUAT = 20;
+/** Lighting brings the hands together: the lighter's hand under the cigarette's, touching it (qa/body-checks.js). */
+const LIGHTING = [["hand_l", "hand_r", 0.045], ["hand_r", "hand_l", 0.045], ["farm_r", "hand_l", 0.02], ["hand_l", "farm_r", 0.02]].map(([part, object, depth]) => ({ part, object, depth }));
 const EL_MOUTH_R = [0.4, -1, 0.6], EL_HOLD_R = [-0.4, -1, -0.3], EL_LIGHT_L = [0.9, -0.6, 0.3];
 const ALL = ["armw_r", "armw_l", "w_rpocket_r", "w_lpocket_l", "w_hold_r", "w_mouth_r", "w_flame_l", "elbow_r", "elbow_l",
 	"wtwist_r", "wflex_r", "wtwist_l", "wflex_l", "head_pitch", "head_yaw", "spine_pitch", "root", "fingers_l", "fingers_r",
@@ -39,7 +45,7 @@ export function smokeCigarette(ctx) {
 	// the pose before f0 stays: the head pitches from its own angle, the right arm's poles lean with the torso
 	const head0 = ctx.state.head_pitch, lean = (ctx.state.pitch ?? 0) + ctx.state.spine_pitch, H = v => v + head0;
 	const EL_MOUTH = lean ? apply(rx(lean), EL_MOUTH_R) : EL_MOUTH_R, EL_HOLD = lean ? apply(rx(lean), EL_HOLD_R) : EL_HOLD_R;
-	const squat = squatAnchors(ctx);
+	const squat = squatAnchors(ctx), FX_M = ctx.self ? (squat ? FX_M_SQUAT : FX_M_SELF) : WR.FX_M;
 	if (squat) ctx.state.w_mouthOut_r = 0;
 	// a short span scales every beat's frame by `pace` (>= 0.75): rounding keeps the keys in order,
 	// and a gap of 2 frames or more stays at least 1 (the lighter reaches the tip 3 frames before
@@ -52,7 +58,7 @@ export function smokeCigarette(ctx) {
 	const raise = (a, b) => {
 		k.hold(a, "w_mouth_r", "w_hold_r", "wtwist_r", "wflex_r", "elbow_r", "head_pitch", "root", ...(squat ? ["w_mouthOut_r"] : []));
 		if (squat) k.at(Math.round((a + b) / 2), { w_hold_r: 0, w_mouthOut_r: 1, w_mouth_r: 0 });
-		k.at(b, { w_mouth_r: 1, w_hold_r: 0, ...(squat ? { w_mouthOut_r: 0 } : {}), wtwist_r: WR.TW_M, wflex_r: WR.FX_M, elbow_r: EL_MOUTH, head_pitch: H(6), root: root0 });
+		k.at(b, { w_mouth_r: 1, w_hold_r: 0, ...(squat ? { w_mouthOut_r: 0 } : {}), wtwist_r: WR.TW_M, wflex_r: FX_M, elbow_r: EL_MOUTH, head_pitch: H(6), root: root0 });
 	};
 	const lower = (a, b) => {
 		k.hold(a, "w_mouth_r", "w_hold_r", "wtwist_r", "wflex_r", "elbow_r", "head_pitch", ...(squat ? ["w_mouthOut_r"] : []));
@@ -67,7 +73,7 @@ export function smokeCigarette(ctx) {
 	k.at(28, { fingers_r: { cigarette: 1 } });
 	k.step(28, "cig_vis", 1);
 	k.hold(36, "w_rpocket_r", "w_mouth_r", "wtwist_r", "wflex_r", "elbow_r", "head_pitch");
-	k.at(58, { w_rpocket_r: 0, w_mouth_r: 1, wtwist_r: WR.TW_M, wflex_r: WR.FX_M, elbow_r: EL_MOUTH, head_pitch: H(6) });
+	k.at(58, { w_rpocket_r: 0, w_mouth_r: 1, wtwist_r: WR.TW_M, wflex_r: FX_M, elbow_r: EL_MOUTH, head_pitch: H(6) });
 	// left hand: pocket -> the lighter appears -> under the cigarette tip
 	k.at(2, { w_lpocket_l: 1, elbow_l: [0.5, -0.4, -1] });
 	k.hold(12, "armw_l", "w_lpocket_l", "elbow_l", "fingers_l");
@@ -95,11 +101,13 @@ export function smokeCigarette(ctx) {
 	k.step(260, "exhale", 0);
 	// the left hand puts the lighter back and drops
 	k.hold(80, "w_flame_l", "w_lpocket_l", "wtwist_l", "wflex_l", "elbow_l");
-	// a squat brings the lighter back to the pocket a little slower (its path crosses the hand's detour circle on the way down)
-	k.at(squat ? 100 : 96, { w_flame_l: 0, w_lpocket_l: 1, wtwist_l: 0, wflex_l: 0, elbow_l: [0.5, -0.4, -1] });
-	k.hold(101, "fingers_l");
-	k.step(102, "lit_vis", 0);
-	k.hold(104, "armw_l", "w_lpocket_l");
+	// a squat brings the lighter back to the pocket a little slower (its path crosses the hand's detour circle on the way
+	// down); with fix.self to the side pocket slower still (at 96 the forearm pops), the lighter going in when the hand gets there
+	const back = squat && ctx.self ? 8 : 0;
+	k.at(back ? 96 + back : squat ? 100 : 96, { w_flame_l: 0, w_lpocket_l: 1, wtwist_l: 0, wflex_l: 0, elbow_l: [0.5, -0.4, -1] });
+	k.hold(101 + back, "fingers_l");
+	k.step(102 + back, "lit_vis", 0);
+	k.hold(104 + back, "armw_l", "w_lpocket_l");
 	k.at(112, { fingers_l: { grip: 0, fist: 0 } });
 	k.at(120, { armw_l: 0, w_lpocket_l: 1 });
 	k.at(123, { w_lpocket_l: 0 });
@@ -118,11 +126,12 @@ export function smokeCigarette(ctx) {
 	k.at(246, { head_pitch: H(-14) });
 	k.at(264, { head_pitch: H(0) });
 	book.hold(span, ...ALL, ...(squat ? ["w_mouthOut_r"] : []));
-	const kit = kitObjects(ctx, { cig: ctx.f0 + t(28), lit: ctx.f0 + t(35), unlit: ctx.f0 + t(102) });
+	const side = Boolean(squat) && ctx.self;
+	const kit = kitObjects(ctx, { cig: ctx.f0 + t(28), lit: ctx.f0 + t(35), unlit: ctx.f0 + t(side ? 110 : 102), squat: side });
 	return {
 		keys: book.keys, end: until, ...(pace < 1 ? { paced: Math.floor(pace * 100) / 100 } : {}), channels: ["exhale", "ember"], ...(kit ? { objects: kit.objects } : {}),
 		anchors: {
-			lpocket: { kind: "body", p: [0.13, -0.035, 0.08] }, rpocket: { kind: "body", p: [-0.13, -0.035, 0.08] }, hold: { kind: "body", p: squat?.hold ?? [-0.24, 0.03, 0.06] },
+			lpocket: { kind: "body", p: (ctx.self && squat?.lpocket) || POCKET.l }, rpocket: { kind: "body", p: (ctx.self && squat?.rpocket) || POCKET.r }, hold: { kind: "body", p: squat?.hold ?? [-0.24, 0.03, 0.06] },
 			...(squat ? { mouthOut: { kind: "body", p: squat.mouthOut } } : {}),
 			mouth: { kind: "landmark", name: "mouth" }, flame: { kind: "prop", prop: "cig", point: "tip", offset: [0, -0.02, 0] },
 		},
@@ -145,7 +154,7 @@ export function smokeCigarette(ctx) {
 				{ name: "cigarette from the right pocket", channel: "cig_vis", joint: "RightHand", anchor: "rpocket", tol: 0.035 },
 				{ name: "lighter from the left pocket", channel: "lit_vis", joint: "LeftHand", anchor: "lpocket", tol: 0.035 },
 			],
-			mouthPoints: ["cig.filter"], ...(kit ? { allow: kit.allow } : {}),
+			mouthPoints: ["cig.filter"], allow: [...(kit?.allow ?? []), ...LIGHTING],
 		},
 	};
 }

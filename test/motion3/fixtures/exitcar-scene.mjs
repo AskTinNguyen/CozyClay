@@ -230,6 +230,9 @@ export const EXITCAR_SPEC = {
 			{ part: "thigh", object: "Car_Seat_Driver", depth: 0.045 }, { part: "torso", object: "Car_Seat_Driver_Back", depth: 0.03 },
 			{ part: "hand", object: "Car_Door_L", depth: 0.03 }, { part: "hand", object: "Car_Steering_Wheel", depth: 0.05 },
 			{ part: "hand", object: "Car_Door_Handle", depth: 0.04 },
+			// the hands rest on the thighs and push on them to stand up (the car skill's THIGH_CONTACT)
+			{ part: "hand", object: "thigh*", depth: 0.07 }, { part: "farm", object: "thigh*", depth: 0.07 },
+			{ part: "hand", object: "hips", depth: 0.07 }, { part: "farm", object: "hips", depth: 0.07 }, { part: "hand_l", object: "hand_r", depth: 0.035 },
 		],
 		mouthPoints: ["cig.filter"],
 	},

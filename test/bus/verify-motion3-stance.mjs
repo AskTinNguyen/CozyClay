@@ -9,7 +9,7 @@
 // frames between the keys broke away (f10: the wrist twist needed 120 deg).
 import { STANCE_SPEC, STANCE_SPEC_ID, STANCE_KIT_AT, CLEAN_SPEC, CLEAN_SPEC_ID, CLEAN_KIT_AT } from "../motion3/fixtures/bat-stance.mjs";
 import { CHARACTER, BAT, batKit } from "../motion3/fixtures/bat-aim-swing.mjs";
-import { compileSpec } from "../../src/motion3/pipeline.js";
+import { compileSpec } from "../motion3/fixtures/legacy-compile.mjs";
 import { solveFrame } from "../../src/motion3/compiler/compile.js";
 import { channelsAt } from "../../src/motion3/compiler/channels.js";
 import { pose } from "../../src/motion3/compiler/pose.js";

@@ -4,11 +4,13 @@
 // rotated by the root yaw only.
 import { add, sub, scale, norm, len, apply, mul, rx, ry, rz } from "./math.js";
 import { restState, rotateSubtree } from "./skeleton.js";
-import { twoBone, orientFoot, wrist, fingers, limitFold, askedFold, ELBOW_FOLD, KNEE_FOLD } from "./limbs.js";
+import { twoBone, orientFoot, wrist, fingers, limitFold, askedFold, swivelElbow, ELBOW_FOLD, KNEE_FOLD } from "./limbs.js";
 import { holdHand } from "./hold.js";
 import { ELBOW_REST } from "./arm-orient.js";
 
 export const SIDES = { l: "Left", r: "Right" };
+/** How much of an auto-fix elbow turn an arm at IK weight w takes (fix/self.js plans with the same). */
+export const turnWeight = w => { const x = Math.min(1, Math.max(0, w)); return x * x * (3 - 2 * x); };
 const KNEE_REST = [0, 0, 1], LEG = ["UpLeg", "Leg", "Foot"];
 
 const v3 = (x, d = [0, 0, 0]) => (Array.isArray(x) || ArrayBuffer.isView(x) ? [x[0], x[1], x[2]] : d);
@@ -40,10 +42,13 @@ function softReach(sk, s, a, fa, h, target, diag, k) {
 /**
  * hooks.handTarget(side, s) -> { target:[x,y,z] } world wrist target before the FK/IK blend
  * hooks.afterArm(side, s, diag) lets the caller measure props carried by that hand.
- * hooks.push(side) -> [x,y,z] | undefined, a world offset added to the IK target (auto-fix).
+ * hooks.push(side) -> [x,y,z] | undefined, a world offset added to the IK target (auto-fix); hooks.skinPush(side) the same
+ * for the self fix (fix/self.js), taken as far as the arm is on its IK.
  * hooks.softReach clamps unreachable wrist targets smoothly (auto-fix).
  * hooks.foldFree lets the arm IK fold past the elbow's stop (a fit's measuring passes, compile.js).
  * hooks.hold(side, s) -> { w, palm, measure, pole?, second? } | null: a held object's keys lead the hand (hold.js).
+ * hooks.keepOut(side, s, target) -> target: the blended wrist target kept out of the body (auto-fix, compile.js).
+ * hooks.swivel(side) -> deg | undefined, an elbow turn about the shoulder-wrist line, the hand kept (auto-fix, fix/self.js).
  * diag.arm_fold_<k>: the flexion (deg) the wrist target asked when past ELBOW_FOLD (arm_miss_<k> is then how far inside).
  * diag.leg_fold_<k>: the knee flexion (deg) the ankle target asked when past KNEE_FOLD (leg_miss_<k> is then how far inside).
  */
@@ -93,8 +98,12 @@ export function pose(sk, c, hooks = {}) {
 			const fkHand = s.P[h].slice();
 			const goal = hooks.handTarget(k, s, diag) ?? fkHand;
 			let target = add(fkHand, scale(sub(goal, fkHand), w));
+			if (hooks.keepOut) target = hooks.keepOut(k, s, target);
 			const push = hooks.push?.(k);
 			if (push) target = add(target, push);
+			// the self fix's push rides the IK as far as the arm is on it (an arm coming in from FK would jump)
+			const skinPush = hooks.skinPush?.(k);
+			if (skinPush) target = add(target, scale(skinPush, turnWeight(w)));
 			if (hooks.softReach) target = softReach(sk, s, a, fa, h, target, diag, k);
 			const poleFk = norm(sub(s.P[fa], scale(add(s.P[a], fkHand), 0.5)));
 			const pole = add(scale(poleFk, 1 - w), scale(poleIk, w));
@@ -107,6 +116,10 @@ export function pose(sk, c, hooks = {}) {
 		fingers(sk, s, side, c[`fingers_${k}`]);
 		const held = hooks.hold?.(k, s);
 		if (held) holdHand(sk, s, side, held, ELBOW_REST, diag, k);
+		// after a held object's grip, so its hand keeps the grip the hold solved; an arm coming in from FK turns
+		// no more than its IK weight (the IK elbow already lands somewhere else than the FK one)
+		const turn = hooks.swivel?.(k);
+		if (turn) swivelElbow(sk, s, side, turn * turnWeight(w));
 		hooks.afterArm?.(k, s, diag);
 	}
 	return { s, diag };

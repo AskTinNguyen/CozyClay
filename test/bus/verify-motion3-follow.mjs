@@ -6,7 +6,7 @@
 // that follows the mouth births its puffs at the mouth while the head moves; a follow entry is no
 // obstacle (no COLLIDE from a body that follows the chest); smokeCigarette args.kit.exhale binds the
 // exhale kit with a follow entry (QA 0, the squat of session da8760fa); motion.keyObject refuses it.
-import { compileSpec } from "../../src/motion3/pipeline.js";
+import { compileSpec } from "../motion3/fixtures/legacy-compile.mjs";
 import { validateSpec } from "../../src/motion3/compiler/validate.js";
 import { bakeTake } from "../../src/motion3/take.js";
 import { objectTracksOf } from "../../src/motion3/object-tracks.js";

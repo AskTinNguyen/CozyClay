@@ -5,6 +5,7 @@ import { bonePoint } from "../compiler/skeleton.js";
 import { CAPSULES, segPoints, sdBox, boxNormal, headDepth, segDist, solePoints, ankleY } from "./geometry.js";
 import { vec, m3 } from "./fmt.js";
 import { kneeFoldHint, kneeWhy } from "./hints-knee.js";
+import { bodyFor, bodyNormal, limbDepth } from "../body.js";
 
 const MARGIN = 0.003;
 const sideOf = name => (/(^|_)l$|^Left/.test(name) ? "l" : /(^|_)r$|^Right/.test(name) ? "r" : null);
@@ -95,6 +96,18 @@ export const contactHints = {
 	BODY(X, g) {
 		const [, nm, part] = /^(\S+) into (\S+)$/.exec(g.subject) ?? [];
 		const cap = capsule(part), f = g.worstFrame, { s } = X.fr(f);
+		// an arm on the fitted skin (body-checks.js): the hand target moves out along the skin where it goes deepest;
+		// an upper arm or forearm says so, since turning its elbow (elbow_<k>) away from the body may do instead
+		const limb = /^(hand|farm|uarm)_([lr])$/.exec(nm ?? ""), body = limb && bodyFor(X.sk);
+		if (body) {
+			const bone = X.I[`${limb[2] === "l" ? "Left" : "Right"}${{ hand: "Hand", farm: "ForeArm", uarm: "Arm" }[limb[1]]}`], hit = limbDepth(body, X.sk, s, bone);
+			const out = hit.p && bodyNormal(body, s, hit.p, body.skip.get(bone));
+			if (out) {
+				const r = moveHint(X, nm, f, scale(out, g.worst - g.limit + MARGIN), ` (out of the ${part})`);
+				if (limb[1] !== "hand") r.hint += `; or turn elbow_${limb[2]} away from the ${part}`;
+				return r;
+			}
+		}
 		if (!cap) return null;
 		const A = s.P[X.I[cap[1]]], B = s.P[X.I[cap[2]]], ab = sub(B, A);
 		const axis = p => add(A, scale(ab, clamp(dot(sub(p, A), ab) / dot(ab, ab), 0, 1)));

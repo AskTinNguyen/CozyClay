@@ -15,6 +15,7 @@ import { add, sub, scale, len, apply, ry } from "./math.js";
 import { bonePoint } from "./skeleton.js";
 import { palmAxes } from "./limbs.js";
 import { SIDES } from "./pose.js";
+import { HAND_CLEAR, keepOut } from "../body.js";
 
 function armReach(sk, k) {
 	const side = SIDES[k], P = sk.restWorldPos, I = sk.index;
@@ -22,9 +23,18 @@ function armReach(sk, k) {
 }
 
 /** Resolve a named anchor to a world point for the current (partial) frame state. */
+/** Anchors placed off the root (a pocket): with fix.self (ctx.keepOut, compile.js) a point the pose put inside
+ * the skin resolves onto it, HAND_CLEAR off, for the hand and for every check alike. A bone's or a segment's
+ * anchor is the spec's own place on that limb (a hand resting on a thigh) and stays. */
+const ON_BODY = new Set(["body"]);
 export function resolveAnchor(ctx, name, s, diag, c) {
 	const a = ctx.spec.anchors?.[name];
 	if (!a) throw new Error(`MOTION_SPEC_INVALID: unknown anchor "${name}"`);
+	const p = anchorPoint(ctx, a, name, s, diag, c), skin = ON_BODY.has(a.kind) && ctx.keepOut;
+	return skin ? keepOut(skin.body, ctx.sk, s, keepOut(skin.body, ctx.sk, s, p, HAND_CLEAR, skin.skip), HAND_CLEAR, skin.skip) : p;
+}
+
+function anchorPoint(ctx, a, name, s, diag, c) {
 	const { sk } = ctx, I = sk.index;
 	switch (a.kind) {
 		case "world": return a.p.slice();

@@ -2,17 +2,18 @@
 // bone length, one-frame pops (style.js), knee and elbow flips, knees bending backward, knees and
 // elbows folded past their stop (KNEE: the shin in the thigh; ELBOW: the forearm in the upper arm,
 // compiler/limbs.js), self contact, hands and held props entering the head (and the torso,
-// contact-checks.js). Speed, acceleration, knee bend and balance are style: style.js measures them
+// contact-checks.js; arms into any other body part on the fitted skin, body-checks.js). Speed, acceleration, knee bend and balance are style: style.js measures them
 // and checks them only when the spec names their limit (checks.limits).
 import { add, sub, scale, apply, len, dist, cross, norm, dot, angle } from "../compiler/math.js";
 import { CAPSULES, segPoints, sdBox, segDist, headDepth, solePoints } from "./geometry.js";
 import { contactChecks } from "./contact-checks.js";
+import { bodyChecks } from "./body-checks.js";
 import { popChecks } from "./style.js";
 import { ELBOW_STOP, KNEE_STOP } from "../compiler/limbs.js";
 
 export const QA_LIMITS = { allow: 0.005, groundAllow: 0.01, reach: 0.01, slide: 0.0015, plantH: 0.012,
 	speedCore: 0.04, speedLimb: 0.16, accCore: 0.015, accLimb: 0.05, flip: 60, knee: 150, headAllow: 0.003, self: 0,
-	body: 0.005, hands: 0.01, object: 0.005, grab: 0.03, balance: 0.08 };
+	body: 0.005, skin: 0.015, hands: 0.01, object: 0.005, grab: 0.03, balance: 0.08 };
 /** FLIP reads a bend plane only where the limb is bent this far (deg) from straight and from folded flat. */
 const FLIP_BEND = 20;
 /** KNEE (folds) and ELBOW: degrees past KNEE_STOP or ELBOW_STOP that count (the IK sits on the stop to rounding). */
@@ -68,7 +69,9 @@ export function generalChecks(sk, out, opts = {}) {
 			if (fold > ELBOW_STOP + STOP_TOL) push("ELBOW", `${S} elbow folds ${fold.toFixed(0)}deg`, f, fold, ELBOW_STOP);
 		}
 	}
-	contactChecks(sk, out, L, push);
+	const allowed = (part, into) => allowance(opts.allow, part, into);
+	contactChecks(sk, out, L, push, allowed);
+	bodyChecks(sk, out, L, push, allowed);
 	// temporal checks
 	for (const S of ["Left", "Right"]) {
 		for (let f = 1; f < n; f++) {

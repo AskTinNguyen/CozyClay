@@ -7,7 +7,7 @@
 // QA 0 and the lit parts switched by the skill's channels (ember 0.6 idle, 2 on a drag; exhale).
 import { buildKit, KIT_CATALOGUE, KIT_NAMES } from "../../src/kits/index.js";
 import { createStudioAppActions } from "../../src/commands/index.js";
-import { compileSpec } from "../../src/motion3/pipeline.js";
+import { compileSpec } from "../motion3/fixtures/legacy-compile.mjs";
 import { motionScene } from "../../src/motion3/scene.js";
 import { skeletonFor } from "../../src/motion3/rigs/index.js";
 import { objectSize } from "../../src/scene-objects.js";

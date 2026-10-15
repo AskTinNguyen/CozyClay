@@ -9,7 +9,7 @@
 import { createHash } from "node:crypto";
 import { SCENE_OBJECTS, CHARACTER, SWING_SPEC, SWING_KEYS, BAT } from "../motion3/fixtures/bat-swing.mjs";
 import { EXITCAR_SPEC, SCENE_OBJECTS as CAR_OBJECTS, CHARACTER as DRIVER } from "../motion3/fixtures/exitcar-scene.mjs";
-import { compileSpec } from "../../src/motion3/pipeline.js";
+import { compileSpec } from "../motion3/fixtures/legacy-compile.mjs";
 import { validateSpec } from "../../src/motion3/compiler/validate.js";
 import { bakeTake } from "../../src/motion3/take.js";
 import { motionScene } from "../../src/motion3/scene.js";

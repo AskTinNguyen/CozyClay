@@ -9,7 +9,7 @@
 import { createHash } from "node:crypto";
 import { SWING_SPEC, SWING_SPEC_ID, EARLIER_SPEC, EARLIER_SPEC_ID, SWING_KIT_AT, EARLIER_KIT_AT, BAT, CHARACTER, batKit } from "../motion3/fixtures/bat-aim-swing.mjs";
 import * as J2 from "../motion3/fixtures/bat-swing.mjs";
-import { compileSpec } from "../../src/motion3/pipeline.js";
+import { compileSpec } from "../motion3/fixtures/legacy-compile.mjs";
 import { solveFrame } from "../../src/motion3/compiler/compile.js";
 import { channelsAt } from "../../src/motion3/compiler/channels.js";
 import { palmAxes } from "../../src/motion3/compiler/limbs.js";

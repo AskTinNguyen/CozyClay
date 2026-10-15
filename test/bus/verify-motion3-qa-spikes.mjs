@@ -10,7 +10,7 @@ import { FOLD_SPEC, FOLD_SPEC_ID, FOLD_KIT_AT } from "../motion3/fixtures/bat-fo
 import { CLEAN_SPEC, CLEAN_SPEC_ID, CLEAN_KIT_AT, STANCE_SPEC, STANCE_KIT_AT } from "../motion3/fixtures/bat-stance.mjs";
 import { SWING_SPEC as L2_SWING, SWING_SPEC_ID as L2_SWING_ID, batScene } from "../motion3/fixtures/ground-sessions.mjs";
 import { EARLIER_SPEC, EARLIER_KIT_AT, batKit } from "../motion3/fixtures/bat-aim-swing.mjs";
-import { compileSpec } from "../../src/motion3/pipeline.js";
+import { compileSpec } from "../motion3/fixtures/legacy-compile.mjs";
 import { generalChecks } from "../../src/motion3/qa/checks.js";
 import { motionScene } from "../../src/motion3/scene.js";
 import { skeletonFor } from "../../src/motion3/rigs/index.js";

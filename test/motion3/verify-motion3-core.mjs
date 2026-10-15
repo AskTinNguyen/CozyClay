@@ -64,8 +64,10 @@ expect("QA catches an unreachable foot target (reach fix off)", reachQa.groups.s
 // Contact checks ported from the car-exit QA, the knee check on a lifted knee, prop anchor offsets.
 const one = (set, extra = {}) => ({ ...walkSpec, frames: 1, generators: [], keys: [{ f: 0, set: { ...walkSpec.keys[0].set, ...set } }], ...extra });
 const groupsOf = (spec, objects = {}) => runMotionQa(sk, compileMotion(spec, { sk, scene: { objects } }), spec).groups;
-const intoChest = groupsOf(one({ armw_r: 1, hand_r: [0, P[I.Spine2][1] - 0.04, 0.04] }));
-expect("QA catches a hand inside the torso", intoChest.some(g => g.kind === "BODY" && /hand_r into torso/.test(g.subject)), JSON.stringify(intoChest.map(g => g.subject)));
+const intoChest = groupsOf(one({ armw_r: 1, hand_r: [0, P[I.Spine2][1] - 0.04, 0.04] }, { fix: { self: false } }));
+expect("QA catches a hand inside the torso (fix.self off)", intoChest.some(g => g.kind === "BODY" && /hand_r into torso/.test(g.subject)), JSON.stringify(intoChest.map(g => g.subject)));
+const keptOut = groupsOf(one({ armw_r: 1, hand_r: [0, P[I.Spine2][1] - 0.04, 0.04] }));
+expect("with fix.self (default) the same target goes onto the skin: no BODY", !keptOut.some(g => g.kind === "BODY"), JSON.stringify(keptOut.map(g => g.subject)));
 const clasped = groupsOf(one({ armw_r: 1, armw_l: 1, hand_r: [0, 1.15, 0.4], hand_l: [0, 1.15, 0.4] }));
 expect("QA catches the two hands overlapping", clasped.some(g => g.kind === "SELF" && g.subject === "hands overlap"), JSON.stringify(clasped.map(g => g.subject)));
 const hinge = { schema: "cozyclay.motion-spec.v1", frames: 2, keys: [{ f: 0, set: { ...walkSpec.keys[0].set, door: 0 } }, { f: 1, set: { door: -90 } }],
