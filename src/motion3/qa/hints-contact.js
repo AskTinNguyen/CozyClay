@@ -4,6 +4,7 @@ import { add, sub, scale, norm, dot, len, clamp, apply, ry, T } from "../compile
 import { bonePoint } from "../compiler/skeleton.js";
 import { CAPSULES, segPoints, sdBox, boxNormal, headDepth, segDist, solePoints, ankleY } from "./geometry.js";
 import { vec, m3 } from "./fmt.js";
+import { kneeFoldHint, kneeWhy } from "./hints-knee.js";
 
 const MARGIN = 0.003;
 const sideOf = name => (/(^|_)l$|^Left/.test(name) ? "l" : /(^|_)r$|^Right/.test(name) ? "r" : null);
@@ -78,7 +79,9 @@ export const contactHints = {
 		return k && boxHint(X, g, k.part, k.object, k.min - g.worst + MARGIN);
 	},
 	GROUND(X, g) {
-		const k = g.subject.startsWith("Left") ? "l" : "r", f = g.worstFrame, c = X.fr(f).c;
+		const k = g.subject.startsWith("Left") ? "l" : "r", f = g.worstFrame, c = X.fr(f).c, fold = X.fr(f).diag[`leg_fold_${k}`];
+		// the knee on its stop left the ankle under its target (compiler/limbs.js): raising the foot folds it further, the root comes up
+		if (fold) return kneeFoldHint(X, k, f, kneeWhy("the sole is in the floor because the knee is on its stop: ", fold), c[`foot_${k}`]);
 		const pitch = c[`fpitch_${k}`] ? `, or less fpitch_${k} (now ${m3(c[`fpitch_${k}`])} deg; + lifts the heel)` : "";
 		return { cause: X.cause(`foot_${k}`, f), hint: `foot_${k}: raise ${m3(g.worst + 0.001)} m at f${f} (foot_* is the ankle; it stands ${ankleY(X.sk)} m above the floor)${pitch}`,
 			fix: { channel: `foot_${k}`, f, delta: [0, g.worst + 0.001, 0] } };

@@ -85,7 +85,7 @@ export function holdHand(sk, s, side, held, restBend, diag, k) {
 	for (let i = 0; i < ITERATIONS; i++) {
 		const W = wristAt(i ? s.R[h] : goal);
 		fold = askedFold(sk, s, side, W);
-		miss = twoBone(sk, s, a, fa, h, W, arm.pole, restBend, true);
+		miss = twoBone(sk, s, a, fa, h, W, arm.pole, restBend, "elbow");
 		need = orient(sk, s, side, h, fa, goal);
 	}
 	// fold: the flexion (deg) the wrist asked when past ELBOW_FOLD; miss is then how far inside the fold it is

@@ -4,12 +4,12 @@
 // rotated by the root yaw only.
 import { add, sub, scale, norm, len, apply, mul, rx, ry, rz } from "./math.js";
 import { restState, rotateSubtree } from "./skeleton.js";
-import { twoBone, orientFoot, wrist, fingers, limitFold, askedFold, ELBOW_FOLD } from "./limbs.js";
+import { twoBone, orientFoot, wrist, fingers, limitFold, askedFold, ELBOW_FOLD, KNEE_FOLD } from "./limbs.js";
 import { holdHand } from "./hold.js";
 import { ELBOW_REST } from "./arm-orient.js";
 
 export const SIDES = { l: "Left", r: "Right" };
-const KNEE_REST = [0, 0, 1];
+const KNEE_REST = [0, 0, 1], LEG = ["UpLeg", "Leg", "Foot"];
 
 const v3 = (x, d = [0, 0, 0]) => (Array.isArray(x) || ArrayBuffer.isView(x) ? [x[0], x[1], x[2]] : d);
 const num = (x, d = 0) => (typeof x === "number" && Number.isFinite(x) ? x : d);
@@ -45,6 +45,7 @@ function softReach(sk, s, a, fa, h, target, diag, k) {
  * hooks.foldFree lets the arm IK fold past the elbow's stop (a fit's measuring passes, compile.js).
  * hooks.hold(side, s) -> { w, palm, measure, pole?, second? } | null: a held object's keys lead the hand (hold.js).
  * diag.arm_fold_<k>: the flexion (deg) the wrist target asked when past ELBOW_FOLD (arm_miss_<k> is then how far inside).
+ * diag.leg_fold_<k>: the knee flexion (deg) the ankle target asked when past KNEE_FOLD (leg_miss_<k> is then how far inside).
  */
 export function pose(sk, c, hooks = {}) {
 	const s = restState(sk);
@@ -71,11 +72,15 @@ export function pose(sk, c, hooks = {}) {
 	const shift = sub(v3(c.root, s.P[hips]), s.P[hips]);
 	for (let j = 0; j < s.P.length; j++) s.P[j] = add(s.P[j], shift);
 	const body = ry(yaw);
-	// Legs: two-bone IK to the ankle targets, then aim the feet.
+	// Legs: two-bone IK to the ankle targets, the knee no further folded than its stop (limbs.js KNEE_STOP), then aim the feet.
 	for (const [k, side] of Object.entries(SIDES)) {
 		if (!c[`foot_${k}`]) continue;
+		const target = v3(c[`foot_${k}`]);
 		diag[`leg_miss_${k}`] = twoBone(sk, s, sk.index[`${side}UpLeg`], sk.index[`${side}Leg`], sk.index[`${side}Foot`],
-			v3(c[`foot_${k}`]), apply(body, v3(c[`knee_${k}`], KNEE_REST)), KNEE_REST);
+			target, apply(body, v3(c[`knee_${k}`], KNEE_REST)), KNEE_REST, "knee");
+		// a target nearer the hip than the knee folds leaves a residual (leg_miss); leg_fold says what it asked
+		const fold = askedFold(sk, s, side, target, LEG);
+		if (fold > KNEE_FOLD) diag[`leg_fold_${k}`] = fold;
 		orientFoot(sk, s, side, num(c[`fyaw_${k}`], yaw), num(c[`fpitch_${k}`]));
 	}
 	// Arms: blend the FK hand toward the hook's target, poles blended the same way.
@@ -94,7 +99,7 @@ export function pose(sk, c, hooks = {}) {
 			const poleFk = norm(sub(s.P[fa], scale(add(s.P[a], fkHand), 0.5)));
 			const pole = add(scale(poleFk, 1 - w), scale(poleIk, w));
 			// a target nearer the shoulder than the elbow folds leaves a residual too; arm_fold says what it asked
-			diag[`arm_miss_${k}`] = twoBone(sk, s, a, fa, h, target, pole, ELBOW_REST, !hooks.foldFree);
+			diag[`arm_miss_${k}`] = twoBone(sk, s, a, fa, h, target, pole, ELBOW_REST, hooks.foldFree ? null : "elbow");
 			const fold = askedFold(sk, s, side, target);
 			if (fold > ELBOW_FOLD && !hooks.foldFree) diag[`arm_fold_${k}`] = fold;
 		}

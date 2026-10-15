@@ -1,4 +1,4 @@
-// Hints for motion-type issues (reach, knees, elbows past their stop, pole flips, sliding, pops,
+// Hints for motion-type issues (reach, knees and elbows past their stop, pole flips, sliding, pops,
 // floating, opted-in speed and acceleration) and for the spec's own checks (contacts, orient,
 // below, appear). Orient and below try small changes of the wrist or elbow channels on the worst
 // frame and scale the best one to the needed amount.
@@ -6,11 +6,12 @@ import { add, sub, scale, norm, len, dist, angle, apply, ry, clamp, dot } from "
 import { solveFrame } from "../compiler/compile.js";
 import { channelsAt } from "../compiler/channels.js";
 import { resolveAnchor } from "../compiler/anchors.js";
-import { carried, reachAt, ELBOW_FOLD, ELBOW_STOP } from "../compiler/limbs.js";
+import { carried, reachAt, ELBOW_FOLD, ELBOW_STOP, KNEE_FOLD } from "../compiler/limbs.js";
 import { pointOf } from "./spec-checks.js";
 import { solePoints, ankleY } from "./geometry.js";
 import { vec, m3 } from "./fmt.js";
 import { moveHint } from "./hints-contact.js";
+import { kneeFoldHint, kneeWhy } from "./hints-knee.js";
 import { bodyMove } from "./hints-goal.js";
 
 const LIMB = { Leg: ["UpLeg", "Leg", "Foot", "knee"], ForeArm: ["Arm", "ForeArm", "Hand", "elbow"] };
@@ -68,6 +69,9 @@ export const motionHints = {
 	REACH(X, g) {
 		const [, limb, k] = /^(leg|arm)_miss_([lr])$/.exec(g.subject) ?? [], f = g.worstFrame, need = g.worst + 0.002;
 		if (limb === "leg") {
+			// an ankle target nearer the hip than the knee folds (compiler/limbs.js): the hips up off it
+			const fold = X.fr(f).diag[`leg_fold_${k}`];
+			if (fold) return kneeFoldHint(X, k, f, kneeWhy(`the ankle target is ${m3(g.worst)} m inside the shin's reach: `, fold), X.fr(f).c[`foot_${k}`]);
 			const T = X.fr(f).c[`foot_${k}`] ?? [0, 0, 0], H = hipOrShoulder(X, k, f, "Leg"), v = sub(T, H), R = dist(H, T) - g.worst;
 			const disc = v[1] * v[1] - dot(v, v) + R * R, side = [v[0], 0, v[2]];
 			const alt = disc >= 0 ? `or root down ${m3(-v[1] - Math.sqrt(disc) + 0.002)} m${g.worst <= 0.05 ? " (fix.reach does this when on)" : ""}`
@@ -99,6 +103,8 @@ export const motionHints = {
 			const pole = add(norm(apply(ry(-(c.yaw ?? 0)), toe)), [0, 0.3, 0]);
 			return { cause: X.cause(`knee_${k}`, f), hint: `knee_${k}: key ${vec(norm(pole))} (body frame, along the foot) at f${f}; a knee pole is +z forward, +x the character's left`, fix: { channel: `knee_${k}`, f, value: norm(pole) } };
 		}
+		// past the stop (the solver stops every knee at KNEE_STOP, so this pose came from outside it): the hips up off the foot
+		if (/ folds /.test(g.subject)) return kneeFoldHint(X, k, f, ` (the knee folds ${m3(g.worst)}deg, past its ${g.limit}deg stop; it bends freely to ${KNEE_FOLD}deg)`, P[I[`${S}Foot`]]);
 		const H = P[I[`${S}UpLeg`]], K = P[I[`${S}Leg`]], A = P[I[`${S}Foot`]], a = dist(H, K), b = dist(K, A);
 		const inner = (180 - (g.limit - 5)) * Math.PI / 180, want = Math.sqrt(a * a + b * b - 2 * a * b * Math.cos(inner));
 		return { cause: X.cause(`foot_${k}`, f), hint: `foot_${k}: move ${vec(scale(norm(sub(A, H)), want - dist(H, A)))} m away from the hip at f${f} (the knee folds ${m3(g.worst)} deg, limit ${g.limit})`,
