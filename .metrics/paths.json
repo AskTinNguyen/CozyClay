@@ -2416,5 +2416,67 @@
       "count": 6,
       "uniques": 4
     }
+  ],
+  "2026-10-15": [
+    {
+      "path": "/NomaDamas/CozyClay",
+      "title": "Overview",
+      "count": 1120,
+      "uniques": 615
+    },
+    {
+      "path": "/NomaDamas/CozyClay/issues",
+      "title": "/issues",
+      "count": 44,
+      "uniques": 19
+    },
+    {
+      "path": "/NomaDamas/CozyClay/pulls",
+      "title": "/pulls",
+      "count": 34,
+      "uniques": 7
+    },
+    {
+      "path": "/NomaDamas/CozyClay/pull/766",
+      "title": "/pull/766",
+      "count": 28,
+      "uniques": 1
+    },
+    {
+      "path": "/NomaDamas/CozyClay/pull/753",
+      "title": "/pull/753",
+      "count": 23,
+      "uniques": 1
+    },
+    {
+      "path": "/NomaDamas/CozyClay/pull/767",
+      "title": "/pull/767",
+      "count": 21,
+      "uniques": 1
+    },
+    {
+      "path": "/NomaDamas/CozyClay/blob/main/docs/kimodo-setup.md",
+      "title": "/blob/main/docs/kimodo-setup.md",
+      "count": 11,
+      "uniques": 7
+    },
+    {
+      "path": "/NomaDamas/CozyClay/releases/tag/v2.0.2",
+      "title": "/releases/tag/v2.0.2",
+      "count": 10,
+      "uniques": 9
+    },
+    {
+      "path": "/NomaDamas/CozyClay/releases",
+      "title": "/releases",
+      "count": 8,
+      "uniques": 8
+    },
+    {
+      "path": "/NomaDamas/CozyClay/stargazers",
+      "title": "/stargazers",
+      "count": 8,
+      "uniques": 2
+    }
   ]
 }
