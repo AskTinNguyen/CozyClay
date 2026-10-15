@@ -11,6 +11,8 @@ import { popChecks } from "./style.js";
 export const QA_LIMITS = { allow: 0.005, groundAllow: 0.01, reach: 0.01, slide: 0.0015, plantH: 0.012,
 	speedCore: 0.04, speedLimb: 0.16, accCore: 0.015, accLimb: 0.05, flip: 60, knee: 150, headAllow: 0.003, self: 0,
 	body: 0.005, hands: 0.01, object: 0.005, grab: 0.03, balance: 0.08 };
+/** FLIP reads a bend plane only where the limb is bent this far (deg) from straight and from folded flat. */
+const FLIP_BEND = 20;
 
 export const allowance = (allow, part, obj) => {
 	for (const a of allow ?? []) if (part.startsWith(a.part) && (a.object === obj || (a.object.endsWith("*") && obj.startsWith(a.object.slice(0, -1))))) return a.depth;
@@ -76,15 +78,28 @@ export function generalChecks(sk, out, opts = {}) {
 		if (drift > 0.001) push("LENGTH", `${sk.names[p]}-${sk.names[j]}`, 0, drift, 0.001);
 	}
 	popChecks(sk, out, L, push);
+	flipChecks(sk, F, L, push);
+	return issues;
+}
+
+/**
+ * FLIP: a knee's or elbow's bend plane turns more than L.flip degrees a frame. The plane is read
+ * only on frames the limb is bent FLIP_BEND or more from straight and from folded flat: near
+ * either end a few millimetres set it, so the hand or foot moving a few centimetres turns it any
+ * way (session df6acdcc: the right elbow folded to 171 deg as the wrist passed the shoulder, and
+ * its plane turned 71 deg in a frame while the elbow moved 3 cm). Across the frames between, the
+ * turn is shared out per frame, so a pole that flips while the limb is straight still shows.
+ */
+function flipChecks(sk, F, L, push) {
+	const I = sk.index, bent = Math.sin(FLIP_BEND * Math.PI / 180);
 	for (const S of ["Left", "Right"]) for (const [a, b, c] of [[`${S}UpLeg`, `${S}Leg`, `${S}Foot`], [`${S}Arm`, `${S}ForeArm`, `${S}Hand`]]) {
-		let prev = null;
-		for (let f = 0; f < n; f++) {
-			const P = F[f].s.P, nv = cross(sub(P[I[b]], P[I[a]]), sub(P[I[c]], P[I[b]]));
-			if (len(nv) < 1e-4) continue;
-			const u = norm(nv);
-			if (prev && dot(u, prev) < Math.cos(L.flip * Math.PI / 180)) push("FLIP", `${b} bend plane jumps ${angle(u, prev).toFixed(0)}deg`, f, angle(u, prev), L.flip);
-			prev = u;
+		let prev = null, at = 0;
+		for (let f = 0; f < F.length; f++) {
+			const P = F[f].s.P, up = sub(P[I[b]], P[I[a]]), down = sub(P[I[c]], P[I[b]]), nv = cross(up, down);
+			if (len(nv) < bent * len(up) * len(down)) continue;
+			const u = norm(nv), turn = prev ? angle(u, prev) : 0, gap = f - at;
+			if (turn / gap > L.flip) push("FLIP", `${b} bend plane jumps ${turn.toFixed(0)}deg${gap > 1 ? ` over ${gap} frames` : ""}`, f, turn / gap, L.flip);
+			prev = u; at = f;
 		}
 	}
-	return issues;
 }

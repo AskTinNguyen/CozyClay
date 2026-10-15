@@ -101,11 +101,13 @@ export const motionHints = {
 	FLIP(X, g) {
 		const [, S, limb] = /^(Left|Right)(Leg|ForeArm) /.exec(g.subject) ?? [], f = g.worstFrame;
 		if (!limb) return null;
-		const k = sideOf(S), [r, m, e, pole] = LIMB[limb], { s } = X.fr(f), P = s.P, I = X.I;
-		const bend = angle(sub(P[I[`${S}${m}`]], P[I[`${S}${r}`]]), sub(P[I[`${S}${e}`]], P[I[`${S}${m}`]]));
+		const k = sideOf(S), [r, m, e, pole] = LIMB[limb], I = X.I, gap = +(/ over (\d+) frames$/.exec(g.subject)?.[1] ?? 1);
+		const bendAt = q => { const P = X.fr(q).s.P; return angle(sub(P[I[`${S}${m}`]], P[I[`${S}${r}`]]), sub(P[I[`${S}${e}`]], P[I[`${S}${m}`]])); };
+		// a flip over several frames passed through the straight (or folded) frames between: the straightest names it
+		const fb = Array.from({ length: Math.max(1, gap - 1) }, (_, i) => (gap > 1 ? f - 1 - i : f)).reduce((p, q) => (bendAt(q) < bendAt(p) ? q : p)), bend = bendAt(fb);
 		const ch = `${pole}_${k}`, prevPole = X.out.baked[ch]?.[Math.max(0, f - 1)];
 		if (prevPole && len(prevPole) < 0.5) return { cause: X.cause(ch, f), hint: `${ch}: the pole passes near zero (length ${m3(len(prevPole))}) at f${f} while it turns between opposite keys; add an in-between pole key (e.g. the average direction, normalised) so it turns, not shrinks` };
-		const straight = bend < 12 ? `the limb is almost straight at f${f} (bend ${m3(bend)} deg), so the pole cannot hold it: bring the ${limb === "Leg" ? "foot" : "hand"} target ~0.02 m toward the ${limb === "Leg" ? "hip" : "shoulder"}, or ` : "";
+		const straight = bend < 12 ? `the limb is almost straight at f${fb} (bend ${m3(bend)} deg), so the pole cannot hold it: bring the ${limb === "Leg" ? "foot" : "hand"} target ~0.02 m toward the ${limb === "Leg" ? "hip" : "shoulder"}, or ` : "";
 		return { cause: X.cause(ch, f), hint: `${ch}: ${straight}keep the pole on one side through f${f}${prevPole ? ` (key ${vec(prevPole)} there)` : ""}`, fix: prevPole && { channel: ch, f, value: prevPole } };
 	},
 	SLIDE(X, g) {

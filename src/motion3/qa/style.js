@@ -5,16 +5,17 @@
 // check again: speedCore/speedLimb -> SPEED, accCore/accLimb -> ACC, knee -> KNEE (bend),
 // balance -> BALANCE. A pop is not style: one frame whose acceleration stands out from the
 // frames around it is an artifact (a step key, a pole flip, a snapped anchor), so POP stays a
-// QA error, and so is a FLOAT: the body off the ground without falling (floatChecks). See
-// docs/motion-api-v3.1.md C13.
-import { add, sub, scale, len, angle } from "../compiler/math.js";
+// QA error, and so is a FLOAT: the body off the ground without falling (floatChecks). A pop is a
+// spike, not a large value: a hard but continuous acceleration (a swing's launch) is style.
+// See docs/motion-api-v3.1.md C13.
+import { add, sub, scale, len, dot, angle } from "../compiler/math.js";
 import { CAPSULES, segPoints, sdBox, solePoints } from "./geometry.js";
 
 const SPEED_JOINTS = ["Hips", "Head", "LeftHand", "RightHand", "LeftFoot", "RightFoot", "LeftLeg", "RightLeg", "LeftForeArm", "RightForeArm"];
 const CORE = new Set(["Hips", "Head"]);
 const BENDS = [["knee_l", "LeftUpLeg", "LeftLeg", "LeftFoot"], ["knee_r", "RightUpLeg", "RightLeg", "RightFoot"],
 	["elbow_l", "LeftArm", "LeftForeArm", "LeftHand"], ["elbow_r", "RightArm", "RightForeArm", "RightHand"]];
-/** A pop's acceleration is at least this many times the largest of the frames 2 and 3 away. */
+/** A pop's acceleration is more than this many times the level around it (popLevel). */
 const POP_RATIO = 2;
 /** FLOAT: the share of gravity an airborne run may miss (0.75: the hips fall at a quarter of g). */
 const FLOAT_LIMIT = 0.75;
@@ -22,37 +23,47 @@ const FLOAT_LIMIT = 0.75;
 const STILL = 0.05;
 const r2 = x => Math.round(x * 100) / 100;
 
-/** Per SPEED_JOINT: speed v[f] (m/frame, from f-1) and acceleration a[f] (m/frame^2, from f-2), 0 where undefined. */
+/**
+ * Per SPEED_JOINT: speed v[f] (m/frame, from f-1), acceleration a[f] (m/frame^2, from f-2) and
+ * its vector A[f]; 0 where undefined.
+ */
 function kinematics(sk, out) {
 	const F = out.frames, n = F.length;
 	return SPEED_JOINTS.map(j => {
-		const X = F.map(fr => fr.s.P[sk.index[j]]), v = new Float64Array(n), a = new Float64Array(n);
+		const X = F.map(fr => fr.s.P[sk.index[j]]), v = new Float64Array(n), a = new Float64Array(n), A = X.map(() => [0, 0, 0]);
 		for (let f = 1; f < n; f++) v[f] = len(sub(X[f], X[f - 1]));
-		for (let f = 2; f < n; f++) a[f] = len(sub(sub(X[f], X[f - 1]), sub(X[f - 1], X[f - 2])));
-		return { j, core: CORE.has(j), v, a };
+		for (let f = 2; f < n; f++) { A[f] = sub(sub(X[f], X[f - 1]), sub(X[f - 1], X[f - 2])); a[f] = len(A[f]); }
+		return { j, core: CORE.has(j), v, a, A };
 	});
 }
 
 /**
- * The acceleration level around frame f that a pop is measured against: the largest of the
- * frames 2 and 3 away. A one-frame event shows in up to three neighbouring frames (a step key in
- * f and f+1, a one-frame glitch in f-1..f+1), so the frames next to f are not read. A smooth
- * motion, however fast, spreads its acceleration over 4 frames or more (a 4-frame move: 1x).
+ * The acceleration level around frame f that a pop is measured against (m/frame^2), the larger of
+ *   far    the largest acceleration 2 and 3 frames away. A one-frame event shows in up to three
+ *          neighbouring frames (a step key in f and f+1, a one-frame glitch in f-1..f+1), so the
+ *          frames next to f are not read here;
+ *   burst  what the frames next to f carry in f's own direction, less what the other one turns
+ *          back. At 24 fps a hard move gathers its acceleration into 2 or 3 frames that all push
+ *          the same way (a swing's launch, the hips turning round): a burst, not a pop, however
+ *          hard. A glitch pushes back on both sides (+1, -2, +1), a step on one (+1, -1), and a
+ *          jitter turns back on one side as the other follows (+, -, -, +): those carry none.
+ * k = { a, A } (kinematics).
  */
-function popLevel(a, f) {
-	let m = 0;
-	for (const q of [f - 3, f - 2, f + 2, f + 3]) if (q >= 2 && q < a.length) m = Math.max(m, a[q]);
-	return m;
+function popLevel({ a, A }, f) {
+	let far = 0;
+	for (const q of [f - 3, f - 2, f + 2, f + 3]) if (q >= 2 && q < a.length) far = Math.max(far, a[q]);
+	const along = a[f] > 0 ? [f - 1, f + 1].filter(q => q >= 2 && q < a.length).map(q => dot(A[q], A[f]) / a[f]) : [];
+	return along.length ? Math.max(far, Math.max(...along) + Math.min(0, ...along)) : far;
 }
 
-/** True when a[f] (m/frame^2) is a pop: above floor and POP_RATIO times popLevel(a, f). */
-export const isPop = (a, f, floor) => a[f] > floor && a[f] > POP_RATIO * popLevel(a, f);
+/** True when k.a[f] (m/frame^2) is a pop: above floor and POP_RATIO times popLevel(k, f); k = { a, A } (kinematics). */
+export const isPop = (k, f, floor) => k.a[f] > floor && k.a[f] > POP_RATIO * popLevel(k, f);
 
 /** Hard POP issues (limits L: accCore, accLimb are the floor); push(kind, msg, f, value, limit). */
 export function popChecks(sk, out, L, push) {
-	for (const { j, core, a } of kinematics(sk, out)) {
-		const floor = core ? L.accCore : L.accLimb;
-		for (let f = 2; f < a.length; f++) if (isPop(a, f, floor)) push("POP", `${j} accel ${(a[f] * 100).toFixed(2)} cm/f^2 in one frame`, f, a[f], floor);
+	for (const k of kinematics(sk, out)) {
+		const floor = k.core ? L.accCore : L.accLimb;
+		for (let f = 2; f < k.a.length; f++) if (isPop(k, f, floor)) push("POP", `${k.j} accel ${(k.a[f] * 100).toFixed(2)} cm/f^2 in one frame`, f, k.a[f], floor);
 	}
 }
 
@@ -132,12 +143,12 @@ const bendAt = (sk, s, [, a, b, c]) => angle(sub(s.P[sk.index[b]], s.P[sk.index[
 export function styleChecks(sk, out, checks, L) {
 	const own = checks?.limits ?? {}, on = k => Object.hasOwn(own, k), issues = [];
 	const push = (kind, msg, f, value, limit) => issues.push({ kind, msg, frame: f, value: +value.toFixed(4), limit });
-	for (const { j, core, v, a } of kinematics(sk, out)) {
-		const vk = core ? "speedCore" : "speedLimb", ak = core ? "accCore" : "accLimb";
+	for (const k of kinematics(sk, out)) {
+		const { j, core, v, a } = k, vk = core ? "speedCore" : "speedLimb", ak = core ? "accCore" : "accLimb";
 		for (let f = 1; f < v.length; f++) {
 			if (on(vk) && v[f] > L[vk]) push("SPEED", `${j} ${(v[f] * 100).toFixed(1)} cm/frame`, f, v[f], L[vk]);
 			// a pop is already a POP group
-			if (on(ak) && f > 1 && a[f] > L[ak] && !isPop(a, f, L[ak])) push("ACC", `${j} accel ${(a[f] * 100).toFixed(2)} cm/f^2`, f, a[f], L[ak]);
+			if (on(ak) && f > 1 && a[f] > L[ak] && !isPop(k, f, L[ak])) push("ACC", `${j} accel ${(a[f] * 100).toFixed(2)} cm/f^2`, f, a[f], L[ak]);
 		}
 	}
 	if (on("knee")) out.frames.forEach(({ s }, f) => {
@@ -192,12 +203,12 @@ export function observeMotion(sk, out, checks = {}) {
  */
 export function speedExcess(sk, out, own, L) {
 	const on = k => Object.hasOwn(own ?? {}, k), e = new Float64Array(out.frames.length);
-	for (const { core, v, a } of kinematics(sk, out)) {
-		const vk = core ? "speedCore" : "speedLimb", ak = core ? "accCore" : "accLimb";
+	for (const k of kinematics(sk, out)) {
+		const { core, v, a } = k, vk = core ? "speedCore" : "speedLimb", ak = core ? "accCore" : "accLimb";
 		for (let f = 1; f < v.length; f++) {
 			if (on(vk)) e[f] = Math.max(e[f], v[f] / L[vk]);
 			if (f < 2) continue;
-			if (isPop(a, f, L[ak])) e[f] = Math.max(e[f], Math.sqrt(a[f] / Math.max(L[ak], POP_RATIO * popLevel(a, f))));
+			if (isPop(k, f, L[ak])) e[f] = Math.max(e[f], Math.sqrt(a[f] / Math.max(L[ak], POP_RATIO * popLevel(k, f))));
 			if (on(ak)) e[f] = Math.max(e[f], Math.sqrt(a[f] / L[ak]));
 		}
 	}

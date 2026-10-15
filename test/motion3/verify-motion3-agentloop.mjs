@@ -115,12 +115,16 @@ expect("checks.limits.speedLimb opts back in: SPEED is an error again (and only 
 	&& optSpeed.qa.groups.every(g => g.kind === "SPEED"), JSON.stringify(optSpeed.qa.groups.map(g => `${g.kind} ${g.subject}`)));
 const stepped = compile(stand({ keys: [{ f: 0, set: { armw_r: 1, hand_r: [-0.25, 1.1, 0.25] } }, { f: 30, set: { hand_r: [-0.25, 1.1, 0.25] } }, { f: 31, step: ["hand_r"], set: { hand_r: [-0.2, 1.15, 0.3] } }] }), empty);
 expect("an isolated pop (a hand that jumps 8.7 cm in one frame) is still an error", !stepped.qa.ok && stepped.qa.groups.some(g => g.kind === "POP" && /RightHand .* in one frame/.test(g.subject)), JSON.stringify(stepped.qa.groups.map(g => g.subject)));
-// the detector: a one-frame event (kink, step, glitch) against the frames 2-3 away, not a short smooth move
-const series = list => Float64Array.from(list), at = (a, f) => isPop(series(a), f, 0.05);
-expect("isPop: a kink, a step key (f and f+1) and a one-frame glitch (f-1..f+1) pop",
-	at([0, 0, 0, 0, 0, 0.2, 0, 0, 0, 0], 5) && at([0, 0, 0, 0, 0, 0.2, 0.2, 0, 0, 0], 5) && at([0, 0, 0, 0, 0.1, 0.2, 0.1, 0, 0, 0], 5));
+// the detector: a spike (kink, step, glitch, jitter) against the frames around it, not a short hard burst
+// (signed accelerations along x, m/frame^2: a step pushes then pulls back, a glitch pulls back on both sides)
+const at = (list, f) => isPop({ a: Float64Array.from(list, Math.abs), A: list.map(x => [x, 0, 0]) }, f, 0.05);
+expect("isPop: a kink, a step key (f and f+1), a one-frame glitch (f-1..f+1) and a jitter pop",
+	at([0, 0, 0, 0, 0, 0.2, 0, 0, 0, 0], 5) && at([0, 0, 0, 0, 0, 0.2, -0.2, 0, 0, 0], 5) && at([0, 0, 0, 0, 0.1, -0.2, 0.1, 0, 0, 0], 5)
+	&& at([0, 0, 0, 0.02, 0.09, -0.2, -0.12, 0.02, 0, 0], 5));
 expect("isPop: a 4-frame smooth move, steady hard acceleration and anything under the floor do not",
-	!at([0, 0, 0, 0.078, 0.094, 0, 0.094, 0.078, 0, 0], 4) && !at([0, 0, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1], 5) && !at([0, 0, 0, 0, 0, 0.04, 0, 0, 0, 0], 5));
+	!at([0, 0, 0, 0.078, 0.094, 0, -0.094, -0.078, 0, 0], 4) && !at([0, 0, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1], 5) && !at([0, 0, 0, 0, 0, 0.04, 0, 0, 0, 0], 5));
+expect("isPop: a 2- or 3-frame burst that pushes one way (a swing's launch, the hips turning round) does not, however hard",
+	!at([0, 0, 0, 0, 0.3, 0.25, 0, 0, 0, 0], 4) && !at([0, 0, 0, 0, 0.12, 0.3, 0.2, 0, 0, 0], 5) && !at([0, 0, 0.03, 0.007, 0.044, 0.079, 0.041, 0.013, 0.013, 0], 5));
 // search and repair cost only qa.groups: the fast end of a searched swing is not penalised, repair has nothing to do
 const searched = compile(swing({ end: { range: [24, 30] } }), empty);
 expect("search ignores observations: the midpoint swing is clean at once (cost 0, 1 eval)", searched.qa.ok && searched.search?.cost === 0 && searched.search.evals === 1, JSON.stringify(searched.search));
