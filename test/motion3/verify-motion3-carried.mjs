@@ -82,7 +82,7 @@ const forearm = (r, f) => sub(r.out.frames[f].s.P[I.RightHand], r.out.frames[f].
 const span = (r, a, b) => { const v = []; for (let f = a; f <= b; f++) v.push(angle(batY(r, f), forearm(r, f))); return Math.max(...v) - Math.min(...v); };
 expect("the fixture is the installed take's spec (spec-3a5803641a71)", specIdOf(SWING_SPEC) === INSTALLED_SPEC_ID);
 expect("without keys the bat holds one angle to the right forearm all swing (the defect)", span(plain, 34, 81) < 0.01, `${span(plain, 34, 81)}`);
-expect("without keys the take is bit for bit the take of lane L2 (soles on the floor, the back foot pivots on its ball)", hashOf(bakeTake(bsk, plain.out)) === "681b862de6399b43", hashOf(bakeTake(bsk, plain.out)));
+expect("without keys the take is bit for bit the take of lane Q1 (L2's soles on the floor and back foot pivoting on its ball; a flat foot keeps its heading until it lifts)", hashOf(bakeTake(bsk, plain.out)) === "0ac49bec6e194bac", hashOf(bakeTake(bsk, plain.out)));
 expect("keyed: the angle between bat and forearm varies through the swing (>= 30 deg)", span(keyed, 40, 53) >= 30, `${span(keyed, 40, 53).toFixed(1)} deg`);
 let hit = 0;
 for (const k of SWING_KEYS) { const p = rootPoseAt(keyed.out, BAT, k.f), R = matFromQuat(k.rot); hit = Math.max(hit, dist(p.pos, k.pos) * 1000, angle(col(R, 1), col(p.R, 1)), angle(col(R, 0), col(p.R, 0))); }

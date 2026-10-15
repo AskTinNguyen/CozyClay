@@ -8,8 +8,9 @@
 //            pick up (session d5c110a7: a bat kit left on the floor, grab 0, "63.6 cm").
 //   COLLIDE  "<part> x <id>": a body capsule in a carried object (every part box of a group) at
 //            any frame it is shown, the holding hand and forearm excused (the fingers ride on the
-//            hand), and a second hand on the frames it grips the object at weight 0.5 or more
-//            (../second-hand.js);
+//            hand), and a second hand on the frames it grips the object (../second-hand.js): at
+//            weight 0.5 or more, or with its palm inside the object (a grip the arm turns only
+//            partly still holds the handle: session 6262a69c, f37-40, the agent allowed it);
 //            "<id> x <other>": a carried object in another scene box from grab on, the
 //            support it stood on at grab excused for +-3 frames around grab and release. The
 //            depths and checks.allow work as for the body (checks.js); <id> is the spec.objects
@@ -45,6 +46,12 @@ export function boxOverlap(a, b, side = null) {
 	}
 	return best;
 }
+
+/** True when the palm of hand k (between its index and middle finger, where a grip holds) is inside one of `boxes`: the hand holds the object there. */
+const palmIn = (sk, s, k, boxes) => {
+	const S = k === "l" ? "Left" : "Right", p = scale(add(s.P[sk.index[`${S}HandIndex2`]], s.P[sk.index[`${S}HandMiddle2`]]), 0.5);
+	return boxes.some(b => sdBox(p, b) <= 0);
+};
 
 /** True while entry o's record is shown (its `visible` channel above 0.5, or no channel) at absolute f. */
 const shownAt = (out, o, f) => !o.visible || (out.baked?.[o.visible]?.[f] ?? 0) > 0.5;
@@ -98,7 +105,7 @@ export function objectChecks(sk, out, spec) {
 			const f = i + f0, boxes = objectBoxesAt(out, id, f);
 			if (!boxes || !shownAt(out, o, f)) continue;
 			const ids = boxes.map(b => b.id), spheres = boxes.map(b => [b, centre(b), len(b.half)]), { s } = out.frames[i];
-			const grips = Object.entries(out.frames[i].diag).filter(([k, v]) => /^hold_[lr]$/.test(k) && v?.second === id && v.w >= 0.5).map(([k]) => `hand_${k.slice(-1)}`);
+			const grips = Object.entries(out.frames[i].diag).filter(([k, v]) => /^hold_[lr]$/.test(k) && v?.second === id && (v.w >= 0.5 || palmIn(sk, s, k.slice(-1), boxes))).map(([k]) => `hand_${k.slice(-1)}`);
 			for (const [part, a, b, r] of CAPSULES) {
 				if (excused.has(part) || grips.includes(part)) continue;
 				const A = s.P[I[a]], B = s.P[I[b]], mid = scale(add(A, B), 0.5), reach = r + dist(A, B) / 2, l = lim([part], [id, ...ids]);

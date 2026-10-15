@@ -55,9 +55,10 @@ expect("f0f2be59's swing is clean without the limits the agent set (accLimb 0.35
 	clean.qa.groups.length === 1 && has(clean, "REACH", /^empty: 1\.\d cm off its keys$/) && clean.qa.groups[0].last === 3 && /inside the forearm's reach/.test(clean.qa.groups[0].hint), kinds(clean).join(" | "));
 expect("no POP on any of the three swings (df6acdcc had LeftForeArm 5.95 cm/f^2 at f31)", ![fold, clean, l2].some(r => has(r, "POP")), [fold, l2].map(r => kinds(r).join(" | ")).join(" || "));
 expect("df6acdcc: no FLIP on the folded right elbow (was 71 deg at f35)", !has(fold, "FLIP", /^RightForeArm/), kinds(fold).join(" | "));
-// lane P3: the right elbow stops at 150 deg, so the keys that drive the wrist into the shoulder are a REACH residual (10.9 cm)
-expect("df6acdcc: what is left is real: the keys folding the right elbow (REACH), the left hand jerking onto the handle (FLIP LeftForeArm f12) and the bat in the chest (COLLIDE f30)",
-	fold.qa.groups.length === 3 && has(fold, "REACH", /^empty: 10\.9 cm off its keys$/) && has(fold, "FLIP", /^LeftForeArm bend plane jumps 61deg$/) && has(fold, "COLLIDE", /^torso_hi x empty$/), kinds(fold).join(" | "));
+// lane P3: the right elbow stops at 150 deg, so the keys that drive the wrist into the shoulder are a REACH residual (10.9 cm);
+// lane Q1: the left hand's roll is priced past what QA allows a hand in the torso, and it no longer flips onto the handle (61 deg at f12)
+expect("df6acdcc: what is left is real: the keys folding the right elbow (REACH) and the bat in the chest (COLLIDE f30)",
+	fold.qa.groups.length === 2 && has(fold, "REACH", /^empty: 10\.9 cm off its keys$/) && has(fold, "COLLIDE", /^torso_hi x empty$/), kinds(fold).join(" | "));
 
 // ---- 2. why the right elbow's plane turned: folded flat, not flipped -------------------------------
 const P = f => fold.out.frames[f].s.P, elbowMove = dist(P(35)[I.RightForeArm], P(34)[I.RightForeArm]);
@@ -121,8 +122,9 @@ expect("an elbow that goes straight for a frame and comes back on the other side
 expect("a walking knee turned 120 deg for one frame is a FLIP", flipAt(swivel(walk.out, ["LeftUpLeg", "LeftLeg", "LeftFoot"], kneeFrame, 120, "glitch"), "LeftLeg", kneeFrame));
 
 // ---- 5. QA does not change takes: the swings bake as before -------------------------------------------
-// lane P3 changed all three: each folds an elbow past 145 deg (df6acdcc right 171, f0f2be59 right 152, 9dcf19c5 left 151), where the elbow now eases onto its stop
-const HASHES = { df6acdcc: [fold, "f3d9e1c7e86e7d08"], "f0f2be59 without limits": [clean, "881d97a81ca23b8e"], "9dcf19c5": [l2, "ad773fd24b96b59b"] };
+// lane P3 changed all three: each folds an elbow past 145 deg (df6acdcc right 171, f0f2be59 right 152, 9dcf19c5 left 151), where the elbow now eases onto its stop;
+// lane Q1 df6acdcc (the left hand's roll priced past the BODY allowance) and 9dcf19c5 (the flat front foot keeps its heading until it lifts)
+const HASHES = { df6acdcc: [fold, "f26fdd7ea04b04e3"], "f0f2be59 without limits": [clean, "881d97a81ca23b8e"], "9dcf19c5": [l2, "ed7327d5d8d8c15e"] };
 const changed = Object.entries(HASHES).map(([k, [r, h]]) => [k, hashOf(bakeTake(sk, r.out)), h]).filter(([, got, h]) => got !== h);
 expect("the three swings bake bit for bit as before (df6acdcc and f0f2be59 retime: what QA calls a pop did not change there)", changed.length === 0, JSON.stringify(changed));
 

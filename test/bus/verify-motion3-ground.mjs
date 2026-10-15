@@ -10,8 +10,9 @@
 //   2. fix.slide lifts sunk soles onto the floor: the squats compile QA 0 and verify_result reads
 //      under 2 mm of floor penetration and no slip; the raised feet are no FLOAT
 //   3. a heel-up foot that turns pivots on its ball and counts as planted: the swing's back foot has no SLIDE, and
-//      verify_result's floor and back-foot slip agree; the front foot's flat turn is a SLIDE whose
-//      hint keys fyaw, and that one patch makes the swing QA 0
+//      verify_result's floor and back-foot slip agree; the front foot's flat turn waits until it lifts
+//      (lane Q1, fix/turn.js), so the swing is QA 0 as sent; with fix.slide off it is the SLIDE it was,
+//      whose hint keys fyaw
 // The X Bot keeps its sole points (the car exit's bits, test/bus/verify-motion3-aim.mjs).
 import { readFileSync } from "node:fs";
 import * as THREE from "three";
@@ -111,11 +112,15 @@ expect("swing: the back foot turns on its ball (fixed.slide.pivots), no SLIDE on
 	swing.fixed.slide?.pivots >= 1 && !swing.qa.groups.some(g => g.subject.startsWith("Right")) && sv.maxFloorPenetrationM < 0.002 && slip("rightFoot") < 0.005,
 	JSON.stringify([swing.qa.groups.map(g => g.subject), swing.fixed.slide, sv.maxFloorPenetrationM, slip("rightFoot")]));
 expect("swing: the back foot is planted through the pivot (timeline)", swing.timeline[0].planted.r.some(([a, z]) => a <= 36 && z >= 58), JSON.stringify(swing.timeline[0].planted));
-const left = swing.qa.groups.find(g => g.subject === "Left ball slides");
-expect("swing: the front foot's flat turn is a SLIDE on both measures, the hint keys fyaw_l", left && slip("leftFoot") > 0.02 && /^fyaw_l: the flat foot turns/.test(left.hint)
-	&& left.patch?.[0]?.value?.set?.fyaw_l !== undefined, JSON.stringify([left?.hint, left?.patch, slip("leftFoot")]));
+// lane Q1: the front foot lands flat at f0 with fyaw_l keyed 5 there and 30 at f36; flat on the floor it keeps 5 deg until it lifts
+expect("swing: the front foot's flat turn waits until it lifts (fixed.slide.turns), no SLIDE, verify_result's left-foot slip < 5 mm; QA 0 with every goal held, as sent",
+	swing.fixed.slide?.turns?.max > 15 && swing.qa.ok && slip("leftFoot") < 0.005 && swing.qa.goals.every(g => g.ok), JSON.stringify([swing.fixed.slide, swing.qa.groups.map(g => g.subject), slip("leftFoot")]));
+const free = compileSpec({ ...G.SWING_SPEC, fix: { ...G.SWING_SPEC.fix, slide: false } }, { sk: ysk, scene: motionScene(bat) });
+const left = free.qa.groups.find(g => g.subject === "Left ball slides");
+expect("swing with fix.slide off: the front foot's flat turn is the SLIDE it was, the hint keys fyaw_l", left && /^fyaw_l: the flat foot turns/.test(left.hint)
+	&& left.patch?.[0]?.value?.set?.fyaw_l !== undefined, JSON.stringify([left?.hint, left?.patch]));
 const patched = left?.patch && compileSpec(applyPatch(G.SWING_SPEC, left.patch), { sk: ysk, scene: motionScene(bat) });
-expect("swing: that one patch makes it QA 0 with every goal held", patched?.qa.ok, JSON.stringify(patched?.qa.groups.map(g => g.subject)));
+expect("swing: that patch (the turn keyed once the foot is up) is QA 0 too, with every goal held", patched?.qa.ok, JSON.stringify(patched?.qa.groups.map(g => g.subject)));
 
 if (failures) { console.error(`${failures} ground-contact check(s) failed`); process.exit(1); }
 console.log("motion3 ground contact: all checks passed");

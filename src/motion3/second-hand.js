@@ -10,7 +10,10 @@
 // default pole, down and back, bent a left arm reaching across the chest into the torso), the
 // forearm and the wrist turn. Each roll is scored by the wrist's strain at the best of POLES poles,
 // plus CLEAR per squared centimetre the upper arm, the forearm or the hand goes into the torso
-// capsules (the BODY check's), and the elbow's path is planned like the holding elbow's. The hold
+// capsules (the BODY check's), and DEEP per squared centimetre the hand goes past what QA allows a
+// hand: into the torso past the BODY allowance, into the holding hand past the SELF one (lane Q1:
+// at CLEAR alone, session 4db5d447 put the hand 0.9 cm into torso_lo at f35 to save 1 of strain,
+// QA BODY). The elbow's path is planned like the holding elbow's. The hold
 // eases in with the keys' weight times the anchor weight, and a grip the arm cannot hold fades out.
 // Only a hand solved after the holding hand can follow it (pose.js solves the right arm first), so
 // the second hand is the left.
@@ -20,8 +23,9 @@ import { add, sub, scale, norm, dot, cross, mul, T, apply, axisRot, len, clamp }
 import { landscape, ELBOW_REST } from "./compiler/arm-orient.js";
 import { bendPlane } from "./compiler/hold.js";
 import { CAPSULES } from "./qa/geometry.js";
+import { QA_LIMITS } from "./qa/checks.js";
 
-const ROLLS = 36, TEMP = 0.05, PULL = 0.3, EASY = 3, SLACK = 10, POLES = 36, CLEAR = 1;
+const ROLLS = 36, TEMP = 0.05, PULL = 0.3, EASY = 3, SLACK = 10, POLES = 36, CLEAR = 1, DEEP = 100;
 const TORSO = CAPSULES.filter(c => c[0].startsWith("torso")), RADIUS = Object.fromEntries(CAPSULES.map(c => [c[0], c[3]]));
 const cols = (a, b, c) => [[a[0], b[0], c[0]], [a[1], b[1], c[1]], [a[2], b[2], c[2]]];
 const col = (R, i) => [R[0][i], R[1][i], R[2][i]];
@@ -75,7 +79,10 @@ export function secondGrip(sk, spec, id, s, c, axis) {
 		const at = th => { const q = land.at(th); return { pv: q.pv, elbow: q.elbow, cost: q.cost + CLEAR * ((100 * into(S, q.elbow, "uarm_l")) ** 2 + (100 * into(q.elbow, W, "farm_l")) ** 2) }; };
 		let best = { th: 0, cost: Infinity };
 		for (let i = 0; i < POLES; i++) { const th = (2 * Math.PI * i) / POLES - Math.PI, v = at(th).cost; if (v < best.cost) best = { th, cost: v }; }
-		const fixed = CLEAR * ((100 * into(W, add(W, apply(hand(r), knuckle)), "hand_l")) ** 2 + (100 * land.miss) ** 2);
+		const K = add(W, apply(hand(r), knuckle)), deep = into(W, K, "hand_l"), past = Math.max(0, deep - QA_LIMITS.body);
+		// the holding hand is done: how far this hand's capsule goes into it (QA SELF "hands overlap")
+		const touch = 2 * RADIUS.hand_l - segSeg(W, K, s.P[I.RightHand], s.P[I.RightHandMiddle3]), over = Math.max(0, touch - QA_LIMITS.hands);
+		const fixed = CLEAR * ((100 * deep) ** 2 + (100 * land.miss) ** 2) + (past > 0 ? DEEP * (100 * past) ** 2 : 0) + (over > 0 ? DEEP * (100 * over) ** 2 : 0);
 		const a = { at, best: { th: best.th, pole: at(best.th).pv, cost: best.cost + fixed } };
 		arms.set(r, a);
 		return a;
