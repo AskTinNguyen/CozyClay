@@ -5,10 +5,12 @@
 // the character carries the take with it. Scene objects the motion animates ride along in
 // world space: one track per spec.objects key (a group: its root only). A switch entry (C15)
 // bakes only vis and lvl, no pos/quat: its record keeps its own place (object-travel.js). A follow
-// entry (C16) bakes pos/quat with hold on every frame: its track is world space throughout.
+// entry (C16) bakes pos/quat with hold on every frame: its track is world space throughout. A free entry
+// (C17) bakes pos/quat (and vis/lvl when it names them), world space, no hold.
 import { toLocal } from "./compiler/skeleton.js";
 import { sub, apply, ry, quatFromMat, mul } from "./compiler/math.js";
 import { isCarried, isFollow, isSwitch } from "./carried.js";
+import { isFree } from "./free-motion.js";
 import { rootPoseAt, spanOf } from "./object-pose.js";
 
 const TAKE_SCHEMA = "cozyclay.take.v3";
@@ -32,8 +34,8 @@ export function bakeTake(sk, out, placement = { position: [0, 0, 0], yaw: 0 }, m
 	for (const [id, spec] of Object.entries(out.ctx.spec.objects ?? {})) {
 		const carried = isCarried(spec), follows = isFollow(spec), rides = carried || follows, moves = !isSwitch(spec);
 		const pos = moves ? new Float32Array(F * 3) : null, quat = moves ? new Float32Array(F * 4) : null;
-		const vis = (rides || !moves) && spec.visible ? new Uint8Array(F) : null, hold = rides ? new Uint8Array(F) : null;
-		const lvl = (rides || !moves) && spec.level ? new Float32Array(F) : null;
+		const named = rides || !moves || isFree(spec), vis = named && spec.visible ? new Uint8Array(F) : null, hold = rides ? new Uint8Array(F) : null;
+		const lvl = named && spec.level ? new Float32Array(F) : null;
 		const [grab, release] = carried ? spanOf(out, spec) : [0, 0];
 		for (let f = 0; f < F; f++) {
 			if (vis) vis[f] = (out.baked?.[spec.visible]?.[f + f0] ?? 0) > 0.5 ? 1 : 0;

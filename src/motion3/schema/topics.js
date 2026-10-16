@@ -80,6 +80,8 @@ export const NOTES = {
 			+ "a left hand on a prop anchor of it turns with it; "
 			+ `the hand eases in and out over ${KEY_BLEND} frames. A REACH group "<id>: n cm off its keys" is what the hand could not reach; `
 			+ "output.observations.held measures every key as drawn (deg off the asked +Y, cm off pos, the drawn +Y, the rot an aim key used).",
+		"free { keys?, fall? } moves what nobody holds: keys at any frame; fall drops it at frame at under gravity onto the still top below (onto: that one; else the floor), "
+			+ "one small bounce (0: none). A carry falls before grab or after release.",
 		"A follow { follow: <ref>, offset?, aim?, visible?, level? } puts any record (an effect, a light, a part) on a body point every frame: "
 			+ "aim sets its +Y (an effect emits along it): up (default), face (forward), a direction or a ref (toward it); offset is metres along its axes after aim. It is no obstacle.",
 		"The editor's motion.keyObject writes one key from a drag (a hinge: its channel key)."],
@@ -91,7 +93,7 @@ export const NOTES = {
 	goals: ["Exactly one of near (distance <= tol), above (a.y - b.y >= by), moved (an object's base moved at least by from the scene pose; any other point ref, e.g. prop:bat.tip, at least by from where it is at at[0], at: [f0, f1]), still (stays within tol, default 0.01 m, of where moved measures from) or speed (the point reaches by m/s).",
 		"at is an absolute frame or [f0, f1]; mode all (every frame; the default) or any (one frame; speed's default). A failed goal is a GOAL group first in qa.groups and makes qa.ok false.",
 		"after / before: another goal's name; at is cut to the frames after (before) the first frame that goal holds, so cause and effect keep their order wherever the event lands (the can moves after the kick). If that goal never holds, this one fails with value null.",
-		"Intent lines as goals: a contact is near between the touching point (joint:RightHandIndex4, joint:RightToeBase) and the object, tol 0.02-0.03; a negative is still on the object before: \"<contact goal>\"; an effect is moved on the object after: \"<contact goal>\" (mode any); a strike is speed of the joint, by m/s, before: \"<contact goal>\"."],
+		"Intent lines as goals: a contact is near between the touching point (joint:RightHandIndex4, joint:RightToeBase) and the object, tol 0.02-0.03; a negative is still on the object before: \"<contact goal>\"; an effect is moved on the object after: \"<contact goal>\" (mode any); a strike is speed of the joint, by m/s, before: \"<contact goal>\"; an effect on something nobody holds (a can that drops, a machine that rocks) moves it by spec.objects keys or fall (topic: \"objects\"), not a hinge or a swapped copy."],
 	probes: ["motion.compile { probes } (at most 16); spec.probes are measured too, not stored; answered whether or not it installs.",
 		"distance [a, b] -> { min, minAt, max, maxAt, mean, first, last } in m; a bare object:<id> measures to its surface. position -> { at: [{ f, p }] }, at most 16 rows."],
 	channels: ["key.set names channels; values ease between keys and hold after the last key. step: [channel] jumps at f instead.",

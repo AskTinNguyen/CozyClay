@@ -24,6 +24,7 @@ The wave-0 PR (W0) wires every hot file once. After W0 these files are frozen fo
 | J2 | C14: `object-keys.js`, `key-edit.js`, `compiler/hold.js`, `compiler/quat.js`, `qa/key-checks.js`, `motion.keyObject` in `src/commands/motion3.js` |
 | K4 | C15: switch entries and `level` (`compiler/validate-objects.js`, `take.js`, `src/object-travel.js` `trackShown`/`trackLevel`), `skills/smoke.js`, `skills/smoke-kit.js`, `src/kits/`, `object.createKit` in `src/commands/kits.js` |
 | K6 | C16: follow entries (`follow.js`) and aim keys (`key-aim.js`, `qa/key-checks.js` `heldReadings`), the exhale kit (`src/kits/smoking.js`), the exhale look (`src/effects/`) |
+| objkeys | C17: free entries and falls (`free-motion.js`; the free branches of `object-pose.js`, `compiler/compile.js` `objectTracks`, `compiler/validate-objects.js`, `take.js`, `qa/object-checks.js` `grabGap`/`supportOf`) |
 
 Paths without a folder are under `src/motion3/`. Every lane test is already registered in `tools/run-tests.mjs` as a placeholder that prints `pending (lane X)`.
 
@@ -56,7 +57,9 @@ checkRef(spec, err, { sk, scene }, at, ref, kinds = REF_KINDS) -> boolean
 spec.objects[id] =
   { "pivot": [x,y,z], "axis": [x,y,z], "channel": "door" }            // hinge: a body or a group
 | { "prop": "cupHandleGrip", "grab": 104, "release": 160,             // carry: a body or a group (Empty) id
-    "at": [d,l,n], "along": [d,l,n], "visible": "cup_vis" }
+    "at": [d,l,n], "along": [d,l,n], "visible": "cup_vis",
+    "fall": { "at": 170 } }                                           // a carry falls before grab or from release on (C17)
+| { "keys": [...], "fall": { "at": 40, "onto": "tray" } }             // free: moves on its own (C17)
 ```
 
 **The group (Empty) is the unit.**
@@ -513,6 +516,28 @@ spec.objects[id] = { "follow": "landmark:mouth", "offset"?: [x, y, z], "aim"?: "
   - `rot`: the quaternion an aim key used.
   - `observations.units` says so. REACH (C14) still judges the residual.
 - **motion.keyObject** takes `aim` (+ `roll`) in place of `rot` and upserts `{ f, pos, aim, roll? }` (aim 1e-5, roll 0.01 deg). The J1 gizmo still writes `pos` + `rot`.
+
+## C17. Free entries: keys and falls (lane objkeys)
+
+An object nobody holds can move. `spec.objects[id]` with no `prop`, `follow` or hinge field (`pivot`, `axis`, `channel`) and with `keys` or `fall` is a **free** entry (`free-motion.js` `isFree`). It takes a body or a group (Empty) id, like a carry.
+
+```jsonc
+spec.objects.can = {
+  "keys": [{ "f": 30, "pos": [0, 1.3, 0.45], "rot": [0, 0, 0, 1] },    // world pose of its root (a body's base pivot, a group's origin)
+           { "f": 36, "pos": [0, 1.1, 0.45], "aim": [0, 1, 0] }],      // aim (+ roll) as C16: turned from the scene pose
+  "fall": [{ "at": 40 }, { "at": 90, "onto": "table", "bounce": 0 }], // one fall or a list
+  "visible": "can_vis"                                                // and level, as a switch (C15)
+}
+spec.objects.cup = { "prop": "cupGrip", "grab": 60, "release": 80, "fall": { "at": 82 } }   // a carry: before grab or from release on
+```
+
+- **Keys.** The curve of held keys (C14 `keyedPose`, `object-keys.js` `curveOf`), at any frame `0..frames-1`, one per frame. Before the first key of a run it stays where it was (its scene pose, or where it landed); after the last it holds the last key. An aim key turns the scene pose's +Y onto `aim`, then `roll` degrees about it (no arm, so no roll search).
+- **Fall.** `{ at, onto?, bounce? }`. From where it is at frame `at` it drops straight down under gravity (`G` = 9.8 m/s^2, no tumbling) onto the top of the highest still body under the centre of its parts (`landingOf`); `onto` restricts that to one object (its top even when it is not right below); nothing below: the floor (y 0). It lands `sqrt(2h/g)` after `at`, bounces at most once (`bounce` 0..0.6 is the share of the landing speed it bounces back with, default 0.25, never higher than `BOUNCE_MAX` = 0.03 m; 0 lands dead) and rests there, never inside the support. Bodies a spec.objects entry moves are no support.
+- **Order.** Keys and falls chain in frame order: a fall starts from the pose the keys before it leave (a key on the fall's own frame comes first); keys after a fall take over at their first key.
+- **A carry's fall.** Before its grab (it lies where it landed: the GRAB check, the grab-frame offset of a carry without `at`/`along`, a keyed carry's `attach` and the carrying hand's own object anchor all read that pose, `object-pose.js` `restingAt`) or from its release on (it falls from the release pose). A fall while in hand is refused.
+- **Who sees it.** `objectTracks` (`compiler/compile.js`) moves a free entry's bodies like a hinged one's: an obstacle at its pose that frame for the body checks and the fixes. `objectPoseAt` / `objectBoxesAt` / `rootPoseAt` read it, so refs, goals, probes, `observations.near`, contacts and the timeline do. The take bakes `pos`/`quat` in world space with no `hold` (and `vis`/`lvl` when it names them), so `src/object-travel.js` draws it in the viewport and in exports, its parts riding the group root.
+- **Retime.** Keys and fall frames go through `out.timeMap` like the body's keys; a fall's duration is physics and is not stretched.
+- **Validation.** Free keys outside the take, a fall without `at`, two falls on one frame, `bounce` outside 0..0.6, an unknown `onto`, an unknown fall field (`FALL_FIELDS`), and keys or a fall on a hinge entry are refused with the reason. `motion.describe { topic: "objects" }` lists the free entry; `essentials` shows it as "as carry".
 
 ## Fixture
 

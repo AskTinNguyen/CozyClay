@@ -29,9 +29,9 @@ const spanIn = (out, o) => { const map = f => (out.timeMap ? Math.round(out.time
 const invert = p => { const Rt = T(p.R); return { pos: scale(apply(Rt, p.pos), -1), R: Rt }; };
 
 /** The keys of entry o as a curve: times (after a retime), positions, quaternions on one hemisphere (aim keys resolved: key-aim.js), tangents. */
-function curveOf(o, map, plain, strain) {
+export function curveOf(o, map, plain, strain) {
 	const keys = [...o.keys].sort((a, b) => a.f - b.f), t = keys.map(k => map(k.f)), p = keys.map(k => k.pos.slice()), q = [];
-	const rots = keyRots(keys, i => plain(t[i]), (i, r) => strain(t[i], keys[i].pos, r));
+	const rots = keyRots(keys, i => plain(t[i]), strain && ((i, r) => strain(t[i], keys[i].pos, r)));
 	for (const r of rots) { const n = qnorm(r); q.push(q.length && qdot(q[q.length - 1], n) < 0 ? n.map(v => -v) : n); }
 	const last = keys.length - 1, rate = i => scale(qlog(qmul(qconj(q[i]), q[i + 1])), 1 / (t[i + 1] - t[i]));
 	const tangent = (i, of) => (i === 0 || i === last ? [0, 0, 0] : scale(add(scale(of(i), t[i] - t[i - 1]), scale(of(i - 1), t[i + 1] - t[i])), 1 / (t[i + 1] - t[i - 1])));
@@ -109,7 +109,7 @@ export function holdHook(ctx, out, solvePlain, solveLed) {
 		attaching.add(id);
 		let s;
 		try { s = keeps ? solvePlain(spanIn(out, o)[0]).s : restState(sk); } finally { attaching.delete(id); }
-		const a = relative(palmOf(o, s), keeps ? { pos: rest.pos, R: rest.R } : carriedPose(sk, spec, s, o));
+		const a = relative(palmOf(o, s), keeps ? ctx.restingAt?.(id, spanIn(out, o)[0]) ?? { pos: rest.pos, R: rest.R } : carriedPose(sk, spec, s, o));
 		cache.set(id, a);
 		return a;
 	};

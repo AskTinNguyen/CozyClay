@@ -195,5 +195,14 @@ const saved = { schema: "cozyclay.take.v3", rig: CHARACTER.model, spec: { ...sta
 expect("compileTakeSource is lenient; motion.compile stays strict", compileTakeSource(saved)?.frameCount === 24
 	&& /spec\.futureField is not a spec field/.test(refusal(() => cupRegistry.run("motion.compile", { characterId: CHARACTER.id, spec: saved.spec, install: false }))));
 
+// C17. Free entries: the cup group lifted by keys falls back onto the table top, sqrt(2h/g) after it starts
+const freeSpec = { ...stand(), use: undefined, keys: [{ f: 0, set: { yaw: 0 } }], frames: 60,
+	objects: { [CUP.group]: { keys: [{ f: 5, pos: [0.2, 0.75, 0.85], rot: [0, 0, 0, 1] }, { f: 10, pos: [0.2, 1.05, 0.85], rot: [0, 0, 0, 1] }], fall: { at: 12, bounce: 0 } } } };
+const freeOut = compileSpec(freeSpec, { sk, scene }).out, cupY = f => objectBoxesAt(freeOut, CUP.group, f).find(b => b.id === "cylinder").pos[1];
+expect("C17: a free group rides its keys, falls at its frame and rests on the table top (0.75 m) after sqrt(2h/g)", Math.abs(cupY(10) - 1.05) < 1e-9 && cupY(17) > 0.76
+	&& Math.abs(cupY(18) - 0.75) < 1e-9 && Math.abs(cupY(59) - 0.75) < 1e-9, [10, 17, 18, 59].map(cupY));
+expect("C17: a fall while in hand is refused", /a carried object falls before its grab or from its release on/.test(refusal(() => validateSpec({ ...freeSpec, props: { grip: { hand: "l", origin: ["LeftHandIndex2"], points: {} } },
+	objects: { [CUP.group]: { prop: "grip", grab: 10, release: 40, fall: { at: 20 } } } }, { sk, scene }))));
+
 if (failures) { console.error(`${failures} motion3 contract check(s) failed`); process.exit(1); }
 console.log("motion3 contracts: all checks passed");

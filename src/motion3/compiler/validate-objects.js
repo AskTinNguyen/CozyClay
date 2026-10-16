@@ -4,15 +4,18 @@
 // (C14) pose a carried object while it is in hand (rot, or aim + roll: C16). A switch { visible?,
 // level? } (C15: no prop, no hinge field) takes any record, a light or an effect too, and moves
 // nothing; so does a follow { follow, offset?, aim?, visible?, level? } (C16), which rides a point
-// of the body. Fields: schema/fields.js OBJECT_FIELDS, OBJECT_KEY_FIELDS. See validate.js.
+// of the body. A free entry { keys?, fall?, visible?, level? } (C17: no prop, no follow, no hinge field) moves a body or a
+// group on its own: world pose keys over the whole take, and gravity falls; a carry takes fall too, before its grab
+// or from its release on. Fields: schema/fields.js OBJECT_FIELDS, OBJECT_KEY_FIELDS, FALL_FIELDS. See validate.js.
 import { isVec3, fmt, didYouMean } from "./vocab.js";
 import { objectOk } from "./validate-common.js";
-import { OBJECT_FIELDS, OBJECT_KEY_FIELDS } from "../schema/fields.js";
+import { OBJECT_FIELDS, OBJECT_KEY_FIELDS, FALL_FIELDS } from "../schema/fields.js";
 import { isSwitch, isFollow, movesRecord } from "../carried.js";
+import { isFree } from "../free-motion.js";
 import { checkRef } from "../refs.js";
 import { partsOf } from "../object-pose.js";
 
-const KEY = "{ f, pos: [x, y, z], rot: [x, y, z, w] } or { f, pos, aim: [x, y, z], roll? }";
+const KEY = "{ f, pos: [x, y, z], rot: [x, y, z, w] } or { f, pos, aim: [x, y, z], roll? }", FALL = "{ at, onto?, bounce? }";
 const isQuat = q => Array.isArray(q) && q.length === 4 && q.every(Number.isFinite) && Math.abs(Math.hypot(...q) - 1) <= 0.01;
 const isDir = v => isVec3(v) && Math.hypot(...v) > 1e-9;
 
@@ -28,16 +31,16 @@ function keyTurnOk(err, kat, k) {
 	if (k.roll !== undefined && !Number.isFinite(k.roll)) err(`${kat}.roll must be degrees about aim (a number), got ${fmt(k.roll)}`);
 }
 
-/** objects.<id>.keys (C14): whole frames inside grab..release, one per frame, a world position and a unit quaternion. */
-function validateKeys(err, unknown, at, o, frames) {
+/** objects.<id>.keys (C14): whole frames inside grab..release (free, C17: the whole take), one per frame, a world position and a unit quaternion. */
+function validateKeys(err, unknown, at, o, frames, free = false) {
 	if (!Array.isArray(o.keys)) return err(`${at}.keys must be an array of ${KEY}`);
-	const lo = o.grab ?? 0, hi = o.release ?? (Number.isInteger(frames) ? frames - 1 : Infinity), seen = new Map();
+	const last = Number.isInteger(frames) ? frames - 1 : Infinity, lo = free ? 0 : o.grab ?? 0, hi = free ? last : o.release ?? last, seen = new Map();
 	o.keys.forEach((k, i) => {
 		const kat = `${at}.keys[${i}]`;
 		if (!k || typeof k !== "object" || Array.isArray(k)) return err(`${kat} must be ${KEY}, got ${fmt(k)}`);
 		for (const f of Object.keys(k)) if (!OBJECT_KEY_FIELDS.includes(f)) unknown(`${kat} has unknown field "${f}"${didYouMean(f, OBJECT_KEY_FIELDS)}; a key is ${KEY}`);
 		if (!Number.isInteger(k.f)) err(`${kat}.f must be a whole frame, got ${fmt(k.f)}`);
-		else if (k.f < lo || k.f > hi) err(`${kat}.f = ${k.f} is outside grab..release (${lo}..${hi}); keys pose the object only while it is in hand`);
+		else if (k.f < lo || k.f > hi) err(free ? `${kat}.f = ${k.f} is outside the take (0..${hi})` : `${kat}.f = ${k.f} is outside grab..release (${lo}..${hi}); keys pose a carried object only while it is in hand (drop its prop to move it on its own, C17)`);
 		else if (seen.has(k.f)) err(`${kat}.f = ${k.f}: keys[${seen.get(k.f)}] is at that frame already; one key per frame`);
 		else seen.set(k.f, i);
 		if (!isVec3(k.pos)) err(`${kat}.pos must be [x, y, z], the world position of the object's base (a group: its root), got ${fmt(k.pos)}`);
@@ -72,6 +75,26 @@ function frameOk(err, at, v, frames) {
 	return false;
 }
 
+/** objects.<id>.fall (C17): { at, onto?, bounce? } or a list, each on its own frame; a carry falls only out of hand. */
+function validateFalls(err, unknown, at, o, { frames, scene, carry }) {
+	const list = Array.isArray(o.fall) ? o.fall : [o.fall], seen = new Set();
+	if (!list.length) err(`${at}.fall is an empty list; give ${FALL} or a list of them`);
+	list.forEach((fl, i) => {
+		const fat = Array.isArray(o.fall) ? `${at}.fall[${i}]` : `${at}.fall`;
+		if (!fl || typeof fl !== "object" || Array.isArray(fl)) return err(`${fat} must be ${FALL} (at: the frame it starts to fall), got ${fmt(fl)}`);
+		for (const k of Object.keys(fl)) if (!FALL_FIELDS.includes(k)) unknown(`${fat} has unknown field "${k}"${didYouMean(k, FALL_FIELDS)}; a fall is ${FALL}`);
+		if (fl.at === undefined) err(`${fat}.at must be the whole frame it starts to fall`);
+		else if (frameOk(err, `${fat}.at`, fl.at, frames)) {
+			if (seen.has(fl.at)) err(`${fat}.at = ${fl.at}: another fall starts on that frame`);
+			seen.add(fl.at);
+			const g = o.grab ?? 0, r = o.release;
+			if (carry && fl.at >= g && (r === undefined || fl.at < r)) err(`${fat}.at = ${fl.at} is while it is in hand (grab ${g}..release ${r ?? "end"}); a carried object falls before its grab or from its release on`);
+		}
+		if (fl.onto !== undefined) objectOk(err, scene, `${fat}.onto`, fl.onto, { groups: true });
+		if (fl.bounce !== undefined && !(Number.isFinite(fl.bounce) && fl.bounce >= 0 && fl.bounce <= 0.6)) err(`${fat}.bounce must be 0..0.6 (the share of its landing speed it bounces back with; 0 lands dead), got ${fmt(fl.bounce)}`);
+	});
+}
+
 /** visible and level name channels (C15): visible shows the record above 0.5, level scales its light, glow and effect rate. */
 function channelsOk(err, at, o) {
 	if (o.visible !== undefined && (typeof o.visible !== "string" || !o.visible)) err(`${at}.visible must name a channel (shown above 0.5)`);
@@ -80,10 +103,10 @@ function channelsOk(err, at, o) {
 
 export function validateObjects(spec, err, { sk, scene, frames = spec.frames, unknown = err }) {
 	for (const [id, o] of Object.entries(spec.objects ?? {})) {
-		const at = `objects.${id}`, kind = o?.prop !== undefined ? "carry" : isFollow(o) ? "follow" : isSwitch(o) ? "switch" : "hinge", fields = OBJECT_FIELDS[kind];
+		const at = `objects.${id}`, kind = o?.prop !== undefined ? "carry" : isFollow(o) ? "follow" : isFree(o) ? "free" : isSwitch(o) ? "switch" : "hinge", fields = OBJECT_FIELDS[kind];
 		// a switch and a follow take any record (a light, an effect); the others a body or a group
 		if ((kind !== "switch" && kind !== "follow") || !scene?.others?.[id]) objectOk(err, scene, at, id, { groups: true });
-		for (const f of Object.keys(o ?? {})) if (!fields.includes(f) && !(kind === "hinge" && f === "keys")) unknown(`${at} (${kind}) has unknown field "${f}"${didYouMean(f, fields)}; fields: ${fields.join(", ")}`);
+		for (const f of Object.keys(o ?? {})) if (!fields.includes(f) && !(kind === "hinge" && (f === "keys" || f === "fall"))) unknown(`${at} (${kind}) has unknown field "${f}"${didYouMean(f, fields)}; fields: ${fields.join(", ")}`);
 		if (kind === "follow") {
 			validateFollow(spec, err, { sk, scene }, at, o);
 			channelsOk(err, at, o);
@@ -94,6 +117,12 @@ export function validateObjects(spec, err, { sk, scene, frames = spec.frames, un
 			channelsOk(err, at, o);
 			continue;
 		}
+		if (kind === "free") {
+			if (o.keys !== undefined) validateKeys(err, unknown, at, o, frames, true);
+			if (o.fall !== undefined) validateFalls(err, unknown, at, o, { frames, scene, carry: false });
+			channelsOk(err, at, o);
+			continue;
+		}
 		if (kind === "carry") {
 			if (!spec.props?.[o.prop]) err(`${at}.prop "${o.prop}" is not in spec.props`);
 			for (const f of ["at", "along"]) if (o[f] !== undefined && !isVec3(o[f])) err(`${at}.${f} must be [d, l, n] along the palm axes, got ${fmt(o[f])}`);
@@ -101,9 +130,10 @@ export function validateObjects(spec, err, { sk, scene, frames = spec.frames, un
 			if (frameOk(err, `${at}.grab`, o.grab, frames) && frameOk(err, `${at}.release`, o.release, frames)
 				&& o.grab !== undefined && o.release !== undefined && !(o.grab < o.release)) err(`${at}: grab (${o.grab}) must come before release (${o.release})`);
 			if (o.keys !== undefined) validateKeys(err, unknown, at, o, frames);
+			if (o.fall !== undefined) validateFalls(err, unknown, at, o, { frames, scene, carry: true });
 			continue;
 		}
-		if (o?.keys !== undefined) err(`${at}.keys: only a carried object (prop) takes keys; a hinge turns by its channel "${o.channel}", keyed in spec.keys`);
+		if (o?.keys !== undefined || o?.fall !== undefined) err(`${at}: a hinge turns by its channel "${o.channel}", keyed in spec.keys; keys and fall move an object with no pivot, axis or channel (C17), or a carried one (prop)`);
 		if (!isVec3(o?.pivot)) err(`${at}.pivot must be [x, y, z] (world hinge point), got ${fmt(o?.pivot)}`);
 		if (o?.axis !== undefined && (!isVec3(o.axis) || Math.hypot(...o.axis) < 1e-9)) err(`${at}.axis must be a non-zero [x, y, z], got ${fmt(o.axis)}`);
 		if (typeof o?.channel !== "string" || !o.channel) err(`${at}.channel must name the angle channel (degrees)`);

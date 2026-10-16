@@ -47,7 +47,7 @@ const ARMS = ["r", "l"], HAND = { l: "left", r: "right" };
  * the left carries (refused).
  */
 export function objectFrame(ctx, a, name, { s, diag, c }, side) {
-	const f = diag.frame, still = () => ctx.objectsAt(f)[a.object] ?? groupsOf(ctx.scene)[a.object];
+	const f = diag.frame, still = () => ctx.restingAt?.(a.object, f) ?? ctx.objectsAt(f)[a.object] ?? groupsOf(ctx.scene)[a.object];
 	const hand = ctx.objectPose && f !== undefined ? ctx.objectHand(a.object, f) : null;
 	if (side && hand && ARMS.indexOf(hand) > ARMS.indexOf(side)) throw new Error(`MOTION_SPEC_INVALID: anchor "${name}" is on "${a.object}", which the ${HAND[hand]} hand holds at f${f}; the right arm is solved before the left, so the right hand cannot follow it. Carry "${a.object}" in the right hand (a right-hand prop) and put the left hand on it, or give the right hand another anchor`);
 	const pose = !ctx.objectPose || f === undefined || hand === side ? still() : nested(ctx, name, a.object, f, () => ctx.objectPose(a.object, f, { s, diag, c }));

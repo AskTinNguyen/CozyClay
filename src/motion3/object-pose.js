@@ -19,6 +19,8 @@
 //   keys (C14, object-keys.js): the object leads and the hand follows; the object is still drawn
 //                         in the hand, so what the hand cannot reach shows as a residual (QA)
 //   follow { follow, offset?, aim?, visible?, level? }   rides a point of the body every frame (C16, follow.js)
+//   free   { keys?, fall?, visible?, level? }             moves on its own: keys, falls (C17, free-motion.js); a carry's
+//                         fall puts it where it lands before grab (the hand finds it there) or after release
 // Carried objects are OBSTACLES at every frame, at their pose that frame (qa/object-checks.js);
 // a follow entry is none.
 import { isCarried, isFollow, carriedPose, compose, relative, movesRecord } from "./carried.js";
@@ -27,6 +29,7 @@ import { groupsOf } from "./scene.js";
 import { solveFrame } from "./compiler/compile.js";
 import { channelsAt } from "./compiler/channels.js";
 import { resolveBone } from "./bones.js";
+import { isFree, freePoseAt, beforeGrab, afterRelease } from "./free-motion.js";
 
 /**
  * Body ids that make up `id` in a motionScene: [id] for a body (plus any bodies parented under
@@ -67,6 +70,20 @@ const keepsOffset = (scene, id, o) => o.at === undefined && o.along === undefine
 
 const solved = new WeakMap(), poses = new WeakMap();
 
+/** What free-motion.js reads of a compile result: the spec, the scene and the time map. */
+const freeCtx = out => ({ spec: out.ctx.spec, scene: out.ctx.scene, timeMap: out.timeMap });
+
+/**
+ * Where a carried body or group `id` (or a part of one) rests at absolute f before its grab, and where the hand took
+ * it from after: its scene pose, or where a fall before the grab left it (C17). null when no carry moves it.
+ */
+export function restingAt(out, id, f) {
+	const { spec, scene } = out.ctx, mover = moverOf(spec, scene, id), o = spec.objects?.[mover];
+	if (!isCarried(o)) return null;
+	const root = beforeGrab(freeCtx(out), mover, o, f, spanOf(out, o)[0]);
+	return root && (mover === id ? root : compose(root, relative(restPose(scene, mover), restPose(scene, id))));
+}
+
 /** The solved frame at absolute f: out.frames, or solved once on demand outside a window. */
 function frameAt(out, f) {
 	const own = out.frames[f - (out.f0 ?? 0)];
@@ -85,7 +102,7 @@ function carriedOn(out, id, o, f, s) {
 	// grab frame is solved (a hand anchored on the object reads it), the object is where the offset puts it: at rest.
 	if (o.keys?.length && out.ctx.hold) return out.ctx.hold.attaching(id) ? restPose(scene, id) : compose(carriedPose(sk, spec, s, { prop: o.prop }), out.ctx.hold.attach(id));
 	const palm = st => carriedPose(sk, spec, st, { prop: o.prop }), grab = spanOf(out, o)[0];
-	return compose(palm(s), relative(palm(grab === f ? s : frameAt(out, grab).s), restPose(scene, id)));
+	return compose(palm(s), relative(palm(grab === f ? s : frameAt(out, grab).s), restingAt(out, id, grab) ?? restPose(scene, id)));
 }
 
 /** Pose of the record a carried entry moves, cached on the solved frame. */
@@ -109,10 +126,13 @@ export function rootPoseAt(out, id, f, now = null) {
 	if (isFollow(o)) return followPose(now ? { ...out, f0: f, frames: [now] } : out, o, f);
 	if (isCarried(o) && (rest || !keepsOffset(scene, id, o))) {
 		const [grab, release] = spanOf(out, o), g = Math.max(grab, Math.min(f, release));
-		if (f < grab && rest) return { pos: rest.pos, R: rest.R };
+		if (f < grab && rest) return restingAt(out, id, f);
+		const after = f > release ? afterRelease(freeCtx(out), id, o, f, release, carriedAt(out, id, o, release)) : null;
+		if (after) return after;
 		return now && g === f ? carriedOn(out, id, o, f, now.s) : carriedAt(out, id, o, g);
 	}
 	if (!rest) return null;
+	if (isFree(o)) return freePoseAt(freeCtx(out), id, f);
 	if (o && scene.objects[id]) return out.ctx.objectsAt(f)[id];
 	if (o) { const part = partsOf(scene, id)[0], box = out.ctx.objectsAt(f)[part]; return compose(box, relative(scene.objects[part], rest)); }
 	return { pos: rest.pos, R: rest.R };
@@ -155,7 +175,7 @@ export function handOf(out, id, f) {
 export function objectPoseAt(out, id, f, now = null) {
 	const { spec, scene } = out.ctx, rest = restPose(scene, id), mover = moverOf(spec, scene, id), entry = spec.objects?.[mover];
 	if (!rest) return null;
-	if (isCarried(entry) || isFollow(entry)) { const root = rootPoseAt(out, mover, f, now); return root && compose(root, relative(restPose(scene, mover), rest)); }
+	if (isCarried(entry) || isFollow(entry) || isFree(entry)) { const root = rootPoseAt(out, mover, f, now); return root && compose(root, relative(restPose(scene, mover), rest)); }
 	if (!mover) return { pos: rest.pos, R: rest.R };
 	if (scene.objects[id]) return out.ctx.objectsAt(f)[id] ?? rest;
 	return mover === id ? rootPoseAt(out, id, f) : compose(rootPoseAt(out, mover, f), relative(restPose(scene, mover), rest));

@@ -11,12 +11,15 @@
 //               keys lead the holding hand (../object-keys.js, hold.js)
 //               { id: { visible?, level? } }   a switch: shown/hidden and dimmed, never moved (C15)
 //               { id: { follow, offset?, aim?, visible?, level? } }   rides a point of the body (C16, ../follow.js)
+//               { id: { keys?, fall?, visible?, level? } }   moves on its own: keys and gravity falls (C17, ../free-motion.js)
 //               id is a body or a group (Empty); a group moves every body under it
 //   generators: [{ type: "walk", f0, ... }]  (walk.js)
 //   fix:        { reach, slide, penetration, retime }  deterministic auto-fixes (../fix/)
 // ctx = { sk, scene: { objects: { id: { pos, R, half, ancestors } } } }; out.ctx.scene keeps the scene (object-pose.js)
 import { add, sub, scale, norm, len, dot, apply, axisRot } from "./math.js";
-import { isCarried, isFollow, hingePose, movesRecord } from "../carried.js";
+import { isCarried, isFollow, hingePose, movesRecord, compose, relative } from "../carried.js";
+import { isFree, freePoseAt } from "../free-motion.js";
+import { groupsOf } from "../scene.js";
 import { pose } from "./pose.js";
 import { bakeChannels, channelsAt } from "./channels.js";
 import { resolveAnchor, measureProps } from "./anchors.js";
@@ -25,32 +28,37 @@ import { fixOptions, applyFixes } from "../fix/index.js";
 import { fitWeight } from "../fix/self.js";
 import { holdHook } from "../object-keys.js";
 import { HAND_CLEAR, keepOut, wristBody } from "../body.js";
-import { objectPoseAt, handOf } from "../object-pose.js";
+import { objectPoseAt, handOf, restingAt } from "../object-pose.js";
 
 const smooth = x => x * x * (3 - 2 * x);
 
 /**
  * Scene boxes by frame. A body moves with its own spec.objects entry or its nearest group's (a
- * switch entry moves nothing; hinge: turned; carry and follow: left at its scene pose and marked `carried` with the
- * moving id). `obstacles` drops the carried ones: QA, refs and object anchors read a carry where it rides
- * (object-pose.js objectPoseAt, qa/object-checks.js); a follow entry rides the body and is no obstacle.
+ * switch entry moves nothing; hinge: turned; free (C17): where its keys and falls put it, under the time map `mapOf()`;
+ * carry and follow: left at its scene pose and marked `carried` with the moving id). `obstacles` drops the carried
+ * ones: QA, refs and object anchors read a carry where it rides (object-pose.js objectPoseAt, qa/object-checks.js);
+ * a follow entry rides the body and is no obstacle.
  */
-function objectTracks(spec, scene, baked) {
-	const cache = new Map();
+function objectTracks(spec, scene, baked, mapOf = () => undefined) {
+	const cache = new Map(), kept = new Map();
+	let map = mapOf();
 	const all = f => {
+		// a retime maps free keys and falls too: frames read before it are read again
+		if (mapOf() !== map) { map = mapOf(); cache.clear(); kept.clear(); }
 		if (cache.has(f)) return cache.get(f);
 		const out = {};
 		for (const [id, o] of Object.entries(scene?.objects ?? {})) {
 			const mover = [id, ...(o.ancestors ?? [])].find(k => movesRecord(spec.objects?.[k])), entry = spec.objects?.[mover];
 			if (!entry) out[id] = o;
 			else if (isCarried(entry) || isFollow(entry)) out[id] = { ...o, carried: mover };
+			else if (isFree(entry)) out[id] = { ...o, ...compose(freePoseAt({ spec, scene, timeMap: map }, mover, f), relative(scene.objects[mover] ?? groupsOf(scene)[mover], o)) };
 			else out[id] = { ...o, ...hingePose(entry, o, baked, f) };
 		}
 		cache.set(f, out);
 		return out;
 	};
-	const kept = new Map();
 	const obstacles = f => {
+		if (mapOf() !== map) all(f);
 		if (!kept.has(f)) kept.set(f, Object.fromEntries(Object.entries(all(f)).filter(([, box]) => !box.carried)));
 		return kept.get(f);
 	};
@@ -161,11 +169,13 @@ export function compileMotion(spec, { sk, scene }, opts = {}) {
 	// object anchors read the pose refs read (object-pose.js), on the frame being solved
 	ctx.objectPose = (id, f, now) => objectPoseAt(out, id, f, now);
 	ctx.objectHand = (id, f) => handOf(out, id, f);
+	// a keyed carry's grab offset is taken where it rests at grab (object-keys.js; a fall before grab: where it landed)
+	ctx.restingAt = (id, f) => restingAt(out, id, f);
 	const engine = {
 		rebake(keys) {
 			out.keys = keys;
 			out.baked = bakeChannels(keys, frameCount);
-			const tracks = objectTracks(spec, scene, out.baked);
+			const tracks = objectTracks(spec, scene, out.baked, () => out.timeMap);
 			ctx.objectsAt = tracks.all;
 			out.objectsAt = a ? f => tracks.obstacles(f + a) : tracks.obstacles;
 		},

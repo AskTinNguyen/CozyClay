@@ -20,7 +20,7 @@ import { QA_LIMITS, allowance } from "./checks.js";
 import { keyIssues } from "./key-checks.js";
 import { CAPSULES, segPoints, sdBox } from "./geometry.js";
 import { isCarried, propOrigin } from "../carried.js";
-import { objectBoxesAt, partsOf, spanOf } from "../object-pose.js";
+import { objectBoxesAt, partsOf, spanOf, restingAt } from "../object-pose.js";
 import { add, sub, apply, dot, cross, len, dist, scale, norm } from "../compiler/math.js";
 
 const NEAR_SUPPORT = 3;
@@ -56,17 +56,20 @@ const palmIn = (sk, s, k, boxes) => {
 /** True while entry o's record is shown (its `visible` channel above 0.5, or no channel) at absolute f. */
 const shownAt = (out, o, f) => !o.visible || (out.baked?.[o.visible]?.[f] ?? 0) > 0.5;
 
-/** Prop origin to the nearest part box surface of `id` at its scene pose, at absolute frame f (0 inside). */
+/** The part boxes of `id` where the hand finds it (any frame f, the hint asks later ones too): its scene pose, or where a fall before its grab left it (C17). */
+const restingBoxes = (out, id, f) => partsOf(out.ctx.scene, id).map(part => ({ ...out.ctx.scene.objects[part], ...restingAt(out, part, f) }));
+
+/** Prop origin to the nearest part box surface of `id` where it rests before grab, at absolute frame f (0 inside). */
 export function grabGap(out, id, f) {
-	const { sk, spec, scene } = out.ctx, fr = out.frames[f - (out.f0 ?? 0)];
+	const { sk, spec } = out.ctx, fr = out.frames[f - (out.f0 ?? 0)];
 	if (!fr) return null;
 	const p = propOrigin(sk, spec, fr.s, spec.objects[id]);
-	return Math.max(0, Math.min(...partsOf(scene, id).map(part => sdBox(p, scene.objects[part]))));
+	return Math.max(0, Math.min(...restingBoxes(out, id, f).map(box => sdBox(p, box))));
 }
 
 /** The scene box right below `id` at grab (absolute frame), the support it may touch near grab and release. */
 function supportOf(out, id, grab) {
-	const scene = out.ctx.scene, parts = partsOf(scene, id).map(p => scene.objects[p]);
+	const parts = restingBoxes(out, id, grab);
 	if (!parts.length) return null;
 	const low = Math.min(...parts.map(b => b.pos[1] - Math.abs(b.R[1][0]) * b.half[0] - Math.abs(b.R[1][2]) * b.half[2]));
 	const c = scale(parts.map(centre).reduce((s, p) => add(s, p), [0, 0, 0]), 1 / parts.length), probe = [c[0], low - 0.01, c[2]];

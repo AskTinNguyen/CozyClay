@@ -173,12 +173,12 @@ const reloaded = compileTakeSource({ schema: "cozyclay.take.v3", rig: CHARACTER.
 expect("a keyed take reloads (lenient) to the same group track, bit for bit", ["pos", "quat", "hold"].every(k => reloaded.objects[CUP.group][k].every((v, i) => v === kt.objects[CUP.group][k][i])));
 const keyRefusal = (o, extra = {}) => refusal(() => validateSpec({ ...base, ...extra, objects: { [CUP.group]: { prop: "grip", grab: GRAB, release: RELEASE, ...o } } }, { sk, scene }));
 const k0 = cupKeys[0];
-expect("keys outside grab..release are refused", keyRefusal({ keys: [{ ...k0, f: 20 }] }).includes("objects.empty-2.keys[0].f = 20 is outside grab..release (34..80); keys pose the object only while it is in hand"));
+expect("keys outside grab..release are refused", keyRefusal({ keys: [{ ...k0, f: 20 }] }).includes("objects.empty-2.keys[0].f = 20 is outside grab..release (34..80); keys pose a carried object only while it is in hand (drop its prop to move it on its own, C17)"));
 expect("a bad rot, a repeated frame and a non-array are refused by name", keyRefusal({ keys: [{ ...k0, rot: [0, 0, 0, 2] }] }).includes("objects.empty-2.keys[0].rot must be a unit quaternion [x, y, z, w], got [0,0,0,2]")
 	&& keyRefusal({ keys: [k0, { ...k0 }] }).includes("objects.empty-2.keys[1].f = 50: keys[0] is at that frame already; one key per frame") && keyRefusal({ keys: k0 }).includes("objects.empty-2.keys must be an array of { f, pos: [x, y, z], rot: [x, y, z, w] }"));
 expect("an unknown key field is refused, and ignored on a lenient reload", keyRefusal({ keys: [{ ...k0, rott: 1 }] }).includes('objects.empty-2.keys[0] has unknown field "rott"; did you mean "rot"?')
 	&& refusal(() => validateSpec({ ...base, objects: { [CUP.group]: { prop: "grip", keys: [{ ...k0, rott: 1 }] } } }, { sk, scene, lenient: true })) === "");
-expect("a hinge takes no keys (its channel is keyed)", /objects\.empty-2\.keys: only a carried object \(prop\) takes keys; a hinge turns by its channel "cupTurn"/.test(refusal(() => validateSpec({ ...base, objects: { [CUP.group]: { pivot: [0.2, 0.75, 0.85], channel: "cupTurn", keys: [k0] } } }, { sk, scene }))));
+expect("a hinge takes no keys (its channel is keyed; keys move a free or carried object, C17)", /objects\.empty-2: a hinge turns by its channel "cupTurn", keyed in spec\.keys; keys and fall move an object with no pivot, axis or channel \(C17\)/.test(refusal(() => validateSpec({ ...base, objects: { [CUP.group]: { pivot: [0.2, 0.75, 0.85], channel: "cupTurn", keys: [k0] } } }, { sk, scene }))));
 const auto = compileSpec({ ...held, frames: "auto" }, { sk, scene });
 expect("frames: \"auto\" with keys: resolves to the last key + 1, stores the number and bakes the same take", auto.spec.frames === 100 && auto.out.frameCount === 100
 	&& bakeTake(sk, auto.out).objects[CUP.group].pos.every((v, i) => v === kt.objects[CUP.group].pos[i]));

@@ -10,7 +10,7 @@
 //   topic "examples"            { topic, examples: [{ name, scene, spec }] (whole specs, schema/spec-examples.js), notes }
 import { SPEC_FIELDS, KEY_FIELDS, USE_FIELDS, ANCHOR_FIELDS, PROP_FIELDS, FIT_FIELDS, OBJECT_FIELDS, WALK_FIELDS, CHECK_FIELDS, CHECK_ENTRY_FIELDS,
 	GOAL_FIELDS, PROBE_FIELDS, REF_KINDS, DESCRIBE_TOPICS } from "./schema/fields.js";
-import { DEFS, SPEC_TYPES, KEY_TYPES, USE_TYPES, WALK_TYPES, ANCHOR_TYPES, ANCHOR_REQUIRED, PROP_TYPES, FIT_TYPES, OBJECT_TYPES, CHECK_ENTRY_TYPES, CHECK_REQUIRED, CHECKS_TYPES,
+import { DEFS, SPEC_TYPES, KEY_TYPES, USE_TYPES, WALK_TYPES, ANCHOR_TYPES, ANCHOR_REQUIRED, PROP_TYPES, FIT_TYPES, OBJECT_TYPES, FREE_TYPES, CHECK_ENTRY_TYPES, CHECK_REQUIRED, CHECKS_TYPES,
 	GOAL_TYPES, PROBE_TYPES, FIX_TYPES, REF_DOCS } from "./schema/types.js";
 import { EXAMPLES, NOTES } from "./schema/topics.js";
 import { SPEC_EXAMPLES, EXAMPLE_NOTES } from "./schema/spec-examples.js";
@@ -66,11 +66,12 @@ const SCHEMAS = {
 	props: () => ({ type: "object", properties: {
 		props: { type: "object", description: "name -> prop", additionalProperties: objectOf(PROP_FIELDS, PROP_TYPES, "props", ["hand", "origin"]) },
 		fits: listOf(objectOf(FIT_FIELDS, FIT_TYPES, "fits", ["side", "anchor", "effector"])) } }),
-	objects: () => ({ type: "object", description: "object or group id -> hinge, carry, switch or follow", additionalProperties: { oneOf: [
+	objects: () => ({ type: "object", description: "object or group id -> hinge, carry, switch, follow or free", additionalProperties: { oneOf: [
 		{ title: "hinge", ...objectOf(OBJECT_FIELDS.hinge, OBJECT_TYPES, "objects (hinge)", ["pivot", "channel"]) },
 		{ title: "carry", ...objectOf(OBJECT_FIELDS.carry, OBJECT_TYPES, "objects (carry)", ["prop"]) },
 		{ title: "switch", ...objectOf(OBJECT_FIELDS.switch, OBJECT_TYPES, "objects (switch)") },
-		{ title: "follow", ...objectOf(OBJECT_FIELDS.follow, OBJECT_TYPES, "objects (follow)", ["follow"]) }] } }),
+		{ title: "follow", ...objectOf(OBJECT_FIELDS.follow, OBJECT_TYPES, "objects (follow)", ["follow"]) },
+		{ title: "free", ...objectOf(OBJECT_FIELDS.free, { ...OBJECT_TYPES, ...FREE_TYPES }, "objects (free)") }] } }),
 	checks: () => ({ type: "object", properties: Object.fromEntries(CHECK_FIELDS.map(f => [f, CHECK_ENTRY_FIELDS[f]
 		? listOf(objectOf(CHECK_ENTRY_FIELDS[f], CHECK_ENTRY_TYPES, `checks.${f}`, CHECK_REQUIRED[f]))
 		: typeOf(CHECKS_TYPES, f, "checks")])), additionalProperties: false }),

@@ -48,7 +48,7 @@ export const SPEC_TYPES = {
 	label: str("a short name for the take"),
 	keys: { type: "array", items: { $ref: "#/$defs/key" } },
 	anchors: { type: "object", description: "name -> anchor (topic anchors)" }, props: { type: "object", description: "name -> held prop (topic props)" },
-	fits: { type: "array", description: "topic props" }, objects: { type: "object", description: "scene object id -> hinge or carry (topic objects)" },
+	fits: { type: "array", description: "topic props" }, objects: { type: "object", description: "scene object id -> hinge, carry, switch, follow or free (topic objects)" },
 	generators: { type: "array", items: { $ref: "#/$defs/walk" } }, checks: { type: "object", description: "topic checks" },
 	fix: { oneOf: [{ const: false }, { type: "object" }], description: "topic fix" }, use: { type: "array", items: { $ref: "#/$defs/use" } },
 	channels: { type: "array", items: { type: "string" }, description: "extra numeric channels your keys set" },
@@ -83,12 +83,18 @@ export const FIT_TYPES = {
 const OBJECT_KEY_TYPES = { f: int(), pos: ref("vec3"), rot: { type: "array", items: { type: "number" }, minItems: 4, maxItems: 4, description: "quaternion x, y, z, w" },
 	aim: ref("vec3", "or rot: its +Y direction"), roll: num("deg about aim") };
 
+const FALL = { type: "object", properties: { at: int(), onto: str(), bounce: num(null, { default: 0.25, minimum: 0, maximum: 0.6 }) }, required: ["at"], additionalProperties: false };
+/** A free entry's keys and fall (C17) are a carry's, at any frame: said once, not twice. */
+const AS_CARRY = { description: "as carry; keys at any frame" };
+export const FREE_TYPES = { keys: AS_CARRY, fall: AS_CARRY };
+
 export const OBJECT_TYPES = {
-	pivot: ref("vec3", "world hinge point, m"), axis: ref("vec3", "default [0, 1, 0]"), channel: str("the angle channel (degrees) your keys set"),
-	prop: str("a spec.props name: it rides that hand"), at: palm("fixed offset:"), along: palm("its +Y, fixed:"),
-	visible: str("a channel: shown above 0.5"), level: str("a channel: light, glow, effect strength 0..4 (1 as authored)"), grab: int("frame the hand takes it", { default: 0 }), release: int("frame it is put down (else the end)"),
+	pivot: ref("vec3", "world hinge point, m"), axis: ref("vec3", "default [0, 1, 0]"), channel: str("angle channel, deg"),
+	prop: str("spec.props name: it rides that hand"), at: ref("vec3", "palm offset [d, l, n], m"), along: ref("vec3", "its +Y on the palm, fixed"),
+	visible: str("channel: shown > 0.5"), level: str("channel: strength 0..4"), grab: int("the hand takes it", { default: 0 }), release: int("let go (else the end)"),
 	keys: { type: "array", items: { type: "object", properties: Object.fromEntries(OBJECT_KEY_FIELDS.map(f => [f, OBJECT_KEY_TYPES[f]])), required: ["f", "pos"], additionalProperties: false },
-		description: "world pose at f (a group: its root), grab..release; the hand follows" },
+		description: "world pose at f (group: its root), in hand; the hand follows" },
+	fall: { ...FALL, description: "or a list; topic objects" },
 	follow: ref("ref"), offset: ref("vec3"), aim: { oneOf: [{ enum: ["face", "up"] }, { $ref: "#/$defs/vec3" }, { $ref: "#/$defs/ref" }], default: "up" },
 };
 
