@@ -74,7 +74,7 @@ const SCHEMAS = {
 	checks: () => ({ type: "object", properties: Object.fromEntries(CHECK_FIELDS.map(f => [f, CHECK_ENTRY_FIELDS[f]
 		? listOf(objectOf(CHECK_ENTRY_FIELDS[f], CHECK_ENTRY_TYPES, `checks.${f}`, CHECK_REQUIRED[f]))
 		: typeOf(CHECKS_TYPES, f, "checks")])), additionalProperties: false }),
-	goals: () => listOf({ ...objectOf(GOAL_FIELDS, GOAL_TYPES, "goals", ["name", "at"]), ...oneOfRequired(["near", "above", "moved"]) }),
+	goals: () => listOf({ ...objectOf(GOAL_FIELDS, GOAL_TYPES, "goals", ["name", "at"]), ...oneOfRequired(["near", "above", "moved", "still", "speed"]) }),
 	probes: () => listOf({ ...objectOf(PROBE_FIELDS, PROBE_TYPES, "probes", ["name"]), ...oneOfRequired(["distance", "position"]) }, { maxItems: 16 }),
 	channels: () => ({ type: "object", description: "key.set: channel -> value",
 		properties: Object.fromEntries([...VEC_CHANNELS, ...NUM_CHANNELS, ...MAP_CHANNELS].map(ch => [ch, channelSchema(ch)])),

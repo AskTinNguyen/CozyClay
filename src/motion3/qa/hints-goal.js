@@ -3,7 +3,9 @@
 // else a foot or the root, through moveHint (hints-contact.js, read only). The fix is
 // { channel: "hand_l", f, delta } when the hand target drives that hand (qa/patch.js turns it into
 // a patch), { path: "/anchors/<a>/p", delta } when a world anchor does, and none for an FK arm.
-// Two causes come first, because moving the hand target cannot cure them:
+// still moves the point back toward where it should stay; speed and a goal that waits on another
+// (after/before) get a hint without a fix. Two causes come first, because moving the hand target
+// cannot cure them:
 //   - another anchor weight of that hand is above 0 at the frame (it ramps between two keys
 //     across the goal), so the hand goes part of the way to that anchor: key it 0 there;
 //   - the arm is at full reach (the wrist target is clamped or missed): move the body (bodyMove).
@@ -12,7 +14,7 @@ import { inHandAt } from "../object-pose.js";
 import { refPoint } from "../refs.js";
 import { scale, norm, sub, len } from "../compiler/math.js";
 import { moveHint } from "./hints-contact.js";
-import { goalKinds, goalName, goalNeed, movedHome, movedRef } from "./goals.js";
+import { goalKinds, goalName, goalNeed, goalWindow, movedHome, movedRef } from "./goals.js";
 import { m3, vec } from "./fmt.js";
 
 const MARGIN = 0.003, LEAK = 0.02, BODY_MAX = 0.2;
@@ -60,7 +62,7 @@ function goalOf(X, g) {
 	let best = null;
 	(X.spec?.goals ?? []).forEach((goal, i) => {
 		const name = goalName(goal, i);
-		if (g.subject.startsWith(`${name}:`) && (!best || name.length > best.name.length)) best = { goal, name };
+		if (g.subject.startsWith(`${name}:`) && (!best || name.length > best.name.length)) best = { goal, name, i };
 	});
 	return best;
 }
@@ -98,12 +100,12 @@ function fixFor(X, part, f, delta) {
 	return null;
 }
 
-/** The side to move and its delta: [part, delta], hands first, then a body part, a to b. */
-function plan(X, goal, kind, f, amount) {
-	if (kind === "moved") {
-		const part = partOf(X, goal.moved, f), home = movedHome(X.out, goal), p = refPoint(X.out, f, movedRef(goal.moved));
+/** The side to move and its delta: [part, delta], hands first, then a body part, a to b (still: back toward its home, from `from`). */
+function plan(X, goal, kind, f, amount, from) {
+	if (kind === "moved" || kind === "still") {
+		const ref = goal[kind], part = partOf(X, ref, f), home = movedHome(X.out, goal, from), p = refPoint(X.out, f, movedRef(ref));
 		const away = p && home && len(sub(p, home)) > 1e-3 ? norm(sub(p, home)) : [0, 1, 0];
-		return part ? [part, scale(away, amount)] : null;
+		return part ? [part, scale(away, kind === "still" ? -amount : amount)] : null;
 	}
 	const [a, b] = goal[kind], pa = partOf(X, a, f), pb = partOf(X, b, f);
 	const rank = p => (p?.startsWith("hand_") ? 2 : p ? 1 : 0), moveA = rank(pa) >= rank(pb);
@@ -119,10 +121,25 @@ export const goalHints = {
 	GOAL(X, g) {
 		const found = X.spec && goalOf(X, g), f = g.worstFrame;
 		if (!found) return { cause: `goal ${g.subject.split(":")[0]}`, hint: `change the keys around f${f} until the goal holds` };
-		const { goal, name } = found, kind = goalKinds(goal)[0], amount = g.worst + MARGIN;
-		const why = ` (goal "${name}" is ${m3(g.worst)} m short; needs ${kind === "near" ? "<=" : ">="} ${goalNeed(goal, kind)})`;
-		const move = plan(X, goal, kind, f, amount);
+		const { goal, name, i } = found, kind = goalKinds(goal)[0], amount = g.worst + MARGIN, w = goalWindow(X.out, X.spec.goals, i);
+		if (w.wait) {
+			const other = goal.after ?? goal.before;
+			return { cause: `goal ${name}`, hint: `${name} ${w.wait}: make goal "${other}" hold${goal.after !== undefined && goal.before !== undefined ? ` and "${goal.before}"` : ""} where this one needs it, or move at` };
+		}
+		const unit = kind === "speed" ? "m/s" : "m", at = kind === "near" || kind === "still" ? "<=" : ">=";
+		const why = ` (goal "${name}" is ${m3(g.worst)} ${unit} ${kind === "still" ? "off" : "short"}; needs ${at} ${goalNeed(goal, kind)})`;
+		if (kind === "speed") {
+			const part = partOf(X, goal.speed, f);
+			return { cause: part ? X.cause(part, f) : `goal ${name}`,
+				hint: `${goal.speed} is too slow at f${f}: put its keys around f${f} closer in time, or farther apart in space${why}` };
+		}
+		const move = plan(X, goal, kind, f, amount, w.a);
 		if (!move) {
+			if (kind === "still" && goal.still.startsWith("object:")) {
+				const id = goal.still.slice(7).replace(/\.(center|top|base)$/, "");
+				return { cause: `objects.${id}`, hint: `${id} moves at f${f}, where it should stay: hold its hinge channel or keys until then, or start them later${why}` };
+			}
+			if (kind === "still") return { cause: `goal ${name}`, hint: `${goal.still} moves at f${f} and nothing that follows the body moves it; name a joint, prop point or held object${why}` };
 			if (kind === "moved" && !goal.moved.startsWith("object:")) return { cause: `goal ${name}`, hint: `${goal.moved} does not move with the body at f${f}; name a joint, prop point or held object` };
 			if (kind === "moved") {
 				const id = goal.moved.slice(7).replace(/\.(center|top|base)$/, "");

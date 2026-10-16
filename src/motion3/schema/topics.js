@@ -32,7 +32,9 @@ export const EXAMPLES = {
 	goals: { anchors: { spot: SPOT }, goals: [
 		{ name: "hand at the spot", near: ["joint:RightHand", "anchor:spot"], tol: 0.06, at: [30, 40] },
 		{ name: "hand over the table", above: ["joint:RightHand", "object:table.top"], by: 0.05, at: 35, mode: "any" },
-		{ name: "cup lifted", moved: "object:cup", by: 0.1, at: [50, 59] }] },
+		{ name: "cup lifted", moved: "object:cup", by: 0.1, at: [40, 59], after: "hand at the spot" },
+		{ name: "cup still before", still: "object:cup", at: [0, 59], before: "cup lifted" },
+		{ name: "hand quick", speed: "joint:RightHand", by: 1.2, at: [20, 30] }] },
 	probes: [{ name: "handToCup", distance: ["joint:RightHand", "object:cup"], frames: [0, 59] }, { name: "cupTop", position: "object:cup.top", frames: [0, 59], every: 10 }],
 	channels: { anchors: { spot: SPOT }, channels: ["lid"], keys: [
 		{ f: 0, set: { armw_r: 1, hand_r: [-0.25, 1.0, 0.2], elbow_r: [-0.5, -1, -0.3], fingers_r: { grip: 0 }, lid: 0 } },
@@ -46,7 +48,7 @@ export const EXAMPLES = {
 };
 
 const UNITS = `World metres, +Y up; ${CONVENTIONS.yaw}; the character's left is +X at yaw 0. Angles in degrees.`;
-const NO_JUMP = "Without at/along the object keeps its grab-frame offset to the palm, so it does not jump.";
+const NO_JUMP = "Without at/along it keeps its grab-frame offset to the palm: no jump.";
 /** The objects example's carry: a grip prop and the object it holds. */
 const CARRY = { props: EXAMPLES.objects.props, objects: { cup: EXAMPLES.objects.objects.cup } };
 
@@ -86,9 +88,10 @@ export const NOTES = {
 		"allow excuses a body part inside an object up to depth; limits override the QA limits. Unnamed entries are named by place, contacts[0].",
 		"Speed, acceleration, knee bend and balance are style: measured in output.observations, not judged. Naming speedCore/speedLimb, accCore/accLimb, knee or balance in limits makes it a check (SPEED, ACC, KNEE, BALANCE). observations.near: each hand's and foot's nearest object and gap (< 0 inside), measured, not judged.",
 		"motion.qa { checks } replaces every check for a re-measure."],
-	goals: ["Exactly one of near (distance <= tol), above (a.y - b.y >= by) or moved (an object's base moved at least by from the scene pose; any other point ref, e.g. prop:bat.tip, at least by from where it is at at[0], at: [f0, f1]).",
-		"at is an absolute frame or [f0, f1]; mode all (every frame) or any (one frame). A failed goal is a GOAL group first in qa.groups and makes qa.ok false.",
-		"Intent lines as goals: a contact is near between the touching point (joint:RightHandIndex4, joint:RightToeBase) and the object or an anchor on it, tol 0.02-0.03, at its frames; an effect is moved on the object at frames after the contact (mode any); \"X stays until the contact\" is near between X and a world anchor at its rest point, tol 0.01, at [0, contact - 1]; a fast strike is moved of the joint by d over the 3-4 frames before the contact (d over that time is its mean speed)."],
+	goals: ["Exactly one of near (distance <= tol), above (a.y - b.y >= by), moved (an object's base moved at least by from the scene pose; any other point ref, e.g. prop:bat.tip, at least by from where it is at at[0], at: [f0, f1]), still (stays within tol, default 0.01 m, of where moved measures from) or speed (the point reaches by m/s).",
+		"at is an absolute frame or [f0, f1]; mode all (every frame; the default) or any (one frame; speed's default). A failed goal is a GOAL group first in qa.groups and makes qa.ok false.",
+		"after / before: another goal's name; at is cut to the frames after (before) the first frame that goal holds, so cause and effect keep their order wherever the event lands (the can moves after the kick). If that goal never holds, this one fails with value null.",
+		"Intent lines as goals: a contact is near between the touching point (joint:RightHandIndex4, joint:RightToeBase) and the object, tol 0.02-0.03; a negative is still on the object before: \"<contact goal>\"; an effect is moved on the object after: \"<contact goal>\" (mode any); a strike is speed of the joint, by m/s, before: \"<contact goal>\"."],
 	probes: ["motion.compile { probes } (at most 16); spec.probes are measured too, not stored; answered whether or not it installs.",
 		"distance [a, b] -> { min, minAt, max, maxAt, mean, first, last } in m; a bare object:<id> measures to its surface. position -> { at: [{ f, p }] }, at most 16 rows."],
 	channels: ["key.set names channels; values ease between keys and hold after the last key. step: [channel] jumps at f instead.",

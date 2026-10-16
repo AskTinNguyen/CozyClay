@@ -69,8 +69,9 @@ export function beatBoardModel(draft, motion) {
 /** One goal as a line: "✓ name 1.2 cm (≤ 2 cm)"; a distance in metres reads in cm. */
 export function goalText(g) {
 	const cm = v => `${Math.round(v * 1000) / 10} cm`;
-	const value = Number.isFinite(g.value) ? (g.kind === "near" ? cm(g.value) : `${Math.round(g.value * 1000) / 1000}`) : "";
-	const need = Number.isFinite(g.need) ? (g.kind === "near" ? ` (≤ ${cm(g.need)})` : ` (≥ ${g.need})`) : "";
+	const upper = g.kind === "near" || g.kind === "still"; // a distance bound from above; the others are minimums
+	const value = Number.isFinite(g.value) ? (upper ? cm(g.value) : `${Math.round(g.value * 1000) / 1000}`) : "";
+	const need = Number.isFinite(g.need) ? (upper ? ` (≤ ${cm(g.need)})` : ` (≥ ${g.need})`) : "";
 	return `${g.ok ? "✓" : "✗"} ${g.name}${value ? ` ${value}${need}` : ""}`;
 }
 

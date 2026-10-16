@@ -106,7 +106,7 @@ expect("essentials lists exactly SKILL_NAMES, each with needs, frames, adds and 
 		&& Object.keys(SKILL_INFO[s.name].args).every(a => named(a, s.args))));
 const rg = ess.skills.find(s => s.name === "reachGrip").args;
 expect("essentials: reachGrip args are typed, required ones without ?, defaults shown", /anchor: string \(.*\), side: 'l'\|'r' \(the hand\), reach\?: int=20 \(frames to reach\)/.test(rg) && /fingers\?: .*='grip'/.test(rg), rg);
-expect("essentials: a goal is a list entry with one of near|above|moved", /^\(\{name: string, near\|above\?: \[ref, ref\].*\(one of near\|above\|moved\)\)\[\]$/.test(ess.types.goals), ess.types.goals);
+expect("essentials: a goal is a list entry with one of near|above|moved|still|speed and after|before", /^\(\{name: string, near\|above\?: \[ref, ref\], moved\|still\|speed\|after\|before\?: string.*\(one of near\|above\|moved\|still\|speed\)\)\[\]$/.test(ess.types.goals), ess.types.goals);
 expect("essentials: objects maps an id to a hinge or a carry", /hinge \{pivot: vec3.*\| carry \{prop: string/.test(ess.types.objects), ess.types.objects);
 expect("essentials: the notes say how to read a whole topic or one skill", /motion\.describe \{ topic \}/.test(ess.notes.join()) && /'skills', name/.test(ess.notes.join()));
 expect("essentials: the spec line names the topic lines, the walk generator the walkTo args", /anchors\?: anchors, props\?: props\.props, fits\?: props\.fits, objects\?: objects/.test(ess.types.spec)
@@ -128,7 +128,7 @@ for (const [topic, name] of FOLLOW_UPS) {
 }
 const carry = describe("objects");
 expect("essentials holds the carry example (a grip prop's origin bones, grab, release) and the no-jump note",
-	essText.includes(literal({ props: carry.example.props, objects: { cup: carry.example.objects.cup } })) && carry.notes.some(n => n.includes("so it does not jump") && essText.includes(n.slice(n.indexOf("Without at/along")))));
+	essText.includes(literal({ props: carry.example.props, objects: { cup: carry.example.objects.cup } })) && carry.notes.some(n => n.includes("no jump") && essText.includes(n.slice(n.indexOf("Without at/along")))));
 expect("essentials: reachGrip's needs, frames and adds are the skill answer's notes", describe("skills", "reachGrip").notes.every(n => essText.includes(n.replace(/^(needs|frames from f0|adds): /, "").split("; ")[0])));
 console.log(`  sizes: the round-2 follow-ups (${FOLLOW_UPS.map(f => f.join(" ")).join(", ")}) took ${followBytes} B in 3 calls for ${facts} meanings; essentials has them all in ${bytes(ess)} B (budget ${DESCRIBE_BUDGET})`);
 // What the three live sessions read in 2-3 calls each (topics, then skills by name): the sum cannot fit

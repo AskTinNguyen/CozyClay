@@ -32,8 +32,8 @@ export const CHECK_ENTRY_FIELDS = {
 	supports: ["object", "part", "tol"],
 	allow: ["part", "object", "depth"],
 };
-/** One spec.goals entry (C8): exactly one of near | above | moved. */
-export const GOAL_FIELDS = ["name", "near", "above", "moved", "tol", "by", "at", "mode"];
+/** One spec.goals entry (C8): exactly one of near | above | moved | still | speed; after / before order it on another goal. */
+export const GOAL_FIELDS = ["name", "near", "above", "moved", "still", "speed", "tol", "by", "at", "mode", "after", "before"];
 /** One motion.compile probes entry (C5): exactly one of distance | position. */
 export const PROBE_FIELDS = ["name", "distance", "position", "frames", "every"];
 /** Point reference kinds (C2, refs.js). */

@@ -113,8 +113,8 @@ expect("the hint without spec goals still answers { cause, hint }", typeof goalH
 // 7. validation: exact messages
 const invalid = goals => refusal(() => run(goals)).replace(/^MOTION_SPEC_INVALID: /, "").split("\n");
 const cases = [
-	[[{ near: ["joint:LeftHand", "anchor:spot"], above: ["joint:LeftHand", "object:cube.top"], at: 3 }], ["goals[0] names near and above; a goal takes exactly one of near, above, moved (split it into 2 goals)"]],
-	[[{ at: 3 }], ["goals[0] needs one predicate: near, above, moved"]],
+	[[{ near: ["joint:LeftHand", "anchor:spot"], above: ["joint:LeftHand", "object:cube.top"], at: 3 }], ["goals[0] names near and above; a goal takes exactly one of near, above, moved, still, speed (split it into 2 goals)"]],
+	[[{ at: 3 }], ["goals[0] needs one predicate: near, above, moved, still, speed"]],
 	[[{ near: ["joint:LeftHnad", "anchor:spot"], at: 3 }], ['goals[0].near[0] "joint:LeftHnad": unknown bone; did you mean "LeftHand"?']],
 	[[{ near: ["joint:LeftHand", "object:empty-3"], at: 3 }], ['goals[0].near[1] "object:empty-3" names object "empty-3", which is not in the scene; did you mean "empty-2"?']],
 	[[{ moved: "joint:Hips", at: 3 }], ['goals[0].moved "joint:Hips" measures how far the point gets from where it is at at[0], so at must be [f0, f1] with f0 < f1, got 3']],
@@ -126,16 +126,16 @@ const cases = [
 	[[{ moved: "object:cylinder", at: 3, mode: "some" }], ['goals[0].mode must be "all" or "any", got "some"']],
 	[[{ near: ["joint:LeftHand", "anchor:spot"], tol: -1, at: 3 }], ["goals[0].tol must be a number >= 0 (metres), got -1"]],
 	// tol on above/moved names the by that replaces it (the live sessions 1e3d1adc and c100b90c sent tol 0.05 and 0.02 on above)
-	[[{ above: ["joint:LeftHand", "anchor:spot"], tol: 0.1, at: 3 }], ["goals[0].tol applies to near; above takes by (a.y - b.y >= by, default 0): use by: 0.1 for a at least 0.1 m above b, or by: -0.1 to let a sit up to 0.1 m below b, not tol"]],
-	[[{ above: ["joint:LeftKnee", "joint:Hips"], tol: 0.02, at: 3 }], ["goals[0].tol applies to near; above takes by (a.y - b.y >= by, default 0): use by: 0.02 for a at least 0.02 m above b, or by: -0.02 to let a sit up to 0.02 m below b, not tol"]],
-	[[{ moved: "object:cylinder", tol: 0.03, at: 3 }], ["goals[0].tol applies to near; moved takes by (the object moves >= by, default 0.05): use by: 0.03 (metres), not tol"]],
-	[[{ above: ["joint:LeftHand", "anchor:spot"], tol: "x", at: 3 }], ["goals[0].tol applies to near; above takes by (a.y - b.y >= by, default 0): use by: 0.05 for a at least 0.05 m above b, or by: -0.05 to let a sit up to 0.05 m below b, not tol"]],
-	[[{ near: ["joint:LeftHand", "anchor:spot"], by: 0.1, at: 3 }], ["goals[0].by applies to above and moved; near takes tol"]],
+	[[{ above: ["joint:LeftHand", "anchor:spot"], tol: 0.1, at: 3 }], ["goals[0].tol applies to near and still; above takes by (a.y - b.y >= by, default 0): use by: 0.1 for a at least 0.1 m above b, or by: -0.1 to let a sit up to 0.1 m below b, not tol"]],
+	[[{ above: ["joint:LeftKnee", "joint:Hips"], tol: 0.02, at: 3 }], ["goals[0].tol applies to near and still; above takes by (a.y - b.y >= by, default 0): use by: 0.02 for a at least 0.02 m above b, or by: -0.02 to let a sit up to 0.02 m below b, not tol"]],
+	[[{ moved: "object:cylinder", tol: 0.03, at: 3 }], ["goals[0].tol applies to near and still; moved takes by (the object moves >= by, default 0.05): use by: 0.03 (metres), not tol"]],
+	[[{ above: ["joint:LeftHand", "anchor:spot"], tol: "x", at: 3 }], ["goals[0].tol applies to near and still; above takes by (a.y - b.y >= by, default 0): use by: 0.05 for a at least 0.05 m above b, or by: -0.05 to let a sit up to 0.05 m below b, not tol"]],
+	[[{ near: ["joint:LeftHand", "anchor:spot"], by: 0.1, at: 3 }], ["goals[0].by applies to above, moved and speed; near takes tol"]],
 	[[{ moved: "object:cylinder", by: -0.1, at: 3 }], ["goals[0].by must be a number >= 0 (metres), got -0.1"]],
-	[[{ moved: "object:cylinder", at: 3, mdoe: "any" }], ['goals[0] has unknown field "mdoe"; did you mean "mode"? (fields: name, near, above, moved, tol, by, at, mode)']],
+	[[{ moved: "object:cylinder", at: 3, mdoe: "any" }], ['goals[0] has unknown field "mdoe"; did you mean "mode"? (fields: name, near, above, moved, still, speed, tol, by, at, mode, after, before)']],
 	[[{ name: "a", moved: "object:cylinder", at: 3 }, { name: "a", moved: "object:cylinder", at: 4 }], ['goals[1].name "a" is already used by goals[0]; goal names must differ']],
-	[{ near: [] }, ['spec.goals must be an array of goals { name?, near | above | moved, tol?, by?, at, mode? }, got {"near":[]}']],
-	[["x"], ['goals[0] must be { name?, near | above | moved, tol?, by?, at, mode? }, got "x"']],
+	[{ near: [] }, ['spec.goals must be an array of goals { name?, near | above | moved | still | speed, tol?, by?, at, mode?, after?, before? }, got {"near":[]}']],
+	[["x"], ['goals[0] must be { name?, near | above | moved | still | speed, tol?, by?, at, mode?, after?, before? }, got "x"']],
 ];
 for (const [goals, want] of cases) {
 	const got = invalid(goals);

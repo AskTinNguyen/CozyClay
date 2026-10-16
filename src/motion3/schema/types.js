@@ -111,9 +111,13 @@ export const CHECKS_TYPES = {
 
 export const GOAL_TYPES = {
 	name: str(), near: pair({ $ref: "#/$defs/ref" }, "distance <= tol"), above: pair({ $ref: "#/$defs/ref" }, "a.y - b.y >= by"),
-	moved: str("a ref or an object id: an object's base moves at least `by` from the scene pose; any other point (prop:, joint:, landmark:, anchor:) at least `by` from where it is at at[0] (at: [f0, f1])"), tol: num("m", { default: 0.05 }),
-	by: num("m; above default 0, moved default 0.05"), at: { oneOf: [int(null, { minimum: 0 }), { $ref: "#/$defs/frameSpan" }], description: "absolute frame or span" },
-	mode: { enum: ["all", "any"], default: "all", description: "every frame of `at`, or one" },
+	moved: str("a ref or an object id: an object's base moves at least `by` from the scene pose; any other point (prop:, joint:, landmark:, anchor:) at least `by` from where it is at at[0] (at: [f0, f1])"),
+	still: str("a ref or an object id: stays within `tol` of where moved measures from (an object: its scene pose; a point: where it is at at[0], at: [f0, f1])"),
+	speed: str("a point ref: its speed reaches `by` m/s (mode any by default)"),
+	tol: num("m; near default 0.05, still 0.01"), by: num("above m, default 0; moved m, default 0.05; speed m/s, needed"),
+	at: { oneOf: [int(null, { minimum: 0 }), { $ref: "#/$defs/frameSpan" }], description: "absolute frame or span" },
+	mode: { enum: ["all", "any"], description: "every frame of `at`, or one; default all, speed any" },
+	after: str("a goal's name: at starts after the first frame that goal holds"), before: str("a goal's name: at ends before the first frame that goal holds"),
 };
 
 export const PROBE_TYPES = {

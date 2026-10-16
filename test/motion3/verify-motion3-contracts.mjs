@@ -67,6 +67,14 @@ expect("validateGoals accepts a goal", goalErrors === 0);
 expect("objectChecks stub: no issues", Array.isArray(objectChecks(sk, out, r.expanded)) && objectChecks(sk, out, r.expanded).length === 0);
 const gc = goalChecks(out, []);
 expect("goalChecks stub: { issues, results }", Array.isArray(gc.issues) && Array.isArray(gc.results));
+// C8 amendment (intent round): still, speed, after/before
+goalErrors = 0;
+validateGoals({ goals: [{ name: "kick", speed: "joint:RightFoot", by: 2, at: [3, 9] }, { name: "x", still: "object:cube", at: [0, 9], before: "kick" }, { moved: "object:cube", at: [0, 9], after: "kick", mode: "any" }] }, () => goalErrors++, { frames: 24 });
+expect("C8: validateGoals accepts still, speed (with by) and after/before naming a goal", goalErrors === 0);
+const amended = goalChecks(out, [{ name: "kick", speed: "joint:RightFoot", by: 50, at: [3, 9] }, { name: "x", still: "object:cube", at: [0, 9], before: "kick" }, { name: "y", still: "object:cube", at: [0, 9] }]);
+expect("C8: still and speed answer { name, kind, ok, value, at, need }; a goal that waits on a goal that never holds answers value and at null",
+	amended.results.map(x => `${x.name}:${x.kind}:${x.ok}`).join() === "kick:speed:false,x:still:false,y:still:true" && amended.results[1].value === null && amended.results[1].at === null
+	&& amended.results[2].need === 0.01 && amended.issues.some(i => i.msg === 'x: waits for "kick" (before), which never holds' && i.value === 0.01 && i.limit === 0));
 const hintShape = h => typeof h?.cause === "string" && typeof h?.hint === "string";
 expect("GRAB and GOAL hints answer { cause, hint }", hintShape(objectHints.GRAB({}, { subject: "empty-2: hand 12.0 cm from it at grab", worstFrame: 104 })) && hintShape(goalHints.GOAL({}, { subject: "cup at mouth: 0.31 m", worstFrame: 150 })));
 const someGroups = [{ kind: "COLLIDE", subject: "a x b", count: 1, worst: 0.02, limit: 0.005 }];

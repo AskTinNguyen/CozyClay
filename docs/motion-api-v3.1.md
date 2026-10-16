@@ -182,14 +182,18 @@ qa.groups[i] = { "kind": "COLLIDE", "subject": "thigh_r x cube", "count": 6, "fi
                "worst": 0.25, "limit": 0, "worstFrame": 150, "first": 150, "last": 170 }] }
 ```
 
-- Exactly one predicate: `near` (distance <= `tol`, default 0.05), `above` (a.y - b.y >= `by`, default 0), `moved` (the object base moved at least `by`, default 0.05, from the scene pose).
+- Exactly one predicate: `near` (distance <= `tol`, default 0.05), `above` (a.y - b.y >= `by`, default 0), `moved` (the object base moved at least `by`, default 0.05, from the scene pose), `still` (the point stays within `tol`, default 0.01, of where `moved` measures from), `speed` (the point's speed reaches `by` m/s; `by` is required and > 0).
 - `moved` accepts a bare object id: `"empty-2"` means `"object:empty-2"`. Every other ref needs its prefix.
 - `moved` on any other point ref (`prop:<p>.<point>`, `joint:<Bone>`, `landmark:mouth`, `anchor:<a>`) measures how far the point gets from where it is at `at[0]`: one value, its farthest frame of `at`, so `at` must be `[f0, f1]` with f0 < f1. The subject reads `bat swings: moved 0.8 m from f31 at f39 (needs >= 1.2)`.
-- `mode` is `"all"` (default) or `"any"`.
+- `still` measures from the same home as `moved`: an object ref from its scene pose, any other point ref from where it is at the window's first frame, so a point's `still` needs `at: [f0, f1]` with f0 < f1. The subject reads `cup still: 0.034 m from its scene pose at f80 (needs <= 0.01)` or `hand still: 0.02 m from f10 at f30 (needs <= 0.005)`. `moved`, `still` and `speed` take a bare object id as `object:<id>`.
+- `speed` is the central difference of the point over f-1..f+1 (one-sided at the compiled window's edges), in m/s. The subject reads `kick fast: 1.9 m/s at f96, the best of f92-f100 (needs >= 3)`.
+- `mode` is `"all"` or `"any"`. The default is `"all"`, except `speed`, whose default is `"any"` (a speed is reached).
+- `after` / `before` (amended in the intent round, lane pred): another goal's name (or `goals[<i>]` for an unnamed one). The goal's `at` is cut to the frames after (before) the first frame the named goal holds, judged by the named goal's own predicate on its own window, so cause and effect keep their order wherever the event lands: `{ "name": "can falls", "moved": "object:can", "by": 0.05, "at": [0, 200], "after": "kick", "mode": "any" }`. When the named goal never holds, or the cut leaves no frame, the goal fails with `value: null`, `at: null` and one GOAL issue (value 0.01, at `at[0]`): `can falls: waits for "kick" (after), which never holds`, `can still: no frames left before "kick" (it holds first at f40; at is f60-f80)`. A windowed trial compile that does not reach the named goal answers nothing for the waiting goal. Goals that wait on each other are refused: `goals wait on each other through after/before: "a" -> "b" -> "a"; one of them must not wait`.
 - A GOAL issue's value is the shortfall and its limit is 0. A failed goal makes `qa.ok` false. `qa.goals` is there when `spec.goals` is.
 - Issue frames index `out.frames`. `goals[].at` is absolute.
 - Validation: `compiler/validate-goals.js` `validateGoals(spec, err, opts)`.
-- `tol` on `above` or `moved` is refused, not mapped: a tolerance could mean `by: -tol` (slack) or `by: tol` (clearance). The message names the replacement with the number sent: `goals[0].tol applies to near; above takes by (a.y - b.y >= by, default 0): use by: 0.02 for a at least 0.02 m above b, or by: -0.02 to let a sit up to 0.02 m below b, not tol`.
+- `tol` on `above`, `moved` or `speed` is refused, not mapped: a tolerance could mean `by: -tol` (slack) or `by: tol` (clearance). The message names the replacement with the number sent: `goals[0].tol applies to near and still; above takes by (a.y - b.y >= by, default 0): use by: 0.02 for a at least 0.02 m above b, or by: -0.02 to let a sit up to 0.02 m below b, not tol`. `by` on `near` or `still` is refused the other way: `goals[0].by applies to above, moved and speed; still takes tol`.
+- The GOAL hint for `still` moves the point back toward its home (an object nothing holds: no fix, the hint names its hinge or keys); `speed` and a waiting goal get a hint without a fix.
 
 ## C9. describe (`describe.js` `describe(topic, name?)`)
 

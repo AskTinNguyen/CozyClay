@@ -21,9 +21,9 @@ export function trendPoints(totals, { width = 220, height = 40, pad = 4 } = {}) 
  */
 export function goalRows(goals = []) {
 	return goals.map(g => {
-		const show = g.kind === "above" ? signedCm : cm;
+		const show = g.kind === "above" ? signedCm : g.kind === "speed" ? v => `${Math.round(v * 100) / 100} m/s` : cm;
 		const value = Number.isFinite(g.value) ? show(g.value) : "—";
-		const need = Number.isFinite(g.need) ? `${g.kind === "near" ? "≤" : "≥"} ${show(g.need)}` : "";
+		const need = Number.isFinite(g.need) ? `${g.kind === "near" || g.kind === "still" ? "≤" : "≥"} ${show(g.need)}` : "";
 		return { name: g.name ?? g.kind ?? "goal", ok: !!g.ok, value, need, at: Number.isFinite(g.at) ? `f${g.at}` : "" };
 	});
 }
