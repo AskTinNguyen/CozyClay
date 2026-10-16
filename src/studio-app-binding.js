@@ -9,8 +9,8 @@ import { isProxyFigure } from "./scenes.js";
 import { supportHeightForObject } from "./scene-objects.js";
 import { studioAssetList } from "./studio-asset-list.js";
 import { buildStudioContext, physicsFingerprintInput, studioEntityCursor, validateStudioCursor } from "./studio-agent-context.js";
-import { createStudioCommandJournal, entityWorldBounds, framingChecks, localTransformReadback, placementChecks, sampledFramingResult, studioObjectCatalogue } from "./studio-agent-commands.js";
-import { verifyInstalledTake } from "./studio-agent-motion.js";
+import { createStudioCommandJournal, framingChecks, localTransformReadback, placementChecks, sampledFramingResult, studioObjectCatalogue } from "./studio-agent-commands.js";
+import { verifyInstalledTake } from "./studio-agent-motion.js"; import { objectRowBounds } from "./studio-entity-bounds.js";
 import { shotGeometryFacts } from "./studio-geometry-facts.js"; import { KIT_CATALOGUE } from "./kits/index.js";
 import { STUDIO_TOOL_FAMILIES, StudioProtocolError, validateReceipt, validateStudioCommand, validateStudioIdentity } from "./studio-agent-protocol.js";
 import { studioVisual, verifyLighting } from "./studio-motion-visual.js";
@@ -128,7 +128,7 @@ export function createStudioAppBinding(ports) {
 		}), ...s.objects.map(o => { const local = localTransformReadback(o, s.objects); return { id: o.id, kind: "object", token: tokens.get(o.id).token, name: o.name || o.id,
 			position: { x: o.x, y: o.y ?? 0, z: o.z }, yawDeg: o.rot ?? 0,
 			rotationDeg: { x: o.rotX ?? 0, y: o.rot ?? 0, z: o.rotZ ?? 0 }, scale: { x: o.scaleX, y: o.scaleY, z: o.scaleZ },
-			renderer: o.renderer, color: o.color ?? null, ...(o.assetId ? { assetId: o.assetId } : {}),
+			renderer: o.renderer, color: o.color ?? null, bounds: objectRowBounds(o, s, ports), ...(o.assetId ? { assetId: o.assetId } : {}),
 			parentId: o.parent ?? null, attachment: o.attach ?? null, pathPointCount: o.path?.points.length ?? 0,
 			// the dots on the route, with the lean (degrees) a mark carries
 			...(o.path?.marks?.length ? { pathMarks: o.path.marks.map(mark => typeof mark === "number" ? mark : { t: mark.t, ...(mark.bank !== undefined ? { bank: mark.bank } : {}), ...(mark.pitch !== undefined ? { pitch: mark.pitch } : {}) }) } : {}), ...(local ? { local } : {}) }; })];
@@ -185,13 +185,13 @@ export function createStudioAppBinding(ports) {
 		if (id === s.host.sceneId) return { selection: s.selection, activeCharacterId: s.activeCharacterId, shotId: s.selectedShotId, view: s.view,
 			...(patched.length ? { patched } : {}) };
 		const object = s.objects.find(row => row.id === id), entity = object ?? s.characters.find(row => row.id === id);
-		// Beyond the transform an object's patched paths already carry: the world box it occupies and, for a
-		// group, who hangs off it. `compact` (a receipt near its size limit) drops back to the paths alone.
-		// A character's box means cloning and posing its rig, too dear for every receipt: inspect or verify has it.
+		// Beyond the transform an object's patched paths already carry: the world box it occupies (an empty: its
+		// parts', as inspect's rows) and, for a group, who hangs off it. `compact` (a receipt near its size limit) drops back to the paths alone.
+		// A character's box means cloning and posing its rig, too dear for every receipt or inspect row: verify has it.
 		const extras = () => {
 			if (!object || compact) return {};
 			const childIds = s.objects.filter(row => row.parent === id).map(row => row.id);
-			return { bounds: entityWorldBounds(object, { ...s, frame: s.view.frame }, { bounds: ports.bounds }),
+			return { bounds: objectRowBounds(object, s, ports),
 				...(childIds.length ? { childIds: childIds.slice(0, 12), ...(childIds.length > 12 ? { childCount: childIds.length } : {}) } : {}) };
 		};
 		if (patched.length) return { patched, ...extras() };
