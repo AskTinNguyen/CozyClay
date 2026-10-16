@@ -899,7 +899,7 @@ function CameraBlockEditor({
 					</label>
 					<label title={ko("Cap dolly travel speed", "돌리의 최고 이동 속도를 제한합니다")}>
 						<span>{ko("Speed", "속도")}</span>
-						<input type="number" min="0.2" max="8" step="0.1" value={follow.maxDollySpeed} onChange={(event) => patchFollow({ maxDollySpeed: numberValue(event) })} />
+						<input type="number" min="0.2" max="40" step="0.1" value={follow.maxDollySpeed} onChange={(event) => patchFollow({ maxDollySpeed: numberValue(event) })} />
 						<small>m/s</small>
 					</label>
 					{!(mode === "rail" && crane) && (

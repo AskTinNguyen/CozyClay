@@ -110,7 +110,7 @@ const FOLLOW_BOUNDS = {
 	height: [0.2, Number.POSITIVE_INFINITY],
 	response: [0.1, 3],
 	lead: [0, 1],
-	maxDollySpeed: [0.2, 8],
+	maxDollySpeed: [0.2, 40],
 	pitchOffsetDeg: [-170, 170],
 	orbitOffsetDeg: [-180, 180],
 };
