@@ -1,13 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { FiAlertTriangle, FiArrowUp, FiCheck, FiChevronRight, FiClock, FiDownload, FiImage, FiMoreHorizontal, FiPaperclip, FiPlus, FiRotateCw, FiX } from "react-icons/fi";
-import {
-	ATTACHMENT_FAILED_NOTICE,
-	ATTACHMENT_LIMIT_NOTICE,
-	ATTACHMENT_TYPE_NOTICE,
-	attachmentFilesFromTransfer,
-	attachmentFromFile,
-	transferCarriesFiles,
-} from "./attachment-image.js";
+import { ATTACHMENT_FAILED_NOTICE, ATTACHMENT_LIMIT_NOTICE, ATTACHMENT_TYPE_NOTICE, attachmentFilesFromTransfer, attachmentFromFile, transferCarriesFiles } from "./attachment-image.js";
 import { isImeComposing } from "../ime.js";
 import { useStudioShell } from "../shell/studio-shell-context.js";
 import { ko } from "../locale.js";
@@ -47,6 +40,7 @@ import {
 	supervisorFollowUp,
 } from "./agent-client.js";
 import "./agent-panel.css";
+import { AgentProgressCard } from "./AgentProgressCard.jsx";
 
 function relativeTime(value, now = Date.now()) {
 	const at = Date.parse(value || "");
@@ -990,6 +984,7 @@ export default function AgentPanel({
 				return <div className="agent-row" key={item.id}><ImageResultCard image={item} onUse={(image) => store.applyImage(image.id)} onUndo={(image) => store.undoImage(image.id)} onRegenerate={() => runTurn(chat.lastPrompt)} onOpen={setLightbox} /></div>;
 			})}
 
+			<AgentProgressCard items={items} />
 			{rateLimit && <PausedCard resetAt={rateLimit.resetAt} onRetry={() => { store.clearRateLimit(); runTurn(chat.lastPrompt); }} onSwitchModel={switchModel} />}
 		</div>
 

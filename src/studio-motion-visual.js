@@ -13,6 +13,8 @@ import { depthViews, projectPoint, trailPoints, viewCameras } from "./motion3/vi
 import { checkRef } from "./motion3/refs.js";
 import { renderWithGhosts } from "./ghost-set.js";
 import { GHOST_COLORS, sheetGhostSettings } from "./view-ghosts.js";
+import { publishSheet } from "./agent-progress.js";
+import { sheetCaption } from "./workflow/agent-progress-view.js";
 // verify_result's lighting check also reads the rendered shot frame; the binding imports it from here.
 export { verifyLighting } from "./studio-lighting-check.js";
 
@@ -115,6 +117,10 @@ export function studioVisual(args, { s, receipt, result, images, ports }) {
 		const imageId = crypto.randomUUID();
 		images.set(imageId, { ...image, revision: s.revision, receiptId: result.receiptId });
 		result.visualRefs.push({ imageId, ...ref });
+		// the user sees what the agent looked at (agent-progress.js: the agent panel's progress card)
+		const kind = image.kind ?? (args.visual === "contact_sheet" ? "contact sheet" : args.visual);
+		publishSheet({ characterId: args.targets?.[0] ?? receipt?.affectedIds?.[0] ?? null, dataUrl: image.dataUrl, width: image.width, height: image.height,
+			caption: sheetCaption({ kind, views: image.views ?? [], frames: image.frames ?? [] }), frames: image.frames ?? [] });
 	};
 	if (args.visual !== "contact_sheet" && (args.views || args.focus || args.trail)) throw new StudioProtocolError("INVALID_ARGUMENT", 'views, focus and trail shape a contact sheet; send visual: "contact_sheet".');
 	if (args.ghosts && (args.visual !== "contact_sheet" || !args.views)) throw new StudioProtocolError("INVALID_ARGUMENT", 'ghosts are drawn on a contact sheet from views of its own; send visual: "contact_sheet" with views, e.g. ["side"].');
