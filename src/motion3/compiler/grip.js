@@ -16,10 +16,14 @@
 //            the wrist the rest (hold.js orient), by the fit's weight
 //   point    the fingers' point stays where the fit put it, the elbow in the plane the arm had
 // The spec wins: a hand whose wtwist_<k> or wflex_<k> is turned on the frame keeps it, a fit with
-// orient: false is left alone, a prop anchor is the second-hand grip's (second-hand.js), and a hand
-// that carries something on the frame, or whose nearest body is one it carries, keeps the carry's own
-// grip (its grab offset, which a keyed carry's keys are written on). So the grip turns the other hand,
-// a push, a handle, a neck, a rail.
+// orient: false is left alone, and a prop anchor is the second-hand grip's (second-hand.js). A hand
+// that carries something keeps the carry's own grip (its grab offset) once the carry leads it. A keyed
+// carry's grab offset is read off the plain solve of its grab frame (object-keys.js attach), so when it
+// carries a body that is not thin (a box, a crate) the carrying hand takes the grip on the reach, on
+// that frame and up to its first key (ownGrip): the offset the carry keeps is then a grip, not the
+// forearm's neutral roll. A thin body (a cup, a can) keeps the neutral offset: its aim keys pick the
+// roll the arm holds most easily from it, and the cylindrical grip measured worse on every bench cup.
+// Those frames read the carried body where it rested before the grab, never a pose the hand moves.
 import { add, sub, scale, norm, cross, dot, len, apply, ry, mul, T, axisRot } from "./math.js";
 import { palmAxes, twoBone } from "./limbs.js";
 import { aimArm, orient } from "./hold.js";
@@ -58,8 +62,21 @@ function effectorAt(sk, spec, s, side, eff) {
 /** The carry entry over body id (its own or a group's) and the side whose prop carries it, else null. */
 function carryOf(ctx, id) {
 	const { spec } = ctx, o = ctx.scene?.objects?.[id];
-	for (const k of [id, ...(o?.ancestors ?? [])]) { const e = spec.objects?.[k]; if (e?.prop) return { entry: e, side: spec.props?.[e.prop]?.hand ?? null }; }
+	for (const k of [id, ...(o?.ancestors ?? [])]) { const e = spec.objects?.[k]; if (e?.prop) return { key: k, entry: e, side: spec.props?.[e.prop]?.hand ?? null }; }
 	return null;
+}
+
+/**
+ * Whether hand k takes the grip on keyed carry `key` at frame f although it carries it (see above): a keyed
+ * carry that keeps its grab offset, from its reach to its grab frame and up to its first key. Answers the
+ * frame to read the carried body at (before the grab), or null.
+ */
+function ownGrip(ctx, key, k, f) {
+	const o = ctx.spec.objects?.[key];
+	const half = ctx.scene?.objects?.[key]?.half;
+	if (!ctx.hold?.span || !o?.prop || ctx.spec.props?.[o.prop]?.hand !== k || !o.keys?.length || o.grab === undefined || o.at !== undefined || o.along !== undefined || (half && thinAxis(half) >= 0)) return null;
+	const [grab] = ctx.hold.span(key);
+	return grab >= 1 && f <= Math.max(grab, ctx.hold.firstKey(key) - 1) ? Math.min(f, grab - 1) : null;
 }
 
 /** The body box the grip is on: the anchor's object (its nearest part) or the nearest body within NEAR m; null when none. */
@@ -69,14 +86,15 @@ function bodyAt(ctx, f, k, A, anchor, now) {
 	for (const id of ids) {
 		const half = scene[id]?.half;
 		if (!half) continue;
-		const pose = ctx.objectPose?.(id, f, now) ?? scene[id];
+		const own = ownGrip(ctx, carryOf(ctx, id)?.key, k, f), pose = ctx.objectPose?.(id, own ?? f, own === null ? now : null) ?? scene[id];
 		if (!pose?.R) continue;
 		const box = { pos: pose.pos, R: pose.R, half }, d = sdBox(A, box);
 		if (!best || d < best.d) best = { box, d, id };
 	}
 	// a body this hand carries keeps the carry's own grip (its grab offset, which its keys are written on:
 	// the same with keys or without), and no other body takes its place
-	if (!best || carryOf(ctx, best.id)?.side === k) return null;
+	const carry = best && carryOf(ctx, best.id);
+	if (!best || (carry?.side === k && ownGrip(ctx, carry.key, k, f) === null)) return null;
 	return anchor?.kind === "object" || best.d <= NEAR ? best.box : null;
 }
 
@@ -127,7 +145,7 @@ export function gripHand(ctx, sk, s, side, k, c, f, diag) {
 	const on = activeFit(ctx.spec, c, k);
 	if (!on || on.w < 1e-3) return;
 	// a hand that carries something on this frame holds that (its carry's grip), whatever its fit's anchor
-	if (Object.keys(ctx.spec.objects ?? {}).some(id => ctx.spec.objects[id]?.prop && ctx.objectHand?.(id, f) === k)) return;
+	if (Object.keys(ctx.spec.objects ?? {}).some(id => ctx.spec.objects[id]?.prop && ctx.objectHand?.(id, f) === k && ownGrip(ctx, id, k, f) === null)) return;
 	const now = { s, diag, c }, anchor = ctx.spec.anchors?.[on.fit.anchor];
 	// a point of a prop another hand holds is the second-hand grip's (second-hand.js)
 	if (anchor?.kind === "prop") return;

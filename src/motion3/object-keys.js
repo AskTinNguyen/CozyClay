@@ -169,5 +169,7 @@ export function holdHook(ctx, out, solvePlain, solveLed) {
 		}
 		return null;
 	};
-	return { lead, attach, attaching: id => attaching.has(id), plainFrame: solvePlain, carryOn, strainOn };
+	// the grip (compiler/grip.js) reads where a keyed carry's span and keys begin, after a retime
+	const firstKey = id => { const t = Math.min(...spec.objects[id].keys.map(k => k.f)); return out.timeMap ? Math.round(out.timeMap(t)) : t; };
+	return { lead, attach, attaching: id => attaching.has(id), plainFrame: solvePlain, carryOn, strainOn, span: id => spanIn(out, spec.objects[id]), firstKey };
 }
