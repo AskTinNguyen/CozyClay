@@ -98,14 +98,17 @@ export const keyedEntries = spec => Object.entries(spec.objects ?? {}).filter(([
 export function holdHook(ctx, out, solvePlain, solveLed) {
 	const { sk, spec, scene } = ctx, held = keyedEntries(spec);
 	if (!held.length) return null;
-	const palmOf = (o, s) => carriedPose(sk, spec, s, { prop: o.prop }), attached = new WeakMap();
+	const palmOf = (o, s) => carriedPose(sk, spec, s, { prop: o.prop }), attached = new WeakMap(), attaching = new Set();
 	const attach = id => {
 		if (!attached.has(out.baked)) attached.set(out.baked, new Map());
 		const cache = attached.get(out.baked), o = spec.objects[id];
 		if (cache.has(id)) return cache.get(id);
 		const rest = scene?.objects?.[id] ?? groupsOf(scene)[id], group = !scene?.objects?.[id] && !!rest;
 		const keeps = o.at === undefined && o.along === undefined && (group || o.grab !== undefined);
-		const s = keeps ? solvePlain(spanIn(out, o)[0]).s : restState(sk);
+		// the grab frame solved without the keys: a left hand anchored on id reads it there (object-pose.js), where this offset puts it
+		attaching.add(id);
+		let s;
+		try { s = keeps ? solvePlain(spanIn(out, o)[0]).s : restState(sk); } finally { attaching.delete(id); }
 		const a = relative(palmOf(o, s), keeps ? { pos: rest.pos, R: rest.R } : carriedPose(sk, spec, s, o));
 		cache.set(id, a);
 		return a;
@@ -166,5 +169,5 @@ export function holdHook(ctx, out, solvePlain, solveLed) {
 		}
 		return null;
 	};
-	return { lead, attach, plainFrame: solvePlain, carryOn, strainOn };
+	return { lead, attach, attaching: id => attaching.has(id), plainFrame: solvePlain, carryOn, strainOn };
 }

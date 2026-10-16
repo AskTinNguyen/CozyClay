@@ -81,8 +81,9 @@ function frameAt(out, f) {
 function carriedOn(out, id, o, f, s) {
 	const { sk, spec, scene } = out.ctx;
 	if (!keepsOffset(scene, id, o)) return carriedPose(sk, spec, s, o);
-	// keyed (object-keys.js): the grab-frame offset solved without the keys, which the hand followed
-	if (o.keys?.length && out.ctx.hold) return compose(carriedPose(sk, spec, s, { prop: o.prop }), out.ctx.hold.attach(id));
+	// keyed (object-keys.js): the grab-frame offset solved without the keys, which the hand followed. While that
+	// grab frame is solved (a hand anchored on the object reads it), the object is where the offset puts it: at rest.
+	if (o.keys?.length && out.ctx.hold) return out.ctx.hold.attaching(id) ? restPose(scene, id) : compose(carriedPose(sk, spec, s, { prop: o.prop }), out.ctx.hold.attach(id));
 	const palm = st => carriedPose(sk, spec, st, { prop: o.prop }), grab = spanOf(out, o)[0];
 	return compose(palm(s), relative(palm(grab === f ? s : frameAt(out, grab).s), restPose(scene, id)));
 }

@@ -50,9 +50,18 @@ export function objectFrame(ctx, a, name, { s, diag, c }, side) {
 	const f = diag.frame, still = () => ctx.objectsAt(f)[a.object] ?? groupsOf(ctx.scene)[a.object];
 	const hand = ctx.objectPose && f !== undefined ? ctx.objectHand(a.object, f) : null;
 	if (side && hand && ARMS.indexOf(hand) > ARMS.indexOf(side)) throw new Error(`MOTION_SPEC_INVALID: anchor "${name}" is on "${a.object}", which the ${HAND[hand]} hand holds at f${f}; the right arm is solved before the left, so the right hand cannot follow it. Carry "${a.object}" in the right hand (a right-hand prop) and put the left hand on it, or give the right hand another anchor`);
-	const pose = !ctx.objectPose || f === undefined || hand === side ? still() : ctx.objectPose(a.object, f, { s, diag, c });
+	const pose = !ctx.objectPose || f === undefined || hand === side ? still() : nested(ctx, name, a.object, f, () => ctx.objectPose(a.object, f, { s, diag, c }));
 	if (!pose) throw new Error(`MOTION_SPEC_INVALID: anchor "${name}" names unknown object "${a.object}"`);
 	return pose;
+}
+
+// Reading an object may solve another frame (a keyed carry's grab offset, object-keys.js), whose hands read objects
+// again; legitimate reads nest a few deep, so a deeper chain is a loop and is refused instead of overflowing the stack.
+const MAX_NEST = 16;
+function nested(ctx, name, object, f, read) {
+	if ((ctx.nest ?? 0) >= MAX_NEST) throw new Error(`MOTION_SPEC_INVALID: anchor "${name}" on "${object}" at f${f} reads a pose that needs this frame solved again (an anchor and carry loop); anchor the hand on a point that does not ride on the hand it moves`);
+	ctx.nest = (ctx.nest ?? 0) + 1;
+	try { return read(); } finally { ctx.nest--; }
 }
 
 function anchorPoint(ctx, a, name, s, diag, c, side) {
