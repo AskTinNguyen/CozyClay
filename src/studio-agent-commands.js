@@ -369,7 +369,7 @@ const LEVELS = { ground: 0.3 / 1.8, low: 0.7 / 1.8, hip: 1.1 / 1.8, eye: 1.65 / 
 const ANGLES = { front: 0, 'front three-quarter': 40, profile: 90, 'rear three-quarter': 140, back: 180 };
 /** Where subject bound points land through one camera: the evidence a
  * frame_shot receipt reports, plus the screen box its details keep. */
-function projectSubject(points, camera, fov, aspectRatio) {
+export function projectSubject(points, camera, fov, aspectRatio) {
   const direction = vector(camera.lookAt).sub(vector(camera.position));
   const projection = new PerspectiveCamera(fov / DEG, aspectRatio, 0.01, 10000);
   projection.position.copy(vector(camera.position)); projection.lookAt(vector(camera.lookAt)); projection.updateMatrixWorld(true);

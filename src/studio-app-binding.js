@@ -10,7 +10,7 @@ import { supportHeightForObject } from "./scene-objects.js";
 import { studioAssetList } from "./studio-asset-list.js";
 import { buildStudioContext, physicsFingerprintInput, studioEntityCursor, validateStudioCursor } from "./studio-agent-context.js";
 import { createStudioCommandJournal, framingChecks, localTransformReadback, placementChecks, sampledFramingResult, studioObjectCatalogue } from "./studio-agent-commands.js";
-import { verifyInstalledTake } from "./studio-agent-motion.js"; import { objectRowBounds } from "./studio-entity-bounds.js";
+import { verifyInstalledTake } from "./studio-agent-motion.js"; import { objectRowBounds } from "./studio-entity-bounds.js"; import { exportFramingInto } from "./studio-export-framing.js";
 import { shotGeometryFacts } from "./studio-geometry-facts.js"; import { KIT_CATALOGUE } from "./kits/index.js";
 import { STUDIO_TOOL_FAMILIES, StudioProtocolError, validateReceipt, validateStudioCommand, validateStudioIdentity } from "./studio-agent-protocol.js";
 import { studioVisual, verifyLighting } from "./studio-motion-visual.js";
@@ -299,7 +299,7 @@ export function createStudioAppBinding(ports) {
 							.then(verification => { verified[index] = verification; }, error => { if (!(error instanceof StudioProtocolError)) throw error; skipped.push(`${name}: ${error.message}`); }));
 					});
 				}
-				if (args.visual !== "none") studioVisual(args, { s, receipt, result, images, ports });
+				if (args.checks.includes("motion")) exportFramingInto(result, { args, s, receipt, scene, ports }); if (args.visual !== "none") studioVisual(args, { s, receipt, result, images, ports });
 				const finish = () => {
 					const computed = verified.filter(Boolean);
 					if (computed.length) result.verification = computed.length === 1 ? computed[0] : computed;
