@@ -12,9 +12,9 @@ const check = (name, fn) => { fn(); console.log(`ok - ${name}`); };
 const motion = prompt.slice(prompt.indexOf("Motion is computed"), prompt.indexOf("The context scene.previsMode"));
 const sentences = text => text.split(/(?<=[.;:])\s+/).map(s => s.trim()).filter(s => s.length >= 40);
 
-check("the whole prompt is at most 11,000 characters", () => assert.ok(prompt.length <= 11000, `${prompt.length}`));
-check("the motion part is at most 1,200 characters", () => {
-	assert.ok(motion.length > 0 && motion.length <= 1200, `${motion.length}`);
+check("the whole prompt is at most 11,100 characters", () => assert.ok(prompt.length <= 11100, `${prompt.length}`));
+check("the motion part is at most 1,350 characters", () => {
+	assert.ok(motion.length > 0 && motion.length <= 1350, `${motion.length}`);
 });
 check("the prompt names describe, grab, goals, repair, base, beats and the 0.01 m scale floor", () => {
 	for (const word of ["motion.describe", "grab", "goals", "repair", "base", "\"beats\"", "0.01 m"]) assert.ok(prompt.includes(word), word);
@@ -25,7 +25,7 @@ check("the motion part keeps the coordinate rules", () => {
 });
 check("the motion part states the procedure", () => {
 	for (const rule of [/Before the first spec, read run_action motion\.describe/, /never probe the schema/, /reachGrip/, /grab\/release/, /frames: "auto"/,
-		/group \(Empty\) is carried or hinged as one unit/, /at least one goals entry per motion request/, /install: "ifClean" and repair: \{ rounds \}/, /topic: "essentials"/, /never sweep values by hand/,
+		/group \(Empty\) is carried or hinged as one unit/, /at least one goals entry per motion request: first list its causes, contacts, effects and what must not happen/, /report the lines no goal measures \(Unmeasured/, /install: "ifClean" and repair: \{ rounds \}/, /topic: "essentials"/, /never sweep values by hand/,
 		/base .*plus patch/, /probes and output\.timeline instead of .*motion\.sample/, /qa\.ok, which includes the goals\) installs in that call/,
 		/visual: "contact_sheet", frames: "beats"/, /visual: "trace"/, /Report the QA numbers, the goals and output\.fixed/, /output\.observations, not QA/, /views, focus, trail/]) assert.match(motion, rule);
 });
