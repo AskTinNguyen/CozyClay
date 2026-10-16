@@ -81,7 +81,7 @@ export const NOTES = {
 		"A follow { follow: <ref>, offset?, aim?, visible?, level? } puts any record (an effect, a light, a part) on a body point every frame: "
 			+ "aim sets its +Y (an effect emits along it): up (default), face (forward), a direction or a ref (toward it); offset is metres along its axes after aim. It is no obstacle.",
 		"The editor's motion.keyObject writes one key from a drag (a hinge: its channel key)."],
-	checks: ["Each entry adds QA groups: contacts CONTACT, orient ORIENT, below BELOW, clearance CLEARANCE, appear APPEAR; supports mark where a part rests on an object (no FLOAT, no balance there).",
+	checks: ["Each entry adds QA groups: contacts CONTACT, orient ORIENT, below BELOW, clearance CLEARANCE, appear APPEAR; supports mark where a part rests on an object (no FLOAT, no balance there); a foot on an object's top is on the ground without one.",
 		"when: a weight channel (active above 0.99) or [f0, f1]; clearance uses frames.", "Check points take joint:, prop: and anchor: only; goals and probes take every ref (topic refs).",
 		"allow excuses a body part inside an object up to depth; limits override the QA limits. Unnamed entries are named by place, contacts[0].",
 		"Speed, acceleration, knee bend and balance are style: measured in output.observations, not judged. Naming speedCore/speedLimb, accCore/accLimb, knee or balance in limits makes it a check (SPEED, ACC, KNEE, BALANCE).",

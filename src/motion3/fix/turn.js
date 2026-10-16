@@ -1,5 +1,5 @@
 // A planted flat foot keeps its heading (lane Q1). While both its heel and its ball are planted
-// (QA's definition: under plantH and still), the foot cannot turn without one of them sliding: a
+// (QA's definition: under plantH over the ground, qa/ground.js, and still), the foot cannot turn without one of them sliding: a
 // flat foot under the body's weight grips the floor. A turn the channels ask for then (fyaw_<k>, or
 // the body's yaw when fyaw_<k> is not keyed) waits: the foot keeps the heading it planted with
 // until its heel or its toes come up or it lifts, and then eases onto the keyed heading at about
@@ -9,7 +9,7 @@
 // A foot that turns only while a heel or ball is up, and a flat foot that does not turn, are left
 // as they were.
 import { QA_LIMITS } from "../qa/checks.js";
-import { solePoints } from "../qa/geometry.js";
+import { groundSole } from "../qa/ground.js";
 import { round4 } from "./ease.js";
 
 const TURN_RATE = 6, DECAY = 4, TOL = 1;
@@ -17,12 +17,12 @@ const smooth = t => t * t * (3 - 2 * t);
 
 /** Holds the heading of flat planted feet (fyaw_<k>), eases it onto the keys once a heel or ball is up; re-solves those frames. */
 export function holdTurns(out, engine) {
-	const { sk } = out.ctx, n = out.frames.length, H = QA_LIMITS.plantH, touched = new Set();
+	const n = out.frames.length, H = QA_LIMITS.plantH, touched = new Set();
 	let worst = 0;
 	for (const [k, S] of [["l", "Left"], ["r", "Right"]]) {
 		const keyed = out.baked[`fyaw_${k}`] ?? out.baked.yaw;
 		if (!out.baked[`foot_${k}`] || !keyed) continue;
-		const sole = out.frames.map(fr => solePoints(sk, fr.s, S));
+		const sole = out.frames.map((_, i) => groundSole(out, i, S));
 		const down = (i, key) => sole[i][key][1] < H && sole[i - 1][key][1] < H && Math.abs(sole[i][key][1] - sole[i - 1][key][1]) < 0.0005;
 		const flat = i => i > 0 && i < n && down(i, "heel") && down(i, "ball");
 		const want = Array.from({ length: n }, (_, i) => keyed[out.f0 + i]), yaw = want.slice();

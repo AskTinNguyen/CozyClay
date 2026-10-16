@@ -139,7 +139,7 @@ export const contactHints = {
 	},
 	BALANCE(X, g) {
 		const f = g.worstFrame, { s } = X.fr(f), P = s.P, I = X.I;
-		if (g.subject === "no foot on the ground") return { cause: X.cause("root", f), hint: `at f${f} lower foot_l or foot_r to the floor (ankle y ${ankleY(X.sk)}), or declare checks.supports for the seat the hips rest on` };
+		if (g.subject === "no foot on the ground") return { cause: X.cause("root", f), hint: `at f${f} lower foot_l or foot_r onto the ground, the floor or the top of an object under it (the ankle stands ${ankleY(X.sk)} m above it), or declare checks.supports for the seat the hips rest on` };
 		const com = scale(["Hips", "Spine1", "Spine2", "Head"].reduce((acc, j) => add(acc, P[I[j]]), [0, 0, 0]), 0.25);
 		const feet = ["Left", "Right"].flatMap(S => Object.values(solePoints(X.sk, s, S)));
 		const xs = feet.map(p => p[0]), zs = feet.map(p => p[2]), mg = 0.08 - 0.01;

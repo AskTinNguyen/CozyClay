@@ -149,7 +149,7 @@ export const motionHints = {
 	SPEED: (X, g) => speedHint(X, g, 1),
 	POP: (X, g) => speedHint(X, g, 0.5),
 	ACC: (X, g) => speedHint(X, g, 0.5),
-	FLOAT: (X, g) => ({ cause: X.cause("root", g.worstFrame), hint: `over f${g.first}-f${g.last} lower the root or key foot_l/foot_r back to the floor (ankle y ${ankleY(X.sk)}); a jump needs the hips to rise and fall; a seat or ledge the body rests on goes in checks.supports` }),
+	FLOAT: (X, g) => ({ cause: X.cause("root", g.worstFrame), hint: `over f${g.first}-f${g.last} lower the root or key foot_l/foot_r back onto the ground, the floor or the top of an object under the foot (the ankle stands ${ankleY(X.sk)} m above it); a jump needs the hips to rise and fall; a seat or ledge the hips rest on goes in checks.supports (a foot on an object's top needs none)` }),
 	LENGTH: () => ({ cause: "compiler", hint: "a bone changed length: report the spec, this is a compiler fault" }),
 	CONTACT(X, g) {
 		const ck = (X.spec.checks?.contacts ?? []).find(c => g.subject.startsWith(`${c.name}:`)), f = g.worstFrame, i = X.rel(f);

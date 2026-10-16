@@ -1,4 +1,5 @@
-// Planted-foot lock: while a heel or ball is planted (QA's own definition) and drifts less than
+// Planted-foot lock: while a heel or ball is planted (QA's own definition, over the ground under
+// it: the floor or an object's top, qa/ground.js) and drifts less than
 // 1 cm, the ankle target is shifted so the planted point stays where it landed. The foot pose
 // depends only on the ankle target, fyaw and fpitch, so the shift moves the sole rigidly.
 // A pivot (the planted point is the only one down: the heel is up over a planted ball, or the
@@ -8,19 +9,19 @@
 // lets go no faster than EASE_STEP a frame.
 import { add, sub } from "../compiler/math.js";
 import { QA_LIMITS } from "../qa/checks.js";
-import { solePoints } from "../qa/geometry.js";
+import { groundSole } from "../qa/ground.js";
 import { round4 } from "./ease.js";
 
 const MAX_DRIFT = 0.01, DECAY = 4, PIVOT_H = 0.03, EASE_STEP = 0.02;
 
 export function lockFeet(out, engine) {
-	const { sk } = out.ctx, n = out.frames.length, H = QA_LIMITS.plantH;
+	const n = out.frames.length, H = QA_LIMITS.plantH;
 	let plants = 0, pivots = 0, worst = 0;
 	const touched = new Set();
 	for (const [k, S] of [["l", "Left"], ["r", "Right"]]) {
 		const ch = out.baked[`foot_${k}`];
 		if (!ch) continue;
-		const sole = out.frames.map(fr => solePoints(sk, fr.s, S));
+		const sole = out.frames.map((_, i) => groundSole(out, i, S));
 		const planted = (i, key) => sole[i][key][1] < H && sole[i - 1][key][1] < H && Math.abs(sole[i][key][1] - sole[i - 1][key][1]) < 0.0005;
 		const delta = Array.from({ length: n }, () => null);
 		for (let i = 1; i < n;) {

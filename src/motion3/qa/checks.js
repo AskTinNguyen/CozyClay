@@ -9,6 +9,7 @@ import { CAPSULES, segPoints, sdBox, segDist, headDepth, solePoints } from "./ge
 import { contactChecks } from "./contact-checks.js";
 import { bodyChecks } from "./body-checks.js";
 import { popChecks } from "./style.js";
+import { groundSole } from "./ground.js";
 import { ELBOW_STOP, KNEE_STOP } from "../compiler/limbs.js";
 
 export const QA_LIMITS = { allow: 0.005, groundAllow: 0.01, reach: 0.01, slide: 0.0015, plantH: 0.012,
@@ -72,10 +73,11 @@ export function generalChecks(sk, out, opts = {}) {
 	const allowed = (part, into) => allowance(opts.allow, part, into);
 	contactChecks(sk, out, L, push, allowed);
 	bodyChecks(sk, out, L, push, allowed);
-	// temporal checks
+	// temporal checks; a planted heel or ball is low over the ground under it, the floor or an object's top (ground.js)
 	for (const S of ["Left", "Right"]) {
+		const sole = F.map((_, f) => groundSole(out, f, S));
 		for (let f = 1; f < n; f++) {
-			const a = solePoints(sk, F[f - 1].s, S), b = solePoints(sk, F[f].s, S);
+			const a = sole[f - 1], b = sole[f];
 			for (const key of ["heel", "ball"]) {
 				const planted = b[key][1] < L.plantH && a[key][1] < L.plantH && Math.abs(b[key][1] - a[key][1]) < 0.0005;
 				const hv = Math.hypot(b[key][0] - a[key][0], b[key][2] - a[key][2]);

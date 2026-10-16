@@ -10,13 +10,13 @@
 // them with the keys. end is the pose at f[1]: root = the Hips joint, hand_* = the wrists,
 // on_* = the "object:<id>" that hand holds there (object-pose.js inHandAt), else the
 // "anchor:<a>" whose w_<a>_<k> > 0.5 (the largest). planted = the heel or the ball below
-// QA_LIMITS.plantH and still (a foot on its ball, heel up, is planted), for 3 frames or more (the first, the last and the longest others
+// QA_LIMITS.plantH over the ground (the floor or an object's top, qa/ground.js) and still (a foot on its ball, heel up, is planted), for 3 frames or more (the first, the last and the longest others
 // when there are more than 4). Events: grab/release when an object enters or leaves a hand,
 // show/hide when a visibility channel (a carry's or a switch's `visible`, or any *_vis channel)
 // crosses 0.5; `object` is the object id (one event per object the channel shows), or the
 // channel's name when no object owns it.
 import { QA_LIMITS } from "./qa/checks.js";
-import { solePoints } from "./qa/geometry.js";
+import { groundSole } from "./qa/ground.js";
 import { inHandAt } from "./object-pose.js";
 
 const MAX_BEATS = 12, PER_FOOT = 4, MIN_PLANT = 3, STILL_Y = 0.0005;
@@ -42,9 +42,9 @@ function beatsOf(out, used, spec) {
 
 /** planted[side][f]: the heel or the ball low and still at absolute frame f (false outside the window). */
 function plantedFlags(out) {
-	const { sk } = out.ctx, n = out.frameCount, a = out.f0 ?? 0, flags = { l: new Uint8Array(n), r: new Uint8Array(n) };
+	const n = out.frameCount, a = out.f0 ?? 0, flags = { l: new Uint8Array(n), r: new Uint8Array(n) };
 	for (const [k, S] of [["l", "Left"], ["r", "Right"]]) {
-		const sole = out.frames.map(fr => (fr ? solePoints(sk, fr.s, S) : null));
+		const sole = out.frames.map((fr, i) => (fr ? groundSole(out, i, S) : null));
 		sole.forEach((p, i) => {
 			const q = sole[i > 0 ? i - 1 : i + 1];
 			if (!p || !q) return;

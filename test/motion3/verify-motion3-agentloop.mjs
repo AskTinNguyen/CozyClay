@@ -10,6 +10,7 @@ import { I3 } from "../../src/motion3/compiler/math.js";
 import { createStudioAppActions } from "../../src/commands/index.js";
 import { SCENE_OBJECTS as CUP_OBJECTS, CHARACTER as CUP_CHARACTER } from "./fixtures/cup-scene.mjs";
 import { isPop } from "../../src/motion3/qa/style.js";
+import { groundY } from "../../src/motion3/qa/ground.js";
 import { repairSpec } from "../../src/motion3/repair.js";
 import { fitOutput } from "../../src/motion3/report.js";
 
@@ -137,6 +138,32 @@ expect("repair ignores observations: a clean fast swing compiles once and is kep
 const float = compile(stand({ fix: { reach: false }, keys: [{ f: 20, set: { root: [0, sk.restWorldPos[I.Hips][1] - 0.01, 0] } }, { f: 30, set: { root: [0, sk.restWorldPos[I.Hips][1] + 0.03, 0] } }, { f: 40, set: { root: [0, sk.restWorldPos[I.Hips][1] - 0.01, 0] } }] }), empty);
 expect("FLOAT: off the ground without falling is a hard error; the airborne frames are observed", float.qa.groups.some(g => g.kind === "FLOAT" && g.count >= 4 && g.hint) && float.observations.balance.air?.length >= 1
 	&& !float.qa.groups.some(g => g.kind === "BALANCE"), JSON.stringify(float.qa.groups.map(g => `${g.kind} ${g.subject}`)));
+// the ground is the floor or an object's top under the sole (qa/ground.js); session 68d305dc read a foot on a cube as FLOAT
+const boxRec = (o = {}) => ({ id: "box", name: "Box", renderer: "cube", x: 0, y: 0, z: 0, rot: 0, rotX: 0, rotZ: 0, scaleX: 1.2, scaleY: 0.3, scaleZ: 1.2, footprint: { width: 1.2, depth: 1.2 }, height: 1, ...o });
+const onBox = motionScene([boxRec()]), up = 0.3;
+const feetAt = (dy, dl = [0, 0]) => ({ root: [0, hipY + dy, 0], foot_l: [P[I.LeftFoot][0] + dl[0], ank + dy, P[I.LeftFoot][2] + dl[1]], foot_r: [P[I.RightFoot][0], ank + dy, P[I.RightFoot][2]] });
+const keyed = (keys, extra = {}) => ({ schema: "cozyclay.motion-spec.v1", fps: 24, frames: 60, keys, ...extra });
+const standBox = compile(keyed([{ f: 0, set: feetAt(up) }, { f: 59, set: feetAt(up) }]), onBox);
+expect("ground: feet on a 0.3 m box top stand on the ground (no FLOAT, no air), balance is measured on them, both feet planted",
+	standBox.qa.ok && !standBox.observations.balance.air && standBox.observations.balance.min?.[0] > 0 && JSON.stringify(standBox.timeline[0].planted) === JSON.stringify({ l: [[0, 59]], r: [[0, 59]] }),
+	JSON.stringify({ groups: standBox.qa.groups.map(g => g.subject), balance: standBox.observations.balance, planted: standBox.timeline[0].planted }));
+const slideBox = compile(keyed([{ f: 0, set: feetAt(up) }, { f: 20, set: feetAt(up) }, { f: 40, set: feetAt(up, [0.04, 0]) }, { f: 59, set: feetAt(up, [0.04, 0]) }], { fix: { slide: false } }), onBox);
+expect("ground: a planted foot sliding 4 cm on the box top is SLIDE", slideBox.qa.groups.some(g => g.kind === "SLIDE" && /^Left /.test(g.subject)) && !slideBox.qa.groups.some(g => g.kind === "FLOAT"),
+	JSON.stringify(slideBox.qa.groups.map(g => `${g.kind} ${g.subject}`)));
+const driftBox = compile(keyed([{ f: 0, set: feetAt(up) }, { f: 20, set: feetAt(up) }, { f: 40, set: feetAt(up, [0.005, 0]) }, { f: 59, set: feetAt(up, [0.005, 0]) }]), onBox);
+expect("ground: fix.slide holds a 5 mm drift on the box top as on the floor (QA's planted definition)", driftBox.qa.ok && driftBox.fixed.slide?.plants === 1, JSON.stringify(driftBox.fixed));
+const hoverBox = compile(keyed([{ f: 0, set: feetAt(up) }, { f: 20, set: feetAt(up) }, { f: 25, set: feetAt(up + 0.05) }, { f: 35, set: feetAt(up + 0.05) }, { f: 40, set: feetAt(up) }, { f: 59, set: feetAt(up) }]), onBox);
+expect("ground: both feet held 5 cm over the box top without falling is still FLOAT", hoverBox.qa.groups.some(g => g.kind === "FLOAT" && g.count >= 6) && hoverBox.observations.balance.air?.length === 1,
+	JSON.stringify(hoverBox.qa.groups.map(g => `${g.kind} ${g.subject}`)));
+// groundY on turned boxes reads the box frame: a yawed square's corner, a tilted top, a table top above the point
+const groundAt = (rec, p) => groundY({ objectsAt: () => motionScene([boxRec(rec)]).objects }, 0, p);
+const near = (a, b) => Math.abs(a - b) < 1e-6;
+expect("groundY: off the box is the floor; on it the top; a top more than 5 cm above the point is not ground (under a table)",
+	near(groundAt({}, [2, 0.5, 0]), 0) && near(groundAt({}, [0.5, 0.4, 0.5]), 0.3) && near(groundAt({}, [0.5, 0.29, 0.5]), 0.3) && near(groundAt({}, [0, 0.2, 0]), 0));
+expect("groundY: a box yawed 45 deg covers its rotated footprint, not its unturned one",
+	near(groundAt({ rot: 45 }, [0.8, 0.4, 0]), 0.3) && near(groundAt({ rot: 45 }, [0.55, 0.4, 0.55]), 0));
+expect("groundY: a box tilted 20 deg about z is as high as its sloped top under the point", near(groundAt({ rotZ: 20 }, [0, 0.5, 0]), 0.3 / Math.cos(20 * Math.PI / 180)),
+	groundAt({ rotZ: 20 }, [0, 0.5, 0]));
 // the output budget keeps observations whole, after qa, even when groups are cut
 const crowded = fitOutput({ frames: 48, specId: "spec-000000000000", qa: { ok: false, total: 400, groups: Array.from({ length: 80 }, (_, i) => ({ kind: "COLLIDE", subject: `hand_r x box-${i}`, count: 5, severity: 5, first: 0, last: 4, worst: 0.02, hint: "x".repeat(200) })) },
 	observations: fastSwing.observations, timeline: [] }, 6000);

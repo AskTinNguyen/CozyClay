@@ -9,7 +9,8 @@
 // spike, not a large value: a hard but continuous acceleration (a swing's launch) is style.
 // See docs/motion-api-v3.1.md C13.
 import { add, sub, scale, len, dot, angle } from "../compiler/math.js";
-import { CAPSULES, segPoints, sdBox, solePoints } from "./geometry.js";
+import { CAPSULES, segPoints, sdBox } from "./geometry.js";
+import { groundSole } from "./ground.js";
 
 const SPEED_JOINTS = ["Hips", "Head", "LeftHand", "RightHand", "LeftFoot", "RightFoot", "LeftLeg", "RightLeg", "LeftForeArm", "RightForeArm"];
 const CORE = new Set(["Hips", "Head"]);
@@ -79,7 +80,8 @@ function supported(out, f, supports) {
 /**
  * Per frame: null where a declared support carries the body, "air" with no foot on the ground,
  * else the balance margin in metres: how far the centre of mass (hips, spine, head) sits inside
- * the feet's box on the floor (< 0: outside it). While the hips travel every foot counts.
+ * the box of the feet on the ground, the floor or an object's top (ground.js; < 0: outside it).
+ * While the hips travel every foot counts.
  */
 function balanceMargins(out, supports = []) {
 	const sk = out.ctx.sk, I = sk.index, F = out.frames;
@@ -89,7 +91,7 @@ function balanceMargins(out, supports = []) {
 		const moving = f > 0 && f < F.length - 1 && Math.hypot(F[f + 1].s.P[I.Hips][0] - F[f - 1].s.P[I.Hips][0], F[f + 1].s.P[I.Hips][2] - F[f - 1].s.P[I.Hips][2]) / 2 > 0.006;
 		const feet = [];
 		for (const S of ["Left", "Right"]) {
-			const sp = solePoints(sk, s, S);
+			const sp = groundSole(out, f, S);
 			if (moving || Math.min(sp.heel[1], sp.ball[1]) < 0.02) feet.push(sp.heel, sp.ball, sp.tip);
 		}
 		if (!feet.length) return "air";
@@ -99,11 +101,11 @@ function balanceMargins(out, supports = []) {
 	});
 }
 
-/** Runs [a, b] (indexes of out.frames) with both soles 2 cm or more above the floor and no declared support. */
+/** Runs [a, b] (indexes of out.frames) with both soles 2 cm or more above the ground (ground.js) and no declared support. */
 function airRuns(out, supports = []) {
-	const sk = out.ctx.sk, n = out.frames.length, runs = [];
-	const air = out.frames.map(({ s }, f) => !supported(out, f, supports)
-		&& ["Left", "Right"].every(S => { const sp = solePoints(sk, s, S); return Math.min(sp.heel[1], sp.ball[1]) >= 0.02; }));
+	const n = out.frames.length, runs = [];
+	const air = out.frames.map((_, f) => !supported(out, f, supports)
+		&& ["Left", "Right"].every(S => { const sp = groundSole(out, f, S); return Math.min(sp.heel[1], sp.ball[1]) >= 0.02; }));
 	for (let a = 0; a < n; a++) {
 		if (!air[a]) continue;
 		let b = a;
@@ -171,7 +173,7 @@ export function styleChecks(sk, out, checks, L) {
  * output.observations: measurements, not verdicts. Frames are absolute (out.f0 added).
  * { units, peaks: { <joint>: { speed: [m/s, f], accel: [m/s^2, f] } } (joints that move: STILL),
  *   balance: { min: [m, f], outside?: [f0, f1], air?: [[f0, f1], ...] (at most 4 runs with both
- *   feet off the floor) }, bend: { knee_l: [deg, f], ... } }
+ *   feet off the ground: the floor or an object's top) }, bend: { knee_l: [deg, f], ... } }
  */
 export function observeMotion(sk, out, checks = {}) {
 	const f0 = out.f0 ?? 0, fps = out.fps ?? 24, peak = (arr, k) => {
