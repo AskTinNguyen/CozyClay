@@ -17,7 +17,7 @@ const HOLD = 0.5, AT = 1;
 const JOINT = { twist: 1 - FOREARM_SHARE, flex: 1, dev: 1 };
 const range = (k, table) => table[k].map(v => v * JOINT[k]);
 
-export const WRIST_UNITS = "wrist: deg on the frames a hand holds (a fit, a carry or a grip on); flex + toward the palm, dev + radial / - ulnar, twist at the wrist joint; [min, f, max, f], frames past the comfortable range and at the limit";
+export const WRIST_UNITS = "wrist: deg on the frames a hand holds (a fit, a carry or a grip on); flex + toward the palm, dev + radial / - ulnar, twist at the wrist joint; [min, f, max, f], frames past the comfortable range and at the limit; grip: the grip a keyed carry of a thin body keeps (grip-choice.js), cost [it, today's] (comfort-priced wrist, reach and body over the keys)";
 
 /** True when the hand of side k holds something on frame i of out (absolute frame f). */
 function holding(out, k, i, f) {
@@ -49,5 +49,7 @@ export function observeWrist(sk, out) {
 		});
 		if (row.frames) res[`hand_${k}`] = row;
 	}
+	// the grip a keyed carry chose for where it goes (grip-choice.js): what the hand of that carry holds
+	for (const g of out.ctx.hold?.grips?.() ?? []) if (res[`hand_${g.hand}`]) res[`hand_${g.hand}`].grip = { object: g.id, chose: g.name, cost: [g.cost, g.today] };
 	return Object.keys(res).length ? res : null;
 }

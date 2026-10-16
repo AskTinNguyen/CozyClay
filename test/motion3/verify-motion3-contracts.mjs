@@ -215,6 +215,11 @@ expect("C18: a fit on a body turns the hand within the comfortable forearm twist
 expect("C18: fit.orient must be a boolean", /fits\[0\]\.orient must be true or false/.test(refusal(() => validateSpec({ schema: "cozyclay.motion-spec.v1", fps: 24, frames: 10, anchors: { a: { kind: "world", p: [0, 1, 0.4] } },
 	props: { g: { hand: "r", origin: ["RightHandIndex2"], points: { tip: [0, 0, 0] } } }, fits: [{ side: "r", anchor: "a", effector: { prop: "g", point: "tip" }, orient: "no" }] }, { sk, scene: cupScene }))));
 expect("C18: observations.wrist reads the holding hand", (gripped.observations.wrist?.hand_r?.frames ?? 0) > 10 && /wrist: deg/.test(gripped.observations.units), JSON.stringify(gripped.observations.wrist));
+// C18 path grip: a keyed carry of a thin body with a free grip reports the grip chosen over its keyed path, never dearer than the grab frame's
+const cupRest = cupScene.groups[CUP.group].pos;
+const pathed = compileSpec({ ...gripSpec, frames: 70, objects: { [CUP.group]: { prop: "cupHoldGrip", grab: 26, keys: [{ f: 26, pos: cupRest, aim: [0, 1, 0] },
+	{ f: 50, pos: [CHARACTER.x - 0.03, 1.46, CHARACTER.z + 0.22], aim: [0, 0.8, -0.6] }] } } }, { sk, scene: cupScene }), chosen = pathed.observations.wrist?.hand_r?.grip;
+expect("C18: a keyed thin carry with a free grip reports its chosen grip (object, chose, cost [it, today's])", chosen?.object === CUP.group && typeof chosen.chose === "string" && chosen.cost[0] <= chosen.cost[1] && /grip: the grip a keyed carry/.test(pathed.observations.units), JSON.stringify(chosen));
 
 if (failures) { console.error(`${failures} motion3 contract check(s) failed`); process.exit(1); }
 console.log("motion3 contracts: all checks passed");

@@ -19,9 +19,12 @@ import { holdCost } from "./compiler/hold.js";
 import { polePlan, smoothPath, smoothed } from "./hold-plan.js";
 import { secondGrip, secondHold, gripGate } from "./second-hand.js";
 import { SIDES } from "./compiler/pose.js";
+import { chooseGrip, between, thinBody } from "./grip-choice.js";
 
 /** Frames over which the hand blends into and out of the keyed span. */
 export const KEY_BLEND = 8;
+// the frames a hand takes to turn into a chosen grip before its grab and out of it after its release (grip-choice.js)
+const GRAB_EASE = 12;
 
 const smooth = x => x * x * (3 - 2 * x);
 /** [grab, release] in absolute frames of `out` (object-pose.js spanOf, kept here to stay out of its import cycle). */
@@ -99,10 +102,32 @@ export function holdHook(ctx, out, solvePlain, solveLed) {
 	const { sk, spec, scene } = ctx, held = keyedEntries(spec);
 	if (!held.length) return null;
 	const palmOf = (o, s) => carriedPose(sk, spec, s, { prop: o.prop }), attached = new WeakMap(), attaching = new Set();
+	const restAt = (id, f) => ctx.restingAt?.(id, f) ?? scene?.objects?.[id] ?? groupsOf(scene)[id];
+	// a keyed carry of a thin body (a cup, a can, a bar) whose grip is free (no at/along, no orient: false, no keyed wrist at
+	// the grab) keeps the grip its keyed path holds most comfortably (grip-choice.js), solved on the plain frames with the
+	// body read at rest; a box keeps the grip grip.js gives it at the grab
+	const choices = new WeakMap(), mapped = f => (out.timeMap ? Math.round(out.timeMap(f)) : f);
+	// chosen once per compile (the first bake): the fixes' rebakes move the body a little, the carry's keys not at all
+	const chosen = id => {
+		if (!choices.has(out)) choices.set(out, new Map());
+		const cache = choices.get(out), o = spec.objects[id], k = spec.props?.[o.prop]?.hand, grab = spanIn(out, o)[0], b = out.baked ?? {};
+		if (cache.has(id)) return cache.get(id);
+		cache.set(id, null);
+		const free = k && o.at === undefined && o.along === undefined && (o.grab !== undefined || !scene?.objects?.[id]) && thinBody(scene, id) && !(spec.fits ?? []).some(fit => fit.side === k && fit.orient === false)
+			&& !["wtwist", "wflex"].some(ch => Math.abs(b[`${ch}_${k}`]?.[grab] ?? 0) > 1e-3)
+			// keys that start after the grab: the body rides the hand from where it rests, which only today's grip meets exactly
+			&& mapped(Math.min(...o.keys.map(key => key.f))) <= grab;
+		if (!free) return null;
+		attaching.add(id);
+		try { cache.set(id, chooseGrip({ sk, o, side: SIDES[k], grab, rest: restAt(id, grab), plain: f => solvePlain(f).s, palmOf: s => palmOf(o, s), map: mapped })); } finally { attaching.delete(id); }
+		return cache.get(id);
+	};
 	const attach = id => {
 		if (!attached.has(out.baked)) attached.set(out.baked, new Map());
 		const cache = attached.get(out.baked), o = spec.objects[id];
 		if (cache.has(id)) return cache.get(id);
+		const picked = chosen(id);
+		if (picked && picked.name !== "today") { cache.set(id, picked.offset); return picked.offset; }
 		const rest = scene?.objects?.[id] ?? groupsOf(scene)[id], group = !scene?.objects?.[id] && !!rest;
 		const keeps = o.at === undefined && o.along === undefined && (group || o.grab !== undefined);
 		// the grab frame solved without the keys: a left hand anchored on id reads it there (object-pose.js), where this offset puts it
@@ -158,9 +183,26 @@ export function holdHook(ctx, out, solvePlain, solveLed) {
 		cache.set(id, { map: out.timeMap, plan });
 		return plan;
 	};
+	// around its keys the hand holds a chosen grip: it turns into it over the GRAB_EASE frames before the grab, holds it from the
+	// grab until the keys lead, keeps it on the body where the last key left it, and turns out of it over the GRAB_EASE frames
+	// after the release (by time, not by a fit's weight, which an agent may key on in a frame), so nothing jumps
+	const gripAround = (id, o, f) => {
+		const pick = chosen(id);
+		if (!pick || pick.name === "today") return null;
+		const curve = curveIn(out, id), t0 = curve.t[0], t1 = curve.t[curve.t.length - 1], [grab, release] = spanIn(out, o);
+		if (f >= t0 && f <= t1) return null;
+		// the elbow takes the planned pole of the nearest keyed frame (hold-plan.js), so it does not swing at the span's ends
+		// the grip on the body where the first key puts it (an aim key's roll is picked for this grip), so the reach meets the keys
+		const on = keyedPose(curve, f < t0 ? t0 : t1), grip = compose(on, invert(pick.offset)), measure = s => palmOf(o, s), pole = planOf(id, o).get(Math.round(f < t0 ? t0 : t1));
+		if (f < grab || f > release) { const w = smooth(Math.max(0, 1 - (f < grab ? grab - f : f - release) / GRAB_EASE)); return w > 1e-3 ? { w, palm: grip, measure, pole } : null; }
+		const h = heldAt(id, o, f);
+		return { w: 1, palm: h ? { pos: add(scale(grip.pos, 1 - h.w), scale(h.palm.pos, h.w)), R: between(grip.R, h.palm.R, h.w) } : grip, measure, pole };
+	};
 	// the hand that holds a keyed carry follows its keys
 	const lead = (k, f, s, c) => {
 		for (const [id, o] of held) {
+			const pre = spec.props?.[o.prop]?.hand === k ? gripAround(id, o, f) : null;
+			if (pre) return pre;
 			const h = spec.props?.[o.prop]?.hand === k ? heldAt(id, o, f) : null;
 			if (h) return { ...h, pole: planOf(id, o).get(f) };
 			const w = k === "l" && s && !planning ? leadWeight(curveIn(out, id), spanIn(out, o), f) : 0, grip = w > 0 ? gripAt(id, s, c) : null;
@@ -171,5 +213,7 @@ export function holdHook(ctx, out, solvePlain, solveLed) {
 	};
 	// the grip (compiler/grip.js) reads where a keyed carry's span and keys begin, after a retime
 	const firstKey = id => { const t = Math.min(...spec.objects[id].keys.map(k => k.f)); return out.timeMap ? Math.round(out.timeMap(t)) : t; };
-	return { lead, attach, attaching: id => attaching.has(id), plainFrame: solvePlain, carryOn, strainOn, span: id => spanIn(out, spec.objects[id]), firstKey };
+	// the grips chosen for keyed carries (observations.wrist reads them): [{ id, hand, name, cost, today }]
+	const grips = () => held.map(([id, o]) => { const p = chosen(id); return p && { id, hand: spec.props[o.prop].hand, name: p.name, cost: p.cost, today: p.today }; }).filter(Boolean);
+	return { lead, attach, attaching: id => attaching.has(id), plainFrame: solvePlain, carryOn, strainOn, span: id => spanIn(out, spec.objects[id]), firstKey, grips };
 }

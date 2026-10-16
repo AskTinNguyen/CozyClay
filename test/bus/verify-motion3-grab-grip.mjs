@@ -1,6 +1,6 @@
 // The carrying hand's own grip (compiler/grip.js ownGrip): a keyed carry of a body that is not thin takes the
-// grip on the reach and on its grab frame, so the grab offset the carry keeps is a grip; a thin body (a cup)
-// keeps the forearm's neutral offset, which its aim keys roll from. Two agent takes of the interaction bench
+// grip on the reach and on its grab frame, so the grab offset the carry keeps is a grip; a thin body (a cup) takes
+// the grip chosen over its keyed path instead (grip-choice.js). Two agent takes of the interaction bench
 // (pred-r1 S10 and S8) compiled with the grip on and with orient: false on every reachGrip.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
@@ -26,9 +26,10 @@ test('a two-hand box carry: the carrying hand grips at the grab and its wrist st
 	assert.ok(turn(on, off) > 0.05, 'the grab frame takes the grip');
 });
 
-test('a thin carry (a cup to the mouth) keeps the neutral grab offset: the carrying hand is the same with or without the grip', () => {
+test('a thin carry (a cup to the mouth) keeps the grip chosen over its keyed path (grip-choice.js), not the neutral grab offset', () => {
 	const fx = load('cup-to-mouth'), on = compile(fx), off = compile({ ...fx, spec: withoutGrip(fx.spec) });
-	const I = sk.index.RightHand, same = on.out.frames.every((fr, f) => fr.s.R[I].flat().every((v, i) => Math.abs(v - off.out.frames[f].s.R[I].flat()[i]) < 1e-9));
-	assert.ok(same, 'the carrying hand is unchanged on every frame');
-	assert.equal(on.qa.total, off.qa.total);
+	const w = r => r.observations.wrist?.hand_r ?? { past: 0, limit: 0 };
+	assert.ok(w(on).past < w(off).past, `past-comfort frames ${w(off).past} -> ${w(on).past}`);
+	assert.ok(on.qa.total <= off.qa.total, `QA ${off.qa.total} -> ${on.qa.total}`);
+	assert.notEqual(w(on).grip?.chose ?? 'today', 'today', JSON.stringify(w(on).grip));
 });
