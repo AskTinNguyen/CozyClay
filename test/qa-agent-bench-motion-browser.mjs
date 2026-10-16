@@ -107,9 +107,15 @@ async function runScenario(id, index) {
 		await ev(`(() => { const b = document.querySelector('button.inspector-agent-switch[aria-pressed="false"]') ?? [...document.querySelectorAll('button')].find(b => /Ask the agent|에이전트에게/.test(b.textContent)); b?.click(); return true; })()`);
 		await sleep(1200);
 		const select = (aria, value) => ev(`(() => { const s = document.querySelector('select[aria-label=${JSON.stringify(aria)}]'); if (!s) return 'missing'; Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(s, ${JSON.stringify(value)}); s.dispatchEvent(new Event('change', { bubbles: true })); return s.value; })()`);
+		// The model list fills in after the provider answers (slow when several benches load at once): wait for
+		// the asked model, and never run a scenario on another model.
+		const hasModel = `[...(document.querySelector('select[aria-label="Model"]')?.options ?? [])].some(o => o.value === ${JSON.stringify(model)})`;
+		if (!(await waitFor(ev, hasModel, 90_000))) throw new Error(`the model ${model} never appeared in the Model select`);
 		row.modelSelected = await select("Model", model);
+		if (row.modelSelected !== model) throw new Error(`the Model select kept ${row.modelSelected}, not ${model}`);
 		await sleep(400);
 		row.effortSelected = await select("Reasoning effort", effort);
+		if (effort && row.effortSelected !== effort) throw new Error(`the Reasoning effort select kept ${row.effortSelected}, not ${effort}`);
 		const focused = await ev(`(() => { const a = document.querySelector('aside[aria-label="Agent"] textarea') ?? document.querySelector('textarea[placeholder^="Ask the agent"]'); a?.focus(); return !!a; })()`);
 		if (!focused) throw new Error("no agent input");
 		await send("Input.insertText", { text: SCENARIOS[id].prompt });
