@@ -23,7 +23,8 @@ export function standIdle(ctx) {
  * walkTo({ to: [x, z] } | { heading: h | [h0, h1] }, steps, step = 0.5, turnDistance, ...): the
  * walk generator from the pose at f0. With `to` the heading turns toward the point and the step
  * count covers the distance. Ends 16 + steps * period + 18 frames after f0, feet together; a
- * take that ends after the last step holds that pose to its end.
+ * take that ends after the last step holds that pose to its end. The steps keep a natural rhythm
+ * (compiler/gait-rhythm.js); vary: 0 makes every step the same.
  */
 export function walkTo(ctx) {
 	const { args, state } = ctx;

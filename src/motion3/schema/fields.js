@@ -19,7 +19,7 @@ export const OBJECT_FIELDS = { hinge: ["pivot", "axis", "channel"], carry: ["pro
 	follow: ["follow", "offset", "aim", "visible", "level"] };
 /** One spec.objects[id].keys entry (C14): the held object's world pose at frame f; aim (+ roll) in place of rot (C16). */
 export const OBJECT_KEY_FIELDS = ["f", "pos", "rot", "aim", "roll"];
-export const WALK_FIELDS = ["type", "f0", "steps", "step", "period", "swing", "halfWidth", "lift", "heading", "turnDistance", "pelvisHigh", "pelvisLow", "firstStep", "armSwing"];
+export const WALK_FIELDS = ["type", "f0", "steps", "step", "period", "swing", "halfWidth", "lift", "heading", "turnDistance", "pelvisHigh", "pelvisLow", "firstStep", "armSwing", "vary"];
 /** spec.checks keys. */
 export const CHECK_FIELDS = ["contacts", "orient", "below", "clearance", "appear", "supports", "allow", "limits", "mouthPoints"];
 /** Fields of one entry of each spec.checks list. */

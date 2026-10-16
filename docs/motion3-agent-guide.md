@@ -18,7 +18,7 @@ The agent writes a **motion spec**. The deterministic compiler bakes every frame
 | Skill | Args | Does |
 |---|---|---|
 | `standIdle` | `at: [x, z]`, `heading`, `until` | Neutral standing pose, arms down (FK). The start pose for a walk. |
-| `walkTo` | `to: [x, z]` or `heading: h \| [h0, h1]`, `steps`, `step`, `turnDistance`, `halfWidth`, `lift`, `firstStep`, `period` | The walk generator from the pose at `f0`. With `to`, it turns toward the point and picks the step count. Ends `16 + steps * period + 18` frames later, feet together. |
+| `walkTo` | `to: [x, z]` or `heading: h \| [h0, h1]`, `steps`, `step`, `turnDistance`, `halfWidth`, `lift`, `firstStep`, `period`, `vary = 1` | The walk generator from the pose at `f0`. With `to`, it turns toward the point and picks the step count. Ends `16 + steps * period + 18` frames later, feet together. The steps keep a natural rhythm: the first steps build up, the last one slows into the stop, one side is a little quicker, no two steps are alike, and turns take shorter steps; `period`, `step`, `lift` and `armSwing` are averages, and the walk keeps its frames and its end point. `vary: 0` makes every step exactly `period` frames and `step` m; `2` is twice as uneven. |
 | `reachGrip` | `anchor`, `side`, `define`, `reach = 20`, `hold = 22`, `release = 12`, `elbow`, `fingers = "grip"` | The hand goes to the anchor with the fingers closing, holds, lets go. Adds the fingertip fit and a contact check. |
 | `sitInSeat` | `car` or `seat` (+ `seatBack`, `wheel`), `offset = [0, 0.17, 0.02]`, `floor` | Seated at the wheel, hands forward. Adds the seat support and the seat allowances. |
 | `exitCar` | `car` or `seat` + `door` + `handle`, `side = "l"`, `channel = "door"` | Reach the inner handle, open the door, swivel, legs out, stand up with the hands on the thighs, two steps away. 246 frames. Follows the car's position and yaw; `side: "r"` mirrors it. Tuned on the X Bot for a seat base at y 0.4 m. |
@@ -117,7 +117,7 @@ A channel is interpolated (monotone cubic) only through the keys that set it, so
 
 ## Generators
 
-`{ type: "walk", f0, steps, step, heading: [h0, h1], turnDistance, halfWidth, lift }` plans footsteps from the pose the keys leave at `f0`. Prefer the `walkTo` skill: it expands the same walk at once, so later skills start from where the walk ends.
+`{ type: "walk", f0, steps, step, heading: [h0, h1], turnDistance, halfWidth, lift, vary }` plans footsteps from the pose the keys leave at `f0`. Prefer the `walkTo` skill: it expands the same walk at once, so later skills start from where the walk ends.
 
 ## QA
 

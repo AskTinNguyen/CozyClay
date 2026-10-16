@@ -28,7 +28,7 @@ export const SKILL_INFO = {
 		args: { to: xz("[x, z] world m: the heading turns toward it and the steps cover the distance"), ...walkArgs,
 			heading: { oneOf: [num(), WALK_TYPES.heading], description: "degrees: h1, or [h0, h1]" } },
 		needs: "a standing pose keyed before f0", frames: "16 + steps * period + 18 (194 by default)",
-		adds: ["keys: a walk (the walk generator), feet together at the end"], example: { f0: 10, args: { to: [0.5, 1.5] } },
+		adds: ["keys: a walk, feet together at the end"], example: { f0: 10, args: { to: [0.5, 1.5] } },
 		tune: { lift: 0.01, halfWidth: 0.01, firstStep: 0.01, step: 0.01 }, place: { firstStep: 0.03, step: 0.03 },
 	},
 	reachGrip: {

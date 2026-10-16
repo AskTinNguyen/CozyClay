@@ -71,13 +71,13 @@ const shortUntil = refusal(smoke(300, { keys: [{ f: 0, set: SQUAT }] }, false, {
 expect("a short args.until says to raise it", shortUntil.endsWith("it has f1..f150, so set args.until >= 199"), shortUntil);
 expect("motion.describe tells the range", SKILL_INFO.smokeCigarette.frames === "265 nominal; fits 199..264 by pacing", SKILL_INFO.smokeCigarette.frames);
 
-// 3. at its own length nothing changes (hashes of v3@6b8b3669)
+// 3. at its own length nothing changes (hashes of v3@6b8b3669; the exitcar's walk as the walk's natural rhythm bakes it)
 const exitcar = { schema: "cozyclay.motion-spec.v1", fps: 24, frames: 730, use: [
 	{ skill: "sitInSeat", f0: 0, args: { car: "Car", offset: [-0.06, 0.17, 0.023] } }, { skill: "exitCar", f0: 0, args: { car: "Car", side: "l" } },
 	{ skill: "walkTo", f0: 246, args: { heading: [125, 150], steps: 8, step: 0.5, halfWidth: 0.1, lift: 0.08, turnDistance: 0.4, firstStep: 0.4 } },
 	{ skill: "smokeCigarette", f0: 440 }] };
 const xb = skeletonFor("x-bot-tpose"), car = compileSpec(exitcar, { sk: xb, scene: motionScene(SCENE_OBJECTS) });
-expect("the exitcar take from skills bakes bit for bit as before", hashOf(bakeTake(xb, car.out)) === "0c650084485e9813" && !car.observations.paced, hashOf(bakeTake(xb, car.out)));
+expect("the exitcar take from skills bakes bit for bit as before", hashOf(bakeTake(xb, car.out)) === "df302cb1a12b1a31" && !car.observations.paced, hashOf(bakeTake(xb, car.out)));
 const HASHES = { "y-bot-tpose": "02f0451771581391", "x-bot-tpose": "dc28a7fcc260fffa" };
 for (const [rig, hash] of Object.entries(HASHES)) {
 	const r = compile(rig, smoke(266, STAND, false), false), got = hashOf(bakeTake(skeletonFor(rig), r.out));
