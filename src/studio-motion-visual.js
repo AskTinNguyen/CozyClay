@@ -9,7 +9,7 @@ import { compileSpec } from "./motion3/pipeline.js";
 import { motionScene } from "./motion3/scene.js";
 import { skeletonFor } from "./motion3/rigs/index.js";
 import { beatFrames, grabReleases, traceSeries, TRACE_COLORS } from "./motion3/beats.js";
-import { projectPoint, trailPoints, viewCameras } from "./motion3/views.js";
+import { depthViews, projectPoint, trailPoints, viewCameras } from "./motion3/views.js";
 import { checkRef } from "./motion3/refs.js";
 import { renderWithGhosts } from "./ghost-set.js";
 import { GHOST_COLORS, sheetGhostSettings } from "./view-ghosts.js";
@@ -84,9 +84,10 @@ const round2 = p => p.map(v => Math.round(v * 100) / 100);
  * camera: each view is placed once for every frame, framed on args.focus (default the whole
  * character) and the trails. A trail is a dot per frame of its ref over the range, so spacing is
  * speed: frames up to the tile's frame solid, later ones faint, the tile's frame ringed. With
- * args.ghosts every tile also draws the take's poses around its frame (ghost-set.js).
+ * args.ghosts every tile also draws the take's poses around its frame (ghost-set.js). args.views
+ * are the rendered ones (depthViews); `added` names the view added to them and why.
  */
-function viewSheet(args, r, { s, frames, span, grid, picks, ports }) {
+function viewSheet(args, r, { s, frames, span, grid, picks, ports, added }) {
 	if (!r) throw new StudioProtocolError("TARGET_NOT_READY", "views frame a character's compiled take; name a character that has one (run motion.compile first).");
 	const focus = listOf(args.focus), refs = listOf(args.trail), ctx = { sk: r.out.ctx.sk, scene: r.out.ctx.scene };
 	for (const [field, list] of [["focus", focus], ["trail", refs]]) list.forEach((ref, i) => checkRef(r.expanded, message => { throw new StudioProtocolError("INVALID_ARGUMENT", message); }, ctx, `${field}[${i}]`, ref));
@@ -103,7 +104,7 @@ function viewSheet(args, r, { s, frames, span, grid, picks, ports }) {
 		return { ...tile, data: paintDots(tile.data, tile.width, tile.height, dots) };
 	}, grid);
 	const views = cameras.map(cam => ({ name: cam.name, eye: round2(cam.eye), target: round2(cam.target) }));
-	const ref = { frames, layout: grid.layout, views, focus: focus.length ? focus : "character", ...(trails.length ? { trails: trails.map(({ ref: of, color }) => ({ ref: of, color })) } : {}), ...(picks ? { picks } : {}),
+	const ref = { frames, layout: grid.layout, views, ...(added ? { addedView: added } : {}), focus: focus.length ? focus : "character", ...(trails.length ? { trails: trails.map(({ ref: of, color }) => ({ ref: of, color })) } : {}), ...(picks ? { picks } : {}),
 		...(target ? { ghosts: { ...sheetGhostSettings(), ...GHOST_COLORS } } : {}) };
 	return [{ dataUrl: ports.encodePng(sheet.data, sheet), width: sheet.width, height: sheet.height, frames, layout: grid.layout, views: views.map(v => v.name) }, ref];
 }
@@ -125,8 +126,9 @@ export function studioVisual(args, { s, receipt, result, images, ports }) {
 		let frames = sampleContactSheetFrames(args.range, s.frameCount), picks;
 		if (Array.isArray(args.frames)) frames = explicitFrames(args.frames, span);
 		else if (args.frames === "beats") ({ frames, picks } = beatFrames({ range: span, even: frames, timeline: r?.timeline, groups: r?.qa.groups, objects: r?.expanded.objects }));
-		const grid = sheetGrid(frames.length, args.views?.length ?? 0);
-		if (args.views) return keep(...viewSheet(args, r, { s, frames, span, grid, picks, ports }));
+		// Views of its own always include two that look across each other (motion3/views.js depthViews).
+		const depth = args.views ? depthViews(args.views) : null, grid = sheetGrid(frames.length, depth?.views.length ?? 0);
+		if (depth) return keep(...viewSheet({ ...args, views: depth.views }, r, { s, frames, span, grid, picks, ports, added: depth.added }));
 		const sheet = buildContactSheet(frames, ports.renderFrameBuffer, grid);
 		return keep({ dataUrl: ports.encodePng(sheet.data, sheet), width: sheet.width, height: sheet.height, frames, layout: grid.layout }, { frames, layout: grid.layout, ...(picks ? { picks } : {}) });
 	}

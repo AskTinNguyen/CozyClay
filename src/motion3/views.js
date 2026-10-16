@@ -7,6 +7,7 @@
 //   side           from the side the focus is on (the right when centred), 10 degrees up
 //   three-quarter  between front and that side, 25 degrees up
 //   top            straight down, the character's forward up the image
+// depthViews adds a view when the asked ones would hide depth (see APART below).
 import { refPoint } from "./refs.js";
 import { objectBoxesAt } from "./object-pose.js";
 import { resolveBone } from "./bones.js";
@@ -89,6 +90,27 @@ export function viewCameras(out, { views, frames, focus = [], trails = [], aspec
 		const e = rad(ELEVATION[name]), level = name === "front" ? forward : name === "side" ? side : norm(add(forward, side));
 		return fit(name, points, add(scale(level, Math.cos(e)), scale(UP, Math.sin(e))), UP, aspect);
 	});
+}
+
+// A picture hides distance along its own line of sight, so a sheet holds two views at least APART
+// degrees apart. Front and three-quarter (45 degrees apart) look along nearly one line: the
+// guitarist's right hand 20 cm in front of the guitar (session df388a9b) showed in neither.
+// LOOK is each view's nominal direction: azimuth from the character's forward, elevation.
+const LOOK = { front: [0, 10], side: [90, 10], "three-quarter": [45, 25], top: [0, 90] }, APART = 60;
+const lookDir = name => { const [a, e] = LOOK[name].map(rad); return [Math.cos(e) * Math.sin(a), Math.sin(e), Math.cos(e) * Math.cos(a)]; };
+const apartDeg = (a, b) => Math.round(Math.acos(Math.min(1, dot(lookDir(a), lookDir(b)))) * 180 / Math.PI);
+const spread = views => views.some((a, i) => views.slice(i + 1).some(b => apartDeg(a, b) >= APART));
+
+/**
+ * The views a sheet renders: the asked ones when two of them are APART degrees apart, else the
+ * asked ones plus the first of side, front and top that makes it so. Answers { views, added }:
+ * added is null, or { view, reason } for visualRefs.
+ */
+export function depthViews(views) {
+	if (spread(views)) return { views, added: null };
+	const view = ["side", "front", "top"].find(name => !views.includes(name) && spread([...views, name]));
+	const line = views.length > 1 ? `${views.join(" and ")} look along nearly one line (${apartDeg(views[0], views[1])} degrees apart)` : `${views[0]} alone looks along one line`;
+	return { views: [...views, view], added: { view, reason: `${line}, so a gap along it (toward or away from the camera) does not show; ${view} looks across it` } };
 }
 
 /** Pixel [x, y] of world point p in a width x height image of cam, y counted from the bottom row; null behind it. */

@@ -2,9 +2,10 @@
 // C11 (docs/motion-api-v3.1.md): verify_result contact_sheet frames "beats" and visual "trace".
 // The frame choice runs on synthetic timeline and QA inputs (lanes B and C fill the real ones);
 // the trace and the binding path run on a real compile of the cup scene. Then explicit frames and
-// views of its own (front/side/three-quarter/top, focus, trail) on a cup pick-up.
+// views of its own (front/side/three-quarter/top, focus, trail) on a cup pick-up, and the view a
+// sheet adds when the asked ones look along nearly one line (depthViews).
 import * as THREE from "three";
-import { viewCameras, trailPoints, projectPoint, VIEW_NAMES } from "../../src/motion3/views.js";
+import { viewCameras, trailPoints, projectPoint, depthViews, VIEW_NAMES } from "../../src/motion3/views.js";
 import { beatFrames, grabReleases, traceSeries } from "../../src/motion3/beats.js";
 import { studioVisual, traceRgba } from "../../src/studio-motion-visual.js";
 import { sampleContactSheetFrames, CONTACT_SHEET_LAYOUT } from "../../src/studio-contact-sheet.js";
@@ -175,12 +176,32 @@ ports.renderFrameBuffer = (frame, view) => { rendered.push(frame); views.push(vi
 const viewRun = run({ visual: "contact_sheet", frames: [10, 30, 34, 50, 70, 90], views: ["front", "side"], focus, trail: `object:${CUP.group}`, targets: [CHARACTER.id] }, cupState());
 expect("views: a row per view, a column per frame, one render per cell", viewRun.ref.layout === "6x2 row-major, a row per view" && json(rendered) === json([10, 30, 34, 50, 70, 90, 10, 30, 34, 50, 70, 90]), json(viewRun.ref));
 expect("views: every cell is a square of 266 px, so the sheet is 1596x532 (within 1600x900)", views.every(v => v.output.width === 266 && v.output.height === 266 && v.fovDeg >= 12 && v.fovDeg <= 35 && v.quaternion.length === 4) && encoded[0].width === 1596 && encoded[0].height === 532, json(encoded));
-expect("views: visualRefs name the views, the focus and the trail colour", json(viewRun.ref.views.map(v => v.name)) === '["front","side"]' && viewRun.ref.views.every(v => v.eye.length === 3 && v.target.length === 3)
+expect("views: visualRefs name the views, the focus and the trail colour; front and side add nothing", json(viewRun.ref.views.map(v => v.name)) === '["front","side"]' && !("addedView" in viewRun.ref) && viewRun.ref.views.every(v => v.eye.length === 3 && v.target.length === 3)
 	&& json(viewRun.ref.focus) === json(focus) && json(viewRun.ref.trails) === json([{ ref: `object:${CUP.group}`, color: "#d1495b" }]), json(viewRun.ref));
 const painted = data => { let n = 0; for (let i = 0; i < data.length; i += 4) if (data[i] === 209 && data[i + 1] === 73 && data[i + 2] === 91) n++; return n; };
 expect("views: the trail is painted on every tile (solid dots up to the tile's frame)", tiles.every(t => painted(t) > 20) && painted(tiles[5]) > painted(tiles[0]), json(tiles.map(painted)));
-const fourViews = run({ visual: "contact_sheet", views: ["top"], targets: [CHARACTER.id] }, cupState());
-expect("views: one view keeps the 3x2 grid over 6 even frames, at most 1600x900", fourViews.ref.layout === CONTACT_SHEET_LAYOUT && fourViews.ref.focus === "character" && encoded[0].width === 1350 && encoded[0].height === 900, json(encoded));
+// One view hides depth along its own line: top alone gets side, a row each (it was a 3x2 grid of top).
+const topRun = run({ visual: "contact_sheet", views: ["top"], targets: [CHARACTER.id] }, cupState());
+expect("views: top alone also renders side, a row per view over 6 even frames, at most 1600x900", topRun.ref.layout === "6x2 row-major, a row per view" && json(topRun.ref.views.map(v => v.name)) === '["top","side"]'
+	&& topRun.ref.addedView?.view === "side" && topRun.ref.focus === "character" && encoded[0].width === 1596 && encoded[0].height === 532, json({ ref: topRun.ref, encoded }));
+
+// ---- the view a sheet adds -------------------------------------------------------------------
+// Session df388a9b looked at a guitarist with front and three-quarter only (45 degrees apart):
+// the right hand 20 cm in front of the guitar showed in neither. A sheet holds two views at
+// least 60 degrees apart, adding the first of side, front and top that does it.
+const added = views => { const d = depthViews(views); return `${json(d.views)} ${d.added?.view ?? "-"}`; };
+expect("depthViews: front and three-quarter get side; front, side or top alone get side or front; three-quarter alone gets top", added(["front", "three-quarter"]) === '["front","three-quarter","side"] side'
+	&& added(["front"]) === '["front","side"] side' && added(["side"]) === '["side","front"] front' && added(["top"]) === '["top","side"] side' && added(["three-quarter"]) === '["three-quarter","top"] top'
+	&& added(["side", "three-quarter"]) === '["side","three-quarter","front"] front', json(["front", "side", "top", "three-quarter"].map(v => added([v]))));
+expect("depthViews: two views 60+ degrees apart are kept as asked", added(["front", "side"]) === '["front","side"] -' && added(["front", "top"]) === '["front","top"] -' && added(["three-quarter", "top"]) === '["three-quarter","top"] -' && added(["side", "top"]) === '["side","top"] -');
+expect("depthViews: the reason names the asked views, their angle and the added view", /^front and three-quarter look along nearly one line \(45 degrees apart\), .*; side looks across it$/.test(depthViews(["front", "three-quarter"]).added.reason), depthViews(["front", "three-quarter"]).added.reason);
+views.length = 0; rendered.length = 0;
+const guitarLike = run({ visual: "contact_sheet", frames: [10, 30, 34, 50, 70, 90], views: ["front", "three-quarter"], focus, targets: [CHARACTER.id] }, cupState());
+expect("views: front and three-quarter render a third row, side, and say why in visualRefs[0].addedView", guitarLike.ref.layout === "6x3 row-major, a row per view" && rendered.length === 18
+	&& json(guitarLike.ref.views.map(v => v.name)) === '["front","three-quarter","side"]' && guitarLike.ref.addedView.view === "side" && /45 degrees apart/.test(guitarLike.ref.addedView.reason), json(guitarLike.ref));
+expect("views: the three rows stay within 1600x900 (266 px tiles, 1596x798)", views.every(v => v.output.width === 266) && encoded[0].width === 1596 && encoded[0].height === 798, json(encoded));
+const sideCam = viewCameras(cup.out, { views: ["side"], frames: [10, 30, 34, 50, 70, 90], focus })[0], sideEye = guitarLike.ref.views[2].eye;
+expect("views: the added side is the same camera side gives when asked", json(sideEye) === json(sideCam.eye.map(v => Math.round(v * 100) / 100)), json([sideEye, sideCam.eye]));
 const refusal = (args, s = cupState()) => { try { run(args, s); return ""; } catch (error) { return `${error.code}: ${error.message}`; } };
 expect("views: focus without views is refused, naming views", /^INVALID_ARGUMENT: focus and trail are drawn by views/.test(refusal({ visual: "contact_sheet", focus: "joint:LeftHand", targets: [CHARACTER.id] })));
 expect("views: views on another visual are refused", /^INVALID_ARGUMENT: views, focus and trail shape a contact sheet/.test(refusal({ visual: "frame", views: ["front"], targets: [CHARACTER.id] })));
