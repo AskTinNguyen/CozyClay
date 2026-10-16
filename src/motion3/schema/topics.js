@@ -84,7 +84,7 @@ export const NOTES = {
 	checks: ["Each entry adds QA groups: contacts CONTACT, orient ORIENT, below BELOW, clearance CLEARANCE, appear APPEAR; supports mark where a part rests on an object (no FLOAT, no balance there); a foot on an object's top is on the ground without one.",
 		"when: a weight channel (active above 0.99) or [f0, f1]; clearance uses frames.", "Check points take joint:, prop: and anchor: only; goals and probes take every ref (topic refs).",
 		"allow excuses a body part inside an object up to depth; limits override the QA limits. Unnamed entries are named by place, contacts[0].",
-		"Speed, acceleration, knee bend and balance are style: measured in output.observations, not judged. Naming speedCore/speedLimb, accCore/accLimb, knee or balance in limits makes it a check (SPEED, ACC, KNEE, BALANCE).",
+		"Speed, acceleration, knee bend and balance are style: measured in output.observations, not judged. Naming speedCore/speedLimb, accCore/accLimb, knee or balance in limits makes it a check (SPEED, ACC, KNEE, BALANCE). observations.near: each hand's and foot's nearest object and gap (< 0 inside), measured, not judged.",
 		"motion.qa { checks } replaces every check for a re-measure."],
 	goals: ["Exactly one of near (distance <= tol), above (a.y - b.y >= by) or moved (an object's base moved at least by from the scene pose; any other point ref, e.g. prop:bat.tip, at least by from where it is at at[0], at: [f0, f1]).",
 		"at is an absolute frame or [f0, f1]; mode all (every frame) or any (one frame). A failed goal is a GOAL group first in qa.groups and makes qa.ok false."],
