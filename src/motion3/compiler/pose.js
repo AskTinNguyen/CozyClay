@@ -115,7 +115,9 @@ export function pose(sk, c, hooks = {}) {
 		wrist(sk, s, side, num(c[`wtwist_${k}`]), num(c[`wflex_${k}`]));
 		fingers(sk, s, side, c[`fingers_${k}`]);
 		const held = hooks.hold?.(k, s);
+		// a keyed carry's hand follows its object; else a fit's hand takes a grip on the body under its anchor (grip.js)
 		if (held) holdHand(sk, s, side, held, ELBOW_REST, diag, k);
+		else hooks.grip?.(k, s, diag);
 		// after a held object's grip, so its hand keeps the grip the hold solved; an arm coming in from FK turns
 		// no more than its IK weight (the IK elbow already lands somewhere else than the FK one)
 		const turn = hooks.swivel?.(k);

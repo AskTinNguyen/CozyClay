@@ -4,7 +4,8 @@
 // saved take compiled again), the compiler bakes and auto-fixes the frames, QA measures them with
 // a cause and a hint per issue group against the agent's own spec, the style quantities are
 // measured (qa/style.js observeMotion; keyed objects: every key as drawn, qa/key-checks.js
-// heldReadings; each hand and foot against the nearest object, qa/near.js observeNear; a skill
+// heldReadings; each hand and foot against the nearest object, qa/near.js observeNear; each holding
+// wrist's bend, qa/wrist-obs.js observeWrist; a skill
 // paced to fit a short span: observations.paced; a skill whose release or
 // settle the last frame cut: observations.cut), and the timeline and the
 // requested probes read the result.
@@ -24,6 +25,7 @@ import { runProbes } from "./probes.js";
 import { canonicalGoals } from "./compiler/validate-goals.js";
 import { heldReadings, HELD_UNITS } from "./qa/key-checks.js";
 import { observeNear, NEAR_UNITS } from "./qa/near.js";
+import { observeWrist, WRIST_UNITS } from "./qa/wrist-obs.js";
 
 const ms = t => Math.round(performance.now() - t);
 
@@ -79,8 +81,9 @@ export function compileSpec(sent, { sk, scene }, opts = {}) {
 	const measured = out.timeMap ? warpChecks(expanded, out.timeMap) : expanded;
 	const qa = runMotionQa(sk, out, measured, { userSpec: resolved }), observations = observeMotion(sk, out, measured.checks), held = heldReadings(out);
 	if (held) Object.assign(observations, { units: `${observations.units}; ${HELD_UNITS}`, held });
-	const near = observeNear(sk, out);
+	const near = observeNear(sk, out), wrist = observeWrist(sk, out);
 	if (near) Object.assign(observations, { units: `${observations.units}; ${NEAR_UNITS}`, near });
+	if (wrist) Object.assign(observations, { units: `${observations.units}; ${WRIST_UNITS}`, wrist });
 	// a skill that paced its beats to fit a short span says so where every answer keeps it (C7 tier 1)
 	const paced = used.filter(u => u.paced).map(u => `${u.skill} paced ${u.paced.toFixed(2)} to fit f${u.f0}..f${u.end}`);
 	if (paced.length) observations.paced = paced;

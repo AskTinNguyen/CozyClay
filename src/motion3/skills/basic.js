@@ -50,9 +50,10 @@ export function walkTo(ctx) {
 
 /**
  * reachGrip({ anchor, side, reach = 20, hold = 22, release = 12, elbow, fingers = "grip",
- * define }): the hand goes to the anchor (defined elsewhere, or by `define`) over `reach`
- * frames with the fingers closing, holds, and lets go. Adds a fit of the fingertips on the
- * anchor and a contact check. A take that ends during the release holds the grip to its end.
+ * define, orient = true }): the hand goes to the anchor (defined elsewhere, or by `define`) over
+ * `reach` frames with the fingers closing, holds, and lets go. Adds a fit of the fingertips on the
+ * anchor (on a body it also turns the hand into a grip, compiler/grip.js; orient: false leaves the
+ * hand's turn alone) and a contact check. A take that ends during the release holds the grip to its end.
  */
 export function reachGrip(ctx) {
 	const { args, state } = ctx, k = args.side, name = args.anchor;
@@ -74,7 +75,7 @@ export function reachGrip(ctx) {
 	return {
 		keys: b.keys, end: cut ? last : ctx.f0 + reach + hold + release, ...(cut ? { cut: `release cut at f${last} (hold to the end)` } : {}), anchors: def,
 		props: { [prop]: { hand: k, origin: [`${S}HandIndex2`, `${S}HandMiddle2`], points: { fingers: [0, 0, 0] } } },
-		fits: [{ side: k, anchor: name, effector: { prop, point: "fingers" } }],
+		fits: [{ side: k, anchor: name, effector: { prop, point: "fingers" }, ...(args.orient === false ? { orient: false } : {}) }],
 		checks: { contacts: [{ name: `fingers on ${name}`, point: `prop:${prop}.fingers`, target: `anchor:${name}`, tol: 0.04, when: w }],
 			allow: obj ? [{ part: "hand", object: obj, depth: 0.04 }] : [] },
 	};

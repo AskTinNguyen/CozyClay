@@ -25,6 +25,7 @@ The wave-0 PR (W0) wires every hot file once. After W0 these files are frozen fo
 | K4 | C15: switch entries and `level` (`compiler/validate-objects.js`, `take.js`, `src/object-travel.js` `trackShown`/`trackLevel`), `skills/smoke.js`, `skills/smoke-kit.js`, `src/kits/`, `object.createKit` in `src/commands/kits.js` |
 | K6 | C16: follow entries (`follow.js`) and aim keys (`key-aim.js`, `qa/key-checks.js` `heldReadings`), the exhale kit (`src/kits/smoking.js`), the exhale look (`src/effects/`) |
 | objkeys | C17: free entries and falls (`free-motion.js`; the free branches of `object-pose.js`, `compiler/compile.js` `objectTracks`, `compiler/validate-objects.js`, `take.js`, `qa/object-checks.js` `grabGap`/`supportOf`) |
+| wrist | C18: fit grips (`compiler/grip.js`, the grip hook in `compiler/pose.js` and `compiler/compile.js`, `fit.orient` in `schema/fields.js`/`types.js`, `compiler/validate-parts.js`, reachGrip `args.orient`), `WRIST_COMFORT` (`compiler/arm-orient.js`), `observations.wrist` (`qa/wrist-obs.js`) |
 
 Paths without a folder are under `src/motion3/`. Every lane test is already registered in `tools/run-tests.mjs` as a placeholder that prints `pending (lane X)`.
 
@@ -552,6 +553,19 @@ spec.objects.cup = { "prop": "cupGrip", "grab": 60, "release": 80, "fall": { "at
 `test/motion3/fixtures/bat-robust.mjs` holds the bat-kit swings of the final build's sessions 6262a69c (`spec-72eaf5116c0a`, QA 0, reachGrip) and 4db5d447 (`spec-f77f28d4b845`, installed at QA 17, the left hand anchored by its wrist), rebuilt from the logs (lane Q1). With the flat-foot hold, the steady elbow path and the second hand's prices the QA-17 spec is QA 2: SELF hands overlap at f29 and f41, where its wrist anchor sits next to the right palm.
 
 `test/motion3/fixtures/cup-scene.mjs` holds the table group `empty` (top `cube`, legs `cube-2` to `cube-5`), the cup group `empty-2` under it (`cylinder`, handle `cube-6/7/8`) and `char-a` (Y Bot at the origin, yaw 0), with the ids and values of the baseline session.
+
+## C18. Fit grips and observations.wrist (lane wrist)
+
+A fit only places a point of the hand on its anchor. Before C18 nothing asked for the hand's turn, so a hand on a box side, a door or a guitar neck kept the forearm's roll (0 deg of wrist on every holding frame, bench S10), or the agent keyed `wflex`/`wtwist` to turn it at the wrist alone, up to the 70 deg clamp (bench S6).
+
+- **Grip** (`compiler/grip.js` `gripHand`, called by `compiler/pose.js` after the arm when no keyed carry leads the hand, on the final and plain solves, not on a fit's measuring passes). While a fit's weight (`w_<anchor>_<side>` times `armw_<side>`) is on and its anchor is on a scene body (the anchor's object, nearest part, or any body within 0.06 m of the anchor):
+  - the fingers stay on the forearm's line (no flex or deviation is asked);
+  - the hand turns about the forearm: on a thin body (two half sizes under 0.045 m) the knuckle line takes the body's long axis, at the end the forearm turns to least (30 deg in favour of the comfortable thumb); on anything else the end-state-comfort thumb: up when the forearm is level, toward the midline when it points down or up;
+  - the turn stops where the forearm's whole twist leaves `WRIST_COMFORT.twist` (+-50 deg); the forearm bone takes `FOREARM_SHARE` of it and the wrist the rest (`hold.js` `orient`);
+  - the fit's effector point stays where the fit put it, the elbow in its plane; `diag.grip_<side> = { w, twist, flex, dev }`.
+- **The spec wins**: a hand whose `wtwist_<side>` or `wflex_<side>` is non-zero on the frame, a fit with `orient: false` (reachGrip `args.orient: false`), a `prop` anchor (the second-hand grip, C14), and a hand that carries something on the frame or whose nearest body is one it carries (the carry's own grip: its grab offset, which a keyed carry's keys are written on, the same with keys or without) are left alone. So the grip turns the other hand, a push, a handle, a neck, a rail. Measured on the bench documents: turning the carrying hand at its grab changed the grab offset the agent's keys were written on (barbell QA 152 to 700+).
+- **`WRIST_COMFORT`** (`compiler/arm-orient.js`) `{ twist: [-50, 50], flex: [-40, 40], dev: [-25, 15] }`: daily-task wrist ranges (Ryu et al.; Gates et al. 2016) and forearm rotation (Morrey 1981). `WRIST_LIMITS` and the keyed-hold strain are unchanged: pricing the keyed hold's swivel against the comfortable ranges was measured on the bench documents and dropped (S6 unchanged, S8 worse).
+- **`output.observations.wrist`** (`qa/wrist-obs.js`), measured, not judged: `{ hand_l?, hand_r? }`, each `{ frames, past, limit, flex, dev, twist }` on the frames the hand holds (a fit's weight over 0.5, `diag.hold_<side>` or `diag.grip_<side>` over 0.5, or a carry in that hand); `flex`, `dev`, `twist` are `[min, f, max, f]` degrees (flex + toward the palm, dev + radial, twist at the wrist joint: `WRIST_COMFORT`/`WRIST_LIMITS` twist times `1 - FOREARM_SHARE`); `past` counts frames more than 1 deg past a comfortable range, `limit` frames within 1 deg of a limit. Units in `observations.units`.
 
 ## Amendment procedure
 

@@ -107,7 +107,7 @@ const j2keyed = structuredClone(J2.SWING_SPEC);
 j2keyed.objects[J2.BAT].keys = J2.SWING_KEYS;
 // [name, rig, spec, scene, hash before (v3@4087806b), hash after (null: the same), why]
 const TAKES = [
-	["exitcar", "x-bot-tpose", { fps: 24, ...EXITCAR_SPEC }, motionScene(CAR), "9e35eb6aa9a2c9f8", "4c8f3a6a5e98d553", "the walk's natural rhythm (compiler/gait-rhythm.js)"],
+	["exitcar", "x-bot-tpose", { fps: 24, ...EXITCAR_SPEC }, motionScene(CAR), "9e35eb6aa9a2c9f8", "0c6e2cf2ad7ccda1", "the walk's natural rhythm (compiler/gait-rhythm.js) and the left hand's grip turn on the door handle (compiler/grip.js)"],
 	["smoke squat cea7fa46", "y-bot-tpose", G.SQUAT_SPEC, motionScene(G.smokeScene()), "096cf692ba1a2cbf", null],
 	["walk", "y-bot-tpose", { ...spec0, frames: 160, use: [...STAND, { skill: "walkTo", f0: 1, args: { to: [0, 2.4], steps: 6, heading: 0 } }] }, { objects: {} }, "6a6295472b4a4781", "1504d031410041da", "the walk's natural rhythm (compiler/gait-rhythm.js)"],
 	["cup run3", "y-bot-tpose", RUN3_SPEC, motionScene(CUP_SCENE), "b2e90da88e394432", "834c73a668121906", "the walk's natural rhythm (compiler/gait-rhythm.js)"],

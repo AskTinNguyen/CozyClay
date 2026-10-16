@@ -67,6 +67,7 @@ export const NOTES = {
 		"segment with reach slides from t toward tMin until the arm reaches it."],
 	props: ["A prop is a set of points fixed to one hand, [d, l, n] along the palm axes; prop:<prop>.origin is the mean of its origin bones.",
 		"fits: the hand target moves so the effector (a prop point or the mean of joints), not the wrist, lands on the anchor.",
+		"A fit on a scene body also turns the hand about the forearm into a grip: a thin body (a can, a bar, a handle, a neck) across the palm, else thumb up; never past a comfortable forearm turn. A wrist you turn (wtwist/wflex) wins; fit.orient: false (reachGrip args.orient: false) turns it off.",
 		"reachGrip adds props.<anchor>Grip and its fit. Carry a scene object with objects.<id>.prop (topic objects)."],
 	objects: ["A hinge turns the object (a body or a group) about pivot/axis by the angle channel your keys set (degrees).",
 		"A carry follows the prop's hand: before grab the scene pose, grab..release in the hand, after release frozen where it was let go.",

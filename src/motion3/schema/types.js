@@ -77,7 +77,7 @@ export const FIT_TYPES = {
 	side: side(), anchor: str("an anchor name"),
 	effector: { oneOf: [{ type: "object", properties: { prop: str(), point: str() }, required: ["prop", "point"] }, { type: "object", properties: { joints: { type: "array", items: { type: "string" } } }, required: ["joints"] }],
 		description: "the hand point fitted onto the anchor" },
-	offset: ref("vec3", "world offset, m"),
+	offset: ref("vec3", "world offset, m"), orient: { type: "boolean", description: "false: no grip turn" },
 };
 
 const OBJECT_KEY_TYPES = { f: int(), pos: ref("vec3"), rot: { type: "array", items: { type: "number" }, minItems: 4, maxItems: 4, description: "quaternion x, y, z, w" },

@@ -24,6 +24,7 @@ import { rankGroups, groupKey, severityOf, weightOf, excessOf } from "../../src/
 import { nameChecks } from "../../src/motion3/qa/check-names.js";
 import { objectChecks } from "../../src/motion3/qa/object-checks.js";
 import { objectHints } from "../../src/motion3/qa/hints-object.js";
+import { WRIST_COMFORT } from "../../src/motion3/compiler/arm-orient.js";
 import { goalChecks } from "../../src/motion3/qa/goals.js";
 import { goalHints } from "../../src/motion3/qa/hints-goal.js";
 import { attachPatches } from "../../src/motion3/qa/patch.js";
@@ -203,6 +204,17 @@ expect("C17: a free group rides its keys, falls at its frame and rests on the ta
 	&& Math.abs(cupY(18) - 0.75) < 1e-9 && Math.abs(cupY(59) - 0.75) < 1e-9, [10, 17, 18, 59].map(cupY));
 expect("C17: a fall while in hand is refused", /a carried object falls before its grab or from its release on/.test(refusal(() => validateSpec({ ...freeSpec, props: { grip: { hand: "l", origin: ["LeftHandIndex2"], points: {} } },
 	objects: { [CUP.group]: { prop: "grip", grab: 10, release: 40, fall: { at: 20 } } } }, { sk, scene }))));
+
+// C18. Fit grips and observations.wrist: the cup's reachGrip turns the hand (diag.grip_r) within the comfortable forearm twist,
+// orient: false and a fit field of the wrong type are named, and the holding wrist is read
+const gripSpec = { schema: "cozyclay.motion-spec.v1", fps: 24, frames: 60, use: [{ skill: "standIdle", f0: 0, args: { at: [CHARACTER.x, CHARACTER.z] } },
+	{ skill: "reachGrip", f0: 4, args: { anchor: "cupHold", side: "r", hold: 20, define: { kind: "object", object: CUP.group, local: [0, 0.05, 0] } } }] };
+const cupScene = motionScene(SCENE_OBJECTS), gripped = compileSpec(gripSpec, { sk, scene: cupScene }), grip = gripped.out.frames[30].diag.grip_r;
+const unturned = compileSpec({ ...gripSpec, use: [gripSpec.use[0], { ...gripSpec.use[1], args: { ...gripSpec.use[1].args, orient: false } }] }, { sk, scene: cupScene });
+expect("C18: a fit on a body turns the hand within the comfortable forearm twist; orient false leaves it", !!grip && Math.abs(grip.twist) <= WRIST_COMFORT.twist[1] + 1e-6 && unturned.out.frames[30].diag.grip_r === undefined, JSON.stringify(grip));
+expect("C18: fit.orient must be a boolean", /fits\[0\]\.orient must be true or false/.test(refusal(() => validateSpec({ schema: "cozyclay.motion-spec.v1", fps: 24, frames: 10, anchors: { a: { kind: "world", p: [0, 1, 0.4] } },
+	props: { g: { hand: "r", origin: ["RightHandIndex2"], points: { tip: [0, 0, 0] } } }, fits: [{ side: "r", anchor: "a", effector: { prop: "g", point: "tip" }, orient: "no" }] }, { sk, scene: cupScene }))));
+expect("C18: observations.wrist reads the holding hand", (gripped.observations.wrist?.hand_r?.frames ?? 0) > 10 && /wrist: deg/.test(gripped.observations.units), JSON.stringify(gripped.observations.wrist));
 
 if (failures) { console.error(`${failures} motion3 contract check(s) failed`); process.exit(1); }
 console.log("motion3 contracts: all checks passed");

@@ -32,9 +32,9 @@ export const SKILL_INFO = {
 		tune: { lift: 0.01, halfWidth: 0.01, firstStep: 0.01, step: 0.01 }, place: { firstStep: 0.03, step: 0.03 },
 	},
 	reachGrip: {
-		args: { anchor: str("the anchor to grip (not ending in _l/_r)"), side: side("the hand"), reach: int("frames to reach", { default: 20 }), hold: int("frames held", { default: 22 }),
-			release: int("frames to let go", { default: 12 }), elbow: ref("vec3", "elbow pole while reaching"), fingers: { enum: FINGER_PRESETS, default: "grip" },
-			define: { type: "object", description: "an anchor (topic anchors) to define under args.anchor" } },
+		args: { anchor: str("not ending in _l/_r"), side: side("the hand"), reach: int("frames to reach", { default: 20 }), hold: int("frames held", { default: 22 }),
+			release: int("frames to let go", { default: 12 }), elbow: ref("vec3", "elbow pole"), fingers: { enum: FINGER_PRESETS, default: "grip" },
+			define: { type: "object", description: "an anchor (topic anchors) named args.anchor" }, orient: { type: "boolean", description: "false: no grip turn" } },
 		required: ["anchor", "side"], needs: "args.anchor in spec.anchors or args.define", frames: "reach + hold + release (54 by default)",
 		adds: ["props.<anchor>Grip (fingers point)", "fits: fingers onto the anchor", "checks.contacts \"fingers on <anchor>\"", "checks.allow hand on the anchor's object",
 			"keys: w_<anchor>_<side>, fingers_<side>, armw_<side>"],

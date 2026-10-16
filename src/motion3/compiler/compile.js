@@ -20,7 +20,8 @@ import { add, sub, scale, norm, len, dot, apply, axisRot } from "./math.js";
 import { isCarried, isFollow, hingePose, movesRecord, compose, relative } from "../carried.js";
 import { isFree, freePoseAt } from "../free-motion.js";
 import { groupsOf } from "../scene.js";
-import { pose } from "./pose.js";
+import { pose, SIDES } from "./pose.js";
+import { gripHand } from "./grip.js";
 import { bakeChannels, channelsAt } from "./channels.js";
 import { resolveAnchor, measureProps } from "./anchors.js";
 import { expandGenerators } from "./walk.js";
@@ -126,6 +127,8 @@ function hooksFor(ctx, c, f, inFit = false, lead = true, fitSide = null) {
 			return target;
 		} : undefined,
 		afterArm: (k, s, diag) => measureProps(ctx, k, s, diag),
+		// a fit's passes only place the wrist; the final pose (and a plain one) turns the hand onto the body
+		grip: inFit ? undefined : (k, s, diag) => gripHand(ctx, sk, s, SIDES[k], k, c, f, diag),
 	};
 }
 

@@ -105,9 +105,10 @@ const foldScene = motionScene(buildKit("bat", [], { position: { x: FOLD_KIT_AT[0
 // Lane Q1 changed six of them after P3, and their hashes here are Q1's: J2 both (a flat foot keeps its heading until it lifts,
 // fix/turn.js), K8 16d12ba9 (the second hand's roll priced past the SELF allowance on the holding hand), N1 d5c110a7 and
 // P2 df6acdcc (the same price past the BODY allowance in the torso), L2 9dcf19c5 (its flat front foot, fix/turn.js).
-// The walking takes (exitcar, walk, cup run3) carry the hashes of the walk's natural rhythm (compiler/gait-rhythm.js).
+// The walking takes (exitcar, walk, cup run3) carry the hashes of the walk's natural rhythm (compiler/gait-rhythm.js);
+// exitcar also the left hand's grip turn on the door handle (compiler/grip.js).
 const TAKES = [
-	["exitcar", "x-bot-tpose", { fps: 24, ...EXITCAR_SPEC }, motionScene(CAR), 137.07, "4c8f3a6a5e98d553", null],
+	["exitcar", "x-bot-tpose", { fps: 24, ...EXITCAR_SPEC }, motionScene(CAR), 137.07, "0c6e2cf2ad7ccda1", null],
 	["smoke stand (Y Bot)", "y-bot-tpose", smoke(266, { use: STAND }, false), { objects: {} }, 134.57, "02f0451771581391", null],
 	["smoke stand (X Bot)", "x-bot-tpose", smoke(266, { use: STAND }, false), { objects: {} }, 137.07, "dc28a7fcc260fffa", null],
 	["smoke squat, kits (Y Bot)", "y-bot-tpose", smoke(240, { keys: [{ f: 0, set: SQUAT }] }, true), kitScene, 132.24, "2be7e02a30c4290f", null],

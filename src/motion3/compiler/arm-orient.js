@@ -19,6 +19,13 @@ import { palmAxes, foldPoint, backOf } from "./limbs.js";
 
 /** Wrist limits in degrees, relative to the hand at rest on the forearm (twist: the forearm's turn). */
 export const WRIST_LIMITS = { twist: [-85, 85], flex: [-70, 70], dev: [-35, 20] };
+/**
+ * The comfortable part of each range, what observations.wrist counts frames past (qa/wrist-obs.js):
+ * daily tasks keep the wrist within about 40 deg of flex and extension and 25 ulnar / 15 radial
+ * deviation (Ryu et al.; Gates et al. 2016) and the forearm within 50 deg of pronation and supination
+ * (Morrey 1981).
+ */
+export const WRIST_COMFORT = { twist: [-50, 50], flex: [-40, 40], dev: [-25, 15] };
 /** The share of the turn about the forearm the forearm bone takes (the hand takes the rest). */
 export const FOREARM_SHARE = 0.5;
 /** The direction an arm's elbow points at rest, carried by the bones (pose.js, twoBone). */

@@ -34,7 +34,7 @@ const clampTo = (v, [lo, hi]) => Math.min(hi, Math.max(lo, v));
  * limits let it: the forearm bone turns FOREARM_SHARE of the twist about its own axis, the hand
  * the rest plus flex and deviation. Returns what it needed, degrees { twist, flex, dev }.
  */
-function orient(sk, s, side, h, fa, goal) {
+export function orient(sk, s, side, h, fa, goal) {
 	const axT = scale(sub(s.P[h], s.P[fa]), 1 / len(sub(s.P[h], s.P[fa]))), neutral = mul(s.R[fa], mul(T(sk.restWorldRot[fa]), sk.restWorldRot[h]));
 	const { axF, axD, ...need } = wristNeed(neutral, goal, axT, apply(mul(neutral, T(s.R[h])), palmAxes(sk, s, side).l));
 	const got = Object.fromEntries(Object.entries(need).map(([k, v]) => [k, clampTo(v, WRIST_LIMITS[k])]));
@@ -60,7 +60,7 @@ export function bendPlane(sk, s, side) {
  * a hand rotation (pin "wrist": where it is; "palm": where the palm stays put), the bend direction
  * (bendPlane).
  */
-function aimArm(sk, s, side, palm, now, w, pin) {
+export function aimArm(sk, s, side, palm, now, w, pin) {
 	const I = sk.index, h = I[`${side}Hand`];
 	// the palm frame in the hand bone's frame: fixed for this frame's finger curl
 	const localR = mul(T(s.R[h]), now.R), localP = apply(T(s.R[h]), sub(now.pos, s.P[h]));

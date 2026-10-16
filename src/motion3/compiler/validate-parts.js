@@ -53,6 +53,7 @@ function validateProps(spec, err, { sk, unknown = err }) {
 		else if (Array.isArray(e?.joints)) e.joints.forEach(j => boneOk(err, sk, `${at}.effector`, j));
 		else err(`${at}.effector must be { prop, point } or { joints: [bone, ...] }`);
 		if (fit?.offset !== undefined && !isVec3(fit.offset)) err(`${at}.offset must be [x, y, z]`);
+		if (fit?.orient !== undefined && typeof fit.orient !== "boolean") err(`${at}.orient must be true or false (false: the hand takes no grip turn), got ${fmt(fit.orient)}`);
 	});
 }
 
