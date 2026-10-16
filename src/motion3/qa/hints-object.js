@@ -4,7 +4,8 @@
 //            limit and proposes fix { path: "/objects/<id>/grab", value: f }; failing that it
 //            moves the hand to the object (moveHint) with a fix on what drives the hand
 //   COLLIDE  for a carried object ("<part> x <id>", "<id> x <other>") moves the holding hand,
-//            so the object comes out; any other COLLIDE is the body hint (hints-contact.js)
+//            so the object comes out; the other hand's arm in it while that hand is on an object
+//            anchor on it moves the anchor's local point out instead; any other COLLIDE is the body hint (hints-contact.js)
 //   REACH    for a keyed object ("<id>: 6.2 cm off its keys", key-checks.js); else the arm and leg hint (hints-motion.js)
 import { contactHints, moveHint } from "./hints-contact.js";
 import { motionHints } from "./hints-motion.js";
@@ -13,6 +14,7 @@ import { CAPSULES, segPoints, sdBox, boxNormal } from "./geometry.js";
 import { grabGap, boxOverlap } from "./object-checks.js";
 import { isCarried, propOrigin } from "../carried.js";
 import { objectBoxesAt, partsOf, spanOf } from "../object-pose.js";
+import { groupsOf } from "../scene.js";
 import { sub, scale, len, apply, T, add, clamp } from "../compiler/math.js";
 
 const MARGIN = 0.003, SEARCH = 24;
@@ -29,6 +31,12 @@ function handFix(X, k, f, delta) {
 function moveHand(X, k, f, delta, why) {
 	const r = moveHint(X, `hand_${k}`, f, delta, why), fix = handFix(X, k, f, delta);
 	return fix ? { ...r, fix } : r;
+}
+
+/** True when hand k is on an object anchor (weight > 0.5) on record `id` or a body or group under it at f. */
+function anchoredOn(X, k, f, id) {
+	const a = X.spec.anchors?.[X.hand(k, f).anchor], scene = X.out.ctx.scene;
+	return a?.kind === "object" && [scene.objects?.[a.object]?.ancestors, groupsOf(scene)[a.object]?.ancestors, [a.object]].some(ids => ids?.includes(id));
 }
 
 /** Closest point of a box (base pivot) to p. */
@@ -68,7 +76,9 @@ export const objectHints = {
 			if (!cap || !boxes.length) return null;
 			const pts = segPoints(s.P[X.I[cap[1]]], s.P[X.I[cap[2]]]);
 			const [box, p] = boxes.flatMap(bx => pts.map(q => [bx, q])).reduce((m, x) => (sdBox(x[1], x[0]) < sdBox(m[1], m[0]) ? x : m));
-			const n = boxNormal(p, box);
+			const n = boxNormal(p, box), j = /^(hand|farm|uarm)_([lr])$/.exec(a)?.[2];
+			// the other hand on an object anchor on what hand k carries rides with it: moving the carry cannot part them, its point moves out
+			if (held && j && j !== k && anchoredOn(X, j, f, id)) return moveHint(X, `hand_${j}`, f, scale(n, need), ` (out of ${id})`);
 			return held ? moveHand(X, k, f, scale(n, -need), ` (${id} off ${a})`) : moveHint(X, a, f, scale(n, need), ` (out of ${id})`);
 		}
 		const ob = X.out.objectsAt(X.rel(f))[b];

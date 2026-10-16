@@ -28,7 +28,7 @@ function validateAnchors(spec, err, { sk, scene, unknown = err }) {
 		if ((a.kind === "world" || a.kind === "body") && a.p === undefined) err(`${at} (${a.kind}) needs p: [x, y, z]${a.kind === "body" ? `, ${CONVENTIONS.pole}` : ""}`);
 		if (a.kind === "bone") boneOk(err, sk, at, a.bone);
 		if (a.kind === "segment") { boneOk(err, sk, `${at}.from`, a.from); boneOk(err, sk, `${at}.to`, a.to); if (a.reach !== undefined && !SIDE.has(a.reach)) err(`${at}.reach must be "l" or "r"`); }
-		if (a.kind === "object") objectOk(err, scene, at, a.object);
+		if (a.kind === "object") objectOk(err, scene, at, a.object, { groups: true });
 		if (a.kind === "landmark" && a.name !== "mouth") err(`${at}: the only landmark is "mouth", got ${fmt(a.name)}`);
 		if (a.kind === "prop" && !spec.props?.[a.prop]?.points?.[a.point] && a.point !== "origin") err(`${at} needs prop point ${a.prop}.${a.point}, which spec.props does not define`);
 	}

@@ -26,6 +26,7 @@ import { followPose } from "./follow.js";
 import { groupsOf } from "./scene.js";
 import { solveFrame } from "./compiler/compile.js";
 import { channelsAt } from "./compiler/channels.js";
+import { resolveBone } from "./bones.js";
 
 /**
  * Body ids that make up `id` in a motionScene: [id] for a body (plus any bodies parented under
@@ -50,9 +51,9 @@ function restPose(scene, id) {
 	return scene?.objects?.[id] ?? groupsOf(scene)[id] ?? null;
 }
 
-/** The spec.objects key that moves body `part`: itself or its nearest group with a carry or hinge entry (a switch moves nothing), or null. */
-function moverOf(spec, scene, part) {
-	return [part, ...(scene?.objects?.[part]?.ancestors ?? [])].find(id => movesRecord(spec.objects?.[id])) ?? null;
+/** The spec.objects key that moves body or group `id`: itself or its nearest group with a carry, follow or hinge entry (a switch moves nothing), or null. */
+function moverOf(spec, scene, id) {
+	return [id, ...(scene?.objects?.[id]?.ancestors ?? groupsOf(scene)[id]?.ancestors ?? [])].find(k => movesRecord(spec.objects?.[k])) ?? null;
 }
 
 /** [grab, release] of a carried entry in absolute frames of `out` (after a retime). */
@@ -76,36 +77,39 @@ function frameAt(out, f) {
 	return cache.get(f);
 }
 
+/** Pose of the record a carried entry moves at in-hand frame f, on that frame's pose s. */
+function carriedOn(out, id, o, f, s) {
+	const { sk, spec, scene } = out.ctx;
+	if (!keepsOffset(scene, id, o)) return carriedPose(sk, spec, s, o);
+	// keyed (object-keys.js): the grab-frame offset solved without the keys, which the hand followed
+	if (o.keys?.length && out.ctx.hold) return compose(carriedPose(sk, spec, s, { prop: o.prop }), out.ctx.hold.attach(id));
+	const palm = st => carriedPose(sk, spec, st, { prop: o.prop }), grab = spanOf(out, o)[0];
+	return compose(palm(s), relative(palm(grab === f ? s : frameAt(out, grab).s), restPose(scene, id)));
+}
+
 /** Pose of the record a carried entry moves, cached on the solved frame. */
 function carriedAt(out, id, o, f) {
-	const fr = frameAt(out, f), { sk, spec, scene } = out.ctx;
+	const fr = frameAt(out, f);
 	if (!poses.has(fr)) poses.set(fr, new Map());
 	const cache = poses.get(fr);
-	if (cache.has(id)) return cache.get(id);
-	let pose;
-	if (!keepsOffset(scene, id, o)) pose = carriedPose(sk, spec, fr.s, o);
-	// keyed (object-keys.js): the grab-frame offset solved without the keys, which the hand followed
-	else if (o.keys?.length && out.ctx.hold) pose = compose(carriedPose(sk, spec, fr.s, { prop: o.prop }), out.ctx.hold.attach(id));
-	else {
-		const palm = s => carriedPose(sk, spec, s, { prop: o.prop });
-		const grab = spanOf(out, o)[0], offset = relative(palm(frameAt(out, grab).s), restPose(scene, id));
-		pose = compose(palm(fr.s), offset);
-	}
-	cache.set(id, pose);
-	return pose;
+	if (!cache.has(id)) cache.set(id, carriedOn(out, id, o, f, fr.s));
+	return cache.get(id);
 }
 
 /**
  * World pose { pos, R } of the record spec.objects[id] moves (a body or a group root) at
  * absolute frame f: carried, hinged (out.ctx.objectsAt for a body; the group root turned by
- * the same hinge) or still. null for an id the scene does not know.
+ * the same hinge) or still. null for an id the scene does not know. `now` ({ s, diag, c }) is
+ * frame f while the compiler solves it (an object anchor): its pose so far stands in for the
+ * solved frame, so the carrying hand must already be solved (compiler/anchors.js).
  */
-export function rootPoseAt(out, id, f) {
+export function rootPoseAt(out, id, f, now = null) {
 	const { spec, scene } = out.ctx, o = movesRecord(spec.objects?.[id]) ? spec.objects[id] : undefined, rest = restPose(scene, id);
-	if (isFollow(o)) return followPose(out, o, f);
+	if (isFollow(o)) return followPose(now ? { ...out, f0: f, frames: [now] } : out, o, f);
 	if (isCarried(o) && (rest || !keepsOffset(scene, id, o))) {
-		const [grab, release] = spanOf(out, o);
-		return f < grab && rest ? { pos: rest.pos, R: rest.R } : carriedAt(out, id, o, Math.max(grab, Math.min(f, release)));
+		const [grab, release] = spanOf(out, o), g = Math.max(grab, Math.min(f, release));
+		if (f < grab && rest) return { pos: rest.pos, R: rest.R };
+		return now && g === f ? carriedOn(out, id, o, f, now.s) : carriedAt(out, id, o, g);
 	}
 	if (!rest) return null;
 	if (o && scene.objects[id]) return out.ctx.objectsAt(f)[id];
@@ -123,10 +127,35 @@ export function rootPoseAt(out, id, f) {
 export function objectBoxesAt(out, id, f) {
 	const fr = out.frames?.[f - (out.f0 ?? 0)], scene = out.ctx.scene, parts = partsOf(scene, id);
 	if (!fr || !parts.length) return null;
-	const spec = out.ctx.spec, at = out.ctx.objectsAt(f);
-	return parts.map(p => {
-		const box = scene.objects[p], mover = moverOf(spec, scene, p);
-		const pose = isCarried(spec.objects?.[mover]) || isFollow(spec.objects?.[mover]) ? compose(rootPoseAt(out, mover, f), relative(restPose(scene, mover), box)) : at[p] ?? box;
-		return { id: p, pos: pose.pos, R: pose.R, half: box.half };
-	});
+	return parts.map(p => { const pose = objectPoseAt(out, p, f); return { id: p, pos: pose.pos, R: pose.R, half: scene.objects[p].half }; });
+}
+
+/**
+ * The hand ("l" | "r") body or group `id` rides at absolute frame f, so a pose of that frame needs that arm solved
+ * first: a carry while in hand (grab..release; after release it is frozen at a frame already solved), a follow on a
+ * joint of that arm or a point of its prop. null otherwise.
+ */
+export function handOf(out, id, f) {
+	const { spec, scene, sk } = out.ctx, entry = spec.objects?.[moverOf(spec, scene, id)];
+	if (isCarried(entry)) { const [grab, release] = spanOf(out, entry); return f >= grab && f <= release ? spec.props?.[entry.prop]?.hand ?? null : null; }
+	if (!isFollow(entry)) return null;
+	const [kind, rest = ""] = String(entry.follow).split(/:(.*)/s);
+	if (kind === "prop") return spec.props?.[rest.split(".")[0]]?.hand ?? null;
+	const arm = (kind === "joint" || kind === "bone") && /^(Left|Right)(Arm|ForeArm|Hand)/.exec(resolveBone(sk, rest).bone ?? "");
+	return arm ? (arm[1] === "Left" ? "l" : "r") : null;
+}
+
+/**
+ * World pose { pos, R } of a body (its base pivot) or a group (its origin) at absolute frame f:
+ * the one pose object refs, probes, goals, QA and object anchors read. A carried or follow record
+ * is where it rides, a hinged one turned, any other at its scene pose. `now` as rootPoseAt.
+ * null for an id the scene does not know.
+ */
+export function objectPoseAt(out, id, f, now = null) {
+	const { spec, scene } = out.ctx, rest = restPose(scene, id), mover = moverOf(spec, scene, id), entry = spec.objects?.[mover];
+	if (!rest) return null;
+	if (isCarried(entry) || isFollow(entry)) { const root = rootPoseAt(out, mover, f, now); return root && compose(root, relative(restPose(scene, mover), rest)); }
+	if (!mover) return { pos: rest.pos, R: rest.R };
+	if (scene.objects[id]) return out.ctx.objectsAt(f)[id] ?? rest;
+	return mover === id ? rootPoseAt(out, id, f) : compose(rootPoseAt(out, mover, f), relative(restPose(scene, mover), rest));
 }

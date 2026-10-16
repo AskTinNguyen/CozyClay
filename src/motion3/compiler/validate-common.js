@@ -11,7 +11,7 @@ export function boneOk(err, sk, at, bone) {
 
 /**
  * A scene object id. A group (an Empty: no box of its own) passes only with { groups: true }
- * (carry, hinge and object: refs take groups, see C3); elsewhere the message lists its parts.
+ * (carry, hinge, object: refs and object anchors take groups, see C3); elsewhere the message lists its parts.
  */
 export function objectOk(err, scene, at, id, { groups = false } = {}) {
 	const ids = Object.keys(scene?.objects ?? {});

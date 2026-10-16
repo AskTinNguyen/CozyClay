@@ -25,14 +25,15 @@ import { fixOptions, applyFixes } from "../fix/index.js";
 import { fitWeight } from "../fix/self.js";
 import { holdHook } from "../object-keys.js";
 import { HAND_CLEAR, keepOut, wristBody } from "../body.js";
+import { objectPoseAt, handOf } from "../object-pose.js";
 
 const smooth = x => x * x * (3 - 2 * x);
 
 /**
  * Scene boxes by frame. A body moves with its own spec.objects entry or its nearest group's (a
- * switch entry moves nothing; hinge: turned; carry and follow: left at its scene pose and marked `carried` with the moving id, for
- * object anchors only). `obstacles` drops the carried ones: QA measures a carry at its real pose
- * (object-pose.js, qa/object-checks.js); a follow entry rides the body and is no obstacle.
+ * switch entry moves nothing; hinge: turned; carry and follow: left at its scene pose and marked `carried` with the
+ * moving id). `obstacles` drops the carried ones: QA, refs and object anchors read a carry where it rides
+ * (object-pose.js objectPoseAt, qa/object-checks.js); a follow entry rides the body and is no obstacle.
  */
 function objectTracks(spec, scene, baked) {
 	const cache = new Map();
@@ -81,7 +82,7 @@ function hooksFor(ctx, c, f, inFit = false, lead = true, fitSide = null) {
 			for (const [ch, w] of Object.entries(c)) {
 				const m = /^w_(.+)_([lr])$/.exec(ch);
 				if (!m || m[2] !== k || !(w > 1e-6)) continue;
-				terms.push([w, add(resolveAnchor(ctx, m[1], s, diag, c), c[`fit_${m[1]}_${k}`] ?? [0, 0, 0])]);
+				terms.push([w, add(resolveAnchor(ctx, m[1], s, diag, c, k), c[`fit_${m[1]}_${k}`] ?? [0, 0, 0])]);
 			}
 			let tot = terms.reduce((a, [w]) => a + w, 0);
 			if (tot > 1) { for (const t of terms) t[0] /= tot; tot = 1; }
@@ -133,13 +134,15 @@ export function solveFrame(ctx, c0, f, lead = true) {
 			full[`fit_${fit.anchor}_${fit.side}`] = corr;
 			const { s, diag } = pose(ctx.sk, full, hooksFor(ctx, full, f, true, lead, fit.side));
 			const eff = effectorPoint(ctx.sk, s, diag, fit.effector);
-			const goal = add(resolveAnchor(ctx, fit.anchor, s, diag, full), fit.offset ?? [0, 0, 0]);
+			const goal = add(resolveAnchor(ctx, fit.anchor, s, diag, full, fit.side), fit.offset ?? [0, 0, 0]);
 			if (!eff) break;
 			corr = add(corr, sub(goal, eff));
 		}
 		c[`fit_${fit.anchor}_${fit.side}`] = corr;
 	}
 	const { s, diag } = pose(ctx.sk, c, hooksFor(ctx, c, f, false, lead));
+	// readers of the solved frame (refs, checks, hints) resolve its anchors at f, IK arms or not
+	diag.frame = f;
 	return { s, diag, c };
 }
 
@@ -155,6 +158,9 @@ export function compileMotion(spec, { sk, scene }, opts = {}) {
 	const [a, b] = opts.window ? [Math.max(0, opts.window[0]), Math.min(frameCount - 1, opts.window[1])] : [0, frameCount - 1];
 	const ctx = { sk, spec, scene, softReach: fix.reach, push: { l: new Map(), r: new Map() }, swivel: { l: new Map(), r: new Map() }, skinPush: { l: new Map(), r: new Map() }, keepOut: fix.self ? wristBody(sk) : null };
 	const out = { ctx, fps: spec.fps ?? 30, frameCount, f0: a, frames: [] };
+	// object anchors read the pose refs read (object-pose.js), on the frame being solved
+	ctx.objectPose = (id, f, now) => objectPoseAt(out, id, f, now);
+	ctx.objectHand = (id, f) => handOf(out, id, f);
 	const engine = {
 		rebake(keys) {
 			out.keys = keys;

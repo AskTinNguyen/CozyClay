@@ -5,37 +5,43 @@ import { bonePoint } from "../compiler/skeleton.js";
 import { CAPSULES, segPoints, sdBox, boxNormal, headDepth, segDist, solePoints, ankleY } from "./geometry.js";
 import { vec, m3 } from "./fmt.js";
 import { kneeFoldHint, kneeWhy } from "./hints-knee.js";
+import { objectFrame } from "../compiler/anchors.js";
 import { bodyFor, bodyNormal, limbDepth } from "../body.js";
 
 const MARGIN = 0.003;
 const sideOf = name => (/(^|_)l$|^Left/.test(name) ? "l" : /(^|_)r$|^Right/.test(name) ? "r" : null);
 
-/** fix (qa/patch.js) moving anchor `name` by a world delta at f: its own point, in the frame that point is written in. */
-function anchorFix(X, name, f, delta) {
+/** fix (qa/patch.js) moving anchor `name` of hand k by a world delta at f: its own point, in the frame that point is written in. */
+function anchorFix(X, name, f, delta, k) {
 	const a = X.spec.anchors?.[name], path = field => `/anchors/${name}/${field}`;
 	if (a?.kind === "world") return { path: path("p"), delta };
 	if (a?.kind === "body") return { path: path("p"), delta: apply(ry(-(X.fr(f).c.yaw ?? 0)), delta) };
 	if (["bone", "segment", "prop"].includes(a?.kind)) return { path: path("offset"), delta };
-	const o = a?.kind === "object" && X.out.objectsAt(X.rel(f))[a.object];
-	return o ? { path: path("local"), delta: apply(T(o.R), delta) } : undefined;
+	if (a?.kind !== "object") return undefined;
+	// local is in the object's axes where that hand's target read it (anchors.js objectFrame)
+	const fr = X.fr(f), o = objectFrame(X.out.ctx, a, name, { ...fr, diag: { ...fr.diag, frame: f } }, k);
+	return { path: path("local"), delta: apply(T(o.R), delta) };
 }
 
 /** cause + hint (+ fix, qa/patch.js) for moving a body part (capsule name, prop_<name>, hand_<k>) by `delta` at frame f. */
 export function moveHint(X, part, f, delta, why = "") {
 	const prop = /^prop_(.+)$/.exec(part);
 	const k = prop ? X.spec.props?.[prop[1]]?.hand : sideOf(part);
-	let label, cause, fix;
+	let label, cause, fix, shown = delta;
 	if (/^(hand|farm|uarm)_/.test(part) || prop) {
 		const d = X.hand(k, f);
 		label = d.label;
-		fix = d.anchor ? anchorFix(X, d.anchor, f, delta) : d.ch === `hand_${k}` ? { channel: d.ch, f, delta } : undefined;
+		fix = d.anchor ? anchorFix(X, d.anchor, f, delta, k) : d.ch === `hand_${k}` ? { channel: d.ch, f, delta } : undefined;
+		// an object anchor moves its point on the object (local, in the object's axes), never the object
+		const on = d.anchor && X.spec.anchors[d.anchor]?.kind === "object" ? X.spec.anchors[d.anchor].object : null;
+		if (on && fix) { label = `anchors.${d.anchor}.local (a point on ${on}, in ${on}'s axes; ${on} stays)`; shown = fix.delta; }
 		cause = d.anchor ? `anchor ${d.anchor}${d.fit !== null ? ` (fits[${d.fit}])` : ""} via ${X.cause(d.ch, f)}` : X.cause(d.ch, f);
 	} else if (/^(shin|foot|sole)_/.test(part)) { label = `foot_${k}`; cause = X.cause(label, f); fix = { channel: label, f, delta }; }
 	else { label = "root"; cause = X.cause("root", f); fix = { channel: "root", f, delta }; }
 	// a key the walk generator wrote: the agent changes the walk, not the key
 	const walk = / (walk|walkTo) /.test(` ${cause}`) && /step|start|end/.test(cause);
 	if (walk && !/^anchor/.test(label)) return { cause, hint: `walk path: ${label} needs ${vec(delta)} m at f${f}${why}; change that walk's heading/turnDistance/step (or give one a { range: [lo, hi] })` };
-	return { cause, hint: `${label}: move ${vec(delta)} m at f${f}${why}`, fix };
+	return { cause, hint: `${label}: move ${vec(shown)} m at f${f}${why}`, fix };
 }
 
 const capsule = name => CAPSULES.find(c => c[0] === name);

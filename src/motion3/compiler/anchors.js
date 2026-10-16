@@ -6,7 +6,8 @@
 //   { kind: "bone",     bone: "LeftLeg", offset: [x,y,z] }  world offset from a bone joint
 //   { kind: "segment",  from: "LeftUpLeg", to: "LeftLeg", t: 0.4, offset: [x,y,z], reach: "l" }
 //                       point along a segment; with reach, slides toward `from` until the arm reaches
-//   { kind: "object",   object: "Car_Door_L", local: [x,y,z] }  point fixed to an animated scene object
+//   { kind: "object",   object: "Car_Door_L", local: [x,y,z] }  point fixed to a scene object or group where it is at
+//                       that frame (hinged, carried, following; object-pose.js objectPoseAt), in its own axes
 //   { kind: "landmark", name: "mouth" }                     measured face landmark on the Head bone
 //   { kind: "prop",     prop: "cig", point: "tip", offset: [x,y,z] }  a point on a prop held by the other hand
 // spec.props = { name: { hand: "r", origin: ["RightHandIndex2", "RightHandMiddle2"],
@@ -16,6 +17,7 @@ import { bonePoint } from "./skeleton.js";
 import { palmAxes } from "./limbs.js";
 import { SIDES } from "./pose.js";
 import { HAND_CLEAR, keepOut } from "../body.js";
+import { groupsOf } from "../scene.js";
 
 function armReach(sk, k) {
 	const side = SIDES[k], P = sk.restWorldPos, I = sk.index;
@@ -27,14 +29,33 @@ function armReach(sk, k) {
  * the skin resolves onto it, HAND_CLEAR off, for the hand and for every check alike. A bone's or a segment's
  * anchor is the spec's own place on that limb (a hand resting on a thigh) and stays. */
 const ON_BODY = new Set(["body"]);
-export function resolveAnchor(ctx, name, s, diag, c) {
+/** side: the hand ("l" | "r") this point is a target for while the compiler solves it; none for a reader of a solved frame. */
+export function resolveAnchor(ctx, name, s, diag, c, side) {
 	const a = ctx.spec.anchors?.[name];
 	if (!a) throw new Error(`MOTION_SPEC_INVALID: unknown anchor "${name}"`);
-	const p = anchorPoint(ctx, a, name, s, diag, c), skin = ON_BODY.has(a.kind) && ctx.keepOut;
+	const p = anchorPoint(ctx, a, name, s, diag, c, side), skin = ON_BODY.has(a.kind) && ctx.keepOut;
 	return skin ? keepOut(skin.body, ctx.sk, s, keepOut(skin.body, ctx.sk, s, p, HAND_CLEAR, skin.skip), HAND_CLEAR, skin.skip) : p;
 }
 
-function anchorPoint(ctx, a, name, s, diag, c) {
+// pose.js solves the right arm, then the left
+const ARMS = ["r", "l"], HAND = { l: "left", r: "right" };
+
+/**
+ * The pose { pos, R } an object anchor's `local` is in at frame diag.frame: where the object is then (ctx.objectPose,
+ * the pose refs and probes read). A hand cannot aim at what rides on it: the hand that carries the object keeps the
+ * scene pose, where it took it. While the right arm is solved the left is not, so the right hand cannot aim at what
+ * the left carries (refused).
+ */
+export function objectFrame(ctx, a, name, { s, diag, c }, side) {
+	const f = diag.frame, still = () => ctx.objectsAt(f)[a.object] ?? groupsOf(ctx.scene)[a.object];
+	const hand = ctx.objectPose && f !== undefined ? ctx.objectHand(a.object, f) : null;
+	if (side && hand && ARMS.indexOf(hand) > ARMS.indexOf(side)) throw new Error(`MOTION_SPEC_INVALID: anchor "${name}" is on "${a.object}", which the ${HAND[hand]} hand holds at f${f}; the right arm is solved before the left, so the right hand cannot follow it. Carry "${a.object}" in the right hand (a right-hand prop) and put the left hand on it, or give the right hand another anchor`);
+	const pose = !ctx.objectPose || f === undefined || hand === side ? still() : ctx.objectPose(a.object, f, { s, diag, c });
+	if (!pose) throw new Error(`MOTION_SPEC_INVALID: anchor "${name}" names unknown object "${a.object}"`);
+	return pose;
+}
+
+function anchorPoint(ctx, a, name, s, diag, c, side) {
 	const { sk } = ctx, I = sk.index;
 	switch (a.kind) {
 		case "world": return a.p.slice();
@@ -48,11 +69,7 @@ function anchorPoint(ctx, a, name, s, diag, c) {
 			for (let t = a.t ?? 0.45; t >= (a.tMin ?? 0.15); t -= 0.01) if (len(sub(at(t), sh)) <= r) return at(t);
 			return at(a.tMin ?? 0.15);
 		}
-		case "object": {
-			const o = ctx.objectsAt(diag.frame)[a.object];
-			if (!o) throw new Error(`MOTION_SPEC_INVALID: anchor "${name}" names unknown object "${a.object}"`);
-			return add(o.pos, apply(o.R, a.local ?? [0, 0, 0]));
-		}
+		case "object": { const o = objectFrame(ctx, a, name, { s, diag, c }, side); return add(o.pos, apply(o.R, a.local ?? [0, 0, 0])); }
 		case "landmark": return bonePoint(s, I.Head, sk.landmarks[a.name] ?? (() => { throw new Error(`MOTION_SPEC_INVALID: unknown landmark "${a.name}"`); })());
 		case "prop": {
 			const p = diag.props?.[a.prop]?.[a.point];

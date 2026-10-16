@@ -61,7 +61,7 @@ export const NOTES = {
 		"Keys ease between values (step jumps); a channel holds its last value. Unknown fields are refused with the field list.",
 		"More: topics anchors, props, objects, checks, goals, probes, channels, refs, fix, skills."],
 	anchors: ["An anchor is a named point a hand can go to: key w_<anchor>_l / w_<anchor>_r from 0 to 1 with armw_<side> 1 (the IK arm).",
-		"An anchor name may not end in _l or _r.", "object anchors follow the object (hinges, carries); prop anchors are a point of a prop the other hand holds.",
+		"An anchor name may not end in _l or _r.", "object anchors (a body or a group; local in its own axes) follow the object where it is (hinges, carries): put the other hand on a carried object with one; the carrying hand's own anchor stays where it took it. prop anchors are a point of a prop the other hand holds.",
 		"segment with reach slides from t toward tMin until the arm reaches it."],
 	props: ["A prop is a set of points fixed to one hand, [d, l, n] along the palm axes; prop:<prop>.origin is the mean of its origin bones.",
 		"fits: the hand target moves so the effector (a prop point or the mean of joints), not the wrist, lands on the anchor.",
