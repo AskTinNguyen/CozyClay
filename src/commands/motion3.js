@@ -20,6 +20,7 @@ import { repairSpec } from "../motion3/repair.js";
 import { fitOutput, reportPage } from "../motion3/report.js";
 import { keyObject } from "../motion3/key-edit.js";
 import { expandUse } from "../motion3/skills/index.js";
+import { publishDraft } from "../agent-progress.js";
 
 const TIMELINE_FPS = 24;
 const id = { type: "string", minLength: 1 };
@@ -119,9 +120,9 @@ export function register(registry, ports) {
 		// ifClean: install only a clean final result (qa.ok includes the goals; after repair when asked)
 		const wanted = install === "ifClean" ? qa.ok : install;
 		let installs = wanted, kept = false;
+		// open ranges are stored with the values the search chose, so motion.qa re-measures this take
+		const { take, put } = installOf(character, r, fixed.spec.label, context);
 		if (wanted) {
-			// open ranges are stored with the values the search chose, so motion.qa re-measures this take
-			const { take, put } = installOf(character, r, fixed.spec.label, context);
 			// ifClean of the take already installed changes nothing (no undo entry; IK edits on it stay)
 			kept = install === "ifClean" && sameTake(owner().motionFor(characterId), take);
 			installs = !kept;
@@ -129,8 +130,10 @@ export function register(registry, ports) {
 		}
 		const delta = base === undefined ? {} : { delta: deltaOf(store.parts(base)?.groups ?? [], qa.groups, base) };
 		const how = kept ? "; already installed, unchanged" : install === "ifClean" ? (installs ? "; installed" : "; not installed") : "";
-		return { affectedIds: installs ? [characterId] : [], summary: `Compiled ${out.frameCount} frames; QA ${qa.ok ? "clean" : `${qa.total} issues`}${how}.`,
-			output: report(r, { frames: out.frameCount, fps: TIMELINE_FPS, installed: wanted }, { ...delta, ...(fixed.repair ? { repair: fixed.repair } : {}) }) };
+		const output = report(r, { frames: out.frameCount, fps: TIMELINE_FPS, installed: wanted }, { ...delta, ...(fixed.repair ? { repair: fixed.repair } : {}) });
+		// the user watches every draft, installed or not (agent-progress.js: viewport ghost, timeline beats, agent panel)
+		publishDraft(characterId, { take, installed: installs || kept, specId: output.specId, label: fixed.spec.label ?? null, qa, timeline: r.timeline });
+		return { affectedIds: installs ? [characterId] : [], summary: `Compiled ${out.frameCount} frames; QA ${qa.ok ? "clean" : `${qa.total} issues`}${how}.`, output };
 	} });
 	registry.register({ ...declarations[1], available: mounted, run({ characterId, checks }) {
 		const character = characterOf(ports, characterId), take = installed(characterId);

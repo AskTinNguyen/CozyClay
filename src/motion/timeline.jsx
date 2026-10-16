@@ -9,7 +9,7 @@ import { insertPathMark, pathMarks, pathMetrics, pathProgressAt, MAX_PATH_LEAN }
 import { NumberField } from "../ui.jsx";
 import { flatTiming, timingIsFlat, envelopeDrag, insertCut, removeCut, CUT_MIN_GAP } from "../speed-envelope.js";
 import { checkShotAgainstPreset, presetById } from "../model-presets.js";
-import { TakeSegmentClips, TakeSegmentTools } from "./take-segments.jsx";
+import { TakeSegmentClips, TakeSegmentTools } from "./take-segments.jsx"; import { BeatBoard } from "./beat-board.jsx";
 import "./timeline.css";
 export { timelineTake } from "./take-segments.jsx";
 
@@ -2110,7 +2110,7 @@ export default function Timeline({
 							aria-label={ko(`Pending pin range ${geometry.startFrame}–${geometry.endFrame}`, `대기 중인 고정 범위 ${geometry.startFrame}–${geometry.endFrame}`)}
 						/>;
 					})()}
-					{name === IK_LANE && motion?.segments && <TakeSegmentClips motion={motion} frame={frame} frameCount={frameCount} displayFrameCount={displayFrameCount} clipPct={clipPct} tools={motionTools} />}
+					{name === IK_LANE && motion?.segments && <TakeSegmentClips motion={motion} frame={frame} frameCount={frameCount} displayFrameCount={displayFrameCount} clipPct={clipPct} tools={motionTools} />}{name === IK_LANE && <BeatBoard motion={motion} frame={frame} displayFrameCount={displayFrameCount} clipPct={clipPct} onJump={(f) => handlers.current.onScrub?.(f)} />}
 
 									{name === IK_LANE &&
 										ikRuns.flatMap((run) => (run.length < KEY_RUN_MIN
