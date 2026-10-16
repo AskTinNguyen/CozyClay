@@ -280,7 +280,7 @@ export function createStudioAppBinding(ports) {
 				if (args.checks.includes("lighting")) verifyLighting(result, args.targets ?? receipt.affectedIds, scene, ports);
 				for (const check of args.checks.filter(check => !["motion", "lighting"].includes(check) && measured)) {
 					if (!measured.length) { reasons[check] = "No target is an object or character in the current scene."; continue; }
-					try { result.checks[check] = check === "placement" ? placementChecks(measured, scene, { bounds: ports.bounds }) : framingChecks(measured, scene, { bounds: ports.bounds }); }
+					try { result.checks[check] = check === "placement" ? placementChecks(measured, scene, { bounds: ports.bounds, takes: s.targets }) : framingChecks(measured, scene, { bounds: ports.bounds }); }
 					catch (error) { if (!(error instanceof StudioProtocolError)) throw error; reasons[check] = error.message; }
 				}
 				if (args.checks.includes("framing") && args.range !== undefined && !args.rangeWasDefaulted) {

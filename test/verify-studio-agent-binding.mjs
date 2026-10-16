@@ -377,6 +377,9 @@ const implementations={
   assert.equal(made.ok,true,JSON.stringify(made));const cube=made.affectedIds[0];
   const overlapped=await verify({targets:['actor-a'],checks:['placement']});
   assert.deepEqual(overlapped.checks.placement.overlapIds,[cube]);assert(overlapped.checks.placement.maximumFootprintOverlapM>0);assert.deepEqual(overlapped.unsupportedChecks,[]);
+  const lifted=await f.call('arrange_objects',f.request('arrange_objects',{ops:[{op:'create',source:{kind:'cube'},position:{world:{x:3,y:0.25,z:0}}}]}));assert.equal(lifted.ok,true,JSON.stringify(lifted));
+  const gaps=(await verify({targets:[cube,lifted.affectedIds[0],'actor-a'],checks:['placement']})).checks.placement;
+  assert.deepEqual({supportGapM:gaps.supportGapM,unsupportedIds:gaps.unsupportedIds},{supportGapM:{[cube]:0,[lifted.affectedIds[0]]:0.25},unsupportedIds:[lifted.affectedIds[0]]},'placement measures how far each object stands off its support');
   const prop=await verify({targets:[cube],checks:['motion']});
   assert.deepEqual(prop.unsupportedChecks,['motion']);assert.match(prop.unsupportedReasons.motion,/not a character/);
   // A take the UI installed carries no verification: verify_result measures it.
@@ -386,6 +389,8 @@ const implementations={
   assert.equal(take.verification.characterId,'actor-a');assert.equal(take.verification.profile,'studio-motion-v1');
   assert.equal(take.verification.evaluatedFrames,48);assert.deepEqual(take.verification.range,{startFrame:0,endFrameExclusive:48});
   assert(['verified','unverified'].includes(take.verification.status),JSON.stringify(take.verification));
+  const moving={...clip()};moving.spec={...moving.spec,objects:{[lifted.affectedIds[0]]:{follow:'joint:Hips'}}};f.buffer.current.motion=moving;
+  assert.deepEqual((await verify({targets:[lifted.affectedIds[0]],checks:['placement']})).checks.placement.supportGapM,{},'a record the installed take moves has no support gap');
  },
  async 'verify-plan-and-geometry'(f){
   // verify_result measures the sight line and side of the line, adds the cut's

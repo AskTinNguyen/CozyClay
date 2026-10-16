@@ -12,6 +12,7 @@ import { clampWarning } from './receipt-findings.js';
 import { occludersOf, primarySubjects, sideOfAxis } from './studio-geometry-facts.js';
 import { StudioProtocolError, StudioSchemas, STUDIO_PATCH_KINDS, STUDIO_PATCH_DESCRIPTORS, validateStudioSchema, validateStudioIdentity, validateReceipt, freezeStudioData } from './studio-agent-protocol.js';
 import { sampleContactSheetFrames } from './studio-contact-sheet.js';
+import { supportGaps } from './studio-support-gap.js';
 
 const DEG = Math.PI / 180, EPS = 1e-8, CHARACTER_SUPPORT_TOLERANCE = 5e-3;
 const fail = (code, message) => { throw new StudioProtocolError(code, message); };
@@ -241,9 +242,8 @@ export function entityWorldBounds(entity, state, ports) {
   } catch { return null; }
 }
 const overlapEvidence = overlaps => ({ coverage: 'same-frame-world-AABB-proxies', overlapIds: [...new Set(overlaps.map(o => o.id))].slice(0, 100), maximumFootprintOverlapM: Math.max(0, ...overlaps.map(o => o.depth)) });
-/** Placement evidence for entity ids in the given scene: the same-frame AABB
- * overlap an arrangement receipt reports for the entities it moved. */
-export const placementChecks = (ids, state, ports) => overlapEvidence(overlapsOf(ids, state, ports));
+// Placement evidence for entity ids: the AABB overlap an arrangement receipt reports, and each object's support gap (studio-support-gap.js).
+export const placementChecks = (ids, state, ports) => ({ ...overlapEvidence(overlapsOf(ids, state, ports)), ...supportGaps(ids, state, ports.takes, entity => entityWorldBounds(entity, state, ports)) });
 function avoid(entity, relation, state, ports) {
   const blocked = overlapsFor(entity, state, ports);
   if (!blocked.length) return entity;
