@@ -1,8 +1,10 @@
 // The View menu's Ghosts group: onion skin on or off, every N frames or at the key frames, and
 // how many on each side. Every control runs view.setGhosts, the agent's door to the same setting.
+// The last item shows or hides the agent's draft ghost (draft-ghost.js), a viewer-only setting.
 import { useStudioShell } from "./studio-shell-context.js";
 import { ko } from "../locale.js";
 import { GHOST_COLORS, GHOST_COUNT, GHOST_STEP, useGhostSettings } from "../view-ghosts.js";
+import { DRAFT_GHOST_COLOR, setDraftGhostShown, useDraftGhostShown } from "../draft-ghost.js";
 import "./ghosts-menu.css";
 
 function Stepper({ label, value, range, disabled, onChange, testId }) {
@@ -20,6 +22,7 @@ function Stepper({ label, value, range, disabled, onChange, testId }) {
 export default function GhostsMenuGroup() {
 	const { runStudioAction } = useStudioShell();
 	const ghosts = useGhostSettings();
+	const drafts = useDraftGhostShown();
 	const set = (patch) => runStudioAction("view.setGhosts", { mode: ghosts.mode, count: ghosts.count, step: ghosts.step, ...patch });
 	const options = [
 		{ value: "off", label: ko("Off", "끔") },
@@ -53,6 +56,19 @@ export default function GhostsMenuGroup() {
 			})}
 			<Stepper label={ko("Each side", "양쪽 개수")} value={ghosts.count} range={GHOST_COUNT} disabled={ghosts.mode === "off"} onChange={(count) => set({ count })} testId="ghost-count" />
 			<Stepper label={ko("Step", "간격")} value={ghosts.step} range={GHOST_STEP} disabled={ghosts.mode !== "step"} onChange={(step) => set({ step })} testId="ghost-step" />
+			<button
+				type="button"
+				role="menuitemcheckbox"
+				className={"view-menu-item draft-ghost-option" + (drafts ? " active" : "")}
+				data-testid="draft-ghost-toggle"
+				aria-checked={drafts}
+				title={ko("While the agent works, its latest motion draft plays on the character as a teal figure; never in exports", "에이전트가 작업하는 동안 최신 모션 초안을 캐릭터 위에 청록색으로 재생합니다. 내보내기에는 나오지 않습니다")}
+				onClick={() => setDraftGhostShown(!drafts)}
+			>
+				<span className="view-menu-mark" aria-hidden="true">{drafts ? "✓" : ""}</span>
+				{ko("Agent draft", "에이전트 초안")}
+				<i className="ghost-swatch" style={{ background: DRAFT_GHOST_COLOR, marginLeft: "auto" }} aria-hidden="true" />
+			</button>
 		</div>
 	);
 }
