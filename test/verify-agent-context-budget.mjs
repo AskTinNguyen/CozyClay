@@ -9,6 +9,8 @@ import assert from "node:assert/strict";
 import * as runnerModule from "../bin/agent/agent-runner.mjs";
 import { encodeStudioContext, studioActionIndex } from "../src/studio-agent-context.js";
 import { createFakeModel } from "./fixtures/fake-model.mjs";
+import { motionReference } from "../bin/agent/studio-motion-reference.mjs";
+import { STUDIO_SYSTEM_PROMPT } from "../bin/agent/studio-prompt.mjs";
 import { contextFixture } from "./verify-studio-agent-protocol.mjs";
 
 const actionIndex = studioActionIndex([
@@ -64,6 +66,10 @@ assert.ok(request.systemPrompt.includes("<actions>"), "the system prompt carries
 const actions = JSON.parse(/\n<actions>\n(.*)\n<\/actions>$/s.exec(request.systemPrompt)[1]);
 assert.deepEqual(actions, actionIndex, "the actions block is the context's actionIndex");
 for (const { id } of actionIndex) assert.ok(request.systemPrompt.includes(id), `the system prompt names ${id}`);
+// The motion reference sits after the rules and before the actions, and the prompt prefix is the same bytes on every request.
+const reference = await motionReference();
+assert.ok(request.systemPrompt.startsWith(`${STUDIO_SYSTEM_PROMPT}\n\n${reference}\n<actions>\n`), "rules, then the motion reference, then the actions");
+assert.ok(fake.calls.every((call) => call.systemPrompt === request.systemPrompt), "every request of the session carries the same system prompt");
 const inspectResults = request.messages.filter((message) => message.role === "toolResult" && message.toolName === "inspect_studio");
 assert.equal(inspectResults.length, 3, "all three inspect_studio results are in the request");
 assert.deepEqual(inspectResults.map((message) => message.content[0].text.includes("\"context\"")), [false, false, true], "only the most recent inspect_studio result keeps its context");
@@ -85,4 +91,4 @@ assert.equal(marked.tools[0].cache_control, undefined);
 assert.equal(bare.system[0].cache_control, undefined, "the payload pi built is not mutated");
 assert.equal(withAnthropicCacheBreakpoints(marked, { api: "anthropic-messages" }), undefined, "an already-marked payload is left alone");
 assert.equal(withAnthropicCacheBreakpoints(bare, { compat: { supportsCacheControlOnTools: false } }).tools.at(-1).cache_control, undefined, "tools stay unmarked when compat refuses it");
-console.log("PASS agent context budget: one live studio context, actions in the system prompt, usage on done");
+console.log("PASS agent context budget: one live studio context, the motion reference and actions in a stable system prompt, usage on done");

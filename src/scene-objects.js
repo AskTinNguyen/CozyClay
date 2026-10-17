@@ -24,6 +24,7 @@ import { MESH_DEFAULT_HEIGHT, MESH_HEIGHT_MIN } from "./scene-mesh.js";
 import { normalizeSculptRecipe, sculptStandingBox } from "./sculpt-recipe.js";
 import { GREY_BOX } from "./object-colors.js";
 import { isEffectivelyHidden } from "./object-hidden.js";
+import { objectSize } from "./object-size.js";
 import { EFFECT_ENTRY, effectFields } from "./effects/effect-record.js";
 import { LIGHT_KIND, LIGHT_MENU_ENTRIES, lightLibraryEntry, objectLookFields, objectLookPatch } from "./object-look.js";
 export { OBJECT_COLORS, normalizeObjectColor, rememberObjectColor, readStoredObjectColors, writeStoredObjectColors } from "./object-colors.js";
@@ -1213,14 +1214,7 @@ export function screenRotatePatch(start, viewAxis, deltaDeg, snap = ROTATE_SNAP)
 	};
 }
 
-/** The object's world size along each axis, for the gizmo and the plan board. */
-export function objectSize(object) {
-	return {
-		width: (object.footprint?.width ?? 1) * (object.scaleX ?? 1),
-		height: (object.height ?? 1) * (object.scaleY ?? 1),
-		depth: (object.footprint?.depth ?? 1) * (object.scaleZ ?? 1),
-	};
-}
+export { objectSize };
 /** The tolerance that keeps an edge-abutting footprint from counting as
  * overlap: a strict `<` against `max - EPS` makes a 0.5 - 0.5 touch false. */
 const OVERLAP_EPS = 1e-4;

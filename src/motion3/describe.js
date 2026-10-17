@@ -8,6 +8,8 @@
 //   topic "skills"              { topic, skills: [{ name, args, needs, frames, adds }] }
 //   topic "skills", name        { topic, name, schema (the skill's args), example (a use entry), notes }
 //   topic "examples"            { topic, examples: [{ name, scene, spec }] (whole specs, schema/spec-examples.js), notes }
+// motion.describe { topics: [{ topic, name? }] } (describeMany): { topics: [those answers, in order], more?: [the asks that
+// did not fit] }, so a request's topics cost one call; the Studio prompt already carries essentials and goals.
 import { SPEC_FIELDS, KEY_FIELDS, USE_FIELDS, ANCHOR_FIELDS, PROP_FIELDS, FIT_FIELDS, OBJECT_FIELDS, WALK_FIELDS, CHECK_FIELDS, CHECK_ENTRY_FIELDS,
 	GOAL_FIELDS, PROBE_FIELDS, REF_KINDS, DESCRIBE_TOPICS } from "./schema/fields.js";
 import { DEFS, SPEC_TYPES, KEY_TYPES, USE_TYPES, WALK_TYPES, ANCHOR_TYPES, ANCHOR_REQUIRED, PROP_TYPES, FIT_TYPES, OBJECT_TYPES, FREE_TYPES, CHECK_ENTRY_TYPES, CHECK_REQUIRED, CHECKS_TYPES,
@@ -154,4 +156,19 @@ export function describe(topic, name) {
 	if (name === undefined) return { topic, skills: SKILL_NAMES.map(n => ({ name: n, args: skillArgs(n), needs: SKILL_INFO[n].needs, frames: SKILL_INFO[n].frames, adds: SKILL_INFO[n].adds })) };
 	if (!SKILL_NAMES.includes(name)) bad(`skill "${name}" is not a skill${didYouMean(String(name), SKILL_NAMES)} (skills: ${SKILL_NAMES.join(", ")})`);
 	return describeSkill(name);
+}
+
+const bytes = value => new TextEncoder().encode(JSON.stringify(value)).length;
+
+/** describeMany([{ topic, name? }]) -> { topics, more? }: the answers in order while they fit DESCRIBE_BUDGET (the first
+ * always does), each ask once; the rest are named in `more` for another call. */
+export function describeMany(asks) {
+	const seen = new Set(), wanted = asks.filter(({ topic, name }) => !seen.has(`${topic} ${name ?? ""}`) && seen.add(`${topic} ${name ?? ""}`));
+	const topics = [];
+	for (const [i, { topic, name }] of wanted.entries()) {
+		const answer = describe(topic, name), rest = wanted.slice(i + 1);
+		if (topics.length && bytes({ topics: [...topics, answer], more: rest }) > DESCRIBE_BUDGET) return { topics, more: wanted.slice(i) };
+		topics.push(answer);
+	}
+	return { topics };
 }

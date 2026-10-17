@@ -7,14 +7,17 @@ import { STUDIO_SYSTEM_PROMPT as prompt } from "../../bin/agent/studio-prompt.mj
 import { MOTION_ACTION_HELP as HELP } from "../../src/motion3/docs.js";
 import { declarations } from "../../src/commands/motion3.js";
 import { DESCRIBE_TOPICS } from "../../src/motion3/schema/fields.js";
+import { describe } from "../../src/motion3/describe.js";
+import { MOTION_REFERENCE_TOPICS, motionReference, studioSystemPrompt } from "../../bin/agent/studio-motion-reference.mjs";
 
 const check = (name, fn) => { fn(); console.log(`ok - ${name}`); };
 const motion = prompt.slice(prompt.indexOf("Motion is computed"), prompt.indexOf("The context scene.previsMode"));
 const sentences = text => text.split(/(?<=[.;:])\s+/).map(s => s.trim()).filter(s => s.length >= 40);
 
-check("the whole prompt is at most 11,250 characters", () => assert.ok(prompt.length <= 11250, `${prompt.length}`));
-check("the motion part is at most 1,500 characters", () => {
-	assert.ok(motion.length > 0 && motion.length <= 1500, `${motion.length}`);
+// +291 characters for the efficiency round (the motion reference, describe topics, one script for sweeps): budgets +300
+check("the whole prompt is at most 11,550 characters", () => assert.ok(prompt.length <= 11550, `${prompt.length}`));
+check("the motion part is at most 1,800 characters", () => {
+	assert.ok(motion.length > 0 && motion.length <= 1800, `${motion.length}`);
 });
 check("the prompt names describe, grab, goals, repair, base, beats and the 0.01 m scale floor", () => {
 	for (const word of ["motion.describe", "grab", "goals", "repair", "base", "\"beats\"", "0.01 m"]) assert.ok(prompt.includes(word), word);
@@ -24,8 +27,8 @@ check("the motion part keeps the coordinate rules", () => {
 	for (const rule of [/metres/, /\+Y up/, /yaw 0 faces \+Z/, /positive yaw turns toward \+X/, /left is \+X/, /base pivot/]) assert.match(motion, rule);
 });
 check("the motion part states the procedure", () => {
-	for (const rule of [/Before the first spec, read run_action motion\.describe/, /never probe the schema/, /reachGrip/, /grab\/release/, /frames: "auto"/,
-		/group \(Empty\) is carried or hinged as one unit/, /at least one goals entry per motion request: first list its causes, contacts, effects and what must not happen/, /report the lines no goal measures \(Unmeasured/, /install: "ifClean" and repair: \{ rounds \}/, /topic: "essentials"/, /never sweep values by hand/,
+	for (const rule of [/The <motion-reference> block below is motion\.describe/, /read them there, not by a call/, /topics: \[\.\.\.\]/, /never probe the schema/, /reachGrip/, /grab\/release/, /frames: "auto"/,
+		/group \(Empty\) is carried or hinged as one unit/, /at least one goals entry per motion request: first list its causes, contacts, effects and what must not happen/, /report the lines no goal measures \(Unmeasured/, /install: "ifClean" and repair: \{ rounds \}/, /topic: "essentials"/, /topic: "goals"/, /never sweep values by hand/, /loop in one script \(tools\.run_action/, /independent calls in the same turn/,
 		/base .*plus patch/, /probes and output\.timeline instead of .*motion\.sample/, /qa\.ok, which includes the goals\) installs in that call/,
 		/visual: "contact_sheet", frames: "beats"/, /visual: "trace"/, /Report the QA numbers, the goals and output\.fixed/, /read output\.observations near and wrist and verify_result exportFraming/, /output\.observations, not QA/, /views, focus, trail/]) assert.match(motion, rule);
 });
@@ -51,5 +54,20 @@ check("the help names every input of its declaration", () => {
 	}
 	for (const topic of DESCRIBE_TOPICS) assert.ok(HELP.describe.includes(topic), topic);
 	for (const field of ["specId", "delta", "repair", "loose bone names", "spec.checks need exact", "probes", "timeline", "goals", "severity", "patch", "more"]) assert.ok(HELP.compile.includes(field), field);
+});
+// The motion reference rides the cached prompt prefix: describe() answers, byte-identical, after the rules.
+const reference = await motionReference(), again = await motionReference(), full = await studioSystemPrompt();
+console.log(`motion reference: ${reference.length} characters (~${Math.round(reference.length / 3.5)} tokens); prompt + reference ~${Math.round(full.length / 3.5)} tokens`);
+check("the motion reference is describe essentials and goals, one JSON line each", () => {
+	assert.deepEqual(MOTION_REFERENCE_TOPICS, ["essentials", "goals"]);
+	assert.equal(reference, `<motion-reference>\n${MOTION_REFERENCE_TOPICS.map(t => JSON.stringify(describe(t))).join("\n")}\n</motion-reference>`);
+});
+check("the motion reference is the same bytes on every call and at most 12,000 characters", () => {
+	assert.equal(again, reference);
+	assert.equal(JSON.stringify(describe("essentials")) + JSON.stringify(describe("goals")), reference.split("\n").slice(1, 3).join(""));
+	assert.ok(reference.length <= 12000, `${reference.length}`);
+});
+check("the Studio animation prompt is the rules, then the reference", () => {
+	assert.equal(full, `${prompt}\n\n${reference}`);
 });
 console.log("verify-motion3-prompt: all checks passed");

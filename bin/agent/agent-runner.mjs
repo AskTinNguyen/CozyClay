@@ -363,7 +363,7 @@ export function createAgentRunner({ models: suppliedModels, sessionStore, tools 
 
 		const ensureHarness = async (input) => {
 			const { pi, models: registry } = await ensureModels();
-			const activePrompt = input.systemPrompt || (input.surface === "studio" ? (await import("./studio-prompt.mjs")).STUDIO_SYSTEM_PROMPT : systemPrompt);
+			const activePrompt = input.systemPrompt || (input.surface === "studio" ? await (await import("./studio-motion-reference.mjs")).studioSystemPrompt() : systemPrompt);
 			const { resolveModel, resolveEffort } = await import("./providers.mjs");
 			const requested = input.model || DEFAULT_MODEL;
 			const slash = requested.indexOf("/");

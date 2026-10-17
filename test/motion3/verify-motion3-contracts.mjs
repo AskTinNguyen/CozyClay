@@ -19,7 +19,7 @@ import { refPoint, refDistance, checkRef } from "../../src/motion3/refs.js";
 import { resolveBone } from "../../src/motion3/bones.js";
 import { applyPatch } from "../../src/motion3/json-patch.js";
 import { fitOutput, reportPage, MOTION_OUTPUT_BUDGET } from "../../src/motion3/report.js";
-import { DESCRIBE_BUDGET } from "../../src/motion3/describe.js";
+import { DESCRIBE_BUDGET, describe } from "../../src/motion3/describe.js";
 import { rankGroups, groupKey, severityOf, weightOf, excessOf } from "../../src/motion3/qa/severity.js";
 import { nameChecks } from "../../src/motion3/qa/check-names.js";
 import { objectChecks } from "../../src/motion3/qa/object-checks.js";
@@ -139,6 +139,14 @@ expect("motion.describe answers every topic with { topic, schema, example, notes
 	&& (a.topic === "skills" ? Array.isArray(a.skills) && a.skills.length > 0 : a.topic === "examples" ? a.examples.length > 0 && Array.isArray(a.notes) : a.topic === "essentials" ? a.types && a.skills.length > 0 && Array.isArray(a.notes) : a.schema && a.example && Array.isArray(a.notes))));
 const one = run(cupRegistry, "motion.describe", { topic: "skills", name: "reachGrip" });
 expect("motion.describe { skills, name } answers one skill", one.name === "reachGrip" && one.example.skill === "reachGrip" && /did you mean "reachGrip"/.test(refusal(() => cupRegistry.run("motion.describe", { topic: "skills", name: "reachGirp" }))));
+const many = run(cupRegistry, "motion.describe", { topics: [{ topic: "objects" }, { topic: "skills", name: "reachGrip" }, { topic: "objects" }, { topic: "anchors" }, { topic: "skills", name: "walkTo" }] });
+expect("motion.describe { topics } answers them in order, each once, within DESCRIBE_BUDGET, and names what did not fit in more", bytes(many) <= DESCRIBE_BUDGET
+	&& JSON.stringify(many.topics) === JSON.stringify([describe("objects"), describe("skills", "reachGrip")]) && JSON.stringify(many.more) === JSON.stringify([{ topic: "anchors" }, { topic: "skills", name: "walkTo" }]), JSON.stringify(many.more));
+const rest = run(cupRegistry, "motion.describe", { topics: many.more });
+expect("motion.describe { topics: more } answers the rest", rest.topics.length === 2 && rest.more === undefined && rest.topics[1].name === "walkTo");
+expect("motion.describe { topics } takes bare topic strings", JSON.stringify(run(cupRegistry, "motion.describe", { topics: ["anchors", { topic: "skills", name: "walkTo" }] }).topics) === JSON.stringify(rest.topics));
+expect("motion.describe refuses topic with topics, neither, and an unknown topic in topics", /not both/.test(refusal(() => cupRegistry.run("motion.describe", { topic: "goals", topics: [{ topic: "objects" }] })))
+	&& /not both/.test(refusal(() => cupRegistry.run("motion.describe", {}))) && /"skils" is not one of/.test(refusal(() => cupRegistry.run("motion.describe", { topics: [{ topic: "skils" }] }))));
 
 // 5. JSON Patch
 const doc = { keys: [{ f: 0 }, { f: 4 }], anchors: { a: { p: [0, 0, 0] } } };

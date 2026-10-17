@@ -12,7 +12,7 @@ import { add, apply, ry } from "../motion3/compiler/math.js";
 import { resolveBone } from "../motion3/bones.js";
 import { MOTION_ACTION_HELP as HELP } from "../motion3/docs.js";
 import { DESCRIBE_TOPICS } from "../motion3/schema/fields.js";
-import { describe } from "../motion3/describe.js";
+import { describe, describeMany } from "../motion3/describe.js";
 import { createSpecStore, specIdOf, SPEC_STORE_SIZE } from "../motion3/spec-store.js";
 import { applyPatch } from "../motion3/json-patch.js";
 import { deltaOf } from "../motion3/delta.js";
@@ -43,7 +43,8 @@ const declarations = Object.freeze([
 		input: input({ characterId: id, frames: { type: "array", items: { type: "integer", minimum: 0 }, minItems: 1, maxItems: 64 },
 			bones: { type: "array", items: id, maxItems: 65 } }, ["characterId", "frames"]) },
 	{ id: "motion.describe", label: "Describe motion spec", kind: "job", domain: "motion", timeoutMs: 10000, readOnly: true, description: HELP.describe,
-		input: input({ topic: { type: "string", enum: DESCRIBE_TOPICS }, name: id }, ["topic"]) },
+		input: input({ topic: { type: "string", enum: DESCRIBE_TOPICS }, name: id,
+			topics: list({ oneOf: [{ type: "string", enum: DESCRIBE_TOPICS }, input({ topic: { type: "string", enum: DESCRIBE_TOPICS }, name: id }, ["topic"])] }, 8) }, []) },
 	{ id: "motion.report", label: "Read motion report", kind: "job", domain: "motion", timeoutMs: 10000, readOnly: true, description: HELP.report,
 		input: input({ specId, part: { type: "string", enum: ["groups", "timeline", "probes"] }, from: { type: "integer", minimum: 0, default: 0 } }, ["specId", "part"]) },
 	{ id: "motion.keyObject", label: "Key held object", kind: "job", domain: "motion", timeoutMs: 120000, description: HELP.keyObject,
@@ -155,7 +156,12 @@ export function register(registry, ports) {
 		});
 		return { affectedIds: [], summary: `Sampled ${rows.length} frames.`, output: { frames: rows } };
 	} });
-	registry.register({ ...declarations[3], available: always, run({ topic, name }) {
+	registry.register({ ...declarations[3], available: always, run({ topic, name, topics }) {
+		if ((topic === undefined) === (topics === undefined) || (topics && name !== undefined)) fail("INVALID_ARGUMENT", "Send topic (and name) for one answer, or topics: [{ topic, name? }] for several in one call, not both.");
+		if (topics) {
+			const output = asArgument(() => describeMany(topics.map(t => (typeof t === "string" ? { topic: t } : t))));
+			return { affectedIds: [], summary: `Described ${output.topics.map(a => (a.name ? `${a.topic} ${a.name}` : a.topic)).join(", ")}${output.more ? `; ${output.more.length} more did not fit` : ""}.`, output };
+		}
 		return { affectedIds: [], summary: `Described ${topic}${name ? ` ${name}` : ""}.`, output: asArgument(() => describe(topic, name)) };
 	} });
 	registry.register({ ...declarations[4], available: always, run({ specId: wanted, part, from = 0 }) {

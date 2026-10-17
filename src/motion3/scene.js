@@ -8,7 +8,7 @@
 // `others` lists the records with no box (an Empty, a light, an effect, a plane) by id with their
 // renderer and ancestors: a switch entry (C15) may name them, and a skill finds a kit's lit parts
 // there. A body that glows (record.glow) says so (`glow: true`).
-import { objectSize } from "../scene-objects.js";
+import { objectSize } from "../object-size.js";
 import { mul, rx, ry, rz } from "./compiler/math.js";
 
 const NO_BODY = new Set(["empty", "plane", "cutout"]);
