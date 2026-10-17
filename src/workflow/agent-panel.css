@@ -534,6 +534,20 @@
 	word-break: break-word;
 }
 
+/* The reply's Markdown, rendered (AgentReplyText.jsx): tight blocks, lists indented, code and tables tinted from the text colour. */
+.agent-assistant-text > * { margin: 0; }
+.agent-assistant-text > * + * { margin-top: 6px; }
+.agent-assistant-text ul, .agent-assistant-text ol { padding-left: 18px; white-space: normal; }
+.agent-assistant-text li + li { margin-top: 2px; }
+.agent-assistant-text .agent-reply-heading { font-weight: 600; }
+.agent-assistant-text code { padding: 0 3px; border-radius: 3px; background: color-mix(in srgb, currentColor 10%, transparent); font: 0.92em ui-monospace, monospace; }
+.agent-assistant-text pre { padding: 6px 8px; border-radius: var(--agent-radius-sm); background: color-mix(in srgb, currentColor 8%, transparent); overflow-x: auto; white-space: pre; }
+.agent-assistant-text pre code { padding: 0; background: none; }
+.agent-reply-table { overflow-x: auto; white-space: normal; }
+.agent-reply-table table { border-collapse: collapse; font-size: 0.92em; font-variant-numeric: tabular-nums; }
+.agent-reply-table th, .agent-reply-table td { padding: 2px 10px 2px 0; border-bottom: 1px solid color-mix(in srgb, currentColor 16%, transparent); text-align: left; vertical-align: top; }
+.agent-reply-table th { font-weight: 600; }
+
 .agent-caret {
 	display: inline-block;
 	width: 6px;
