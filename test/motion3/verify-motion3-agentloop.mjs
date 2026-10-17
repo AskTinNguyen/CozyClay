@@ -221,10 +221,11 @@ for (const line of [
 ]) expect(`frames number: ${line.slice(0, 40)}`, pastEnd.split("\n").includes(line), pastEnd);
 const autoAgain = refused(() => act("motion.compile", { characterId: CUP_CHARACTER.id, base: numeric.specId, patch: [{ op: "replace", path: "/frames", value: "auto" }, ...RUN2_PATCH], install: false }));
 expect("frames number: following the advice (frames: \"auto\") compiles", autoAgain === "", autoAgain);
-// a goal past the last key: "auto" counts keys, not goals, so the advice is the number alone
-const lateGoal = reject(s => { s.goals = [{ name: "late", near: ["joint:LeftHand", "joint:RightHand"], at: [700, 760] }]; });
+// a goal wholly past the last key: "auto" counts keys, not goals, so the advice is the number alone
+// (a window that only runs past the end is cut to it, C19)
+const lateGoal = reject(s => { s.goals = [{ name: "late", near: ["joint:LeftHand", "joint:RightHand"], at: [740, 760] }]; });
 expect("frames: a goal past the end that \"auto\" would not cover gets the number alone",
-	lateGoal.replace(/^MOTION_SPEC_INVALID: /, "").split("\n").includes("goals[0].at = [700,760] is outside 0..729 (spec.frames 730); set frames >= 761"), lateGoal);
+	lateGoal.replace(/^MOTION_SPEC_INVALID: /, "").split("\n").includes("goals[0].at = [740,760] is outside 0..729 (spec.frames 730); set frames >= 761"), lateGoal);
 const overview = refused(() => act("motion.describe", { topic: "overview" }));
 expect("describe: an unknown topic names the allowed ones", overview === "$.args.topic: \"overview\" is not one of: essentials, spec, skills, anchors, props, objects, checks, goals, probes, channels, refs, fix, examples.", overview);
 

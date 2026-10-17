@@ -80,8 +80,9 @@ r = ifClean({ base: r.output.specId, patch: [{ op: "replace", path: "/generators
 expect("ifClean with base + patch: a dirty patched spec is not installed", r.output.qa.ok === false && r.output.installed === false && takes.get("char-1") === cleanTake);
 r = registry.run("motion.compile", { characterId: "char-1", spec: long });
 expect("install: true still installs a dirty spec", r.output.qa.ok === false && r.output.installed === true && takes.get("char-1").frames === 340 && r.affectedIds[0] === "char-1");
-const wrongInstall = (() => { try { registry.run("motion.compile", { characterId: "char-1", spec, install: "yes" }); return null; } catch (error) { return error; } })();
-expect("install takes only true, false or \"ifClean\"", wrongInstall?.code === "INVALID_ARGUMENT", String(wrongInstall));
+// "yes" is an install spelling (C19, normalizeCompileArgs); a word that is none is refused
+const wrongInstall = (() => { try { registry.run("motion.compile", { characterId: "char-1", spec, install: "maybe" }); return null; } catch (error) { return error; } })();
+expect("install takes only true, false, \"ifClean\" or \"never\" (and their spellings)", wrongInstall?.code === "INVALID_ARGUMENT", String(wrongInstall));
 
 // ifClean + repair: a hand 1.5 cm into a board; repair reaches qa.ok and the repaired spec is installed.
 const boardTakes = new Map();

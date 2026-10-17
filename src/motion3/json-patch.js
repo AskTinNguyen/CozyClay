@@ -2,6 +2,8 @@
 // an array in add. Used for motion.compile { base, patch } (C7) and by repair (C6). Errors are
 // MOTION_SPEC_INVALID (INVALID_ARGUMENT to the agent) and name the op and what is there:
 //   patch[1] (replace /keys/12/f): /keys/12 does not exist (keys has 9 entries)
+// With a notes list (motion.compile, lenient.js), replace on a member an existing object lacks adds it
+// and says so; repair (no notes) stays strict.
 
 const OPS = ["add", "remove", "replace", "test"];
 const bad = msg => { throw new Error(`MOTION_SPEC_INVALID: ${msg}`); };
@@ -30,7 +32,7 @@ function parentOf(doc, parts, tag) {
 	return node;
 }
 
-function applyOne(doc, op, i) {
+function applyOne(doc, op, i, notes) {
 	if (!op || typeof op !== "object" || !OPS.includes(op.op)) bad(`patch[${i}]: op must be ${OPS.join(", ")}, got ${JSON.stringify(op?.op)}`);
 	const tag = `patch[${i}] (${op.op} ${op.path})`;
 	if (typeof op.path !== "string" || (op.path !== "" && !op.path.startsWith("/"))) bad(`${tag}: path must be a JSON Pointer such as "/keys/0/f"`);
@@ -53,7 +55,8 @@ function applyOne(doc, op, i) {
 		else if (!same(node[k], op.value)) bad(`${tag}: value is ${JSON.stringify(node[k])?.slice(0, 60)}, not ${JSON.stringify(op.value)?.slice(0, 60)}`);
 		return doc;
 	}
-	if (op.op !== "add" && !Object.hasOwn(node, last)) bad(`${tag}: ${op.path} does not exist (${what(node, name)})`);
+	if (op.op === "replace" && notes && !Object.hasOwn(node, last)) notes.push(`${tag}: ${op.path} did not exist (${what(node, name)}); added`);
+	else if (op.op !== "add" && !Object.hasOwn(node, last)) bad(`${tag}: ${op.path} does not exist (${what(node, name)})`);
 	if (op.op === "remove") delete node[last];
 	else if (op.op === "test") { if (!same(node[last], op.value)) bad(`${tag}: value is ${JSON.stringify(node[last])?.slice(0, 60)}, not ${JSON.stringify(op.value)?.slice(0, 60)}`); }
 	else node[last] = structuredClone(op.value);
@@ -62,11 +65,13 @@ function applyOne(doc, op, i) {
 
 /**
  * Applies ops in order to a copy of doc (doc is never changed) and returns the copy; the first
- * failing op throws MOTION_SPEC_INVALID and nothing is applied.
+ * failing op throws MOTION_SPEC_INVALID and nothing is applied. notes (optional) turns a replace on a
+ * missing object member into an add and collects a line for it.
  * @param {object} doc
  * @param {{ op: "add" | "remove" | "replace" | "test", path: string, value?: any }[]} ops
+ * @param {string[]} [notes]
  */
-export function applyPatch(doc, ops) {
+export function applyPatch(doc, ops, notes) {
 	if (!Array.isArray(ops)) bad("patch must be an array of { op, path, value }");
-	return ops.reduce((d, op, i) => applyOne(d, op, i), structuredClone(doc));
+	return ops.reduce((d, op, i) => applyOne(d, op, i, notes), structuredClone(doc));
 }

@@ -8,12 +8,14 @@
 //   distance [a, b]  { min, minAt, max, maxAt, mean, first, last }   (refs.js refDistance; metres
 //                    to 6 decimals; every `every` frames, default 1; null when no frame has a value)
 //   position ref     { at: [{ f, p: [x,y,z] }] }                      (metres to 4 decimals; at most 16
-//                    rows; every defaults to the step that fits the range in 16 rows)
-// frames: [f0, f1] absolute and inclusive, or one frame (default the whole take).
+//                    rows; every defaults to the step that fits the range in 16 rows, a smaller one grows to it)
+// frames: [f0, f1] absolute and inclusive, or one frame (default the whole take); a window partly past
+// the take is cut to it. Both fixes leave a note in ctx.notes (lenient.js; output.adjusted).
 import { PROBE_FIELDS } from "./schema/fields.js";
 import { checkRef, refPoint, refDistance } from "./refs.js";
 import { resolveBone } from "./bones.js";
 import { didYouMean, fmt } from "./compiler/vocab.js";
+import { clampProbe, fitEvery } from "./lenient.js";
 
 const MAX_PROBES = 16, MAX_ROWS = 16, MAX_ERRORS = 12, SHAPE = "{ name, distance: [refA, refB] | position: ref, frames: [f0, f1], every }";
 const r6 = v => Math.round(v * 1e6) / 1e6, r4 = v => Math.round(v * 1e4) / 1e4;
@@ -24,15 +26,14 @@ function exactRef(sk, ref) {
 	return m ? `${m[1]}:${resolveBone(sk, m[2]).bone ?? m[2]}` : ref;
 }
 
-function rangeOf(p, at, last, err) {
-	const fr = p.frames === undefined ? [0, last] : Number.isInteger(p.frames) ? [p.frames, p.frames] : p.frames;
-	const ok = Array.isArray(fr) && fr.length === 2 && fr.every(Number.isInteger) && fr[0] >= 0 && fr[0] <= fr[1] && fr[1] <= last;
-	if (!ok) err(`${at}.frames must be [f0, f1], integer frames within 0..${last} with f0 <= f1, got ${fmt(p.frames)}`);
-	return ok ? fr : null;
+function rangeOf(p, at, last, err, notes) {
+	const fr = p.frames === undefined ? [0, last] : clampProbe(p.frames, last, at, notes);
+	if (!fr) err(`${at}.frames must be [f0, f1], integer frames within 0..${last} with f0 <= f1, got ${fmt(p.frames)}`);
+	return fr;
 }
 
 /** Checked probes [{ name, refs, kind, range, every }]; throws MOTION_SPEC_INVALID listing every problem. */
-function checkProbes(out, probes, { spec, sk, scene }) {
+function checkProbes(out, probes, { spec, sk, scene, notes }) {
 	const errors = [], err = m => { if (errors.length < MAX_ERRORS) errors.push(m); }, last = out.frameCount - 1, list = [], names = new Map();
 	if (!Array.isArray(probes)) err(`probes must be an array of ${SHAPE}`);
 	else if (probes.length > MAX_PROBES) err(`probes has ${probes.length} entries; at most ${MAX_PROBES} per compile`);
@@ -50,11 +51,11 @@ function checkProbes(out, probes, { spec, sk, scene }) {
 		if (kind === "distance" && !(Array.isArray(refs) && refs.length === 2 && refs.every(r => typeof r === "string"))) return err(`${at}.distance must be [refA, refB], two point refs, got ${fmt(p.distance)}`);
 		if (kind === "position" && typeof p.position !== "string") return err(`${at}.position must be a point ref, got ${fmt(p.position)}`);
 		const good = refs.map((r, j) => checkRef(spec, err, { sk, scene }, kind === "distance" ? `${at}.distance[${j}]` : `${at}.position`, r)).every(Boolean);
-		const range = rangeOf(p, at, last, err);
+		const range = rangeOf(p, at, last, err, notes);
 		if (p.every !== undefined && !(Number.isInteger(p.every) && p.every >= 1)) return err(`${at}.every must be a positive integer, got ${fmt(p.every)}`);
 		if (!good || !range) return;
-		const span = range[1] - range[0] + 1, every = p.every ?? (kind === "position" ? Math.ceil(span / MAX_ROWS) : 1), rows = Math.ceil(span / every);
-		if (kind === "position" && rows > MAX_ROWS) return err(`${at} (position) gives ${rows} rows over f${range[0]}..${range[1]} with every ${every}; at most ${MAX_ROWS} rows (every >= ${Math.ceil(span / MAX_ROWS)})`);
+		const span = range[1] - range[0] + 1, asked = p.every ?? (kind === "position" ? Math.ceil(span / MAX_ROWS) : 1);
+		const every = kind === "position" ? fitEvery(asked, span, MAX_ROWS, at, notes) : asked;
 		list.push({ name, kind, refs: refs.map(r => exactRef(sk, r)), range, every });
 	});
 	if (errors.length) throw new Error(`MOTION_SPEC_INVALID: ${errors.join("\n")}${errors.length >= MAX_ERRORS ? "\n(more problems not listed)" : ""}`);
@@ -83,7 +84,7 @@ function positionOf(out, p) {
  * runProbes(out, probes, { spec, sk, scene }) -> { [name]: result }
  * @param {object} out  compileMotion result
  * @param {object[]} probes  the request's probes
- * @param {{ spec: object, sk: object, scene: object }} ctx  spec = the expanded spec
+ * @param {{ spec: object, sk: object, scene: object, notes?: string[] }} ctx  spec = the expanded spec; notes gets the windows cut and every grown
  */
 export function runProbes(out, probes, ctx) {
 	return Object.fromEntries(checkProbes(out, probes, ctx).map(p => [p.name, p.kind === "distance" ? distanceOf(out, p) : positionOf(out, p)]));

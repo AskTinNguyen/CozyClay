@@ -76,8 +76,10 @@ r = compile(swing, { ...swing.spec, goals: [{ ...goal, by: 5 }] });
 const g = r.qa.groups.find(x => x.kind === "GOAL");
 expect(`${swing.session}: a point moved short of by is one GOAL issue at that frame, its subject naming from where`, !r.qa.ok && g.count === 1 && g.worstFrame === far.f
 	&& g.subject === `${goal.name}: moved ${m3(far.v)} m from f${goal.at[0]} at f${far.f} (needs >= 5)` && /hand_r/.test(`${g.hint} ${g.cause}`), JSON.stringify(g));
-expect(`${sweep.session}: the spec as sent stops only at the probe row cap, whose message names the fix`, refusal(() => compile(sweep))
-	=== "probes[0] (position) gives 18 rows over f0..71 with every 4; at most 16 rows (every >= 5)", refusal(() => compile(sweep)));
+// the probe row cap that stopped it is now fixed for it (C19): every grows to 5 and the answer names it
+const sent = compile(sweep);
+expect(`${sweep.session}: the spec as sent compiles; the probe's every grows to fit 16 rows, named in notes`, sent.probes?.["tip path"]?.at?.length === 15
+	&& JSON.stringify(sent.notes) === JSON.stringify(["probes[0].every 4 -> 5: a position probe answers at most 16 rows"]), JSON.stringify(sent.notes));
 r = compile(sweep, { ...sweep.spec, probes: [{ ...sweep.spec.probes[0], every: 5 }] });
 const tip = r.qa.goals.find(x => x.name === sweep.spec.goals[1].name), tipFar = travel(r, sweep.spec.goals[1].moved, sweep.spec.goals[1].at);
 expect(`${sweep.session}: with every 5 it compiles; "${sweep.spec.goals[1].name}" measures the tip`, r.probes?.["tip path"]?.at?.length === 15 && tip.value === m3(tipFar.v) && tip.at === tipFar.f, JSON.stringify(tip));

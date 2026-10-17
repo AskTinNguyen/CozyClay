@@ -10,7 +10,8 @@
 // settle the last frame cut: observations.cut), and the timeline and the
 // requested probes read the result.
 // liftRequest first takes what the agent obviously meant: spec.probes are request probes, and a
-// bare goals[].moved id is object:<id>.
+// bare goals[].moved id is object:<id>; relaxSpec (lenient.js) fixes mechanical slips in the expanded
+// spec before validation and the answer lists each fix in notes.
 import { compileMotion } from "./compiler/compile.js";
 import { validateSpec } from "./compiler/validate.js";
 import { runMotionQa } from "./qa/index.js";
@@ -27,6 +28,7 @@ import { heldReadings, HELD_UNITS } from "./qa/key-checks.js";
 import { observeNear, NEAR_UNITS } from "./qa/near.js";
 import { observeWrist, WRIST_UNITS } from "./qa/wrist-obs.js";
 import { planWalks, applyWalkPlans } from "./walk-plan.js";
+import { relaxSpec } from "./lenient.js";
 
 const ms = t => Math.round(performance.now() - t);
 
@@ -55,19 +57,19 @@ export function liftRequest(spec, probes) {
 
 /**
  * spec -> { out, qa, observations, spec (frames and open values filled in), expanded, used,
- * fixed, search, timeline, probes?, ms }. opts.checks replaces every check (the spec's and its skills') for a
+ * fixed, search, timeline, probes?, notes?, ms }. opts.checks replaces every check (the spec's and its skills') for a
  * re-measure; opts.lenient ignores unknown fields (take-source.js); opts.probes are measured
  * (with spec.probes, liftRequest).
  */
 export function compileSpec(sent, { sk, scene }, opts = {}) {
 	const { spec, probes: asked } = liftRequest(sent, opts.probes);
-	const t0 = performance.now(), ctx = { sk, scene, lenient: opts.lenient === true };
+	const t0 = performance.now(), ctx = { sk, scene, lenient: opts.lenient === true }, notes = [];
 	const checks = opts.checks && nameChecks({ checks: opts.checks }).checks;
 	let plans = [];
 	const expand = s => {
 		const { spec: exp, used } = expandUse(nameChecks(applyWalkPlans(s, plans)), ctx);
 		// plain JSON objects compile about twice as fast as structuredClone'd ones (V8 shapes)
-		const full = JSON.parse(JSON.stringify(checks ? { ...exp, checks } : exp));
+		const full = relaxSpec(JSON.parse(JSON.stringify(checks ? { ...exp, checks } : exp)), scene, notes);
 		validateSpec(full, ctx);
 		return { full, used };
 	};
@@ -94,6 +96,7 @@ export function compileSpec(sent, { sk, scene }, opts = {}) {
 	const cut = used.filter(u => u.cut).map(u => `${u.skill}: ${u.cut}`);
 	if (cut.length) observations.cut = cut;
 	if (plans.length) observations.planned = plans.map(p => p.note);
-	const timeline = timelineOf(out, { used, spec: expanded }), probes = asked && runProbes(out, asked, { spec: expanded, sk, scene });
-	return { out, qa, observations, spec: resolved, expanded, used, fixed: out.fixed, search, timeline, ...(probes ? { probes } : {}), ms: { compile: compileMs, qa: ms(t2), total: ms(t0) } };
+	const timeline = timelineOf(out, { used, spec: expanded }), probes = asked && runProbes(out, asked, { spec: expanded, sk, scene, notes });
+	return { out, qa, observations, spec: resolved, expanded, used, fixed: out.fixed, search, timeline, ...(probes ? { probes } : {}), ...(notes.length ? { notes } : {}),
+		ms: { compile: compileMs, qa: ms(t2), total: ms(t0) } };
 }

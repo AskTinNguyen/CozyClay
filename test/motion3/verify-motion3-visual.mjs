@@ -132,9 +132,9 @@ const chosen = run({ visual: "contact_sheet", frames: [40, 5, 20], targets: [CHA
 expect("frames [f, ...]: those frames, ascending, rendered in order, 3x2 like even", json(chosen.ref.frames) === "[5,20,40]" && json(rendered) === "[5,20,40]" && chosen.ref.layout === CONTACT_SHEET_LAYOUT && !("picks" in chosen.ref), json(chosen.ref));
 const eight = run({ visual: "contact_sheet", frames: [0, 6, 12, 18, 24, 30, 36, 42], targets: [CHARACTER.id] });
 expect("frames: 7-8 frames tile 4x2", eight.ref.layout === "4x2 row-major" && eight.ref.frames.length === 8 && encoded[0].width === 32 && encoded[0].height === 8, json({ ref: eight.ref, encoded }));
-let outsideRange = "";
-try { run({ visual: "contact_sheet", frames: [10, 60], targets: [CHARACTER.id], range: { startFrame: 0, endFrameExclusive: 48 } }); } catch (error) { outsideRange = `${error.code}: ${error.message}`; }
-expect("frames outside the range are refused by name", outsideRange === "INVALID_ARGUMENT: frames 60 lie outside the range 0..47.", outsideRange);
+// a frame past the range is drawn at its nearest end and the ref says so (lenient.js), instead of a refused call
+const pastEnd = run({ visual: "contact_sheet", frames: [10, 60, 70], targets: [CHARACTER.id], range: { startFrame: 0, endFrameExclusive: 48 } });
+expect("frames outside the range are drawn at its end, named in ref.adjusted", json(pastEnd.ref.frames) === "[10,47]" && pastEnd.ref.adjusted === "frames 60, 70 lie outside 0..47: drawn at 47", json(pastEnd.ref));
 
 // ---- views of its own on a cup pick-up ----------------------------------------------------
 // The left hand's fingers land on the cup handle and the cup group rides the hand 34..80

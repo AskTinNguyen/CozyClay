@@ -35,6 +35,7 @@ import { deltaOf } from "../../src/motion3/delta.js";
 import { repairSpec } from "../../src/motion3/repair.js";
 import { resolveFrames } from "../../src/motion3/skills/frames-auto.js";
 import { compileTakeSource } from "../../src/domains/motion/take-source.js";
+import { relaxSpec, clampFrames, normalizeCompileArgs } from "../../src/motion3/lenient.js";
 
 let failures = 0;
 function expect(name, condition, detail = "") {
@@ -228,6 +229,14 @@ const cupRest = cupScene.groups[CUP.group].pos;
 const pathed = compileSpec({ ...gripSpec, frames: 70, objects: { [CUP.group]: { prop: "cupHoldGrip", grab: 26, keys: [{ f: 26, pos: cupRest, aim: [0, 1, 0] },
 	{ f: 50, pos: [CHARACTER.x - 0.03, 1.46, CHARACTER.z + 0.22], aim: [0, 0.8, -0.6] }] } } }, { sk, scene: cupScene }), chosen = pathed.observations.wrist?.hand_r?.grip;
 expect("C18: a keyed thin carry with a free grip reports its chosen grip (object, chose, cost [it, today's])", chosen?.object === CUP.group && typeof chosen.chose === "string" && chosen.cost[0] <= chosen.cost[1] && /grip: the grip a keyed carry/.test(pathed.observations.units), JSON.stringify(chosen));
+
+// C19. Lenient inputs: fixes that cannot change the meaning are made and named; the rest is refused as before
+const slips = [], relaxed = relaxSpec({ frames: 60, goals: [{ name: "g", near: ["joint:Hips", "joint:Head"], at: [50, 80] }, { near: ["joint:Hips", "joint:Head"], at: [70, 80] }],
+	objects: { [CUP.group]: { keys: [{ f: 5, pos: [0, 1, 0] }] } } }, motionScene(SCENE_OBJECTS), slips);
+expect("C19: a goal window past the clip is cut, one wholly past it is left; a free pos-only key takes its scene turn; one note each",
+	JSON.stringify(relaxed.goals.map(g => g.at)) === "[[50,59],[70,80]]" && JSON.stringify(relaxed.objects[CUP.group].keys[0].rot) === "[0,0,0,1]" && slips.length === 2, JSON.stringify(slips));
+expect("C19: verify_result frames are pulled into the range; install and repair spellings are the declared ones", JSON.stringify(clampFrames([10, 60], [0, 47])) === JSON.stringify({ frames: [10, 47], adjusted: "frames 60 lie outside 0..47: drawn at 47" })
+	&& JSON.stringify(normalizeCompileArgs({ install: "always", repair: { rounds: 0 } })) === JSON.stringify({ install: true }));
 
 if (failures) { console.error(`${failures} motion3 contract check(s) failed`); process.exit(1); }
 console.log("motion3 contracts: all checks passed");

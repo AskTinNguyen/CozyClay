@@ -64,10 +64,14 @@ expect("every problem is listed at once, one per line", json(lines) === json([
 	"probes[0] needs exactly one of distance: [refA, refB] or position: ref",
 	"probes[1].name \"a\" is already used by probes[0]; probe names must differ",
 	"probes[1].position \"object:nope\" names object \"nope\", which is not in the scene; did you mean \"cube\"?",
-	"probes[2].frames must be [f0, f1], integer frames within 0..119 with f0 <= f1, got [10,500]",
-	"probes[3] (position) gives 60 rows over f0..119 with every 2; at most 16 rows (every >= 8)",
 	"probes[4] has unknown field \"zzz\"; a probe is { name, distance: [refA, refB] | position: ref, frames: [f0, f1], every }",
 	"probes[4].distance must be [refA, refB], two point refs, got [\"joint:Hips\"]"]), several);
+// a window partly past the take is cut to it and a position probe's every grows to fit 16 rows, each with a note (lenient.js);
+// a window wholly past the take is still refused
+const notes = [], fixed = runProbes(out, [{ name: "late", position: "joint:Hips", frames: [100, 500] }, { name: "dense", position: "joint:Hips", every: 2 }], { spec: r.expanded, sk, scene, notes });
+expect("a late window is cut to the take and a dense position probe thins to 16 rows, with notes", fixed.late.at.at(-1).f <= 119 && fixed.late.at[0].f === 100 && fixed.dense.at.length <= 16 && fixed.dense.at[1].f - fixed.dense.at[0].f === 8
+	&& json(notes) === json(["probes[0].frames [100,500] -> [100,119]: the take is 0..119", "probes[1].every 2 -> 8: a position probe answers at most 16 rows"]), json({ notes, late: fixed.late.at.length, dense: fixed.dense.at.length }));
+expect("a window wholly past the take is still refused", refused([{ position: "joint:Hips", frames: [130, 500] }]) === "MOTION_SPEC_INVALID: probes[0].frames must be [f0, f1], integer frames within 0..119 with f0 <= f1, got [130,500]");
 const tooMany = refused(Array.from({ length: 17 }, (_, i) => ({ name: `p${i}`, position: "joint:Hips" })));
 expect("more than 16 probes are refused", tooMany === "MOTION_SPEC_INVALID: probes has 17 entries; at most 16 per compile", tooMany);
 

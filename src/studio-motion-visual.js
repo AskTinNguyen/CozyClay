@@ -14,6 +14,7 @@ import { checkRef } from "./motion3/refs.js";
 import { renderWithGhosts } from "./ghost-set.js";
 import { GHOST_COLORS, sheetGhostSettings } from "./view-ghosts.js";
 import { publishSheet } from "./agent-progress.js";
+import { clampFrames } from "./motion3/lenient.js";
 import { sheetCaption } from "./workflow/agent-progress-view.js";
 // verify_result's lighting check also reads the rendered shot frame; the binding imports it from here.
 export { verifyLighting } from "./studio-lighting-check.js";
@@ -71,13 +72,6 @@ export function traceRgba(series, [lo, hi], { width = TRACE_WIDTH, height = TRAC
 	return { data, width, height };
 }
 
-/** Named frames, ascending; each inside the range. */
-function explicitFrames(frames, [lo, hi]) {
-	const outside = frames.filter(f => f < lo || f > hi);
-	if (outside.length) throw new StudioProtocolError("INVALID_ARGUMENT", `frames ${outside.join(", ")} lie outside the range ${lo}..${hi}.`);
-	return [...frames].sort((a, b) => a - b);
-}
-
 const listOf = value => value === undefined ? [] : [value].flat();
 const round2 = p => p.map(v => Math.round(v * 100) / 100);
 
@@ -129,14 +123,16 @@ export function studioVisual(args, { s, receipt, result, images, ports }) {
 		// One image of frames across the range, each rendered through the export
 		// path, which puts the playhead pose, shot camera and props back.
 		const span = rangeOf(args.range, s.frameCount), r = args.frames === "beats" || args.views ? takeCompile(args, s, receipt) : null;
-		let frames = sampleContactSheetFrames(args.range, s.frameCount), picks;
-		if (Array.isArray(args.frames)) frames = explicitFrames(args.frames, span);
+		let frames = sampleContactSheetFrames(args.range, s.frameCount), picks, adjusted;
+		// named frames past the range are drawn at its nearest end, and visualRefs[0].adjusted says so (lenient.js)
+		if (Array.isArray(args.frames)) ({ frames, adjusted } = clampFrames(args.frames, span));
 		else if (args.frames === "beats") ({ frames, picks } = beatFrames({ range: span, even: frames, timeline: r?.timeline, groups: r?.qa.groups, objects: r?.expanded.objects }));
 		// Views of its own always include two that look across each other (motion3/views.js depthViews).
 		const depth = args.views ? depthViews(args.views) : null, grid = sheetGrid(frames.length, depth?.views.length ?? 0);
-		if (depth) return keep(...viewSheet({ ...args, views: depth.views }, r, { s, frames, span, grid, picks, ports, added: depth.added }));
+		const said = ref => (adjusted ? { ...ref, adjusted } : ref);
+		if (depth) { const [image, ref] = viewSheet({ ...args, views: depth.views }, r, { s, frames, span, grid, picks, ports, added: depth.added }); return keep(image, said(ref)); }
 		const sheet = buildContactSheet(frames, ports.renderFrameBuffer, grid);
-		return keep({ dataUrl: ports.encodePng(sheet.data, sheet), width: sheet.width, height: sheet.height, frames, layout: grid.layout }, { frames, layout: grid.layout, ...(picks ? { picks } : {}) });
+		return keep({ dataUrl: ports.encodePng(sheet.data, sheet), width: sheet.width, height: sheet.height, frames, layout: grid.layout }, said({ frames, layout: grid.layout, ...(picks ? { picks } : {}) }));
 	}
 	if (args.visual === "trace") {
 		const r = takeCompile(args, s, receipt);

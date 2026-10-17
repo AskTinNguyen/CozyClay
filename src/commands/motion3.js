@@ -22,6 +22,7 @@ import { keyObject } from "../motion3/key-edit.js";
 import { expandUse } from "../motion3/skills/index.js";
 import { publishDraft } from "../agent-progress.js";
 import { carryEdit } from "../motion3/edit-carry.js";
+import { normalizeCompileArgs } from "../motion3/lenient.js";
 
 const TIMELINE_FPS = 24;
 const id = { type: "string", minLength: 1 };
@@ -55,6 +56,10 @@ const declarations = Object.freeze([
 export { declarations };
 
 const DEFAULT_BONES = ["Hips", "Head", "LeftHand", "RightHand", "LeftFoot", "RightFoot"];
+// the inputs a compile fixed instead of refusing (lenient.js), kept in every answer (report.js keeps the head)
+const MAX_ADJUSTED = 8;
+const adjustedOf = notes => (notes.length ? { adjusted: notes.length > MAX_ADJUSTED ? [...notes.slice(0, MAX_ADJUSTED - 1), `${notes.length - MAX_ADJUSTED + 1} more`] : notes } : {});
+const adjustedSay = notes => (notes.length ? `; ${notes.length} input${notes.length > 1 ? "s" : ""} adjusted (output.adjusted)` : "");
 const unknownSpec = (what, value, then = "send spec") => fail("INVALID_ARGUMENT", `${what} "${value}" is not known (the editor keeps the last ${SPEC_STORE_SIZE} compiled specs this session); ${then}`);
 
 const sameArray = (a, b) => a?.length === b?.length && Array.prototype.every.call(a, (v, i) => v === b[i]);
@@ -123,15 +128,16 @@ export function register(registry, ports) {
 	const installed = characterId => owner().motionFor(characterId)?.schema === "cozyclay.take.v3" ? owner().motionFor(characterId)
 		: fail("TARGET_NOT_READY", "This character has no compiled take; run motion.compile first.");
 
-	registry.register({ ...declarations[0], available: mounted, target: args => args.characterId, run({ characterId, spec, base, patch, install: asked = true, probes, repair }, context) {
+	// normalizeArgs: other spellings of install and repair become the declared ones before the schema check (lenient.js)
+	registry.register({ ...declarations[0], normalizeArgs: normalizeCompileArgs, available: mounted, target: args => args.characterId, run({ characterId, spec, base, patch, install: asked = true, probes, repair }, context) {
 		const install = asked === "never" ? false : asked;
 		const character = characterOf(ports, characterId);
 		if ((spec === undefined) === (base === undefined)) fail("INVALID_ARGUMENT", "Send exactly one of spec or base (the specId of a compiled spec, with patch).");
 		if (patch !== undefined && base === undefined) fail("INVALID_ARGUMENT", "patch applies to base, the specId of a compiled spec; send base with it, or the whole spec.");
-		const source = spec ?? asArgument(() => applyPatch(store.get(base) ?? unknownSpec("base", base), patch ?? []));
+		const patched = [], source = spec ?? asArgument(() => applyPatch(store.get(base) ?? unknownSpec("base", base), patch ?? [], patched));
 		const once = s => compile(character, s, { probes });
 		const fixed = repair ? repairSpec(source, repair, once) : { spec: source, result: once(source) };
-		const r = fixed.result, { out, qa } = r;
+		const r = fixed.result, { out, qa } = r, notes = [...patched, ...(r.notes ?? [])];
 		// ifClean: install only a clean final result (qa.ok includes the goals; after repair when asked)
 		const wanted = install === "ifClean" ? qa.ok : install;
 		let installs = wanted, kept = false, timing;
@@ -145,15 +151,15 @@ export function register(registry, ports) {
 		}
 		const delta = base === undefined ? {} : { delta: deltaOf(store.parts(base)?.groups ?? [], qa.groups, base) };
 		const how = kept ? "; already installed, unchanged" : install === "ifClean" ? (installs ? "; installed" : "; not installed") : "";
-		const output = report(r, { frames: out.frameCount, fps: TIMELINE_FPS, installed: wanted }, { ...delta, ...(fixed.repair ? { repair: fixed.repair } : {}), ...(timing ? { timing } : {}) });
+		const output = report(r, { frames: out.frameCount, fps: TIMELINE_FPS, installed: wanted, ...adjustedOf(notes) }, { ...delta, ...(fixed.repair ? { repair: fixed.repair } : {}), ...(timing ? { timing } : {}) });
 		// the user watches every draft, installed or not (agent-progress.js: viewport ghost, timeline beats, agent panel)
 		publishDraft(characterId, { take, installed: installs || kept, specId: output.specId, label: fixed.spec.label ?? null, qa, timeline: r.timeline });
-		return { affectedIds: installs ? [characterId] : [], summary: `Compiled ${out.frameCount} frames; QA ${qa.ok ? "clean" : `${qa.total} issues`}${how}.`, output };
+		return { affectedIds: installs ? [characterId] : [], summary: `Compiled ${out.frameCount} frames; QA ${qa.ok ? "clean" : `${qa.total} issues`}${how}${adjustedSay(notes)}.`, output };
 	} });
 	registry.register({ ...declarations[1], available: mounted, run({ characterId, checks }) {
 		const character = characterOf(ports, characterId), take = installed(characterId);
 		const r = compile(character, take.spec, { checks });
-		return { affectedIds: [], summary: `QA ${r.qa.ok ? "clean" : `${r.qa.total} issues`}.`, output: report(r, {}) };
+		return { affectedIds: [], summary: `QA ${r.qa.ok ? "clean" : `${r.qa.total} issues`}${adjustedSay(r.notes ?? [])}.`, output: report(r, adjustedOf(r.notes ?? [])) };
 	} });
 	registry.register({ ...declarations[2], available: mounted, run({ characterId, frames, bones = DEFAULT_BONES }) {
 		const character = characterOf(ports, characterId), take = installed(characterId), sk = rigOf(character);

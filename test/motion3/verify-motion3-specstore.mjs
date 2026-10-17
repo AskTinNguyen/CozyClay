@@ -146,8 +146,9 @@ expect("base + patch: [] re-measures the stored spec with new probes (same specI
 const never = remeasureReg.run("motion.compile", { characterId: CHARACTER.id, base: measuredBase.specId, patch: [], probes: handProbe, install: "never" });
 expect("install: \"never\" is install: false (installed false, no affectedIds, the take untouched)", never.output.installed === false && never.affectedIds.length === 0
 	&& takes.get(CHARACTER.id) === takeBefore && never.output.probes?.hand?.min > 0, JSON.stringify({ installed: never.output.installed, affected: never.affectedIds }));
-const wrongInstall = refusal(() => remeasureReg.run("motion.compile", { characterId: CHARACTER.id, base: measuredBase.specId, install: "no" }));
-expect("any other install string is still refused, and the refusal lists \"never\"", /install must be true, false, "ifClean" or "never", got "no"/.test(wrongInstall), wrongInstall);
+// "no" is a spelling of "never" (C19, normalizeCompileArgs); a word that is none is refused
+const wrongInstall = refusal(() => remeasureReg.run("motion.compile", { characterId: CHARACTER.id, base: measuredBase.specId, install: "perhaps" }));
+expect("any other install string is still refused, and the refusal lists \"never\"", /install must be true, false, "ifClean" or "never", got "perhaps"/.test(wrongInstall), wrongInstall);
 const inPatch = run(remeasureReg, "motion.compile", { characterId: CHARACTER.id, base: measuredBase.specId, patch: [{ op: "add", path: "/probes", value: handProbe }], install: false });
 expect("spec.probes added by a patch are measured like request probes, and are not part of the spec (same specId)", inPatch.specId === measuredBase.specId
 	&& JSON.stringify(inPatch.probes) === JSON.stringify(noPatch.probes), JSON.stringify([inPatch.specId, inPatch.probes]));

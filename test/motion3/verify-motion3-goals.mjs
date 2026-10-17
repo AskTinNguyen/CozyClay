@@ -119,7 +119,8 @@ const cases = [
 	[[{ near: ["joint:LeftHand", "object:empty-3"], at: 3 }], ['goals[0].near[1] "object:empty-3" names object "empty-3", which is not in the scene; did you mean "empty-2"?']],
 	[[{ moved: "joint:Hips", at: 3 }], ['goals[0].moved "joint:Hips" measures how far the point gets from where it is at at[0], so at must be [f0, f1] with f0 < f1, got 3']],
 	[[{ near: ["joint:LeftHand"], at: 3 }], ['goals[0].near must be [ref, ref] (two point refs), got ["joint:LeftHand"]']],
-	[[{ moved: "object:cylinder", at: [40, 60] }], ["goals[0].at = [40,60] is outside 0..47 (spec.frames 48); set frames >= 61"]],
+	// a window wholly past the clip (one that only runs past the end is cut to it, C19)
+	[[{ moved: "object:cylinder", at: [50, 60] }], ["goals[0].at = [50,60] is outside 0..47 (spec.frames 48); set frames >= 61"]],
 	[[{ moved: "object:cylinder", at: -1 }], ["goals[0].at = -1 is outside 0..47 (spec.frames 48)"]],
 	[[{ moved: "object:cylinder", at: [20, 10] }], ["goals[0].at must be an integer frame or [f0, f1] with f0 <= f1, got [20,10]"]],
 	[[{ moved: "object:cylinder" }], ["goals[0] needs at: a frame or [f0, f1] (absolute frames within 0..47)"]],
