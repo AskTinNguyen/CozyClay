@@ -7,8 +7,11 @@ import { vec, m3 } from "./fmt.js";
 import { kneeFoldHint, kneeWhy } from "./hints-knee.js";
 import { objectFrame } from "../compiler/anchors.js";
 import { bodyFor, bodyNormal, limbDepth } from "../body.js";
+import { footProbes, footDepths } from "./foot-checks.js";
 
 const MARGIN = 0.003;
+/** The most a foot hint lifts a foot over a body it went into through a side (a stair riser); higher, it backs out. */
+const LIFT_MAX = 0.25;
 const sideOf = name => (/(^|_)l$|^Left/.test(name) ? "l" : /(^|_)r$|^Right/.test(name) ? "r" : null);
 
 /** fix (qa/patch.js) moving anchor `name` of hand k by a world delta at f: its own point, in the frame that point is written in. */
@@ -60,6 +63,25 @@ function boxHint(X, g, part, id, need) {
 	return moveHint(X, part, f, scale(n, need), ` (out of ${id})`);
 }
 
+/**
+ * A foot in a box (foot-checks.js): through a side face (a toe swung into a stair's riser) the foot rises over the
+ * box's top by what its deepest probe lacks, with the way straight out of that side as the other choice; through
+ * the top face (a sole sunk in a step) it comes out along that face.
+ */
+function footHint(X, g, part, id) {
+	const f = g.worstFrame, box = X.out.objectsAt(X.rel(f))[id];
+	if (!box) return null;
+	const probes = footProbes(X.sk, X.fr(f).s, part.endsWith("_l") ? "Left" : "Right"), d = footDepths(probes, box), need = g.worst - g.limit + MARGIN;
+	if (!(d.side > 0)) return d.topAt ? moveHint(X, part, f, scale(boxNormal(d.topAt, box), need), ` (out of ${id}'s top)`) : null;
+	const under = p => 2 * box.half[1] - apply(T(box.R), sub(p, box.pos))[1];
+	const rise = Math.max(...probes.filter(p => sdBox(p, box) < 0).map(under)) + MARGIN, out = scale(boxNormal(d.sideAt, box), need);
+	// a step's riser is cleared by lifting the swing; a panel the foot kicks or a wall is left the way the foot came
+	if (rise > LIFT_MAX) return moveHint(X, part, f, out, ` (out of ${id}'s side)`);
+	const r = moveHint(X, part, f, apply(box.R, [0, rise, 0]), ` (over ${id}'s top; its ${g.worst.toFixed(3)} m is through a side)`);
+	r.hint += /^walk path/.test(r.hint) ? "; a higher lift raises the swing" : `; or move ${vec(out)} m out of that side`;
+	return r;
+}
+
 function towardFrom(X, g, part, from, need, what) {
 	return moveHint(X, part, g.worstFrame, scale(norm(from), need), ` (away from the ${what})`);
 }
@@ -74,6 +96,7 @@ function probes(X, f, nm) {
 export const contactHints = {
 	COLLIDE(X, g) {
 		const [, part, id] = /^(\S+) x (.+)$/.exec(g.subject) ?? [];
+		if (/^foot_[lr]$/.test(part ?? "")) return footHint(X, g, part, id);
 		const r = boxHint(X, g, part, id, g.worst - g.limit + MARGIN);
 		if (r && /^(hand|farm)_/.test(part) && !X.spec.fix?.penetration && g.worst - g.limit <= 0.05) {
 			r.hint += "; or fix.penetration: 0.02 pushes shallow hand hits out";

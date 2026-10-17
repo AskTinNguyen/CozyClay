@@ -10,6 +10,7 @@ import { contactChecks } from "./contact-checks.js";
 import { bodyChecks } from "./body-checks.js";
 import { popChecks } from "./style.js";
 import { groundSole } from "./ground.js";
+import { footChecks } from "./foot-checks.js";
 import { ELBOW_STOP, KNEE_STOP } from "../compiler/limbs.js";
 
 export const QA_LIMITS = { allow: 0.005, groundAllow: 0.01, reach: 0.01, slide: 0.0015, plantH: 0.012,
@@ -44,6 +45,7 @@ export function generalChecks(sk, out, opts = {}) {
 				if (pen > lim) push("COLLIDE", `${part} x ${id}`, f, pen, lim);
 			}
 		}
+		footChecks(sk, s, f, spheres, L, (part, id) => allowance(opts.allow, part, id), push);
 		for (const side of ["Left", "Right"]) {
 			const sp = solePoints(sk, s, side), low = Math.min(sp.heel[1], sp.ball[1], sp.tip[1]);
 			if (low < -L.groundAllow) push("GROUND", `${side} sole below floor`, f, -low, L.groundAllow);
