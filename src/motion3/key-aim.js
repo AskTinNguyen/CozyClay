@@ -11,13 +11,35 @@
 // settles each pick within its step. roll given (0 included) and rot keys are used exactly.
 // The quaternion is rounded to 1e-5 (the grid motion.keyObject writes) and kept on the hemisphere
 // of the key before it.
+// lean (degrees, lane elbow) lets the compiler lean aim itself up to that far: a cup brought to the mouth
+// is tipped toward the face AND a little toward the hand's side, which lets the elbow stay down (a cup at
+// the mouth aimed only at the face can be held with a comfortable wrist only with the elbow over the
+// shoulder). The aim, and AZIMUTHS directions leaned lean/2 and lean, each at every roll (or at the
+// given roll), are scored by the arm's strain plus the shoulder's price (hold.js holdCost opts.shoulder);
+// the chain and the roll refinement run as above on the picked direction.
 import { qmul, qrot, qdot, qnorm, arcQuat, axisQuat } from "./compiler/quat.js";
-import { norm } from "./compiler/math.js";
+import { add, cross, norm, scale, sub } from "./compiler/math.js";
 
-const ROLLS = 24, STEP = 360 / ROLLS, TURN = 0.2, GOLDEN = 12;
+const ROLLS = 24, STEP = 360 / ROLLS, TURN = 0.2, GOLDEN = 12, AZIMUTHS = 8;
 const round5 = v => Math.round(v * 1e5) / 1e5;
 /** The turn between two unit quaternions, radians. */
 const turn = (a, b) => 2 * Math.acos(Math.min(1, Math.abs(qdot(a, b))));
+
+/**
+ * Where a leaning key puts the object: a lean pivots about the object's top (its +Y end, `top` m above its
+ * base pivot), so a cup's rim stays where aim put it (at the lips) and its foot swings; any other key's pos.
+ */
+export const leanPos = (key, q, top) => (key.lean > 0 && key.aim && top > 0 ? add(key.pos, scale(sub(norm(key.aim), qrot(q, [0, 1, 0])), top)) : key.pos);
+
+/** aim d and the directions leaned lean/2 and lean deg from it toward AZIMUTHS sides. */
+function leanedAims(d, lean) {
+	const side = norm(cross(d, Math.abs(d[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0])), up = cross(d, side), out = [d];
+	for (const deg of [lean / 2, lean]) for (let j = 0; j < AZIMUTHS; j++) {
+		const a = (2 * Math.PI * j) / AZIMUTHS, t = (Math.min(deg, 45) * Math.PI) / 180, w = add(scale(side, Math.cos(a)), scale(up, Math.sin(a)));
+		out.push(norm(add(scale(d, Math.cos(t)), scale(w, Math.sin(t)))));
+	}
+	return out;
+}
 
 /** The pick per key: DP over candidates [{ q, cost }] per key, a TURN price on the squared turn between neighbours. */
 function chain(cands) {
@@ -55,13 +77,18 @@ function golden(f, lo, hi) {
 export function keyRots(keys, plain, strain) {
 	const at = keys.map((k, i) => {
 		if (k.aim === undefined) return { fixed: qnorm(k.rot) };
-		const from = qnorm(plain(i)), d = norm(k.aim), q0 = qmul(arcQuat(norm(qrot(from, [0, 1, 0])), d), from);
-		const rolled = r => qmul(axisQuat(d, r), q0);
-		return k.roll !== undefined || !strain ? { fixed: k.roll ? rolled(k.roll) : q0 } : { rolled };
+		const from = qnorm(plain(i)), aimed = d => { const q0 = qmul(arcQuat(norm(qrot(from, [0, 1, 0])), d), from); return r => qmul(axisQuat(d, r), q0); };
+		if (k.lean > 0 && strain) return { leans: leanedAims(norm(k.aim), k.lean).map(aimed), roll: k.roll };
+		const rolled = aimed(norm(k.aim));
+		return k.roll !== undefined || !strain ? { fixed: k.roll ? rolled(k.roll) : rolled(0) } : { rolled };
 	});
+	const rollsOf = a => (a.roll !== undefined ? [a.roll] : Array.from({ length: ROLLS }, (_, j) => j * STEP - 180));
 	const cands = at.map((a, i) => (a.fixed ? [{ q: a.fixed, cost: 0, r: 0 }]
+		: a.leans ? a.leans.flatMap(rolled => rollsOf(a).map(r => { const q = rolled(r); return { q, cost: strain(i, q), r, rolled, fixedRoll: a.roll !== undefined }; }))
 		: Array.from({ length: ROLLS }, (_, j) => { const r = j * STEP - 180, q = a.rolled(r); return { q, cost: strain(i, q), r }; })));
 	const picks = chain(cands), chosen = cands.map((c, i) => c[picks[i]]);
+	// a leaning key keeps the direction it picked; its roll is refined below like any other (unless given)
+	for (const [i, a] of at.entries()) if (a.leans) at[i] = chosen[i].fixedRoll ? { fixed: chosen[i].q } : { rolled: chosen[i].rolled };
 	const rots = [];
 	let prev = null;
 	for (const [i, a] of at.entries()) {

@@ -14,7 +14,7 @@ import { groupsOf } from "./scene.js";
 import { restState } from "./compiler/skeleton.js";
 import { add, scale, sub, apply, T, matFromQuat, quatFromMat } from "./compiler/math.js";
 import { qmul, qconj, qlog, qexp, qrot, qdot, qnorm } from "./compiler/quat.js";
-import { keyRots } from "./key-aim.js";
+import { keyRots, leanPos } from "./key-aim.js";
 import { holdCost } from "./compiler/hold.js";
 import { polePlan, smoothPath, smoothed } from "./hold-plan.js";
 import { secondGrip, secondHold, gripGate } from "./second-hand.js";
@@ -32,9 +32,10 @@ const spanIn = (out, o) => { const map = f => (out.timeMap ? Math.round(out.time
 const invert = p => { const Rt = T(p.R); return { pos: scale(apply(Rt, p.pos), -1), R: Rt }; };
 
 /** The keys of entry o as a curve: times (after a retime), positions, quaternions on one hemisphere (aim keys resolved: key-aim.js), tangents. */
-export function curveOf(o, map, plain, strain) {
-	const keys = [...o.keys].sort((a, b) => a.f - b.f), t = keys.map(k => map(k.f)), p = keys.map(k => k.pos.slice()), q = [];
-	const rots = keyRots(keys, i => plain(t[i]), strain && ((i, r) => strain(t[i], keys[i].pos, r)));
+export function curveOf(o, map, plain, strain, top = 0) {
+	const keys = [...o.keys].sort((a, b) => a.f - b.f), t = keys.map(k => map(k.f)), q = [];
+	const rots = keyRots(keys, i => plain(t[i]), strain && ((i, r) => strain(t[i], leanPos(keys[i], r, top), r, keys[i].lean ? { shoulder: true } : undefined)));
+	const p = keys.map((k, i) => leanPos(k, qnorm(rots[i]), top).slice());
 	for (const r of rots) { const n = qnorm(r); q.push(q.length && qdot(q[q.length - 1], n) < 0 ? n.map(v => -v) : n); }
 	const last = keys.length - 1, rate = i => scale(qlog(qmul(qconj(q[i]), q[i + 1])), 1 / (t[i + 1] - t[i]));
 	const tangent = (i, of) => (i === 0 || i === last ? [0, 0, 0] : scale(add(scale(of(i), t[i] - t[i - 1]), scale(of(i - 1), t[i + 1] - t[i])), 1 / (t[i + 1] - t[i - 1])));
@@ -53,8 +54,8 @@ export function curveIn(out, id) {
 	const cache = curves.get(out), map = out.timeMap, baked = out.baked, had = cache.get(id);
 	if (!had || had.map !== map || had.baked !== baked) {
 		const hold = out.ctx.hold, solved = new Map(), at = t => { const f = Math.round(t); if (!solved.has(f)) solved.set(f, hold.plainFrame(f).s); return solved.get(f); };
-		const plain = t => quatFromMat(hold.carryOn(id, at(t)).R), strain = (t, pos, q) => hold.strainOn(id, at(t), { pos, R: matFromQuat(q) });
-		cache.set(id, { map, baked, curve: curveOf(out.ctx.spec.objects[id], f => (map ? map(f) : f), plain, strain) });
+		const plain = t => quatFromMat(hold.carryOn(id, at(t)).R), strain = (t, pos, q, opts) => hold.strainOn(id, at(t), { pos, R: matFromQuat(q) }, opts);
+		cache.set(id, { map, baked, curve: curveOf(out.ctx.spec.objects[id], f => (map ? map(f) : f), plain, strain, 2 * (out.ctx.scene?.objects?.[id]?.half?.[1] ?? 0)) });
 	}
 	return cache.get(id).curve;
 }
@@ -139,10 +140,10 @@ export function holdHook(ctx, out, solvePlain, solveLed) {
 		return a;
 	};
 	const carryOn = (id, s) => compose(palmOf(spec.objects[id], s), attach(id));
-	const strainOn = (id, s, pose) => { const o = spec.objects[id]; return holdCost(sk, s, SIDES[spec.props[o.prop].hand], compose(pose, invert(attach(id))), palmOf(o, s)); };
+	const strainOn = (id, s, pose, opts) => { const o = spec.objects[id]; return holdCost(sk, s, SIDES[spec.props[o.prop].hand], compose(pose, invert(attach(id))), palmOf(o, s), opts); };
 	const heldAt = (id, o, f) => {
 		const curve = curveIn(out, id), w = leadWeight(curve, spanIn(out, o), f);
-		return w > 0 ? { w, palm: compose(keyedPose(curve, f), invert(attach(id))), measure: s => palmOf(o, s) } : null;
+		return w > 0 ? { w, palm: compose(keyedPose(curve, f), invert(attach(id))), measure: s => palmOf(o, s), comfort: o.keys.some(k => k.lean > 0) } : null;
 	};
 	// the elbow's planned path over the frames the keys lead (hold-plan.js), once per baked channels and time map
 	const plans = new WeakMap();

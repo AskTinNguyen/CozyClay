@@ -24,11 +24,13 @@ function keyTurnOk(err, kat, k) {
 	if (k.rot !== undefined && k.aim !== undefined) return err(`${kat} gives both rot and aim; give one: rot [x, y, z, w], or aim [x, y, z] (the world direction its +Y points) with roll`);
 	if (k.aim === undefined) {
 		if (k.roll !== undefined) err(`${kat}.roll turns the object about aim; give aim [x, y, z] with it, or leave roll out (rot fixes the roll)`);
+		if (k.lean !== undefined) err(`${kat}.lean lets the compiler lean aim; give aim [x, y, z] with it (rot is used exactly)`);
 		if (!isQuat(k.rot)) err(`${kat}.rot must be a unit quaternion [x, y, z, w], got ${fmt(k.rot)}${k.rot === undefined ? "; or give aim [x, y, z], the world direction its +Y points" : ""}`);
 		return;
 	}
 	if (!isDir(k.aim)) err(`${kat}.aim must be a non-zero world direction [x, y, z] for the object's +Y (a bat: knob to barrel), got ${fmt(k.aim)}`);
 	if (k.roll !== undefined && !Number.isFinite(k.roll)) err(`${kat}.roll must be degrees about aim (a number), got ${fmt(k.roll)}`);
+	if (k.lean !== undefined && !(Number.isFinite(k.lean) && k.lean >= 0 && k.lean <= 45)) err(`${kat}.lean must be the most degrees the compiler may lean aim (0..45), got ${fmt(k.lean)}`);
 }
 
 /** objects.<id>.keys (C14): whole frames inside grab..release (free, C17: the whole take), one per frame, a world position and a unit quaternion. */

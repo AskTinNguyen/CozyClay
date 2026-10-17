@@ -106,7 +106,7 @@ export function chooseGrip({ sk, o, side, grab, rest, plain, palmOf, map = f => 
 	const rough = R => { const A = offsetOf(R); return grabCost(A) + some.reduce((sum, key) => { const { s, now } = at(map(key.f)); return sum + keyCost(sk, s, side, key, now, A, pose => held(A, map(key.f), pose)); }, 0); };
 	const faithful = R => {
 		const A = offsetOf(R), t0 = Math.round(map(keys[0].f)), t1 = Math.round(map(keys[keys.length - 1].f));
-		const curve = curveOf(o, map, t => quatFromMat(compose(at(t).now, A).R), (t, pos, q) => { const { s, now } = at(t); return holdCost(sk, s, side, compose({ pos, R: matFromQuat(q) }, invert(A)), now); });
+		const curve = curveOf(o, map, t => quatFromMat(compose(at(t).now, A).R), (t, pos, q, opts) => { const { s, now } = at(t); return holdCost(sk, s, side, compose({ pos, R: matFromQuat(q) }, invert(A)), now, opts); }, 2 * (rest?.half?.[1] ?? 0));
 		let cost = grabCost(A), worst = cost;
 		for (let f = t0; f <= t1; f += STEP) { const c = held(A, f, keyedPose(curve, f)); cost += c; worst = Math.max(worst, c); }
 		return { A, cost, worst };

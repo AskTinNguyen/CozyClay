@@ -80,8 +80,8 @@ export const FIT_TYPES = {
 	offset: ref("vec3", "world offset, m"), orient: { type: "boolean", description: "false: no grip turn" },
 };
 
-const OBJECT_KEY_TYPES = { f: int(), pos: ref("vec3"), rot: { type: "array", items: { type: "number" }, minItems: 4, maxItems: 4, description: "quaternion x, y, z, w" },
-	aim: ref("vec3", "or rot: its +Y direction"), roll: num("deg about aim") };
+const OBJECT_KEY_TYPES = { f: int(), pos: ref("vec3"), rot: { type: "array", items: { type: "number" }, minItems: 4, maxItems: 4, description: "quat x, y, z, w" },
+	aim: ref("vec3", "or rot: +Y dir"), roll: num("deg about aim"), lean: num("aim tilt", { minimum: 0, maximum: 45 }) };
 
 const FALL = { type: "object", properties: { at: int(), onto: str(), bounce: num(null, { default: 0.25, minimum: 0, maximum: 0.6 }) }, required: ["at"], additionalProperties: false };
 /** A free entry's keys and fall (C17) are a carry's, at any frame: said once, not twice. */
@@ -93,7 +93,7 @@ export const OBJECT_TYPES = {
 	prop: str("spec.props name: it rides that hand"), at: ref("vec3", "palm offset [d, l, n], m"), along: ref("vec3", "its +Y on the palm, fixed"),
 	visible: str("channel: shown > 0.5"), level: str("channel: strength 0..4"), grab: int("the hand takes it", { default: 0 }), release: int("let go (else the end)"),
 	keys: { type: "array", items: { type: "object", properties: Object.fromEntries(OBJECT_KEY_FIELDS.map(f => [f, OBJECT_KEY_TYPES[f]])), required: ["f", "pos"], additionalProperties: false },
-		description: "world pose at f (group: its root), in hand; the hand follows" },
+		description: "world pose at f, in hand; the hand follows" },
 	fall: { ...FALL, description: "or a list; topic objects" },
 	follow: ref("ref"), offset: ref("vec3"), aim: { oneOf: [{ enum: ["face", "up"] }, { $ref: "#/$defs/vec3" }, { $ref: "#/$defs/ref" }], default: "up" },
 };
