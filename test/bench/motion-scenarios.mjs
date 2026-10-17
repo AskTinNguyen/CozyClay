@@ -177,6 +177,8 @@ export const SCENARIOS = {
 		...table(2.4),
 	] },
 };
+// S6 read as past events to most agents (they only drank, run baseline-r1/r2); S6b asks for the whole scene in the present.
+SCENARIOS.S6b = { ...SCENARIOS.S6, title: "vending machine kick, the whole scene asked", prompt: "자판기 버튼을 눌러도 음료가 안 나와서 발로 한 번 차면 캔이 떨어지고, 그 캔을 꺼내서 마시는 장면을 만들어줘" };
 
 /** track -> { assertions, passed, total, byKind: { cause, contact, effect, negative: [passed, total] } }. */
 export function scoreScenario(id, track) {
