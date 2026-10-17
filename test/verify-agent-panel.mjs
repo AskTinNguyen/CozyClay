@@ -8,8 +8,9 @@ import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 
 const panel = readFileSync(new URL("../src/workflow/AgentPanel.jsx", import.meta.url), "utf8");
-// The provider key row moved to ProviderKeys.jsx (first-run pass); its checks read that file.
-const keyRow = readFileSync(new URL("../src/workflow/ProviderKeys.jsx", import.meta.url), "utf8");
+// Connect a model is pi's own login (#pi-login): the list and the flow live in LoginPanel.jsx and login-client.js.
+const login = readFileSync(new URL("../src/workflow/LoginPanel.jsx", import.meta.url), "utf8");
+const loginClient = readFileSync(new URL("../src/workflow/login-client.js", import.meta.url), "utf8");
 const client = readFileSync(new URL("../src/workflow/agent-client.js", import.meta.url), "utf8");
 const css = readFileSync(new URL("../src/workflow/agent-panel.css", import.meta.url), "utf8");
 const builder = readFileSync(new URL("../src/workflow/WorkflowBuilder.jsx", import.meta.url), "utf8");
@@ -118,9 +119,8 @@ const controls = [
 	["History placeholder", "agent-history"],
 	["overflow menu", "agent-overflow-toggle"],
 	["Clear context action", "Clear context"],
-	["Provider keys action", "Provider keys…"],
-	["provider keys section", "agent-keys"],
-	["provider key row", "ProviderKeyRow"],
+	["Connect a model action", "Connect a model…"],
+	["login list", "<LoginPanel"],
 	["Sign out action", "Sign out"],
 	["collapse control", "agent-collapse"],
 	["account strip", "agent-account"],
@@ -347,20 +347,18 @@ expect("the error mock fails a tool call", failed.some((event) => event.type ===
 // The overflow menu opens an INLINE section that states which providers have a
 // key and where it came from. A key is typed into a password field, handed to
 // the sidecar once and dropped: no store, no transcript, no DOM node keeps it.
-expect("the overflow menu offers Provider keys…", panel.includes('className="agent-menu-keys"') && panel.includes("Provider keys…"));
-expect("the menu item opens an inline section, never a modal", panel.includes('<section className="agent-keys"') && !/role="dialog"/.test(panel));
-expect("the section opens from the menu and closes in place", panel.includes("toggleProviderKeys") && panel.includes("agent-keys-close"));
-expect("every listed provider gets a status dot and the source of its key", keyRow.includes("export function ProviderKeyRow") && panel.includes('import { ProviderKeyRow } from "./ProviderKeys.jsx"')
-	&& keyRow.includes('<KeyDot tone={provider.signedIn ? "ok" : ""}') && keyRow.includes('className="agent-key-source"'));
-expect("ChatGPT is never offered as an API-key provider", panel.includes('providers.filter((entry) => entry.id !== "openai-codex")'));
-expect("the key input is a password field", /aria-label=\{`\$\{provider\.label\} API key`\}/.test(keyRow) && /className="agent-key-input"\n\t+type="password"/.test(keyRow) && !/agent-key-input[\s\S]{0,240}type="text"/.test(keyRow));
-expect("an env-backed provider names the variable on the input it refuses", keyRow.includes("set by ${providerEnvLabel(provider.id)}")
-	&& keyRow.includes("placeholder={fromEnv ? envLabel") && keyRow.includes("disabled={fromEnv || busy}"));
-expect("Remove exists only for a key this machine stores", keyRow.includes("{fromFile && <button") && keyRow.includes("agent-key-remove"));
-expect("a refused write is reported under the input it belongs to", /setError\(failure\?\.message/.test(keyRow) && keyRow.includes('className="agent-key-error"'));
-expect("the key leaves the page the moment the sidecar accepts it", /await action\(\);[\s\S]{0,160}setDraft\(""\)/.test(keyRow));
-expect("a saved or removed key re-reads the providers AND the models", /const refreshProviderState = useCallback\(async \(\) => \{[\s\S]{0,200}await readProviders\(\);[\s\S]{0,200}transport\.models\(\)/.test(panel)
-	&& /setProviderKey\(id, key\);\n\t\tawait refreshProviderState\(\)/.test(panel) && /removeProviderKey\(id\);\n\t\tawait refreshProviderState\(\)/.test(panel));
+expect("the overflow menu offers Connect a model…", panel.includes('className="agent-menu-keys"') && panel.includes("Connect a model…"));
+expect("Connect a model is an inline section, never a modal", login.includes('<section className="agent-keys agent-login"') && !/role="dialog"/.test(login));
+expect("it opens from the menu and the signed-out card, and closes in place", panel.includes("toggleProviderKeys") && panel.includes("openProviderKeys") && login.includes("agent-keys-close"));
+expect("it lists pi's login methods: connected, subscriptions, api keys", login.includes("fetchLogins") && ["Connected", "Subscriptions", "API keys"].every((title) => login.includes(`["${title}"`)));
+expect("a login runs pi's flow in the sidecar: start, read prompts and events, answer, cancel", ["startLogin", "readLogin", "answerLogin", "cancelLogin"].every((name) => login.includes(`${name}(`))
+	&& loginClient.includes('"/agent/logins"') && loginClient.includes("/answer"));
+expect("a secret pi asks for is a password field, and nothing typed is kept", login.includes('type={ask.type === "secret" ? "password" : "text"}') && login.includes('onSubmit(value); setValue("")'));
+expect("ChatGPT keeps CozyClay's own sign-in", login.includes('method.type === "chatgpt"') && panel.includes("onChatGPT={signIn}"));
+expect("a sign-in page and a device code are shown as pi sends them", login.includes('event.type === "auth_url"') && login.includes('event.type === "device_code"') && login.includes("Open the sign-in page"));
+expect("a connected provider can log out through pi", login.includes("logoutProvider(provider.id)") && loginClient.includes("/agent/logout/"));
+expect("a finished login re-reads the session AND the models", /const refreshProviderState = useCallback\(async \(\) => \{[\s\S]{0,120}await readAccount\(\);[\s\S]{0,200}transport\.models\(\)/.test(panel)
+	&& panel.includes("onChanged={refreshProviderState}") && /entry\.type === "done" && entry\.ok\) \{ await onChanged\?\.\(\)/.test(login));
 expect("the transport owns the three provider routes", client.includes("async providers()") && client.includes("async setProviderKey(id, key)") && client.includes("async removeProviderKey(id)"));
 expect("the key is sent once as a PUT body and never in a URL", client.includes('{ method: "PUT", body: JSON.stringify({ key }) }') && !/providers\/[^\n]*key=/.test(client));
 for (const [name, rule] of [
@@ -423,8 +421,8 @@ const refreshBody = (() => {
 	if (start === -1) return "";
 	return panel.slice(start, panel.indexOf("\n\tconst ", start + 1));
 })();
-expect("a saved or removed key re-reads the session the readiness gate depends on",
-	(refreshBody.match(/readAccount\(\)/g) || []).length === 1 && refreshBody.includes("await readProviders();") && refreshBody.includes("transport.models()"), refreshBody);
+expect("a finished login or logout re-reads the session the readiness gate depends on",
+	(refreshBody.match(/readAccount\(\)/g) || []).length === 1 && refreshBody.includes("transport.models()"), refreshBody);
 expect("readiness is refreshed through the existing status call, not a new one", (panel.match(/transport\.status\(\)/g) || []).length === 2
 	&& panel.includes("const status = await transport.status();") && !/setInterval\([^)]*(status|readAccount|refreshProviderState)/.test(panel),
 	String((panel.match(/transport\.status\(\)/g) || []).length));

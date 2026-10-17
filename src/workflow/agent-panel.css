@@ -445,19 +445,52 @@
 	font-size: var(--agent-font-sm);
 }
 
-/* A key saved without being checked (offline), and where a server address comes from. */
+/* A quiet line under a row or a flow: progress, instructions, a result. */
 .agent-key-note {
 	margin: 0;
 	color: var(--agent-text-dim);
 	font-size: var(--agent-font-sm);
 }
 
-/* CLIProxyAPI's server address, above its key. */
-.agent-key-endpoint {
+/* Connect a model (pi's login list): group labels, a running flow, what pi asks and tells. */
+.agent-login-group,
+.agent-login-flow,
+.agent-login-form,
+.agent-login-choices {
 	display: flex;
 	flex-direction: column;
 	gap: var(--agent-space-2);
 }
+
+.agent-login-ask {
+	color: var(--agent-text);
+	font-size: var(--agent-font-sm);
+}
+
+.agent-login-log {
+	display: flex;
+	flex-direction: column;
+	gap: var(--agent-space-2);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.agent-login-log li {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: var(--agent-space-1);
+}
+
+.agent-login-code {
+	display: block;
+	margin-top: var(--agent-space-1);
+	font-size: var(--agent-font-xl);
+	letter-spacing: 0.12em;
+}
+
+.agent-login-open { display: inline-block; text-decoration: none; }
 
 .agent-key-endpoint-label {
 	color: var(--agent-text-dim);

@@ -355,7 +355,7 @@ process.on("SIGTERM", () => shutdown(143));
 
 // A source checkout has mcp/node_modules; the package loads the Studio's live
 // tools from the staged MCP runtime that `cclay mcp` also uses (#576).
-const agentHandler = createAgentHandler({ port: () => opts.port, verifyKey: true, ...(SOURCE_CHECKOUT ? {} : { mcpRuntime: { ensure: ensureMcpRuntime } }) });
+const agentHandler = createAgentHandler({ port: () => opts.port, ...(SOURCE_CHECKOUT ? {} : { mcpRuntime: { ensure: ensureMcpRuntime } }) });
 server = createServer((req, res) => {
 	const url = new URL(req.url ?? "/", "http://127.0.0.1");
 	if (/^\/oauth\/(start|status|logout)$/.test(url.pathname)) {

@@ -5,7 +5,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { openBrowser } from "./open-browser.mjs";
 import { writeSecureJson } from "./agent/secure-file.mjs";
-import { readKeys } from "./agent/provider-keys.mjs";
+import { readCredentials, readKeys } from "./agent/provider-keys.mjs";
 import { PROVIDERS } from "./agent/providers.mjs";
 
 const AUTHORIZE_ENDPOINT = "https://auth.openai.com/oauth/authorize";
@@ -54,6 +54,8 @@ function providersConfigured() {
 	const configured = new Set();
 	for (const provider of PROVIDERS) for (const name of provider.env) if (process.env[name]?.trim()) configured.add(provider.id);
 	for (const [id, value] of Object.entries(readKeys())) if (typeof value === "string" && value.trim()) configured.add(id);
+	// and every provider a pi login stored a credential for (auth.json: OAuth, or a key with provider env)
+	for (const id of Object.keys(readCredentials())) configured.add(id);
 	return configured.size;
 }
 export function status() {

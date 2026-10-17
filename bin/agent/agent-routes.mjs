@@ -10,7 +10,7 @@ import { createAgentTools, SYSTEM_PROMPT, pickWorkspace } from "./agent-tools.mj
 import { createVideoAdapters, validateFalVideoRequest } from "./video-adapters.mjs";
 import { createSessionStore, transcriptFromHistory } from "./session-store.mjs";
 import { createAgentRunner } from "./agent-runner.mjs";
-import { handleProviderRoute } from "./provider-routes.mjs";
+import { createProviderRoutes } from "./provider-routes.mjs";
 import { STUDIO_SYSTEM_PROMPT_STORYBOARD } from "./studio-prompt.mjs";
 
 // Values the codex backend accepts for reasoning.effort (its own 400 lists them).
@@ -347,7 +347,7 @@ function liveToolsRuntime(mcpRuntime) {
 // `supervisor` (#728) defaults off only under an injected scripted provider:
 // a test's script is an exact queue of replies, and a review would take one
 // meant for a later turn. The real sidecar never injects one.
-export function createAgentHandler({ auth = defaultAuth, codex, models, codexBaseUrl, cliproxyBaseUrl, env, verifyKey, fauxProvider, handlers, liveHub, mcpRuntime, port, studioRuntime, clock = Date.now, setIntervalImpl = setInterval, clearIntervalImpl = clearInterval, sessionStore: injectedSessionStore, supervisor = !fauxProvider } = {}) {
+export function createAgentHandler({ auth = defaultAuth, codex, models, codexBaseUrl, cliproxyBaseUrl, env, fauxProvider, handlers, liveHub, mcpRuntime, port, studioRuntime, clock = Date.now, setIntervalImpl = setInterval, clearIntervalImpl = clearInterval, sessionStore: injectedSessionStore, supervisor = !fauxProvider } = {}) {
 	const requestContext = new AsyncLocalStorage();
 	codex ||= defaultClient(auth, requestContext);
 	const runtime = handlers !== undefined || liveHub !== undefined ? Promise.resolve({ handlers: handlers ?? [], liveHub }) : liveToolsRuntime(mcpRuntime);
@@ -381,9 +381,10 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 		try { if (await auth.getAccessToken()) return true; } catch { /* an unavailable ChatGPT token is not a credential */ }
 		const registry = await ensureWorkflowModels();
 		if (typeof registry?.getAuth !== "function") return false;
-		const { PROVIDERS } = await import("./providers.mjs");
-		for (const provider of PROVIDERS) {
-			try { if (await registry.getAuth(provider.id)) return true; } catch { /* one broken provider does not break the gate */ }
+		// the curated providers and any other one a pi login stored a credential for (#pi-login)
+		const [{ PROVIDERS }, { readCredentials }] = await Promise.all([import("./providers.mjs"), import("./provider-keys.mjs")]);
+		for (const id of new Set([...PROVIDERS.map((provider) => provider.id), ...Object.keys(readCredentials())])) {
+			try { if (await registry.getAuth(id)) return true; } catch { /* one broken provider does not break the gate */ }
 		}
 		return false;
 	};
@@ -441,6 +442,7 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 		sessions.clear(); studioSessions.clear(); studioEvents.clear(); studioOwnerTokens.clear();
 	};
 	const unsubscribe = auth.onAuthChange?.(({ kind }) => { if (kind === "signed_out" || kind === "replaced") resetRegistry(); });
+	const providerRoutes = createProviderRoutes({ auth, getModels: ensureWorkflowModels, onChange: resetRegistry, json, readBody });
 
 	const studioIdentity = host => Object.fromEntries(["workspaceId", "documentEpoch", "sceneId", "sceneEpoch"].map(key => [key, host[key]]));
 	const writeStudioStream = (res, record, after = 0) => {
@@ -739,7 +741,7 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 			await session.modelSession.steer(value.text, images);
 			json(res, 200, { ok: true, queued: true }); return true;
 		}
-		if (await handleProviderRoute(req, res, path, { auth, env, json, readBody, verifyKey, onChange: resetRegistry })) return true;
+		if (await providerRoutes(req, res, path)) return true;
 		if (path === "/agent/sessions" && req.method === "GET") {
 			const surface = new URL(req.url, "http://127.0.0.1").searchParams.get("surface") || undefined;
 			try { json(res, 200, { sessions: sessionStore.list({ surface }) }); }

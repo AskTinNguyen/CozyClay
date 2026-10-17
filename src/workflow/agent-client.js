@@ -642,7 +642,7 @@ export function providerEnvLabel(id) {
 export function keyRefusedMessage(raw) {
 	const reason = /"message"\s*:\s*"([^"]{1,160})"/.exec(String(raw || ""))?.[1];
 	const status = /\b(401|403)\b/.exec(String(raw || ""))?.[1];
-	return `The model provider refused the credentials${status || reason ? ` (${[status, reason].filter(Boolean).join(": ")})` : ""}. Check the key in Provider keys, or sign in again.`;
+	return `The model provider refused the credentials${status || reason ? ` (${[status, reason].filter(Boolean).join(": ")})` : ""}. Log in again under Connect a model.`;
 }
 
 export function createHttpTransport({ fetchImpl = globalThis.fetch?.bind(globalThis), surface, capture = track, now = () => performance.now() } = {}) {
@@ -689,11 +689,8 @@ export function createHttpTransport({ fetchImpl = globalThis.fetch?.bind(globalT
 		// a key once and never reads one back: the status route answers with the
 		// source of a key, never with key material.
 		async providers() { const result = await request("/agent/providers"); return Array.isArray(result?.providers) ? result.providers : []; },
-		// { ok, verified?, warning? }: the sidecar checks the key with its provider and refuses one the provider refuses
 		async setProviderKey(id, key) { return request(`/agent/providers/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify({ key }) }); },
 		async removeProviderKey(id) { return request(`/agent/providers/${encodeURIComponent(id)}`, { method: "DELETE" }); },
-		// A provider's own server address (CLIProxyAPI); an empty url goes back to the environment or the default
-		async setProviderEndpoint(id, url) { return request(`/agent/providers/${encodeURIComponent(id)}/endpoint`, url ? { method: "PUT", body: JSON.stringify({ url }) } : { method: "DELETE" }); },
 		async listSessions() {
 			const result = await request(`/agent/sessions?surface=${encodeURIComponent(surface || "studio")}`);
 			return Array.isArray(result?.sessions) ? result.sessions : [];
@@ -1033,7 +1030,6 @@ export function createMockTransport(config = { state: "ready" }) {
 			return { ok: true };
 		},
 		async removeProviderKey(id) { storedProviders.delete(id); return { ok: true }; },
-		async setProviderEndpoint() { return { ok: true }; },
 		async stop() {
 			liveTurn = null;
 			return { ok: true };

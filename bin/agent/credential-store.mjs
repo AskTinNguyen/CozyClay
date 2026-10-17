@@ -1,4 +1,5 @@
 import { PROVIDERS } from "./providers.mjs";
+import { readCredentials, removeCredential, setCredential } from "./provider-keys.mjs";
 
 const codexId = "openai-codex";
 const apiProvider = (id) => PROVIDERS.find((provider) => provider.id === id);
@@ -44,7 +45,12 @@ function rawOAuth(credential) {
 	};
 }
 
-export function createCredentialStore({ auth, keys, env = process.env }) {
+// pi's CredentialStore for every provider pi can log in to (#pi-login): ChatGPT stays in codex-auth's file (its
+// id_token carries the plan and account the image routes need), a bare api key in providers.json, and what pi's
+// login flows return beyond that (OAuth tokens, api keys with provider env) in auth.json. A credential that
+// lands in one file is removed from the other, so one provider never has two.
+
+export function createCredentialStore({ auth, keys, env = process.env, credentialFile = { read: readCredentials, set: setCredential, remove: removeCredential } }) {
 	const configured = (id) => apiProvider(id);
 	return {
 		async read(providerId, { signal } = {}) {
@@ -54,8 +60,11 @@ export function createCredentialStore({ auth, keys, env = process.env }) {
 				return mapOAuth(stored);
 			}
 			const provider = configured(providerId);
-			if (!provider) return undefined;
-			const key = envValue(provider, env) ?? keys.readKeys()[providerId];
+			const fromEnv = provider && envValue(provider, env);
+			if (fromEnv) return { type: "api_key", key: fromEnv };
+			const credential = credentialFile.read()[providerId];
+			if (credential) return credential;
+			const key = keys.readKeys()[providerId];
 			return key ? { type: "api_key", key } : undefined;
 		},
 		async list({ signal } = {}) {
@@ -68,8 +77,13 @@ export function createCredentialStore({ auth, keys, env = process.env }) {
 					if (stored) result.push({ providerId: provider.id, type: "oauth", source: "chatgpt" });
 					continue;
 				}
-				const source = envValue(provider, env) ? "env" : saved[provider.id] ? "file" : null;
-				if (source) result.push({ providerId: provider.id, type: "api_key", source });
+				const source = envValue(provider, env) ? "env" : saved[provider.id] || credentialFile.read()[provider.id] ? "file" : null;
+				if (source) result.push({ providerId: provider.id, type: credentialFile.read()[provider.id]?.type ?? "api_key", source });
+			}
+			// providers outside the curated list that a pi login stored
+			const listed = new Set(result.map((entry) => entry.providerId));
+			for (const [providerId, credential] of Object.entries({ ...Object.fromEntries(Object.keys(saved).map((id) => [id, { type: "api_key" }])), ...credentialFile.read() })) {
+				if (!listed.has(providerId)) result.push({ providerId, type: credential.type, source: "file" });
 			}
 			return result;
 		},
@@ -79,14 +93,23 @@ export function createCredentialStore({ auth, keys, env = process.env }) {
 				const next = await fn(current);
 				if (next === undefined) return current;
 				if (providerId === codexId) await auth.writeStored(rawOAuth(next));
-				else keys.setKey(providerId, next.key);
+				else if (next.type === "api_key" && !next.env) {
+					keys.setKey(providerId, next.key);
+					credentialFile.remove(providerId);
+				} else {
+					credentialFile.set(providerId, next);
+					if (keys.readKeys()[providerId]) keys.removeKey(providerId);
+				}
 				return next;
 			}, signal);
 		},
 		async delete(providerId, { signal } = {}) {
 			await serialized(providerId, async () => {
 				if (providerId === codexId) await auth.logout();
-				else if (configured(providerId)) keys.removeKey(providerId);
+				else {
+					if (keys.readKeys()[providerId]) keys.removeKey(providerId);
+					credentialFile.remove(providerId);
+				}
 			}, signal);
 		},
 	};

@@ -54,56 +54,35 @@ export function removeKey(id) {
 	return next;
 }
 
-// Endpoints (#first-run): a provider a user runs themselves (CLIProxyAPI) needs its server URL, and an app
-// launched from the Dock has no shell to export CLIPROXY_BASE_URL in. The URL is kept beside the keys, in
-// endpoints.json; the environment still wins when it is set, then the saved URL, then the default.
-const ENDPOINT_ENV = { cliproxy: "CLIPROXY_BASE_URL" };
-const ENDPOINT_DEFAULT = { cliproxy: "http://127.0.0.1:8317" };
-
-function endpointsPath() {
-	return join(configDir(), "endpoints.json");
+// Credentials pi's login flows return that are more than a bare key (#pi-login): OAuth tokens (Claude Pro/Max,
+// GitHub Copilot, xAI, Kimi, OpenRouter) and api-key credentials that carry provider env (CLIProxyAPI's server
+// address). They are kept as pi's canonical Credential, one per provider id, in auth.json beside providers.json;
+// a bare api key stays in providers.json as before. credential-store.mjs decides which file a write goes to.
+function authPath() {
+	return join(configDir(), "auth.json");
 }
 
-function readEndpoints() {
+/** { [providerId]: Credential } from auth.json; a missing or unreadable file is {}. */
+export function readCredentials() {
 	try {
-		const value = JSON.parse(readFileSync(endpointsPath(), "utf8"));
-		return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+		const value = JSON.parse(readFileSync(authPath(), "utf8"));
+		if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+		return Object.fromEntries(Object.entries(value).filter(([id, entry]) => id && entry && typeof entry === "object" && ["api_key", "oauth"].includes(entry.type)));
 	} catch {
 		return {};
 	}
 }
 
-/** A server URL as typed, cleaned: http or https, no trailing slash, no trailing /v1 (the models add it). */
-function normalizeEndpoint(url) {
-	let parsed;
-	try {
-		parsed = new URL(String(url ?? "").trim());
-	} catch {
-		throw new Error("Enter the full server address, such as http://127.0.0.1:8317.");
-	}
-	if (!["http:", "https:"].includes(parsed.protocol)) throw new Error("The server address must start with http:// or https://.");
-	return parsed.href.replace(/\/+$/, "").replace(/\/v1$/, "");
+export function setCredential(id, credential) {
+	const next = { ...readCredentials(), [id]: credential };
+	writeSecureJson(authPath(), next);
+	return next;
 }
 
-/** { url, source: "env" | "file" | "default", env } for a provider with a server of its own, else null. */
-export function endpointOf(id, env = process.env) {
-	const name = ENDPOINT_ENV[id];
-	if (!name) return null;
-	const fromEnv = typeof env?.[name] === "string" ? env[name].trim() : "";
-	if (fromEnv) return { url: fromEnv.replace(/\/+$/, ""), source: "env", env: name };
-	const saved = readEndpoints()[id];
-	return typeof saved === "string" && saved ? { url: saved, source: "file", env: name } : { url: ENDPOINT_DEFAULT[id], source: "default", env: name };
-}
-
-export function setEndpoint(id, url) {
-	if (!ENDPOINT_ENV[id]) throw new Error("This provider has no server address to set.");
-	const next = { ...readEndpoints(), [id]: normalizeEndpoint(url) };
-	writeSecureJson(endpointsPath(), next);
-	return next[id];
-}
-
-export function removeEndpoint(id) {
-	const next = readEndpoints();
-	delete next[id];
-	writeSecureJson(endpointsPath(), next);
+export function removeCredential(id) {
+	const current = readCredentials();
+	if (!(id in current)) return current;
+	delete current[id];
+	writeSecureJson(authPath(), current);
+	return current;
 }

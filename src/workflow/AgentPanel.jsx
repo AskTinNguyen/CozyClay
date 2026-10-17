@@ -40,7 +40,7 @@ import {
 } from "./agent-client.js";
 import "./agent-panel.css";
 import { AgentProgressCard } from "./AgentProgressCard.jsx";
-import { ProviderKeyRow } from "./ProviderKeys.jsx";
+import { LoginPanel } from "./LoginPanel.jsx";
 
 function relativeTime(value, now = Date.now()) {
 	const at = Date.parse(value || "");
@@ -244,7 +244,7 @@ const RECOVERY_COPY = {
 	new_intent: "Tell the agent what to do with the changed target.",
 	reconcile: "The result is unknown; reconcile before changing this target.",
 	sign_in: "Sign in again to continue.",
-	fix_key: "Check or replace the key in Provider keys, then retry.",
+	fix_key: "Log in again under Connect a model, then retry.",
 };
 
 function FailureCard({ failure, onRetry, onFixKey }) {
@@ -252,7 +252,7 @@ function FailureCard({ failure, onRetry, onFixKey }) {
 		<div className="agent-failure-head"><FiAlertTriangle size={12} aria-hidden="true" /><span className="agent-failure-code">{failure.code}</span></div>
 		<p className="agent-failure-message">{failure.message || "The command did not complete."}</p>
 		<p className="agent-failure-recovery">{RECOVERY_COPY[failure.recovery?.action] || RECOVERY_COPY.none}{failure.preserved?.authoredState === "unchanged" ? " Nothing in the scene changed." : failure.preserved?.authoredState === "unknown" ? " Whether the scene changed is unknown." : ""}</p>
-		{failure.recovery?.retryAllowed && <div className="agent-error-actions">{failure.recovery.action === "fix_key" && onFixKey && <button type="button" className="agent-ghost-button agent-error-keys" onClick={onFixKey}>Provider keys</button>}<button type="button" className="agent-ghost-button agent-error-retry" onClick={onRetry}>Retry</button></div>}
+		{failure.recovery?.retryAllowed && <div className="agent-error-actions">{failure.recovery.action === "fix_key" && onFixKey && <button type="button" className="agent-ghost-button agent-error-keys" onClick={onFixKey}>Log in again</button>}<button type="button" className="agent-ghost-button agent-error-retry" onClick={onRetry}>Retry</button></div>}
 	</div>;
 }
 
@@ -344,10 +344,8 @@ export default function AgentPanel({
 	const [lightbox, setLightbox] = useState(null);
 	const [overlay, setOverlay] = useState(() => !embedded && (globalThis.innerWidth || 1440) < AGENT_PANEL_OVERLAY_BREAKPOINT);
 	const [historyOpen, setHistoryOpen] = useState(false);
-	// Provider credentials, read from the sidecar only while the section is open.
+	// Connect a model (pi's login list, LoginPanel.jsx) reads its own list from the sidecar while it is open.
 	const [keysOpen, setKeysOpen] = useState(false);
-	const [providers, setProviders] = useState([]);
-	const [providersState, setProvidersState] = useState("loading");
 	const [historySessions, setHistorySessions] = useState([]);
 	const [restoreNotice, setRestoreNotice] = useState("");
 	// Why the last steer did not reach the running turn. It reads in the same
@@ -447,21 +445,6 @@ export default function AgentPanel({
 			return null;
 		}
 	}, [sessionState, transport]);
-	// The sidecar owns the credentials; this reads which providers have one and
-	// where it came from. The list is read when the keys section opens and again
-	// after every write — a key that just landed (or left) changes which models
-	// the composer may offer, so the model list is re-read with it.
-	const readProviders = useCallback(async () => {
-		try {
-			const list = await transport.providers?.();
-			if (!Array.isArray(list)) throw new Error("no provider list");
-			setProviders(list);
-			setProvidersState("ready");
-		} catch {
-			setProviders([]);
-			setProvidersState("failed");
-		}
-	}, [transport]);
 	// Everything an authentication change moves, read back once: WHO the session
 	// is (readiness is `signedIn || providersConfigured > 0`), which providers
 	// hold a credential, and WHICH models this session may therefore send to. A
@@ -472,13 +455,11 @@ export default function AgentPanel({
 	// into a composer without reloading the page, and what takes it away again
 	// when the last way in goes. No timer is involved.
 	const refreshProviderState = useCallback(async () => {
-		const session = readAccount();
-		await readProviders();
-		await session;
+		await readAccount();
 		try {
 			applyModelList(await transport.models());
 		} catch { /* the composer keeps the list it was last advertised */ }
-	}, [applyModelList, readAccount, readProviders, transport]);
+	}, [applyModelList, readAccount, transport]);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -735,32 +716,13 @@ export default function AgentPanel({
 	// refresh above, because a key changes the session, not just a row.
 	const toggleProviderKeys = useCallback(() => {
 		setMenuOpen(false);
-		const next = !keysOpen;
-		setKeysOpen(next);
-		if (!next) return;
-		setProvidersState("loading");
-		readProviders();
-	}, [keysOpen, readProviders]);
-	const saveProviderKey = useCallback(async (id, key) => {
-		const result = await transport.setProviderKey(id, key);
-		await refreshProviderState();
-		return result;
-	}, [refreshProviderState, transport]);
-	const saveProviderEndpoint = useCallback(async (id, url) => {
-		await transport.setProviderEndpoint(id, url);
-		await refreshProviderState();
-	}, [refreshProviderState, transport]);
-	// Opens (never toggles) the keys section: the signed-out card and a refused key both lead here.
+		setKeysOpen(!keysOpen);
+	}, [keysOpen]);
+	// Opens (never toggles) Connect a model, pi's login list: the signed-out card and a refused key both lead here.
 	const openProviderKeys = useCallback(() => {
 		setMenuOpen(false);
 		setKeysOpen(true);
-		setProvidersState("loading");
-		readProviders();
-	}, [readProviders]);
-	const removeProviderKey = useCallback(async (id) => {
-		await transport.removeProviderKey(id);
-		await refreshProviderState();
-	}, [refreshProviderState, transport]);
+	}, []);
 
 	// Clearing the transcript also retires the session, so what the author sees
 	// and what the model remembers cannot diverge.
@@ -876,7 +838,7 @@ export default function AgentPanel({
 						{resetLabel && <span className="agent-account-reset">resets in {resetLabel}</span>}
 					</div>}
 					<button type="button" role="menuitem" onClick={clearContext}>Clear context</button>
-					<button type="button" role="menuitem" className="agent-menu-keys" aria-expanded={keysOpen} onClick={toggleProviderKeys}>Provider keys…</button>
+					<button type="button" role="menuitem" className="agent-menu-keys" aria-expanded={keysOpen} onClick={toggleProviderKeys}>Connect a model…</button>
 					{account?.signedIn && <button type="button" role="menuitem" onClick={signOut}>Sign out</button>}
 				</div>}
 			</span>
@@ -888,23 +850,14 @@ export default function AgentPanel({
 
 		{/* An inline section, not a modal: the panel stays the one place the
 		    conversation and the credentials it runs on are managed. */}
-		{keysOpen && <section className="agent-keys" aria-label="Provider keys" data-agent-keys="true">
-			<div className="agent-keys-head">
-				<h3 className="agent-keys-title">Provider keys</h3>
-				<button type="button" className="agent-icon-button agent-keys-close" aria-label="Close provider keys" onClick={() => setKeysOpen(false)}><FiX size={11} aria-hidden="true" /></button>
-			</div>
-			<p className="agent-keys-hint">Keys are stored by the local CozyClay service and are never shown again.</p>
-			{providersState === "loading" && <p className="agent-keys-note">Loading providers…</p>}
-			{providersState === "failed" && <p className="agent-keys-note alert" role="alert">The provider list is unavailable.</p>}
-			{providers.filter((entry) => entry.id !== "openai-codex").map((entry) => <ProviderKeyRow key={entry.id} provider={entry} onSave={saveProviderKey} onRemove={removeProviderKey} onEndpoint={saveProviderEndpoint} />)}
-		</section>}
+		{keysOpen && <LoginPanel onClose={() => setKeysOpen(false)} onChatGPT={signIn} onChanged={refreshProviderState} />}
 
 		<div className="agent-transcript" ref={transcriptRef} aria-live="polite" aria-label="Conversation" data-agent-transcript="true">
 			{authState === "signed-out" && <div className="agent-state-card" data-agent-card="signed-out">
 				<h3>Connect a model</h3>
-				<p>The agent runs against your ChatGPT plan, an API key (Anthropic, OpenAI, Google Gemini, OpenRouter) or your own CLIProxyAPI server. ChatGPT sign-in happens in your browser — no token is ever stored in this page.</p>
+				<p>Sign in with ChatGPT, or log in to any provider pi supports: a Claude Pro/Max or GitHub Copilot subscription, an API key, or your own CLIProxyAPI server. Sign-in happens in your browser — no token is ever stored in this page.</p>
 				<button type="button" className="agent-primary-button agent-signin" onClick={signIn}>Sign in with ChatGPT</button>
-				<button type="button" className="agent-ghost-button agent-use-key" onClick={openProviderKeys}>Use an API key or your own server</button>
+				<button type="button" className="agent-ghost-button agent-use-key" onClick={openProviderKeys}>Log in with another provider</button>
 			</div>}
 
 			{authState === "signing-in" && <div className="agent-state-card" data-agent-card="signing-in">

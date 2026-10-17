@@ -46,7 +46,7 @@ await new Promise((resolvePromise, reject) => {
 
 const children = [];
 const removeSignalCleanup = installSignalCleanup(() => children, () => {});
-const agentHandler = createAgentHandler({ port: mainPort, verifyKey: true });
+const agentHandler = createAgentHandler({ port: mainPort });
 const oauthServer = createServer((req, res) => {
 	const path = (req.url || "").split("?")[0];
 	const hosts = new Set([`127.0.0.1:${mainPort}`, `localhost:${mainPort}`]);
