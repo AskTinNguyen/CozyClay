@@ -147,7 +147,7 @@ qa.groups[i] = { "kind": "COLLIDE", "subject": "thigh_r x cube", "count": 6, "fi
 - Every hint function (`hints-*.js`) returns `{ cause, hint, fix? }`. `explain.js` puts `fix` on the group as a non-enumerable property, so it never reaches the output. The `moveHint` signature is frozen.
 - `fix = { channel, f, delta } | { channel, f, value } | { path: "/fix/retime", value: true } | { path: "/anchors/cupHandle/p", delta }`.
 - `qa/patch.js` `attachPatches(groups, { X, userSpec }) -> groups`: `X` is the explain context, `userSpec` the spec as the agent sent it (patches address it).
-- `repair.js` `repairSpec(spec, { rounds }, compile) -> { spec, result, repair }` with `repair = { rounds, compiles, applied: [{ kind, subject, patch, severity: [before, after] }], rejected }`. Each round tries the top 3 groups that carry a patch, keeps one when the summed severity drops, and stops when a round keeps nothing. Deterministic, at most 20 s. With `install: true` (or `"ifClean"` and a clean result, C12) the improved spec is installed and `output.specId` names it.
+- `repair.js` `repairSpec(spec, { rounds }, compile) -> { spec, result, repair }` with `repair = { rounds, compiles, applied: [{ kind, subject, patch, severity: [before, after] }], rejected }`; the answer's `output.ms.repair` is the repair's wall time, so a sweep that repairs every variant shows what it costs. Each round tries the top 3 groups that carry a patch, keeps one when the summed severity drops, and stops when a round keeps nothing. Deterministic, at most 20 s. With `install: true` (or `"ifClean"` and a clean result, C12) the improved spec is installed and `output.specId` names it.
 
 ## C7. specId, base + patch, delta, report, output budget
 

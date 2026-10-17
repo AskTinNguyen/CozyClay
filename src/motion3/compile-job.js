@@ -34,7 +34,7 @@ const fresh = value => (Array.isArray(value) ? value.map(fresh) : value && typeo
 
 /**
  * runCompileJob({ model, scene, spec, probes?, checks?, lenient?, repair?, bake? }) -> { stored, qa, observations,
- * used, fixed, search, timeline, probes?, notes?, ms, frameCount, label, repair?, take? }
+ * used, fixed, search, timeline, probes?, notes?, ms (+ repair: its wall ms), frameCount, label, repair?, take? }
  * bake: { position, yaw, prompt? } bakes the final result's take (prompt: given, else the final spec's label).
  */
 export function runCompileJob({ model, scene, spec: asked, probes: sentProbes, checks, lenient, repair, bake }) {
@@ -48,11 +48,12 @@ export function runCompileJob({ model, scene, spec: asked, probes: sentProbes, c
 		const r = asArgument(() => compileSpec(sent, { sk, scene }, { ...opts, probes }));
 		return { ...r, stored: r.spec === sent ? spec : r.spec };
 	};
-	const fixed = repair ? repairSpec(asked, repair, once) : { spec: asked, result: once(asked) };
-	const r = fixed.result, label = fixed.spec?.label ?? null;
+	const t0 = performance.now(), fixed = repair ? repairSpec(asked, repair, once) : { spec: asked, result: once(asked) };
+	// ms.repair: the whole repair's wall time, so a sweep that repairs every variant shows what it costs
+	const r = fixed.result, label = fixed.spec?.label ?? null, ms = fixed.repair ? { ...r.ms, repair: Math.round(performance.now() - t0) } : r.ms;
 	const take = bake ? bakeTake(sk, r.out, { position: bake.position, yaw: bake.yaw }, { spec: r.stored, prompt: ("prompt" in bake ? bake.prompt : label) ?? "" }) : undefined;
 	return { stored: r.stored, qa: r.qa, observations: r.observations, used: r.used, fixed: r.fixed, search: r.search, timeline: r.timeline,
-		...(r.probes ? { probes: r.probes } : {}), ...(r.notes ? { notes: r.notes } : {}), ms: r.ms, frameCount: r.out.frameCount, label,
+		...(r.probes ? { probes: r.probes } : {}), ...(r.notes ? { notes: r.notes } : {}), ms, frameCount: r.out.frameCount, label,
 		...(fixed.repair ? { repair: fixed.repair } : {}), ...(take ? { take } : {}) };
 }
 

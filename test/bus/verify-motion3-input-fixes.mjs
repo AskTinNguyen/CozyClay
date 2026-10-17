@@ -84,5 +84,9 @@ expect("clampFrames: inside frames unchanged, no note", json(clampFrames([5, 1, 
 const reported = compile({ spec: goal([30, 90]) }).output.specId;
 expect("motion.report without part pages the groups", json(registry.run("motion.report", { specId: reported }).output) === json(registry.run("motion.report", { specId: reported, part: "groups" }).output));
 
+// 9. a repaired compile says how long its repair took (output.ms.repair); a plain one has no repair time
+const repairedMs = compile({ spec: idle, repair: { rounds: 1 } }).output.ms, plainMs = compile({ spec: idle }).output.ms;
+expect("output.ms.repair is the repair's wall time, only when repair ran", Number.isInteger(repairedMs.repair) && repairedMs.repair >= 0 && !("repair" in plainMs), json({ repairedMs, plainMs }));
+
 if (failures) { console.error(`${failures} input-fix check(s) failed`); process.exit(1); }
 console.log("verify-motion3-input-fixes: all checks passed");
