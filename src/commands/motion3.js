@@ -48,7 +48,7 @@ const declarations = Object.freeze([
 		input: input({ topic: { type: "string", enum: DESCRIBE_TOPICS }, name: id,
 			topics: list({ oneOf: [{ type: "string", enum: DESCRIBE_TOPICS }, input({ topic: { type: "string", enum: DESCRIBE_TOPICS }, name: id }, ["topic"])] }, 8) }, []) },
 	{ id: "motion.report", label: "Read motion report", kind: "job", domain: "motion", timeoutMs: 10000, readOnly: true, description: HELP.report,
-		input: input({ specId, part: { type: "string", enum: ["groups", "timeline", "probes"] }, from: { type: "integer", minimum: 0, default: 0 } }, ["specId", "part"]) },
+		input: input({ specId, part: { type: "string", enum: ["groups", "timeline", "probes"], default: "groups" }, from: { type: "integer", minimum: 0, default: 0 } }, ["specId"]) },
 	{ id: "motion.keyObject", label: "Key held object", kind: "job", domain: "motion", timeoutMs: 120000, description: HELP.keyObject,
 		input: input({ characterId: id, objectId: id, frame: { type: "integer", minimum: 0 }, pos: numbers(3), rot: numbers(4), aim: numbers(3), roll: { type: "number" },
 			angle: { type: "number" }, remove: { type: "boolean", default: false } }, ["characterId", "objectId", "frame"]) },
@@ -177,14 +177,19 @@ export function register(registry, ports) {
 		return { affectedIds: [], summary: `Sampled ${rows.length} frames.`, output: { frames: rows } };
 	} });
 	registry.register({ ...declarations[3], available: always, run({ topic, name, topics }) {
-		if ((topic === undefined) === (topics === undefined) || (topics && name !== undefined)) fail("INVALID_ARGUMENT", "Send topic (and name) for one answer, or topics: [{ topic, name? }] for several in one call, not both.");
+		if (topic === undefined && topics === undefined) fail("INVALID_ARGUMENT", "Send topic (and name) for one answer, or topics: [{ topic, name? }] for several in one call.");
 		if (topics) {
-			const output = asArgument(() => describeMany(topics.map(t => (typeof t === "string" ? { topic: t } : t))));
+			// C19: a topic beside topics joins them; a name beside topics goes to the one ask that can take it
+			const asks = [...(topic === undefined ? [] : [{ topic }]), ...topics.map(t => (typeof t === "string" ? { topic: t } : { ...t }))];
+			const open = asks.filter(a => a.name === undefined && (asks.length === 1 || a.topic === "skills"));
+			if (name !== undefined && open.length !== 1) fail("INVALID_ARGUMENT", "name goes with one topic; inside topics give each its own: topics: [{ topic, name? }].");
+			if (name !== undefined) open[0].name = name;
+			const output = asArgument(() => describeMany(asks));
 			return { affectedIds: [], summary: `Described ${output.topics.map(a => (a.name ? `${a.topic} ${a.name}` : a.topic)).join(", ")}${output.more ? `; ${output.more.length} more did not fit` : ""}.`, output };
 		}
 		return { affectedIds: [], summary: `Described ${topic}${name ? ` ${name}` : ""}.`, output: asArgument(() => describe(topic, name)) };
 	} });
-	registry.register({ ...declarations[4], available: always, run({ specId: wanted, part, from = 0 }) {
+	registry.register({ ...declarations[4], available: always, run({ specId: wanted, part = "groups", from = 0 }) {
 		const page = reportPage(store.parts(wanted) ?? unknownSpec("specId", wanted, "compile it again"), wanted, part, from);
 		return { affectedIds: [], summary: `${page.items.length} ${part} from ${from}.`, output: page };
 	} });

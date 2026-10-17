@@ -22,6 +22,6 @@ export const MOTION_ACTION_HELP = {
 		+ "A carried object takes pos [x, y, z] and rot [x, y, z, w], or aim [x, y, z] (its +Y) and roll?: its base's world pose (a group: its root), grab..release only (objects.<id>.keys); the hand follows. "
 		+ "A hinge takes angle (degrees) or rot (its turn about the axis). remove: true deletes the key at frame. Refused where the take neither holds nor hinges it (drag it then). "
 		+ "Answers keyed and the motion.compile output; REACH \"<id>: n cm off its keys\": what the hand missed.",
-	report: "Page through the parts of a motion.compile or motion.qa answer that did not fit (output.more): part is groups, timeline or probes, from the item index to start at; "
+	report: "Page through the parts of a motion.compile or motion.qa answer that did not fit (output.more): part is groups (the default), timeline or probes, from the item index to start at; "
 		+ "answers { specId, part, from, items, next } (next = the index to ask for next, null at the end). Changes nothing.",
 };

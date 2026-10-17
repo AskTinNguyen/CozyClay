@@ -80,5 +80,9 @@ const clean = JSON.parse(json(carry([{ f: 26, pos: cupRest, aim: [0, 1, 0] }])))
 expect("relaxSpec changes nothing on a spec that needs nothing", json(relaxSpec(JSON.parse(json(clean)), scene, notes)) === json(clean) && notes.length === 0);
 expect("clampFrames: inside frames unchanged, no note", json(clampFrames([5, 1, 3], [0, 9])) === json({ frames: [1, 3, 5] }));
 
+// 8. motion.report without part reads the groups, as { part: "groups" } does
+const reported = compile({ spec: goal([30, 90]) }).output.specId;
+expect("motion.report without part pages the groups", json(registry.run("motion.report", { specId: reported }).output) === json(registry.run("motion.report", { specId: reported, part: "groups" }).output));
+
 if (failures) { console.error(`${failures} input-fix check(s) failed`); process.exit(1); }
 console.log("verify-motion3-input-fixes: all checks passed");

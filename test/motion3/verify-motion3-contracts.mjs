@@ -146,8 +146,8 @@ expect("motion.describe { topics } answers them in order, each once, within DESC
 const rest = run(cupRegistry, "motion.describe", { topics: many.more });
 expect("motion.describe { topics: more } answers the rest", rest.topics.length === 2 && rest.more === undefined && rest.topics[1].name === "walkTo");
 expect("motion.describe { topics } takes bare topic strings", JSON.stringify(run(cupRegistry, "motion.describe", { topics: ["anchors", { topic: "skills", name: "walkTo" }] }).topics) === JSON.stringify(rest.topics));
-expect("motion.describe refuses topic with topics, neither, and an unknown topic in topics", /not both/.test(refusal(() => cupRegistry.run("motion.describe", { topic: "goals", topics: [{ topic: "objects" }] })))
-	&& /not both/.test(refusal(() => cupRegistry.run("motion.describe", {}))) && /"skils" is not one of/.test(refusal(() => cupRegistry.run("motion.describe", { topics: [{ topic: "skils" }] }))));
+expect("motion.describe joins topic with topics, gives a name to its one skills ask (C19), and refuses neither, a name with two open asks and an unknown topic", JSON.stringify(run(cupRegistry, "motion.describe", { topic: "anchors", topics: ["skills"], name: "walkTo" }).topics) === JSON.stringify(rest.topics)
+	&& /Send topic/.test(refusal(() => cupRegistry.run("motion.describe", {}))) && /name goes with one topic/.test(refusal(() => cupRegistry.run("motion.describe", { topics: ["skills", "skills"], name: "walkTo" }))) && /"skils" is not one of/.test(refusal(() => cupRegistry.run("motion.describe", { topics: [{ topic: "skils" }] }))));
 
 // 5. JSON Patch
 const doc = { keys: [{ f: 0 }, { f: 4 }], anchors: { a: { p: [0, 0, 0] } } };
