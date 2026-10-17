@@ -7277,6 +7277,11 @@ input[type=range] {
 	white-space: nowrap;
 }
 
+/* The panels' native file pickers stay hidden; their own buttons open them. */
+.multimodel-file-input {
+	display: none;
+}
+
 .multimodel-file-name {
 	min-width: 0;
 	overflow: hidden;

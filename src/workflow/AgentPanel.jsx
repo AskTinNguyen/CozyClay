@@ -855,7 +855,7 @@ export default function AgentPanel({
 		<div className="agent-transcript" ref={transcriptRef} aria-live="polite" aria-label="Conversation" data-agent-transcript="true">
 			{authState === "signed-out" && <div className="agent-state-card" data-agent-card="signed-out">
 				<h3>Connect a model</h3>
-				<p>Sign in with ChatGPT, or log in to any provider pi supports: a Claude Pro/Max or GitHub Copilot subscription, an API key, or your own CLIProxyAPI server. Sign-in happens in your browser — no token is ever stored in this page.</p>
+				<p>Sign in with ChatGPT, or log in to another provider with a subscription, an API key, or your own proxy server. Sign-in happens in your browser — no token is ever stored in this page.</p>
 				<button type="button" className="agent-primary-button agent-signin" onClick={signIn}>Sign in with ChatGPT</button>
 				<button type="button" className="agent-ghost-button agent-use-key" onClick={openProviderKeys}>Log in with another provider</button>
 			</div>}
@@ -863,7 +863,8 @@ export default function AgentPanel({
 			{authState === "signing-in" && <div className="agent-state-card" data-agent-card="signing-in">
 				<span className="agent-spinner" aria-hidden="true" />
 				<h3>Waiting for your browser…</h3>
-				<p>Finish the ChatGPT sign-in in the tab that just opened. This panel picks up the session when you come back.</p>
+				<p>Finish the ChatGPT sign-in in the browser page that just opened. This panel picks up the session when you come back.</p>
+				{account?.authorizeUrl && <a className="agent-ghost-button agent-signin-link" href={account.authorizeUrl} target="_blank" rel="noopener noreferrer">Open the sign-in page again</a>}
 			</div>}
 
 			{authState === "no-entitlement" && <div className="agent-state-card" data-agent-card="no-entitlement">

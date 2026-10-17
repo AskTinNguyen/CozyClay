@@ -23,7 +23,14 @@
 	border: 0;
 	background: none;
 }
-.app[data-shell="glass"] .studio-agent-inspector .agent-title { font: 600 13px var(--sans); color: var(--text-1); }
+.app[data-shell="glass"] .studio-agent-inspector .agent-title {
+	min-width: 0;
+	overflow: hidden;
+	color: var(--text-1);
+	font: 600 13px var(--sans);
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
 .app[data-shell="glass"] .studio-agent-inspector .agent-status-dot { display: none; }
 .app[data-shell="glass"] .studio-agent-inspector .agent-icon-button {
 	display: grid;
@@ -227,7 +234,9 @@
 	font: 400 12.5px/1.5 var(--sans);
 }
 .app[data-shell="glass"] .studio-agent-inspector .agent-composer textarea::placeholder { color: var(--text-3); }
-.app[data-shell="glass"] .studio-agent-inspector .agent-composer-controls { gap: 2px; margin: 4px 0 0 -6px; }
+/* A narrow dock wraps the controls to a second row instead of crushing the
+   model name to its caret or pushing Send past the field's edge. */
+.app[data-shell="glass"] .studio-agent-inspector .agent-composer-controls { flex-wrap: wrap; gap: 4px 2px; margin: 4px 0 0 -6px; }
 .app[data-shell="glass"] .studio-agent-inspector .agent-attach-chip {
 	display: grid;
 	place-items: center;
@@ -248,9 +257,9 @@
 .app[data-shell="glass"] .studio-agent-inspector .agent-model-select {
 	-webkit-appearance: none;
 	appearance: none;
-	flex: 0 1 auto;
-	min-width: 0;
-	max-width: 132px;
+	flex: 1 1 96px;
+	min-width: 96px;
+	max-width: none;
 	height: 26px;
 	padding: 0 18px 0 8px;
 	border: 0;
@@ -262,7 +271,7 @@
 	cursor: pointer;
 }
 .app[data-shell="glass"] .studio-agent-inspector .agent-model-select:hover { background-color: var(--chip-fill); color: var(--text-1); }
-.app[data-shell="glass"] .studio-agent-inspector .agent-effort-select { flex: none; max-width: none; }
+.app[data-shell="glass"] .studio-agent-inspector .agent-effort-select { flex: none; min-width: 0; max-width: none; }
 .app[data-shell="glass"] .studio-agent-inspector .agent-model-select optgroup,
 .app[data-shell="glass"] .studio-agent-inspector .agent-model-select option { background: var(--surface-raised); color: var(--text-1); }
 .app[data-shell="glass"] .studio-agent-inspector .agent-send {
@@ -293,4 +302,8 @@
 
 /* Provider keys: the same quiet rows. */
 .app[data-shell="glass"] .studio-agent-inspector .agent-keys { margin: 0 10px 8px; border: 0; border-radius: 12px; background: var(--card-fill); box-shadow: var(--card-ring); }
+/* Connect a model takes the panel body while it is open: one scroll, and no
+   second "Connect a model" card showing through behind it. */
+.app[data-shell="glass"] .studio-agent-inspector .agent-login { flex: 1 1 auto; min-height: 0; max-height: none; }
+.app[data-shell="glass"] .studio-agent-inspector .agent-login ~ .agent-transcript { display: none; }
 .app[data-shell="glass"] .studio-agent-inspector .agent-key-input { border: 0; border-radius: 8px; background: var(--field-fill); color: var(--text-1); }

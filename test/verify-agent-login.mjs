@@ -197,7 +197,7 @@ await check("a provider outside the curated list joins the model picker once a l
 });
 
 await check("a provider's 401 in a turn reads as logging in again", () => {
-	assert.equal(keyRefusedMessage('401 {"error":{"message":"invalid x-api-key"}}'), "The model provider refused the credentials (401: invalid x-api-key). Log in again under Connect a model.");
+	assert.equal(keyRefusedMessage('401 {"error":{"message":"invalid x-api-key"}}'), "The model provider refused the credentials (401: invalid x-api-key).");
 });
 
 rmSync(rootDir, { recursive: true, force: true });

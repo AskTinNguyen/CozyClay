@@ -15,10 +15,10 @@ const ANIMATION_STEPS = [
 		hintKo: "바닥의 캐릭터 마커를 드래그해 배치하세요.",
 	},
 	{
-		en: "Press K to set a key at the current frame.",
-		ko: "현재 프레임에서 K를 눌러 키를 설정하세요.",
-		hintEn: "The key appears on the timeline as your first pose checkpoint.",
-		hintKo: "첫 포즈 체크포인트가 타임라인에 표시됩니다.",
+		en: "Ask the Agent for a motion.",
+		ko: "에이전트에게 동작을 요청하세요.",
+		hintEn: "Open it with Cmd/Ctrl+B and say what the character does; the take lands on the Body lane.",
+		hintKo: "Cmd/Ctrl+B로 열고 캐릭터가 할 동작을 말하면 테이크가 바디 레인에 올라갑니다.",
 	},
 	{
 		en: "Scrub the timeline or press Space to play.",
@@ -81,7 +81,7 @@ export default function FirstSuccessGuide({ open, onDismiss, previsMode = "anima
 				<div className="v2-first-success-guide-complete first-success-guide-complete" id="first-success-guide-description" role="status">
 					<div className="v2-first-success-guide-check first-success-guide-check">✓</div>
 					<strong>{storyboard ? ko("You made your first panel.", "첫 패널을 만들었어요.") : ko("You made your first shot.", "첫 샷을 만들었어요.")}</strong>
-					<p>{storyboard ? ko("Describe, review on the Board, then stylize or export. You can close this guide and keep adding panels.", "설명하고, 보드에서 확인한 뒤 스타일을 입히거나 내보내세요. 가이드를 닫고 패널을 계속 추가하세요.") : ko("Select, move, key, and play are the core CozyClay loop. You can close this guide and keep blocking.", "선택하고, 움직이고, 키를 찍고, 재생하는 것이 CozyClay의 핵심 흐름입니다. 가이드를 닫고 계속 블로킹하세요.")}</p>
+					<p>{storyboard ? ko("Describe, review on the Board, then stylize or export. You can close this guide and keep adding panels.", "설명하고, 보드에서 확인한 뒤 스타일을 입히거나 내보내세요. 가이드를 닫고 패널을 계속 추가하세요.") : ko("Select, move, ask, and play are the core CozyClay loop. You can close this guide and keep blocking.", "선택하고, 움직이고, 요청하고, 재생하는 것이 CozyClay의 핵심 흐름입니다. 가이드를 닫고 계속 블로킹하세요.")}</p>
 					<button type="button" className="v2-first-success-guide-next first-success-guide-next btn primary" onClick={onDismiss}>{ko("Continue editing", "편집 계속하기")}</button>
 				</div>
 			) : (

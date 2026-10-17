@@ -433,9 +433,9 @@
 	min-height: 0;
 	height: 100%;
 	display: grid;
+	/* Ruler, then the lanes in TRACKS order: Body group, Root path row, Camera Cuts group. */
 	grid-template-rows:
 		var(--tl-ruler-height, 24px)
-		var(--tl-track-row-height, 38px)
 		var(--tl-track-group-height, 114px)
 		var(--tl-track-row-height, 38px)
 		var(--tl-track-group-height, 114px);
@@ -447,7 +447,6 @@
 .v2-sequencer .tl-surface.empty-shots {
 	grid-template-rows:
 		var(--tl-ruler-height, 24px)
-		var(--tl-track-row-height, 38px)
 		var(--tl-track-group-height, 114px)
 		var(--tl-track-row-height, 38px)
 		var(--tl-track-group-height, 114px);

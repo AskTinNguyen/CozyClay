@@ -110,8 +110,8 @@ export default function DetailsSlot() {
 		{!inspectorHasContent && (
 			<p className="inspector-empty" data-inspector-empty role="status">
 				{ko(
-					"Select something in the hierarchy — the scene, the camera, a character, the environment or a prop — and its settings appear here.",
-					"계층에서 항목을 고르면 — 씨, 카메라, 캐릭터, 환경, 소품 — 그 설정이 여기 나타납니다.",
+					"Select the camera, a character, the light, the environment or a prop in the Outliner, and its settings appear here.",
+					"아웃라이너에서 카메라, 캐릭터, 조명, 환경, 소품을 고르면 그 설정이 여기 나타납니다.",
 				)}
 			</p>
 		)}

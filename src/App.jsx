@@ -3756,7 +3756,6 @@ export default function App() {
 	// sidebar tabs. Every panel belongs to the thing that owns it: the scene
 	// owns what gets generated, the camera owns the lens, and a character owns
 	// its pose and its motion.
-	const isSceneSelection = selectedHierarchyId === "shot";
 	const isCameraSelection = selectedHierarchyId === "camera";
 	const isCharacterSelection = selectedHierarchyId === "characters"
 		|| selectedHierarchyId === "characterA"
@@ -3769,7 +3768,8 @@ export default function App() {
 	const viewLooksActive = gridView || autoColor || partColoursEnabled || guideMode !== "off";
 	const rigSelection = parseRigNodeId(selectedHierarchyId);
 	const isRigSelection = rigSelection !== null;
-	const inspectorHasContent = isSceneSelection || isCameraSelection || isCharacterSelection || isRigSelection
+	// The scene row owns no settings of its own, so it leaves the empty-panel hint up rather than a blank column.
+	const inspectorHasContent = isCameraSelection || isCharacterSelection || isRigSelection
 		|| selectedHierarchyId === "environment" || selectedHierarchyId === "props" || selectedHierarchyId === "light" || Boolean(selectedSceneObject) || sculptMode;
 
 	// Startup idle work, once.
@@ -4181,11 +4181,8 @@ export default function App() {
 		return { min, max, warn: min < 0.5 || max > 3 };
 	}, [activeChar.x, activeChar.z, tlFps, waypoints]);
 
-	const stateBadge = motion
-			? { label: ko("PLAYBACK", "재생"), kind: "playback" }
-			: waypointMode
-				? { label: ko("ROOT PATH", "루트 경로"), kind: "root" }
-				: null;
+	// A loaded take needs no badge: its clip on the Body lane already says so.
+	const stateBadge = !motion && waypointMode ? { label: ko("ROOT PATH", "루트 경로"), kind: "root" } : null;
 
 	function bufferToPng(buffer, output = shotOutput, decorate = null) {
 		const canvas = document.createElement("canvas");

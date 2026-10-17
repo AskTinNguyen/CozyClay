@@ -83,7 +83,8 @@ export function LoginPanel({ onClose, onChatGPT, onChanged }) {
 
 	const begin = async (provider, method) => {
 		setError("");
-		if (method.type === "chatgpt") { onChatGPT?.(); return; }
+		// ChatGPT's own sign-in shows its waiting card in the panel body, so the list steps aside.
+		if (method.type === "chatgpt") { onChatGPT?.(); onClose?.(); return; }
 		try {
 			const flowId = await startLogin(provider.id, method.type);
 			setFlow({ flowId, name: provider.name, label: method.label, log: [], prompt: null, done: false });
@@ -118,7 +119,7 @@ export function LoginPanel({ onClose, onChatGPT, onChanged }) {
 			{flow.done && <p className={flow.ok ? "agent-key-note" : "agent-key-error"} role={flow.ok ? "status" : "alert"}>{flow.ok ? `Connected to ${flow.name}.` : flow.message}</p>}
 			<div className="agent-key-controls"><button type="button" className="agent-ghost-button" onClick={cancel}>{flow.done ? "Back to the list" : "Cancel"}</button></div>
 		</div> : <>
-			<p className="agent-keys-hint">These are pi&apos;s logins. A subscription signs in on its own page; a key or address you type is kept by the local CozyClay service and never shown again.</p>
+			<p className="agent-keys-hint">A subscription signs in on its own page. A key or server address you type stays with the local CozyClay service and is never shown again.</p>
 			<input className="agent-key-input" type="search" aria-label="Search providers" placeholder="Search providers" value={query} onChange={(event) => setQuery(event.target.value)} />
 			{providers === null && !error && <p className="agent-keys-note">Loading providers…</p>}
 			{GROUPS.map(([title, test]) => {

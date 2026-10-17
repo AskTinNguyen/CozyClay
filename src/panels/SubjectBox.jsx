@@ -32,7 +32,10 @@ export default function SubjectBox({ label, onRemove, onPose, posing, color, onC
 							title={isKo ? `${label} 포즈` : `Pose ${label}`}
 							onClick={onPose}
 						>
-							⌘
+							{/* The Pose mode figure, not a keyboard glyph. */}
+							<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+								<path d="M8 2.25a1.5 1.5 0 1 1 0 3 1.5 1.5 0 1 1 0-3z M5 7.25h6 M8 7.25v3.5 M6.25 13.75 8 10.75l1.75 3" />
+							</svg>
 						</button>
 					)}
 					{onRemove && (

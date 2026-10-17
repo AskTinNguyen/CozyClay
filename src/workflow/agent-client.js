@@ -637,12 +637,13 @@ export function providerEnvLabel(id) {
 	return names?.length ? names.join(" or ") : "an environment variable";
 }
 
-/** The failure a provider's 401/403 turns into: what to fix, plus the provider's own reason when the raw
+/** The failure a provider's 401/403 turns into: the refusal, plus the provider's own reason when the raw
  * error carries one ("invalid x-api-key"), instead of the raw status and JSON body. */
 export function keyRefusedMessage(raw) {
 	const reason = /"message"\s*:\s*"([^"]{1,160})"/.exec(String(raw || ""))?.[1];
 	const status = /\b(401|403)\b/.exec(String(raw || ""))?.[1];
-	return `The model provider refused the credentials${status || reason ? ` (${[status, reason].filter(Boolean).join(": ")})` : ""}. Log in again under Connect a model.`;
+	// What to do next is the failure card's recovery line, said once there.
+	return `The model provider refused the credentials${status || reason ? ` (${[status, reason].filter(Boolean).join(": ")})` : ""}.`;
 }
 
 export function createHttpTransport({ fetchImpl = globalThis.fetch?.bind(globalThis), surface, capture = track, now = () => performance.now() } = {}) {
@@ -654,10 +655,9 @@ export function createHttpTransport({ fetchImpl = globalThis.fetch?.bind(globalT
 			return request("/oauth/status");
 		},
 		async signIn() {
-			const result = await request("/oauth/start", { method: "POST", body: "{}" });
-			// The sidecar owns the code exchange; the browser only opens the page.
-			if (result?.authorizeUrl) globalThis.open?.(result.authorizeUrl, "_blank", "noopener,noreferrer");
-			return result;
+			// The sidecar owns the code exchange and opens the sign-in page itself; opening it here
+			// too showed the page twice. The waiting card links the page from /oauth/status.
+			return request("/oauth/start", { method: "POST", body: "{}" });
 		},
 		async signOut() {
 			return request("/oauth/logout", { method: "POST", body: "{}" });

@@ -200,7 +200,8 @@ export default function ProjectBrowser({ currentName, onOpen, onOpenFile, onNew,
 
 	const selectTemplate = (template) => {
 		setSelectedTemplateId(template.id);
-		setName((current) => current.trim() ? current : template.name);
+		// A name the previous card (or the open project) filled in follows the new card; a typed one stays.
+		setName((current) => !current.trim() || current.trim() === selectedTemplate?.name || current.trim() === currentName ? template.name : current);
 	};
 
 	const choosePrevisMode = (mode) => {
@@ -364,9 +365,7 @@ export default function ProjectBrowser({ currentName, onOpen, onOpenFile, onNew,
 				</main>
 
 				<aside className="v2-start-preview" data-testid="start-project-preview" aria-label={ko("Project preview", "프로젝트 미리보기")}>
-					<div className={`v2-start-preview-art ${selectedTemplate?.kind || "blank"}`} aria-hidden="true">
-						<span>{ko("template preview", "템플릿 미리보기")}</span>
-					</div>
+					<div className={`v2-start-preview-art ${selectedTemplate?.kind || "blank"}`} aria-hidden="true" />
 					<div className="v2-start-preview-copy">
 						<strong>{selectedTemplate?.name}</strong>
 						<span>{selectedTemplate?.description}</span>

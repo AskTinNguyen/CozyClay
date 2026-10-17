@@ -61,7 +61,9 @@ function providersConfigured() {
 export function status() {
 	const claim = claims();
 	const auth = claim["https://api.openai.com/auth"] || {};
-	return { signedIn: !!readTokens()?.refresh_token, email: claim.email || null, plan: auth.chatgpt_plan_type || null, accountId: auth.chatgpt_account_id || null, expiresAt: readTokens()?.expires_at || null, providersConfigured: providersConfigured() };
+	// `pending` keeps the panel on "Waiting for your browser…" while a sign-in page is open, with its link.
+	const pending = Boolean(authServer && authState) && !readTokens()?.refresh_token;
+	return { signedIn: !!readTokens()?.refresh_token, ...(pending ? { pending, authorizeUrl: authState.result.authorizeUrl } : {}), email: claim.email || null, plan: auth.chatgpt_plan_type || null, accountId: auth.chatgpt_account_id || null, expiresAt: readTokens()?.expires_at || null, providersConfigured: providersConfigured() };
 }
 export function readStored() {
 	const current = readTokens();
@@ -126,6 +128,9 @@ export async function startOAuth() {
 	const authorizeUrl = new URL(AUTHORIZE_ENDPOINT);
 	for (const [key, value] of Object.entries({ response_type: "code", client_id: CLIENT_ID, redirect_uri: `http://${"local" + "host"}:${port}/auth/callback`, scope: SCOPE, code_challenge: challenge, code_challenge_method: "S256", state, id_token_add_organizations: "true", codex_cli_simplified_flow: "true", originator: "cozyclay" })) authorizeUrl.searchParams.set(key, value);
 	authState = { result: { ok: true, port, authorizeUrl: authorizeUrl.toString() } };
+	// An abandoned sign-in stops listening after ten minutes, so the panel cannot wait on it forever.
+	const server = authServer;
+	setTimeout(() => { if (authServer === server) { server.close(); authServer = null; authState = null; } }, 10 * 60 * 1000).unref?.();
 	openBrowser(authorizeUrl.toString());
 	return authState.result;
 }
