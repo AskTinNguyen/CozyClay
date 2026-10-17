@@ -3787,8 +3787,8 @@ export default function App() {
 	// The camera tutorial's seed (#209). startCameraTutorial arms
 	// tutorialSeedPending once the starter scene is applied, and a compiled walk
 	// (take v3) goes on as soon as that scene's character has a parsed rig: a
-	// state condition, not a timer. The compile installs synchronously, so no
-	// agent or user edit can land between the rig being ready and the take.
+	// state condition, not a timer. The compile runs in the worker; an edit that lands
+	// before it answers makes the job's fence refuse the install (set dressing, no error).
 	useEffect(() => {
 		if (!tutorialSeedPending || !activeRig) return;
 		const seedEpoch = tutorialSeedEpochRef.current;
