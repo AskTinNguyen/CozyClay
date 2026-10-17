@@ -637,6 +637,14 @@ export function providerEnvLabel(id) {
 	return names?.length ? names.join(" or ") : "an environment variable";
 }
 
+/** The failure a provider's 401/403 turns into: what to fix, plus the provider's own reason when the raw
+ * error carries one ("invalid x-api-key"), instead of the raw status and JSON body. */
+export function keyRefusedMessage(raw) {
+	const reason = /"message"\s*:\s*"([^"]{1,160})"/.exec(String(raw || ""))?.[1];
+	const status = /\b(401|403)\b/.exec(String(raw || ""))?.[1];
+	return `The model provider refused the credentials${status || reason ? ` (${[status, reason].filter(Boolean).join(": ")})` : ""}. Check the key in Provider keys, or sign in again.`;
+}
+
 export function createHttpTransport({ fetchImpl = globalThis.fetch?.bind(globalThis), surface, capture = track, now = () => performance.now() } = {}) {
 	const activeTurns = new Map();
 	const request = (path, init) => sidecarRequest(fetchImpl, path, init);
@@ -680,16 +688,12 @@ export function createHttpTransport({ fetchImpl = globalThis.fetch?.bind(globalT
 		// Provider credentials live in the sidecar's 0600 store. The browser sends
 		// a key once and never reads one back: the status route answers with the
 		// source of a key, never with key material.
-		async providers() {
-			const result = await request("/agent/providers");
-			return Array.isArray(result?.providers) ? result.providers : [];
-		},
-		async setProviderKey(id, key) {
-			return request(`/agent/providers/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify({ key }) });
-		},
-		async removeProviderKey(id) {
-			return request(`/agent/providers/${encodeURIComponent(id)}`, { method: "DELETE" });
-		},
+		async providers() { const result = await request("/agent/providers"); return Array.isArray(result?.providers) ? result.providers : []; },
+		// { ok, verified?, warning? }: the sidecar checks the key with its provider and refuses one the provider refuses
+		async setProviderKey(id, key) { return request(`/agent/providers/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify({ key }) }); },
+		async removeProviderKey(id) { return request(`/agent/providers/${encodeURIComponent(id)}`, { method: "DELETE" }); },
+		// A provider's own server address (CLIProxyAPI); an empty url goes back to the environment or the default
+		async setProviderEndpoint(id, url) { return request(`/agent/providers/${encodeURIComponent(id)}/endpoint`, url ? { method: "PUT", body: JSON.stringify({ url }) } : { method: "DELETE" }); },
 		async listSessions() {
 			const result = await request(`/agent/sessions?surface=${encodeURIComponent(surface || "studio")}`);
 			return Array.isArray(result?.sessions) ? result.sessions : [];
@@ -1018,9 +1022,7 @@ export function createMockTransport(config = { state: "ready" }) {
 			});
 			return { providers, models: providers.flatMap((provider) => provider.models.map((model) => ({ ...model, id: model.key }))) };
 		},
-		async providers() {
-			return providerStatus();
-		},
+		async providers() { return providerStatus(); },
 		async setProviderKey(id, key) {
 			if (id === "openai-codex") throw Object.assign(new Error("Use ChatGPT sign-in for OpenAI Codex."), { status: 400 });
 			if (typeof key !== "string" || key.trim().length < MOCK_PROVIDER_KEY_MIN) {
@@ -1030,10 +1032,8 @@ export function createMockTransport(config = { state: "ready" }) {
 			storedProviders.add(id);
 			return { ok: true };
 		},
-		async removeProviderKey(id) {
-			storedProviders.delete(id);
-			return { ok: true };
-		},
+		async removeProviderKey(id) { storedProviders.delete(id); return { ok: true }; },
+		async setProviderEndpoint() { return { ok: true }; },
 		async stop() {
 			liveTurn = null;
 			return { ok: true };
@@ -1363,7 +1363,7 @@ export function createAgentChatStore({
 			return;
 		}
 		if (event?.type !== "error") return;
-		const failure = { code: event.code || "upstream", message: event.message || ERROR_COPY[event.code] || "The turn failed.", ...(Number.isFinite(event.status) ? { status: event.status } : {}) };
+		const failure = { code: event.code || "upstream", message: event.code === "unauthorized" ? keyRefusedMessage(event.message) : event.message || ERROR_COPY[event.code] || "The turn failed.", ...(Number.isFinite(event.status) ? { status: event.status } : {}) };
 		if (activeTurn) activeTurn.failure = failure;
 		if (event.code === "rate_limit") { set({ rateLimit: { resetAt: event.resetAt || null, message: event.message || ERROR_COPY.rate_limit } }); return; }
 		if (event.code === "auth") { onAuthLost?.(); return; }
@@ -1372,7 +1372,7 @@ export function createAgentChatStore({
 			// an older card would hide the new failure inside finished history.
 			const prompt = items.findLastIndex((item) => item.kind === "user");
 			const position = items.findLastIndex((item, at) => at > prompt && item.kind === "tool" && item.status === "failed");
-			if (position === -1) return [...items, { kind: "failure", id: newId(), failure: { ...failure, recovery: { action: "retry", retryAllowed: true } } }];
+			if (position === -1) return [...items, { kind: "failure", id: newId(), failure: { ...failure, recovery: { action: failure.code === "unauthorized" ? "fix_key" : "retry", retryAllowed: true } } }];
 			return items.map((item, at) => at === position ? { ...item, failure } : item);
 		});
 	}

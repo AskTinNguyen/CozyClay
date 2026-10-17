@@ -70,7 +70,7 @@ const factories = {
 };
 
 async function cliproxyProvider({ baseUrl, env = process.env } = {}) {
-	const base = (baseUrl ?? env.CLIPROXY_BASE_URL ?? "http://127.0.0.1:8317").replace(/\/$/, "");
+	const base = (baseUrl ?? defaultKeys.endpointOf("cliproxy", env).url).replace(/\/$/, "");
 	const [{ createProvider, envApiKeyAuth }, { openaiProvider }, { anthropicProvider }, openaiResponsesApi, anthropicMessagesApi] = await Promise.all([
 		import("@earendil-works/pi-ai"),
 		import("@earendil-works/pi-ai/providers/openai"),
@@ -159,7 +159,7 @@ async function registryLiveCatalogue(models, codex) {
 		state.fetch = Promise.resolve().then(() => codex.listModels()).then((result) => {
 			state.models = liveModelsCodex(result);
 			return state.models;
-		}).catch(() => []);
+		}).catch(() => { state.fetch = null; return []; });
 	}
 	return state.fetch;
 }
@@ -194,7 +194,7 @@ async function registryLiveCliproxy(models, apiKey) {
 			return new Map((Array.isArray(body?.data) ? body.data : [])
 				.map((entry) => typeof entry === "string" ? [entry, undefined] : [entry?.id, typeof entry?.owned_by === "string" ? entry.owned_by : undefined])
 				.filter(([id]) => id));
-		}).catch(() => null);
+		}).catch(() => { state.cliproxyFetch = null; return null; });
 	}
 	return state.cliproxyFetch;
 }

@@ -338,7 +338,7 @@
 	flex-direction: column;
 	gap: var(--agent-space-3);
 	flex: none;
-	max-height: 46%;
+	max-height: 70%;
 	overflow-y: auto;
 	padding: var(--agent-space-4);
 	border-bottom: 1px solid var(--agent-border);
@@ -443,6 +443,26 @@
 	margin: 0;
 	color: var(--agent-alert);
 	font-size: var(--agent-font-sm);
+}
+
+/* A key saved without being checked (offline), and where a server address comes from. */
+.agent-key-note {
+	margin: 0;
+	color: var(--agent-text-dim);
+	font-size: var(--agent-font-sm);
+}
+
+/* CLIProxyAPI's server address, above its key. */
+.agent-key-endpoint {
+	display: flex;
+	flex-direction: column;
+	gap: var(--agent-space-2);
+}
+
+.agent-key-endpoint-label {
+	color: var(--agent-text-dim);
+	font-size: var(--agent-font-xs);
+	letter-spacing: 0.04em;
 }
 
 /* --- transcript -------------------------------------------------------- */
@@ -798,6 +818,9 @@
 	font-size: var(--agent-font-md);
 	line-height: 1.55;
 }
+
+/* The second way in on the signed-out card: a key or a server of one's own. */
+.agent-state-card .agent-use-key { align-self: center; }
 
 .agent-primary-button {
 	align-self: center;

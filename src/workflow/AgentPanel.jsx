@@ -24,7 +24,6 @@ import {
 	clampPanelWidth,
 	createAgentTransport,
 	panelPresentation,
-	providerEnvLabel,
 	requestHostImageAction,
 	resolveToolLabel,
 	formatElapsed,
@@ -41,6 +40,7 @@ import {
 } from "./agent-client.js";
 import "./agent-panel.css";
 import { AgentProgressCard } from "./AgentProgressCard.jsx";
+import { ProviderKeyRow } from "./ProviderKeys.jsx";
 
 function relativeTime(value, now = Date.now()) {
 	const at = Date.parse(value || "");
@@ -244,69 +244,15 @@ const RECOVERY_COPY = {
 	new_intent: "Tell the agent what to do with the changed target.",
 	reconcile: "The result is unknown; reconcile before changing this target.",
 	sign_in: "Sign in again to continue.",
+	fix_key: "Check or replace the key in Provider keys, then retry.",
 };
 
-function FailureCard({ failure, onRetry }) {
+function FailureCard({ failure, onRetry, onFixKey }) {
 	return <div className="agent-card agent-failure-card" data-failure-code={failure.code} role="alert">
 		<div className="agent-failure-head"><FiAlertTriangle size={12} aria-hidden="true" /><span className="agent-failure-code">{failure.code}</span></div>
 		<p className="agent-failure-message">{failure.message || "The command did not complete."}</p>
 		<p className="agent-failure-recovery">{RECOVERY_COPY[failure.recovery?.action] || RECOVERY_COPY.none}{failure.preserved?.authoredState === "unchanged" ? " Nothing in the scene changed." : failure.preserved?.authoredState === "unknown" ? " Whether the scene changed is unknown." : ""}</p>
-		{failure.recovery?.retryAllowed && <div className="agent-error-actions"><button type="button" className="agent-ghost-button agent-error-retry" onClick={onRetry}>Retry</button></div>}
-	</div>;
-}
-
-// One provider's credential row. The key lives in this component and nowhere
-// else: it is typed into a password field, handed to the transport once and
-// dropped the moment the sidecar accepts it, so no store, no transcript and no
-// screenshot can ever carry it. The sidecar answers with the SOURCE of a key
-// (env / file), never with a key, which is what the row reports.
-function ProviderKeyRow({ provider, onSave, onRemove }) {
-	const [draft, setDraft] = useState("");
-	const [busy, setBusy] = useState(false);
-	const [error, setError] = useState("");
-	const fromEnv = provider.authSource === "env";
-	const fromFile = provider.authSource === "file";
-	const envLabel = `set by ${providerEnvLabel(provider.id)}`;
-	const inputId = `agent-key-${provider.id}`;
-	const run = async (action) => {
-		setBusy(true);
-		setError("");
-		try {
-			await action();
-			// The key is gone from the page the instant it is stored.
-			setDraft("");
-		} catch (failure) {
-			// The sidecar's own refusal, which never quotes key material.
-			setError(failure?.message || "The sidecar refused that key.");
-		} finally {
-			setBusy(false);
-		}
-	};
-	return <div className="agent-key-row" data-provider={provider.id} data-provider-source={provider.authSource || "none"} data-provider-signed-in={provider.signedIn ? "true" : "false"}>
-		<div className="agent-key-head">
-			<StatusDot tone={provider.signedIn ? "ok" : ""} title={provider.signedIn ? "key configured" : "no key"} />
-			<label className="agent-key-label" htmlFor={inputId}>{provider.label}</label>
-			{/* The head states WHERE the key lives in two words; the variable's own
-			    name belongs on the input it replaces, where there is room for it. */}
-			<span className="agent-key-source">{fromEnv ? "environment" : fromFile ? "saved on this machine" : "no key"}</span>
-		</div>
-		<div className="agent-key-controls">
-			<input
-				id={inputId}
-				className="agent-key-input"
-				type="password"
-				autoComplete="off"
-				spellCheck="false"
-				aria-label={`${provider.label} API key`}
-				placeholder={fromEnv ? envLabel : provider.signedIn ? "Replace key" : "Paste API key"}
-				disabled={fromEnv || busy}
-				value={draft}
-				onChange={(event) => { setDraft(event.target.value); setError(""); }}
-			/>
-			<button type="button" className="agent-key-save" disabled={fromEnv || busy || !draft.trim()} onClick={() => run(() => onSave(provider.id, draft))}>Save</button>
-			{fromFile && <button type="button" className="agent-ghost-button agent-key-remove" disabled={busy} onClick={() => run(() => onRemove(provider.id))}>Remove</button>}
-		</div>
-		{error && <p className="agent-key-error" role="alert">{error}</p>}
+		{failure.recovery?.retryAllowed && <div className="agent-error-actions">{failure.recovery.action === "fix_key" && onFixKey && <button type="button" className="agent-ghost-button agent-error-keys" onClick={onFixKey}>Provider keys</button>}<button type="button" className="agent-ghost-button agent-error-retry" onClick={onRetry}>Retry</button></div>}
 	</div>;
 }
 
@@ -796,9 +742,21 @@ export default function AgentPanel({
 		readProviders();
 	}, [keysOpen, readProviders]);
 	const saveProviderKey = useCallback(async (id, key) => {
-		await transport.setProviderKey(id, key);
+		const result = await transport.setProviderKey(id, key);
+		await refreshProviderState();
+		return result;
+	}, [refreshProviderState, transport]);
+	const saveProviderEndpoint = useCallback(async (id, url) => {
+		await transport.setProviderEndpoint(id, url);
 		await refreshProviderState();
 	}, [refreshProviderState, transport]);
+	// Opens (never toggles) the keys section: the signed-out card and a refused key both lead here.
+	const openProviderKeys = useCallback(() => {
+		setMenuOpen(false);
+		setKeysOpen(true);
+		setProvidersState("loading");
+		readProviders();
+	}, [readProviders]);
 	const removeProviderKey = useCallback(async (id) => {
 		await transport.removeProviderKey(id);
 		await refreshProviderState();
@@ -919,7 +877,7 @@ export default function AgentPanel({
 					</div>}
 					<button type="button" role="menuitem" onClick={clearContext}>Clear context</button>
 					<button type="button" role="menuitem" className="agent-menu-keys" aria-expanded={keysOpen} onClick={toggleProviderKeys}>Provider keys…</button>
-					<button type="button" role="menuitem" onClick={signOut}>Sign out</button>
+					{account?.signedIn && <button type="button" role="menuitem" onClick={signOut}>Sign out</button>}
 				</div>}
 			</span>
 			{!embedded && <button type="button" className="agent-icon-button agent-collapse" onClick={() => setCollapsed(true)} aria-label="Collapse agent panel" title="Collapse agent panel (Cmd/Ctrl+B)"><FiChevronRight size={13} /></button>}
@@ -938,14 +896,15 @@ export default function AgentPanel({
 			<p className="agent-keys-hint">Keys are stored by the local CozyClay service and are never shown again.</p>
 			{providersState === "loading" && <p className="agent-keys-note">Loading providers…</p>}
 			{providersState === "failed" && <p className="agent-keys-note alert" role="alert">The provider list is unavailable.</p>}
-			{providers.filter((entry) => entry.id !== "openai-codex").map((entry) => <ProviderKeyRow key={entry.id} provider={entry} onSave={saveProviderKey} onRemove={removeProviderKey} />)}
+			{providers.filter((entry) => entry.id !== "openai-codex").map((entry) => <ProviderKeyRow key={entry.id} provider={entry} onSave={saveProviderKey} onRemove={removeProviderKey} onEndpoint={saveProviderEndpoint} />)}
 		</section>}
 
 		<div className="agent-transcript" ref={transcriptRef} aria-live="polite" aria-label="Conversation" data-agent-transcript="true">
 			{authState === "signed-out" && <div className="agent-state-card" data-agent-card="signed-out">
-				<h3>Sign in with ChatGPT</h3>
-				<p>The agent runs against your ChatGPT plan. Sign-in happens in your browser — no token is ever stored in this page.</p>
+				<h3>Connect a model</h3>
+				<p>The agent runs against your ChatGPT plan, an API key (Anthropic, OpenAI, Google Gemini, OpenRouter) or your own CLIProxyAPI server. ChatGPT sign-in happens in your browser — no token is ever stored in this page.</p>
 				<button type="button" className="agent-primary-button agent-signin" onClick={signIn}>Sign in with ChatGPT</button>
+				<button type="button" className="agent-ghost-button agent-use-key" onClick={openProviderKeys}>Use an API key or your own server</button>
 			</div>}
 
 			{authState === "signing-in" && <div className="agent-state-card" data-agent-card="signing-in">
@@ -979,7 +938,7 @@ export default function AgentPanel({
 				if (item.kind === "tool") return <div className="agent-row" key={item.id}><ToolCallCard call={item} presentation={presentation} onRetry={() => runTurn(chat.lastPrompt)} /></div>;
 				if (item.kind === "job") return <div className="agent-row" key={item.id}><JobCard job={item} onStop={stopTurn} onAccept={(job) => store.acceptJob(job.jobId)} /></div>;
 				if (item.kind === "receipt") return <div className="agent-row" key={item.id}><ReceiptCard item={item} /></div>;
-				if (item.kind === "failure") return <div className="agent-row" key={item.id}><FailureCard failure={item.failure} onRetry={() => runTurn(chat.lastPrompt)} /></div>;
+				if (item.kind === "failure") return <div className="agent-row" key={item.id}><FailureCard failure={item.failure} onRetry={() => runTurn(chat.lastPrompt)} onFixKey={openProviderKeys} /></div>;
 				if (item.kind === "supervisor") return <div className="agent-row" key={item.id}><SupervisorCard note={item} onSend={(text) => { store.setDraft(text); runTurn(text); }} /></div>;
 				return <div className="agent-row" key={item.id}><ImageResultCard image={item} onUse={(image) => store.applyImage(image.id)} onUndo={(image) => store.undoImage(image.id)} onRegenerate={() => runTurn(chat.lastPrompt)} onOpen={setLightbox} /></div>;
 			})}

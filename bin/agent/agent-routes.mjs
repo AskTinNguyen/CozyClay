@@ -10,6 +10,7 @@ import { createAgentTools, SYSTEM_PROMPT, pickWorkspace } from "./agent-tools.mj
 import { createVideoAdapters, validateFalVideoRequest } from "./video-adapters.mjs";
 import { createSessionStore, transcriptFromHistory } from "./session-store.mjs";
 import { createAgentRunner } from "./agent-runner.mjs";
+import { handleProviderRoute } from "./provider-routes.mjs";
 import { STUDIO_SYSTEM_PROMPT_STORYBOARD } from "./studio-prompt.mjs";
 
 // Values the codex backend accepts for reasoning.effort (its own 400 lists them).
@@ -346,7 +347,7 @@ function liveToolsRuntime(mcpRuntime) {
 // `supervisor` (#728) defaults off only under an injected scripted provider:
 // a test's script is an exact queue of replies, and a review would take one
 // meant for a later turn. The real sidecar never injects one.
-export function createAgentHandler({ auth = defaultAuth, codex, models, codexBaseUrl, cliproxyBaseUrl, env, fauxProvider, handlers, liveHub, mcpRuntime, port, studioRuntime, clock = Date.now, setIntervalImpl = setInterval, clearIntervalImpl = clearInterval, sessionStore: injectedSessionStore, supervisor = !fauxProvider } = {}) {
+export function createAgentHandler({ auth = defaultAuth, codex, models, codexBaseUrl, cliproxyBaseUrl, env, verifyKey, fauxProvider, handlers, liveHub, mcpRuntime, port, studioRuntime, clock = Date.now, setIntervalImpl = setInterval, clearIntervalImpl = clearInterval, sessionStore: injectedSessionStore, supervisor = !fauxProvider } = {}) {
 	const requestContext = new AsyncLocalStorage();
 	codex ||= defaultClient(auth, requestContext);
 	const runtime = handlers !== undefined || liveHub !== undefined ? Promise.resolve({ handlers: handlers ?? [], liveHub }) : liveToolsRuntime(mcpRuntime);
@@ -429,8 +430,8 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 		if (["done", "error", "receipt"].includes(value.type)) record.terminal = true;
 		studioEvents.set(turnId, record); for (const listener of [...record.listeners]) listener(value);
 	};
-	const unsubscribe = auth.onAuthChange?.(({ kind }) => {
-		if (kind !== "signed_out" && kind !== "replaced") return;
+	// A sign-out, another account, or a provider key or server address that changed: the registry and every runner on it go.
+	const resetRegistry = () => {
 		for (const session of sessions.values()) session.controller?.abort();
 		for (const session of studioSessions.values()) session.controller?.abort();
 		for (const runner of [...workflowRunners.values(), ...studioRunners.values()]) void runner.close?.();
@@ -438,7 +439,8 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 		workflowModels = models;
 		workflowModelsPromise = models ? Promise.resolve(models) : null;
 		sessions.clear(); studioSessions.clear(); studioEvents.clear(); studioOwnerTokens.clear();
-	});
+	};
+	const unsubscribe = auth.onAuthChange?.(({ kind }) => { if (kind === "signed_out" || kind === "replaced") resetRegistry(); });
 
 	const studioIdentity = host => Object.fromEntries(["workspaceId", "documentEpoch", "sceneId", "sceneEpoch"].map(key => [key, host[key]]));
 	const writeStudioStream = (res, record, after = 0) => {
@@ -737,35 +739,7 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 			await session.modelSession.steer(value.text, images);
 			json(res, 200, { ok: true, queued: true }); return true;
 		}
-		if (path === "/agent/providers" && req.method === "GET") {
-			const { providerStatus } = await import("./providers.mjs");
-			try { json(res, 200, { providers: providerStatus({ auth }) }); }
-			catch { json(res, 500, { error: "provider credentials unavailable" }); }
-			return true;
-		}
-		if (/^\/agent\/providers\/[^/]+$/.test(path) && ["PUT", "DELETE"].includes(req.method)) {
-			const { PROVIDERS } = await import("./providers.mjs");
-			const keys = await import("./provider-keys.mjs");
-			const { createCredentialStore } = await import("./credential-store.mjs");
-			const id = path.slice("/agent/providers/".length);
-			if (!PROVIDERS.some((provider) => provider.id === id)) { json(res, 404, { error: "provider not found" }); return true; }
-			const credentials = createCredentialStore({ auth, keys });
-			let key;
-			if (req.method === "PUT") {
-				if (id === "openai-codex") { json(res, 400, { error: "Use ChatGPT sign-in for OpenAI Codex." }); return true; }
-				try {
-					const value = await readBody(req);
-					if (typeof value?.key !== "string" || !value.key.trim()) throw new Error("Invalid key.");
-					key = value.key.trim();
-				} catch { json(res, 400, { error: "a non-empty API key is required" }); return true; }
-			}
-			try {
-				if (req.method === "PUT") await credentials.modify(id, async () => ({ type: "api_key", key }));
-				else await credentials.delete(id);
-				json(res, 200, { ok: true });
-			} catch { json(res, 500, { error: "provider credentials could not be saved" }); }
-			return true;
-		}
+		if (await handleProviderRoute(req, res, path, { auth, env, json, readBody, verifyKey, onChange: resetRegistry })) return true;
 		if (path === "/agent/sessions" && req.method === "GET") {
 			const surface = new URL(req.url, "http://127.0.0.1").searchParams.get("surface") || undefined;
 			try { json(res, 200, { sessions: sessionStore.list({ surface }) }); }

@@ -8,6 +8,8 @@ import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 
 const panel = readFileSync(new URL("../src/workflow/AgentPanel.jsx", import.meta.url), "utf8");
+// The provider key row moved to ProviderKeys.jsx (first-run pass); its checks read that file.
+const keyRow = readFileSync(new URL("../src/workflow/ProviderKeys.jsx", import.meta.url), "utf8");
 const client = readFileSync(new URL("../src/workflow/agent-client.js", import.meta.url), "utf8");
 const css = readFileSync(new URL("../src/workflow/agent-panel.css", import.meta.url), "utf8");
 const builder = readFileSync(new URL("../src/workflow/WorkflowBuilder.jsx", import.meta.url), "utf8");
@@ -348,15 +350,15 @@ expect("the error mock fails a tool call", failed.some((event) => event.type ===
 expect("the overflow menu offers Provider keys…", panel.includes('className="agent-menu-keys"') && panel.includes("Provider keys…"));
 expect("the menu item opens an inline section, never a modal", panel.includes('<section className="agent-keys"') && !/role="dialog"/.test(panel));
 expect("the section opens from the menu and closes in place", panel.includes("toggleProviderKeys") && panel.includes("agent-keys-close"));
-expect("every listed provider gets a status dot and the source of its key", panel.includes("function ProviderKeyRow")
-	&& panel.includes('<StatusDot tone={provider.signedIn ? "ok" : ""}') && panel.includes('className="agent-key-source"'));
+expect("every listed provider gets a status dot and the source of its key", keyRow.includes("export function ProviderKeyRow") && panel.includes('import { ProviderKeyRow } from "./ProviderKeys.jsx"')
+	&& keyRow.includes('<KeyDot tone={provider.signedIn ? "ok" : ""}') && keyRow.includes('className="agent-key-source"'));
 expect("ChatGPT is never offered as an API-key provider", panel.includes('providers.filter((entry) => entry.id !== "openai-codex")'));
-expect("the key input is a password field", /className="agent-key-input"[\s\S]{0,240}type="password"/.test(panel) && !/agent-key-input[\s\S]{0,240}type="text"/.test(panel));
-expect("an env-backed provider names the variable on the input it refuses", panel.includes("set by ${providerEnvLabel(provider.id)}")
-	&& panel.includes("placeholder={fromEnv ? envLabel") && panel.includes("disabled={fromEnv || busy}"));
-expect("Remove exists only for a key this machine stores", panel.includes("{fromFile && <button") && panel.includes("agent-key-remove"));
-expect("a refused write is reported under the input it belongs to", /setError\(failure\?\.message/.test(panel) && panel.includes('className="agent-key-error"'));
-expect("the key leaves the page the moment the sidecar accepts it", /await action\(\);[\s\S]{0,160}setDraft\(""\)/.test(panel));
+expect("the key input is a password field", /aria-label=\{`\$\{provider\.label\} API key`\}/.test(keyRow) && /className="agent-key-input"\n\t+type="password"/.test(keyRow) && !/agent-key-input[\s\S]{0,240}type="text"/.test(keyRow));
+expect("an env-backed provider names the variable on the input it refuses", keyRow.includes("set by ${providerEnvLabel(provider.id)}")
+	&& keyRow.includes("placeholder={fromEnv ? envLabel") && keyRow.includes("disabled={fromEnv || busy}"));
+expect("Remove exists only for a key this machine stores", keyRow.includes("{fromFile && <button") && keyRow.includes("agent-key-remove"));
+expect("a refused write is reported under the input it belongs to", /setError\(failure\?\.message/.test(keyRow) && keyRow.includes('className="agent-key-error"'));
+expect("the key leaves the page the moment the sidecar accepts it", /await action\(\);[\s\S]{0,160}setDraft\(""\)/.test(keyRow));
 expect("a saved or removed key re-reads the providers AND the models", /const refreshProviderState = useCallback\(async \(\) => \{[\s\S]{0,200}await readProviders\(\);[\s\S]{0,200}transport\.models\(\)/.test(panel)
 	&& /setProviderKey\(id, key\);\n\t\tawait refreshProviderState\(\)/.test(panel) && /removeProviderKey\(id\);\n\t\tawait refreshProviderState\(\)/.test(panel));
 expect("the transport owns the three provider routes", client.includes("async providers()") && client.includes("async setProviderKey(id, key)") && client.includes("async removeProviderKey(id)"));
