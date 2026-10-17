@@ -30,7 +30,7 @@ export function walkTo(ctx) {
 	const { args, state } = ctx;
 	if (!state.foot_l || !state.foot_r || !state.root) skillError(ctx.tag, "needs a standing pose keyed before f0 (use standIdle or another skill first)");
 	const gen = { type: "walk", f0: ctx.f0, ...args };
-	delete gen.to;
+	delete gen.to; delete gen.arrive;
 	const h0 = state.yaw ?? 0, step = args.step ?? 0.5, first = args.firstStep ?? 0.4;
 	if (args.to) {
 		const c0 = [(state.foot_l[0] + state.foot_r[0]) / 2, (state.foot_l[2] + state.foot_r[2]) / 2];

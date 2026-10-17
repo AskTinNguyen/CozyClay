@@ -6,6 +6,7 @@ import { createTakeEdit, isIdentityEdit, remapFrameKeys, removeSegment, renderTa
 	takeEditDuration, takeEditLayout, timelineToSource, trimTakeEdit } from "../../src/motion3/take-edit.js";
 import { compileTakeSource, normalizeTakeSource, savedTakeSource } from "../../src/domains/motion/take-source.js";
 import { skeletonFor } from "../../src/motion3/rigs/index.js";
+import { carryEdit } from "../../src/motion3/edit-carry.js";
 
 let failures = 0;
 function expect(name, condition, detail = "") {
@@ -76,7 +77,9 @@ expect("a broken edit is dropped on load, the take still loads", normalizeTakeSo
 // --- the commands through the registry ------------------------------------------------------------
 const rows = new Map([["char-1", { id: "char-1", take: { resourceId: "r1", frames: 96, source }, ikKeys: [{ frame: 60, tracks: {} }] }]]);
 let synced = 0;
-const owner = { layer: id => rows.get(id), writeLayer: (id, patch) => rows.set(id, { ...rows.get(id), ...patch }), fullMotionFor: id => (rows.get(id)?.take ? compiled : null), motionFor: () => compiled };
+// replace: an install puts a new take without an edit and drops the IK keys, as the motion domain does
+const owner = { layer: id => rows.get(id), writeLayer: (id, patch) => rows.set(id, { ...rows.get(id), ...patch }), fullMotionFor: id => (rows.get(id)?.take ? compiled : null), motionFor: () => compiled,
+	replace: (id, take) => rows.set(id, { id, take: { resourceId: "r2", frames: take.frames, source }, ikKeys: [] }) };
 const ports = { state: () => ({ characters: [{ id: "char-1", model: "x-bot-tpose", x: 0, y: 0, z: 0, rot: 0, scale: 1 }], objects: [], frameCount: 96 }),
 	storeDomain: name => (name === "motion" ? owner : name === "cast" ? { syncTimeline: () => { synced += 1; } } : null) };
 const registry = createStudioAppActions(ports), run = (id, args) => registry.run(id, args);
@@ -93,6 +96,17 @@ r = run("motion.resetTiming", { characterId: "char-1" });
 expect("motion.resetTiming restores the compiled timing and clears the edit", r.output.frames === 96 && rows.get("char-1").take.edit === undefined);
 r = run("motion.trim", { characterId: "char-1", start: 10, end: 69 });
 expect("motion.trim keeps the range", r.output.frames === 60 && rows.get("char-1").take.edit[0].sourceStart === 10);
+
+// --- a recompile keeps the timing edit of the take it replaces (edit-carry.js) ----------------------
+const edited = setSegmentSpeed(splitTakeEdit(createTakeEdit(96), 40), "motion-0-b", 0.5);
+expect("the same frame count keeps the edit as it is", JSON.stringify(carryEdit(edited, 96, 96)?.edit) === JSON.stringify(edited) && /kept the timing edit/.test(carryEdit(edited, 96, 96).note));
+const longer = carryEdit(edited, 96, 120)?.edit, shorter = carryEdit(edited, 96, 30);
+expect("a longer take: the segment that ran to the end runs to the new end", longer?.[1].sourceEnd === 119 && longer[1].speed === 0.5 && longer[0].sourceEnd === 39, JSON.stringify(longer));
+expect("a shorter take: segments past the end drop out, and an edit left as the plain take is dropped with a note", shorter?.edit === null && /dropped the timing edit/.test(shorter.note), JSON.stringify(shorter));
+expect("no edit, or the plain take, carries nothing", carryEdit(undefined, 96, 96) === null && carryEdit(createTakeEdit(96), 96, 96) === null);
+r = run("motion.compile", { characterId: "char-1", spec: source.spec });
+expect("motion.compile installs the new take with the trim kept, and says so in the receipt", JSON.stringify(rows.get("char-1").take.edit) === JSON.stringify([{ id: "motion-0-t10", sourceStart: 10, sourceEnd: 69, speed: 1 }])
+	&& /kept the timing edit .*motion\.resetTiming/.test(r.output.timing ?? ""), JSON.stringify([rows.get("char-1").take.edit, r.output.timing]));
 
 if (failures) { console.error(`${failures} timing check(s) failed`); process.exit(1); }
 console.log("all timing checks passed");

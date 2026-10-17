@@ -110,7 +110,7 @@ expect("essentials: a goal is a list entry with one of near|above|moved|still|sp
 expect("essentials: objects maps an id to a hinge or a carry", /hinge \{pivot: vec3.*\| carry \{prop: string/.test(ess.types.objects), ess.types.objects);
 expect("essentials: the notes say how to read a whole topic or one skill", /motion\.describe \{ topic \}/.test(ess.notes.join()) && /'skills', name/.test(ess.notes.join()));
 expect("essentials: the spec line names the topic lines, the walk generator the walkTo args", /anchors\?: anchors, props\?: props\.props, fits\?: props\.fits, objects\?: objects/.test(ess.types.spec)
-	&& ess.types.walk === "{type: 'walk', f0: int, heading?: [number, number], ...walkTo args but to}", `${ess.types.spec}\n${ess.types.walk}`);
+	&& ess.types.walk === "{type: 'walk', f0: int, heading?: [number, number], ...walkTo args but to, arrive}", `${ess.types.spec}\n${ess.types.walk}`);
 // Round 2 (three live sessions): after essentials every run read skills reachGrip, objects and channels.
 // Each meaning those answers gave (a field's description, but a bare unit) is in essentials, verbatim or as
 // "<head>, as <field>" where its tail repeats an earlier field's; so do the carry example and its no-jump note.

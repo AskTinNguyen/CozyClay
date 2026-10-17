@@ -21,6 +21,7 @@ import { fitOutput, reportPage } from "../motion3/report.js";
 import { keyObject } from "../motion3/key-edit.js";
 import { expandUse } from "../motion3/skills/index.js";
 import { publishDraft } from "../agent-progress.js";
+import { carryEdit } from "../motion3/edit-carry.js";
 
 const TIMELINE_FPS = 24;
 const id = { type: "string", minLength: 1 };
@@ -101,10 +102,23 @@ export function register(registry, ports) {
 		return fitOutput({ ...head, specId: specIdValue, qa: r.qa, observations: r.observations, ...extra, ...(r.probes ? { probes: r.probes } : {}), timeline: r.timeline,
 			fixed: r.fixed, ...(r.search ? { search: r.search } : {}), ...(r.used.length ? { skills: r.used } : {}), ms: r.ms });
 	};
-	/** The take of compile result r on the character, installed as one undo entry. */
+	/**
+	 * The take of compile result r on the character, installed as one undo entry; put() keeps the timing edit of the take
+	 * it replaces (edit-carry.js) and returns what it did with it (a note for the receipt), or undefined.
+	 */
 	const installOf = (character, r, label, context) => {
 		const take = bakeTake(r.sk, r.out, { position: [character.x ?? 0, character.y ?? 0, character.z ?? 0], yaw: character.rot ?? 0 }, { spec: r.stored, prompt: label ?? "" });
-		return { take, put: () => { const apply = () => owner().replace(character.id, { ...take, frames: take.frameCount }); if (context?.commit) context.commit(apply); else apply(); } };
+		return { take, put: () => {
+			let note;
+			const apply = () => {
+				const id = character.id, edit = owner().layer?.(id)?.take?.edit, full = edit && owner().fullMotionFor?.(id), carried = full && carryEdit(edit, full.frames ?? full.frameCount, take.frameCount);
+				owner().replace(id, { ...take, frames: take.frameCount });
+				if (carried?.edit) { owner().writeLayer(id, { take: { ...owner().layer(id).take, edit: carried.edit } }); ports.storeDomain("cast")?.syncTimeline?.(); }
+				note = carried?.note;
+			};
+			if (context?.commit) context.commit(apply); else apply();
+			return note;
+		} };
 	};
 	const installed = characterId => owner().motionFor(characterId)?.schema === "cozyclay.take.v3" ? owner().motionFor(characterId)
 		: fail("TARGET_NOT_READY", "This character has no compiled take; run motion.compile first.");
@@ -120,18 +134,18 @@ export function register(registry, ports) {
 		const r = fixed.result, { out, qa } = r;
 		// ifClean: install only a clean final result (qa.ok includes the goals; after repair when asked)
 		const wanted = install === "ifClean" ? qa.ok : install;
-		let installs = wanted, kept = false;
+		let installs = wanted, kept = false, timing;
 		// open ranges are stored with the values the search chose, so motion.qa re-measures this take
 		const { take, put } = installOf(character, r, fixed.spec.label, context);
 		if (wanted) {
 			// ifClean of the take already installed changes nothing (no undo entry; IK edits on it stay)
 			kept = install === "ifClean" && sameTake(owner().motionFor(characterId), take);
 			installs = !kept;
-			if (installs) put();
+			if (installs) timing = put();
 		}
 		const delta = base === undefined ? {} : { delta: deltaOf(store.parts(base)?.groups ?? [], qa.groups, base) };
 		const how = kept ? "; already installed, unchanged" : install === "ifClean" ? (installs ? "; installed" : "; not installed") : "";
-		const output = report(r, { frames: out.frameCount, fps: TIMELINE_FPS, installed: wanted }, { ...delta, ...(fixed.repair ? { repair: fixed.repair } : {}) });
+		const output = report(r, { frames: out.frameCount, fps: TIMELINE_FPS, installed: wanted }, { ...delta, ...(fixed.repair ? { repair: fixed.repair } : {}), ...(timing ? { timing } : {}) });
 		// the user watches every draft, installed or not (agent-progress.js: viewport ghost, timeline beats, agent panel)
 		publishDraft(characterId, { take, installed: installs || kept, specId: output.specId, label: fixed.spec.label ?? null, qa, timeline: r.timeline });
 		return { affectedIds: installs ? [characterId] : [], summary: `Compiled ${out.frameCount} frames; QA ${qa.ok ? "clean" : `${qa.total} issues`}${how}.`, output };
@@ -174,8 +188,8 @@ export function register(registry, ports) {
 		const character = characterOf(ports, characterId), take = installed(characterId), scene = motionScene(ports.state().objects);
 		const { spec, keyed } = asArgument(() => keyObject(take.spec, scene, args, expandUse(take.spec, { sk: rigOf(character), scene, lenient: true }).spec.objects));
 		const r = compile(character, spec, { lenient: true });
-		installOf(character, r, take.prompt, context).put();
+		const timing = installOf(character, r, take.prompt, context).put();
 		return { affectedIds: [characterId], summary: `${keyed.removed ? "Removed the key of" : "Keyed"} ${keyed.objectId} at f${keyed.f}; QA ${r.qa.ok ? "clean" : `${r.qa.total} issues`}; installed.`,
-			output: report(r, { frames: r.out.frameCount, fps: TIMELINE_FPS, installed: true, keyed }) };
+			output: report(r, { frames: r.out.frameCount, fps: TIMELINE_FPS, installed: true, keyed }, timing ? { timing } : {}) };
 	} });
 }

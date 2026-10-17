@@ -76,12 +76,16 @@ export function keyedPose({ t, p, q, m, w }, f) {
 	return { pos, R: matFromQuat(qmul(q[i], qexp(v))) };
 }
 
-/** 0..1: how much the keys lead the hand at absolute frame f (1 from the first to the last key). */
+/**
+ * 0..1: how much the keys lead the hand at absolute frame f (1 from the first to the last key).
+ * After the last key the hand eases out over KEY_BLEND frames even when the release comes sooner:
+ * the rest of the ease runs past the release (holdHook easeOut), so the arm does not snap.
+ */
 function leadWeight(curve, [grab, release], f) {
 	const t0 = curve.t[0], t1 = curve.t[curve.t.length - 1];
 	if (f < grab || f > release) return 0;
 	if (f >= t0 && f <= t1) return 1;
-	const b = f < t0 ? Math.min(KEY_BLEND, t0 - grab) : Math.min(KEY_BLEND, release - t1), gap = f < t0 ? t0 - f : f - t1;
+	const b = f < t0 ? Math.min(KEY_BLEND, t0 - grab) : KEY_BLEND, gap = f < t0 ? t0 - f : f - t1;
 	return b > 0 && gap < b ? smooth(1 - gap / b) : 0;
 }
 
@@ -199,15 +203,27 @@ export function holdHook(ctx, out, solvePlain, solveLed) {
 		const h = heldAt(id, o, f);
 		return { w: 1, palm: h ? { pos: add(scale(grip.pos, 1 - h.w), scale(h.palm.pos, h.w)), R: between(grip.R, h.palm.R, h.w) } : grip, measure, pole };
 	};
+	// a release within KEY_BLEND frames of the last key: the hands finish easing out of the keys after it (weight from the last
+	// key), the holding hand from the palm they gave it at the release (the object stays where it was let go), each hand with
+	// the elbow pole (and the second hand the roll) planned for the release frame
+	const pastRelease = (id, o, f) => {
+		const curve = curveIn(out, id), t1 = curve.t[curve.t.length - 1], release = spanIn(out, o)[1];
+		return f > release && f - t1 < KEY_BLEND ? { curve, release, w: smooth(1 - (f - t1) / KEY_BLEND) } : null;
+	};
+	const easeOut = (id, o, f) => {
+		const e = pastRelease(id, o, f);
+		return e && { w: e.w, palm: compose(keyedPose(e.curve, e.release), invert(attach(id))), measure: s => palmOf(o, s), pole: planOf(id, o).get(e.release) };
+	};
 	// the hand that holds a keyed carry follows its keys
 	const lead = (k, f, s, c) => {
 		for (const [id, o] of held) {
-			const pre = spec.props?.[o.prop]?.hand === k ? gripAround(id, o, f) : null;
+			const pre = spec.props?.[o.prop]?.hand === k ? gripAround(id, o, f) ?? easeOut(id, o, f) : null;
 			if (pre) return pre;
 			const h = spec.props?.[o.prop]?.hand === k ? heldAt(id, o, f) : null;
 			if (h) return { ...h, pole: planOf(id, o).get(f) };
-			const w = k === "l" && s && !planning ? leadWeight(curveIn(out, id), spanIn(out, o), f) : 0, grip = w > 0 ? gripAt(id, s, c) : null;
-			const planned = grip && rollsOf(id, o).get(f), roll = planned?.roll ?? grip?.softmin();
+			const after = k === "l" && s && !planning ? pastRelease(id, o, f) : null;
+			const w = k === "l" && s && !planning ? leadWeight(curveIn(out, id), spanIn(out, o), f) || (after?.w ?? 0) : 0, grip = w > 0 ? gripAt(id, s, c) : null;
+			const planned = grip && rollsOf(id, o).get(after ? after.release : f), roll = planned?.roll ?? grip?.softmin();
 			if (grip) return secondHold(grip, w, roll, planned?.gate ?? gripGate(grip, roll), planned?.pole ?? grip.arm(roll).best.pole);
 		}
 		return null;

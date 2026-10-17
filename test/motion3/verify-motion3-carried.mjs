@@ -115,5 +115,16 @@ const missed = compileSpec(keyedSpec(far), { sk: bsk, scene: bscene }), reach = 
 expect("QA reports what the wrist cannot reach: REACH \"cylinder: n cm off its keys\", caused by keys[2], the hint names the wrist limit", /^cylinder: [\d.]+ cm off its keys$/.test(reach?.subject)
 	&& reach.worst > 0.05 && reach.cause === "objects.cylinder.keys[2] f47" && /the wrist .* needs -?\d+deg \(limit/.test(reach.hint) && !missed.qa.ok, JSON.stringify(reach));
 
+// a release on the last key (or 2 frames after it): both hands ease out of the keys over KEY_BLEND frames past it, so the
+// arms do not snap to their plain pose at the release (they did: forearms 10-39 cm/f^2 in one frame, QA POP)
+for (const release of [53, 55]) {
+	const sp = keyedSpec(SWING_KEYS);
+	sp.objects[BAT].release = release;
+	const r = compileSpec(sp, { sk: bsk, scene: bscene }), P = (f, j) => r.out.frames[f].s.P[I[j]];
+	const acc = j => Math.max(...[0, 1, 2, 3].map(d => { const f = release + d; return len(sub(add(P(f, j), P(f - 2, j)), scale(P(f - 1, j), 2))); }));
+	expect(`a release at f${release} (last key f53): no pop, the forearms ease out (<= 6 cm/f^2)`, !r.qa.groups.some(g => g.kind === "POP") && acc("RightForeArm") <= 0.06 && acc("LeftForeArm") <= 0.06,
+		`${r.qa.groups.filter(g => g.kind === "POP").map(g => g.subject)} ${(acc("RightForeArm") * 100).toFixed(1)} ${(acc("LeftForeArm") * 100).toFixed(1)}`);
+}
+
 if (failures) { console.error(`${failures} carried-prop check(s) failed`); process.exit(1); }
 console.log("motion3 carried props: all checks passed");

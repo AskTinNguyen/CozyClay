@@ -12,6 +12,7 @@ import { createSpecStore } from "../../src/motion3/spec-store.js";
 import { motionScene } from "../../src/motion3/scene.js";
 import { skeletonFor } from "../../src/motion3/rigs/index.js";
 import { dist, add, apply, mul, ry } from "../../src/motion3/compiler/math.js";
+import { compileSpec as compilePipeline } from "../../src/motion3/pipeline.js";
 
 let failures = 0;
 function expect(name, condition, detail = "") {
@@ -96,6 +97,24 @@ store.put(structuredClone(autoRun.spec));
 const numberId = store.put({ ...exitcar(), frames: 720 });
 expect("spec store: a spec resolved from frames auto comes back as auto; the stored spec keeps the number",
 	autoRun.spec.frames === 705 && store.get(autoId)?.frames === "auto" && store.get(numberId)?.frames === 720, JSON.stringify({ stored: autoRun.spec.frames, auto: store.get(autoId)?.frames }));
+
+// walkTo { to, arrive }: the engine plans the cadence (walk-plan.js) instead of the agent sweeping period and step
+const walkBy = (args, before = { at: [0, 0], heading: 0 }) => compilePipeline({ schema: "cozyclay.motion-spec.v1", fps: 24, frames: "auto",
+	use: [{ skill: "standIdle", f0: 0, args: before }, { skill: "walkTo", f0: 1, args }] }, { sk, scene: motionScene([]) });
+const endOf = r => r.used.find(u => u.skill === "walkTo").end, planned = r => (r.observations.planned ?? []).join(" ");
+const by79 = walkBy({ to: [0.07, 2.0], arrive: 79 });
+expect("arrive f79 for 2 m: a clean walk planned to end by f79 (the cadence the agent of session 260c7529 found after five sweeps)",
+	by79.qa.total === 0 && endOf(by79) <= 79 && /^use\[1\] walkTo arrive f79: steps \d+, period \d+, swing \d+, step [\d.]+ m/.test(planned(by79)), `${by79.qa.total} f${endOf(by79)} ${planned(by79)}`);
+expect("the stored spec keeps arrive and no planned args (a recompile plans again)", by79.spec.use[1].args.arrive === 79 && by79.spec.use[1].args.steps === undefined && by79.spec.frames === endOf(by79) + 1);
+const by48 = walkBy({ to: [0.07, 2.0], arrive: 48 });
+expect("arrive f48 for 2 m is too soon: the earliest clean walk, and the note says why and what to give", by48.qa.total === 0 && endOf(by48) > 48 && /f48 is too soon: even the quickest walk .* ends f\d+; give arrive >= f\d+/.test(planned(by48)), planned(by48));
+const by140 = walkBy({ to: [0.07, 2.0], arrive: 140 });
+expect("arrive f140 for 2 m: a slower walk that uses the time (ends f130..f140, a step every 16+ frames)", by140.qa.total === 0 && endOf(by140) <= 140 && endOf(by140) >= 130 && /period (1[6-9]|2\d)/.test(planned(by140)), planned(by140));
+const turned = walkBy({ to: [3, 1.5], arrive: 100 }, { at: [1, 0], heading: 90 });
+expect("the distance is read where the feet stand at f0 (after another skill)", turned.qa.total === 0 && endOf(turned) <= 100 && endOf(turned) >= 90, `${planned(turned)}`);
+const fixed = walkBy({ to: [0.07, 2.0], arrive: 79, period: 12 });
+expect("explicit steps/period/step/swing win: no plan", fixed.observations.planned === undefined);
+expect("deterministic: the same request plans the same walk", planned(walkBy({ to: [0.07, 2.0], arrive: 79 })) === planned(by79));
 
 if (failures) { console.error(`${failures} motion3 skills check(s) failed`); process.exit(1); }
 console.log("motion3 skills: all checks passed");

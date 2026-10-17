@@ -26,6 +26,7 @@ import { canonicalGoals } from "./compiler/validate-goals.js";
 import { heldReadings, HELD_UNITS } from "./qa/key-checks.js";
 import { observeNear, NEAR_UNITS } from "./qa/near.js";
 import { observeWrist, WRIST_UNITS } from "./qa/wrist-obs.js";
+import { planWalks, applyWalkPlans } from "./walk-plan.js";
 
 const ms = t => Math.round(performance.now() - t);
 
@@ -62,14 +63,17 @@ export function compileSpec(sent, { sk, scene }, opts = {}) {
 	const { spec, probes: asked } = liftRequest(sent, opts.probes);
 	const t0 = performance.now(), ctx = { sk, scene, lenient: opts.lenient === true };
 	const checks = opts.checks && nameChecks({ checks: opts.checks }).checks;
+	let plans = [];
 	const expand = s => {
-		const { spec: exp, used } = expandUse(nameChecks(s), ctx);
+		const { spec: exp, used } = expandUse(nameChecks(applyWalkPlans(s, plans)), ctx);
 		// plain JSON objects compile about twice as fast as structuredClone'd ones (V8 shapes)
 		const full = JSON.parse(JSON.stringify(checks ? { ...exp, checks } : exp));
 		validateSpec(full, ctx);
 		return { full, used };
 	};
-	const framed = resolveFrames(spec, ctx), params = findParams(framed);
+	// a walkTo with arrive gets its cadence planned on probe compiles of the walk alone (walk-plan.js); the spec keeps arrive
+	plans = planWalks(spec, { sk, scene, trial: s => { const full = expand(s).full; return runMotionQa(sk, compileMotion({ fps: 24, ...full }, ctx), full, { explain: false }); } });
+	const framed = spec?.frames === "auto" && plans.length ? { ...spec, frames: resolveFrames(applyWalkPlans(spec, plans), ctx).frames } : resolveFrames(spec, ctx), params = findParams(framed);
 	let resolved = framed, search = null;
 	if (params.length) ({ spec: resolved, search } = searchParams(framed, params, ctx, s => expand(s).full));
 	// the store keeps the "auto" intent beside the resolved number (spec-store.js)
@@ -89,6 +93,7 @@ export function compileSpec(sent, { sk, scene }, opts = {}) {
 	if (paced.length) observations.paced = paced;
 	const cut = used.filter(u => u.cut).map(u => `${u.skill}: ${u.cut}`);
 	if (cut.length) observations.cut = cut;
+	if (plans.length) observations.planned = plans.map(p => p.note);
 	const timeline = timelineOf(out, { used, spec: expanded }), probes = asked && runProbes(out, asked, { spec: expanded, sk, scene });
 	return { out, qa, observations, spec: resolved, expanded, used, fixed: out.fixed, search, timeline, ...(probes ? { probes } : {}), ms: { compile: compileMs, qa: ms(t2), total: ms(t0) } };
 }
