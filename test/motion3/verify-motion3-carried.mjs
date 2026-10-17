@@ -40,7 +40,8 @@ expect("an unknown prop and a bad offset are refused by name", /objects\.Bad\.pr
 
 const out = compileMotion({ fps: 24, ...spec }, { sk, scene });
 const qa = runMotionQa(sk, out, spec);
-expect("the scene stays at QA 0 with two carried records", qa.ok && qa.total === 0, JSON.stringify(qa.groups.slice(0, 3)));
+// QA WRIST: the smoking wrist fix.self bends (verify-motion3-self) is the scene's one group; the records add none
+expect("the scene keeps its QA with two carried records: only the wrist fix.self bends (hand_r radial 57 deg, 88 frames)", qa.total === 88 && qa.groups.length === 1 && qa.groups[0].kind === "WRIST" && /^hand_r radial deviation 57deg/.test(qa.groups[0].subject), JSON.stringify(qa.groups.slice(0, 3)));
 const take = bakeTake(sk, out, { position: [0, 0, 0], yaw: 0 });
 const cig = take.objects.Cigarette, lit = take.objects.Lighter;
 expect("the take carries both records with a visibility track", cig?.vis?.length === 730 && lit?.vis?.length === 730);
@@ -103,8 +104,10 @@ const differ = Array.from({ length: 96 }, (_, f) => f).filter(f => !same(f));
 expect(`the hands blend in and out over ${KEY_BLEND} frames: only f${a + 1}..f${b - 1} change, and QA finds no pop`, differ[0] === a + 1 && differ[differ.length - 1] === b - 1 && !keyed.qa.groups.some(g => g.kind === "POP"),
 	`${differ[0]}..${differ[differ.length - 1]} ${keyed.qa.groups.map(g => g.kind)}`);
 // BODY (arms in the body, on the skin) is measured on both swings and is verify-motion3-self's subject
-const notBody = r => r.qa.groups.filter(g => g.kind !== "BODY");
-expect("the keyed swing adds no QA issue but BODY (the stance goal and the stride float were there before)", notBody(keyed).reduce((n, g) => n + g.count, 0) === notBody(plain).reduce((n, g) => n + g.count, 0) && keyed.qa.groups.every(g => g.kind !== "REACH"), keyed.qa.groups.map(g => `${g.kind} ${g.subject}`).join(" | "));
+// WRIST: the keyed swing bends the left wrist past its ulnar limit at the contact (pinned on its own)
+const notBody = r => r.qa.groups.filter(g => g.kind !== "BODY" && g.kind !== "WRIST"), lw = keyed.qa.groups.filter(g => g.kind === "WRIST");
+expect("the keyed swing adds no QA issue but BODY and WRIST (the stance goal and the stride float were there before)", notBody(keyed).reduce((n, g) => n + g.count, 0) === notBody(plain).reduce((n, g) => n + g.count, 0) && keyed.qa.groups.every(g => g.kind !== "REACH"), keyed.qa.groups.map(g => `${g.kind} ${g.subject}`).join(" | "));
+expect("WRIST: the keyed swing bends the left wrist 40 deg ulnar (limit 35), the plain swing does not", lw.length === 1 && /^hand_l ulnar deviation 40deg \(limit 35\)$/.test(lw[0].subject) && !plain.qa.groups.some(g => g.kind === "WRIST"), JSON.stringify([lw, plain.qa.groups.map(g => g.subject)]));
 expect("deterministic: the same keys bake the same take", hashOf(tk) === hashOf(bakeTake(bsk, compileSpec(keyedSpec(SWING_KEYS), { sk: bsk, scene: bscene }).out)));
 // a key the wrist cannot reach: the contact pose turned a further 110 deg about the forearm
 const R47 = matFromQuat(SWING_KEYS[2].rot), turned = mul(axisRot(forearm(keyed, 47), 110), R47), knob = add(SWING_KEYS[2].pos, apply(R47, [0, 0.14, 0]));

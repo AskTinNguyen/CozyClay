@@ -7,6 +7,7 @@ import { styleChecks, floatChecks } from "./style.js";
 import { specChecks } from "./spec-checks.js";
 import { objectChecks } from "./object-checks.js";
 import { goalChecks } from "./goals.js";
+import { wristIssues } from "./wrist-checks.js";
 import { explainGroups } from "./explain.js";
 import { LOW_IS_BAD, groupKey, rankGroups } from "./severity.js";
 
@@ -33,7 +34,7 @@ export function runMotionQa(sk, out, spec, opts = {}) {
 	const checks = spec.checks ?? {}, goals = goalChecks(out, spec.goals ?? []);
 	const issues = [...generalChecks(sk, out, { allow: checks.allow, limits: checks.limits, mouthPoints: checks.mouthPoints }), ...specChecks(out, checks),
 		...objectChecks(sk, out, spec), ...floatChecks(out, checks),
-		...styleChecks(sk, out, checks, { ...QA_LIMITS, ...checks.limits }), ...goals.issues];
+		...styleChecks(sk, out, checks, { ...QA_LIMITS, ...checks.limits }), ...wristIssues(sk, out), ...goals.issues];
 	if (out.f0) for (const i of issues) i.frame += out.f0;
 	const groups = summarizeIssues(issues);
 	if (opts.explain !== false) explainGroups(sk, out, spec, groups, { userSpec: opts.userSpec });

@@ -20,8 +20,8 @@ const range = (k, table) => table[k].map(v => v * JOINT[k]);
 
 export const WRIST_UNITS = "wrist: deg on the frames a hand holds (a fit, a carry or a grip on); flex + toward the palm, dev + radial / - ulnar, twist at the wrist joint; [min, f, max, f], frames past the comfortable range and at the limit; grip: the grip a keyed carry of a thin body keeps (grip-choice.js), cost [it, today's] (comfort-priced wrist, reach and body over the keys); elevation [max deg, f] of the upper arm (90 level), raised: frames the elbow is over the shoulder";
 
-/** True when the hand of side k holds something on frame i of out (absolute frame f). */
-function holding(out, k, i, f) {
+/** True when the hand of side k holds something on frame i of out (absolute frame f); qa/wrist-checks.js reads it too. */
+export function holding(out, k, i, f) {
 	const { diag } = out.frames[i], baked = out.baked ?? {};
 	if ((diag[`hold_${k}`]?.w ?? 0) > HOLD || (diag[`grip_${k}`]?.w ?? 0) > HOLD) return true;
 	for (const fit of out.ctx.spec.fits ?? []) if (fit.side === k && (baked[`w_${fit.anchor}_${k}`]?.[f] ?? 0) > HOLD) return true;

@@ -12,6 +12,14 @@
 //                                             there (x, z), else the last standIdle/walkTo before
 //                                             it (SKILL_INFO[skill].place); then the lean, the
 //                                             spine_pitch of the agent's keys around it (5 deg)
+//   WRIST (qa/wrist-checks.js) at the worst frame: a lean there (a spine_pitch key 10, 20 or 30 deg
+//                                             forward of the lean before it, or 10 back, eased back to it 12
+//                                             frames either side when no lean key is nearer), then the lean
+//                                             keys around it 5 or 10 deg either way; which move frees
+//                                             a held wrist depends on the elbow path the hold plans, so it is
+//                                             compiled (on bench S6 the body's floor steps only made it worse)
+//                                             ; none when fix.self's elbow turn bent it (cause "fix.self ..."): a lean
+//                                             does not undo the turn (car exit: 21 compiles, 20 s, 57 -> 51 deg)
 // Every candidate is a JSON Patch on the agent's spec; the order is fixed, so the search is
 // deterministic. Least-change candidates come first, so a tie keeps the smaller edit.
 import { excessOf } from "./qa/severity.js";
@@ -82,6 +90,22 @@ function placeSteps(spec, f, n) {
 	return out;
 }
 
+const LEANS = [10, 20, 30, -10], EASE = 12;
+
+/** WRIST: a spine_pitch key at f that leans the upper body by d from the lean before it, eased back over EASE frames where no lean key is nearer. */
+function leanSteps(spec, f) {
+	const keys = spec.keys ?? [], at = Math.round(f), last = Number.isInteger(spec.frames) ? spec.frames - 1 : Infinity;
+	const pitched = keys.filter(k => isNum(k?.f) && isNum(k?.set?.spine_pitch)).sort((a, b) => a.f - b.f);
+	const prev = pitched.filter(k => k.f < at).at(-1), next = pitched.find(k => k.f > at), base = prev?.set.spine_pitch ?? 0;
+	const same = keys.findIndex(k => k?.f === at && k.set && typeof k.set === "object");
+	return LEANS.map(d => {
+		const value = base + d, ops = [same >= 0 ? { op: keys[same].set.spine_pitch === undefined ? "add" : "replace", path: `/keys/${same}/set/spine_pitch`, value } : { op: "add", path: "/keys/-", value: { f: at, set: { spine_pitch: value } } }];
+		if ((!prev || at - prev.f > EASE) && at - EASE >= 0) ops.push({ op: "add", path: "/keys/-", value: { f: at - EASE, set: { spine_pitch: base } } });
+		if ((!next || next.f - at > EASE) && at + EASE <= last) ops.push({ op: "add", path: "/keys/-", value: { f: at + EASE, set: { spine_pitch: next?.set.spine_pitch ?? base } } });
+		return ops;
+	});
+}
+
 /**
  * tuneCandidates(g, spec) -> patch[] (each a JSON Patch on spec; [] when the group is not near its
  * limit, already carries a patch, or its cause names nothing tunable; a GOAL group up to 10 cm
@@ -89,6 +113,8 @@ function placeSteps(spec, f, n) {
  */
 export function tuneCandidates(g, spec) {
 	if (typeof g.cause !== "string") return [];
+	if (g.kind === "WRIST" && g.cause.startsWith("fix.self")) return [];
+	if (g.kind === "WRIST" && isNum(g.worstFrame)) return [...leanSteps(spec, g.worstFrame), ...[1, 2].flatMap(n => placeSteps(spec, g.worstFrame, n)).filter(p => p.every(op => op.path.endsWith("/spine_pitch")))];
 	const near = !g.patch && nearLimit(g) ? [...skillCandidates(g.cause, spec), ...keyCandidates(g, g.cause, spec)] : [];
 	if (g.kind !== "GOAL" || !isNum(g.worstFrame) || excessOf(g) > PLACE_MAX) return near;
 	return [...near, ...placeSteps(spec, g.worstFrame, 1), ...placeSteps(spec, g.worstFrame, 2)];

@@ -102,7 +102,7 @@ const fastFree = compile(throwHand({ retime: true }), empty);
 expect("retime: without the opt-in a smooth fast throw is clean (but its arm in the chest, BODY) and keeps its speed", onlyBody(fastFree) && !fastFree.fixed.retime && fastFree.observations.peaks.RightHand.speed[0] > 3.8, JSON.stringify(fastFree.observations.peaks));
 // the exitcar fixture itself stays clean with the default fixes on
 r = compile(EXITCAR_SPEC);
-expect("exitcar: QA 0 with the default fixes, and the fixes report their counts", r.qa.ok && typeof r.fixed === "object", JSON.stringify(r.qa.groups.slice(0, 2)));
+expect("exitcar: with the default fixes QA is only the wrist fix.self bends (WRIST, verify-motion3-self), and the fixes report their counts", r.qa.groups.length === 1 && /^WRIST hand_r radial deviation 57deg/.test(`${r.qa.groups[0].kind} ${r.qa.groups[0].subject}`) && typeof r.fixed === "object", JSON.stringify(r.qa.groups.slice(0, 2)));
 console.log(`  exitcar default fixes: ${JSON.stringify(r.fixed)}; ${JSON.stringify(r.ms)}`);
 
 // 5b. Style is measured, not judged (C13). A bat-like swing moves the wrist at ~9 m/s, smoothly.

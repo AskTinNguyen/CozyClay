@@ -58,8 +58,13 @@ expect("rot keys get rows too, without rot; a spec without keys has no held", ke
 // 3. what an agent writes: the barrel directions to 2 decimals, no roll -> the hand holds every key (no REACH)
 const rough = compile(aims.map(a => ({ f: a.f, pos: a.pos, aim: a.aim.map(v => +v.toFixed(2)) })));
 console.log(`  2-decimal aims, no roll: QA ${rough.qa.total} (rot keys ${keyed.qa.total}); held ${JSON.stringify(rough.observations.held[BAT].map(h => [h.f, h.deg, h.cm]))}`);
-expect("2-decimal aims with no roll: no REACH, every key drawn within 1 deg and 1 cm, the same QA total as the rot keys",
-	!rough.qa.groups.some(g => g.kind === "REACH") && rough.qa.total === keyed.qa.total && rough.observations.held[BAT].every(h => h.deg < 1 && h.cm < 1), rough.qa.groups.map(g => `${g.kind} ${g.subject}`).join(" | "));
+// WRIST (qa/wrist-checks.js) is left out of the comparison: an aim without roll takes the roll the arm holds most easily,
+// which moves where the left wrist tops out; it is pinned below
+const notWrist = r => r.qa.groups.filter(g => g.kind !== "WRIST").reduce((n, g) => n + g.count, 0);
+expect("2-decimal aims with no roll: no REACH, every key drawn within 1 deg and 1 cm, the same QA total as the rot keys (WRIST aside)",
+	!rough.qa.groups.some(g => g.kind === "REACH") && notWrist(rough) === notWrist(keyed) && rough.observations.held[BAT].every(h => h.deg < 1 && h.cm < 1), rough.qa.groups.map(g => `${g.kind} ${g.subject}`).join(" | "));
+expect("WRIST: the two-hand swing asks the left wrist past its ulnar limit (35 deg) on a few frames, with rot keys and aims alike",
+	[rough, keyed].every(r => r.qa.groups.some(g => g.kind === "WRIST" && /^hand_l ulnar deviation/.test(g.subject) && g.count <= 8)), [rough, keyed].map(r => r.qa.groups.filter(g => g.kind === "WRIST").map(g => `${g.subject} n${g.count}`).join(" | ")).join(" || "));
 const rots = rough.observations.held[BAT].map(h => h.rot);
 expect("the resolved rots are unit, on the 1e-5 grid and on one hemisphere", rots.every((q, i) => Math.abs(Math.hypot(...q) - 1) < 1e-4 && q.every(v => Math.abs(v * 1e5 - Math.round(v * 1e5)) < 1e-6) && (!i || qdot(q, rots[i - 1]) >= 0)));
 

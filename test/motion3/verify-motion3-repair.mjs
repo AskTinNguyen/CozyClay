@@ -65,9 +65,10 @@ const deep = stand({ fix: { reach: false }, checks: { limits: { balance: 0.08 } 
 r = repair(deep, empty);
 expect("no improvement: spec unchanged, nothing applied, rejected counted, one round", r.spec === deep && r.repair.applied.length === 0 && r.repair.rejected >= 1 && r.repair.rounds === 1, json(r.repair));
 
-// 5. A clean take compiles once; rounds is a ceiling.
+// 5. A take with nothing to try compiles once; rounds is a ceiling. The car exit's one group is the wrist
+// fix.self bends (WRIST, verify-motion3-self): no patch, and a lean does not undo the elbow turn (repair-tune.js).
 r = repair(EXITCAR_SPEC);
-expect("exit car (clean): one compile, no rounds, under 10 s", r.result.qa.ok && r.repair.compiles === 1 && r.repair.rounds === 0 && r.ms < 10000, json(r.repair));
+expect("exit car (only the fix.self wrist): one compile, no rounds, under 10 s", r.result.qa.groups.length === 1 && r.result.qa.groups[0].kind === "WRIST" && r.repair.compiles === 1 && r.repair.rounds === 0 && r.ms < 10000, json(r.repair));
 const wing = structuredClone(EXITCAR_SPEC);
 for (const k of wing.keys) if (json(k.set.elbow_r) === "[0.4,-1,0.6]") k.set.elbow_r = [0.4, 1, 0.6];
 r = repair(wing, car, 1);

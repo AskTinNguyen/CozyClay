@@ -57,8 +57,9 @@ expect("no POP on any of the three swings (df6acdcc had LeftForeArm 5.95 cm/f^2 
 expect("df6acdcc: no FLIP on the folded right elbow (was 71 deg at f35)", !has(fold, "FLIP", /^RightForeArm/), kinds(fold).join(" | "));
 // lane P3: the right elbow stops at 150 deg, so the keys that drive the wrist into the shoulder are a REACH residual (10.9 cm);
 // lane Q1: the left hand's roll is priced past what QA allows a hand in the torso, and it no longer flips onto the handle (61 deg at f12)
-expect("df6acdcc: what is left is real: the keys folding the right elbow (REACH) and the bat in the chest (COLLIDE f30)",
-	fold.qa.groups.length === 2 && has(fold, "REACH", /^empty: 10\.9 cm off its keys$/) && has(fold, "COLLIDE", /^torso_hi x empty$/), kinds(fold).join(" | "));
+// WRIST (qa/wrist-checks.js): the keys that fold the right elbow also ask the wrists past their limits there; real too
+expect("df6acdcc: what is left is real: the keys folding the right elbow (REACH), the bat in the chest (COLLIDE f30) and the wrists those keys bend past their limits (WRIST)",
+	fold.qa.groups.filter(g => g.kind !== "WRIST").length === 2 && has(fold, "REACH", /^empty: 10\.9 cm off its keys$/) && has(fold, "COLLIDE", /^torso_hi x empty$/) && has(fold, "WRIST", /^hand_r ulnar deviation/), kinds(fold).join(" | "));
 
 // ---- 2. why the right elbow's plane turned: folded flat, not flipped -------------------------------
 const P = f => fold.out.frames[f].s.P, elbowMove = dist(P(35)[I.RightForeArm], P(34)[I.RightForeArm]);

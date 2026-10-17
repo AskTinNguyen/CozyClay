@@ -7,9 +7,10 @@ import { contactHints } from "./hints-contact.js";
 import { motionHints } from "./hints-motion.js";
 import { objectHints } from "./hints-object.js";
 import { goalHints } from "./hints-goal.js";
+import { wristHints } from "./wrist-checks.js";
 import { attachPatches } from "./patch.js";
 
-const HINTS = { ...contactHints, ...motionHints, ...objectHints, ...goalHints };
+const HINTS = { ...contactHints, ...motionHints, ...objectHints, ...goalHints, ...wristHints };
 
 function keyTable(out) {
 	const byCh = new Map();

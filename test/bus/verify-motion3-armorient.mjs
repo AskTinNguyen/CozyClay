@@ -101,14 +101,20 @@ expect("the hands no longer overlap (SELF) and the left hand stays on the bat (g
 // ---- 6. session 6912547c: 38 rot keys ----------------------------------------------------------------
 const earlier = compileSpec(EARLIER_SPEC, { sk, scene: motionScene(batKit(EARLIER_KIT_AT)) });
 console.log(`  6912547c: QA ${earlier.qa.total} (was 35); ${kinds(earlier).join(" | ")}`);
-expect("rot keys: the swivel alone halves the residual (REACH <= 6 cm, was 12.0) and the flip is gone; QA <= 30 (was 35)",
-	cm(batReach(earlier)) <= 6 && !earlier.qa.groups.some(g => g.kind === "FLIP") && earlier.qa.total <= 30, kinds(earlier).join(" | "));
+// WRIST (qa/wrist-checks.js) counts apart: these 38 rot keys ask the right wrist past its flex and ulnar limits, which the
+// residual (REACH) already showed as the bat off its keys; pinned below
+const notWrist = r => r.qa.groups.filter(g => g.kind !== "WRIST").reduce((n, g) => n + g.count, 0);
+expect("rot keys: the swivel alone halves the residual (REACH <= 6 cm, was 12.0) and the flip is gone; QA <= 30 (was 35), WRIST aside",
+	cm(batReach(earlier)) <= 6 && !earlier.qa.groups.some(g => g.kind === "FLIP") && notWrist(earlier) <= 30, kinds(earlier).join(" | "));
+expect("WRIST: the 38 rot keys ask the right wrist past its limits (flex 70, ulnar 35) where the bat leaves its keys",
+	earlier.qa.groups.some(g => g.kind === "WRIST" && /^hand_r (flex|ulnar deviation)/.test(g.subject)), kinds(earlier).join(" | "));
 
 // ---- 7. the J2 swing is POP-free, with its rot keys and as aims without roll ----------------------------
 const j2scene = motionScene(J2.SCENE_OBJECTS), j2 = keys => { const sp = structuredClone(J2.SWING_SPEC); sp.objects[J2.BAT].keys = keys; return compileSpec(sp, { sk, scene: j2scene }); };
 const j2plain = compileSpec(J2.SWING_SPEC, { sk, scene: j2scene });
 for (const [name, r] of [["rot keys", j2(J2.SWING_KEYS)], ["aims without roll", j2(J2.SWING_KEYS.map(k => ({ f: k.f, pos: k.pos, aim: yOf(rootPoseAt(j2(J2.SWING_KEYS).out, J2.BAT, k.f)).map(v => +v.toFixed(2)) })))]]) {
-	expect(`J2 swing, ${name}: no POP, no FLIP, no REACH, the QA of the take without keys (${j2plain.qa.total})`, !r.qa.groups.some(g => ["POP", "FLIP", "REACH"].includes(g.kind)) && r.qa.total === j2plain.qa.total, kinds(r).join(" | "));
+	expect(`J2 swing, ${name}: no POP, no FLIP, no REACH, the QA of the take without keys (${j2plain.qa.total}), WRIST aside`, !r.qa.groups.some(g => ["POP", "FLIP", "REACH"].includes(g.kind)) && notWrist(r) === notWrist(j2plain), kinds(r).join(" | "));
+	expect(`J2 swing, ${name}: WRIST pins the left wrist past its ulnar limit (35) on a few frames of the two-hand grip`, r.qa.groups.some(g => g.kind === "WRIST" && /^hand_l ulnar deviation/.test(g.subject) && g.count <= 8), kinds(r).join(" | "));
 }
 
 // ---- 8. the hint says what the wrist still needs after the arm turned ---------------------------------
