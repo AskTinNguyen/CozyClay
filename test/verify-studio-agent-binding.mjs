@@ -44,7 +44,7 @@ import { PART_COLOURS } from '../src/part-colours.js';
 import { objectTransformAt } from '../src/object-path.js';
 import { dispatchLiveFrame } from '../src/live-control.js';
 
-const cases = ['previs-mode-and-character-kind', 'verify-plan-and-geometry', 'inspect-entity-transforms', 'targeted-commit-and-undo', 'stale-target-and-epoch', 'mid-gesture-target', 'lost-acknowledgement', 'camera-undo', 'still-frame-shot-camera-key', 'clip-frame-shot-camera-key', 'rail-camera-undo', 'rail-camera-undo-after-object-undo', 'context-revisions', 'recreated-motion-read-and-verify', 'stale-receipt-undo', 'reverted-edit-invalidates-target', 'patch-character-tint-and-undo', 'patch-stage-key-light-and-undo', 'patch-partial-drop', 'patch-inside-agent-turn', 'patch-during-gesture', 'patch-shot-and-prompt-blocks', 'patch-stage-environment-text-and-undo', 'run-action-shot-create-and-undo', 'run-action-object-duplicate-and-undo', 'run-action-refusals', 'run-action-character-waypoints-and-undo', 'run-action-character-ik-keys-and-undo', 'run-action-object-attach-and-undo', 'ui-refusals-localized-or-silent', 'run-action-shot-camera-rail-and-undo', 'run-action-view-toggles', 'context-entity-index', 'context-assets', 'inspect-scopes', 'cursor-survives-edit', 'verify-stale-receipt', 'verify-result-targets', 'late-apply-inspect-patch', 'arrange-with-attached-prop', 'arrange-local-space', 'run-action-export-shot-video', 'run-action-scenes', 'run-action-project-save', 'run-action-asset-import-and-undo', 'run-action-ai-prepare-shot'];
+const cases = ['previs-mode-and-character-kind', 'verify-plan-and-geometry', 'inspect-entity-transforms', 'targeted-commit-and-undo', 'stale-target-and-epoch', 'mid-gesture-target', 'lost-acknowledgement', 'camera-undo', 'still-frame-shot-camera-key', 'clip-frame-shot-camera-key', 'rail-camera-undo', 'rail-camera-undo-after-object-undo', 'context-revisions', 'recreated-motion-read-and-verify', 'stale-receipt-undo', 'reverted-edit-invalidates-target', 'patch-character-tint-and-undo', 'patch-stage-key-light-and-undo', 'patch-partial-drop', 'patch-inside-agent-turn', 'patch-during-gesture', 'patch-shot-and-prompt-blocks', 'patch-stage-environment-text-and-undo', 'run-action-shot-create-and-undo', 'run-action-object-duplicate-and-undo', 'run-action-refusals', 'run-action-character-waypoints-and-undo', 'run-action-character-ik-keys-and-undo', 'run-action-object-attach-and-undo', 'ui-refusals-localized-or-silent', 'run-action-shot-camera-rail-and-undo', 'run-action-shot-camera-rail-aim-lens-and-key-stops', 'run-action-view-toggles', 'context-entity-index', 'context-assets', 'inspect-scopes', 'cursor-survives-edit', 'verify-stale-receipt', 'verify-result-targets', 'late-apply-inspect-patch', 'arrange-with-attached-prop', 'arrange-local-space', 'run-action-export-shot-video', 'run-action-scenes', 'run-action-project-save', 'run-action-asset-import-and-undo', 'run-action-ai-prepare-shot'];
 const argv = process.argv.slice(2);
 assert(!argv.length || (argv.length === 2 && argv[0] === '--case' && cases.includes(argv[1])), 'Unknown test arguments');
 import { readStudioSource } from './bus/verify-domain-modules.mjs';
@@ -834,6 +834,42 @@ const implementations={
   await refused('shot.setCameraRail',{shotId:'shot-ghost',points:[{x:0,z:0},{x:1,z:0}]},'STALE_TARGET');
   await refused('shot.clearCameraRail',{shotId:'shot-ghost'},'STALE_TARGET');
   assert.equal(f.scope.shotsDomain.documentStore.depths().past,depth);
+ },
+ async 'run-action-shot-camera-rail-aim-lens-and-key-stops'(f){
+  const run=(action,args)=>f.call('run_action',f.request('run_action',{action,args}));
+  const camera=async()=>(await f.call('inspect_studio',{scope:'shot'})).document.shots[0];
+  const shot=createShot('Orbit',0,47,[]);f.scope.setShots([shot]);f.live.current.shots=[shot];
+  // Keys written through a move halt it at each inner key: the receipt says so.
+  const keyed=await run('shot.set',{id:shot.id,set:{cameraKeys:[0,12,24,36,47].map((frame,i)=>({id:`camera-key-${i}`,frame,framing:{pos:{x:i*0.5,y:1.6,z:5},yaw:0,pitch:0,fovDeg:40}}))}});
+  assert.equal(keyed.status,'applied',JSON.stringify(keyed));assert.deepEqual(keyed.warnings.map(w=>[w.code,w.count]),[['CAMERA_KEY_STOPS',3]]);
+  // One rail call lays the whole move: the keys it covers go, and the answer names the move.
+  const laid=await run('shot.setCameraRail',{shotId:shot.id,points:[{x:-2,z:4},{x:2,z:4}],height:2.5,aim:['actor-a','actor-b'],focalMm:35});
+  assert.equal(laid.status,'applied',JSON.stringify(laid));
+  assert.match(laid.summary,/4\.0 m over 2\.0 s \(2\.00 m\/s\), height 2\.50 m, aim actor-a, actor-b, 35 mm; 5 camera keys removed\.$/,laid.summary);
+  let read=await camera();
+  assert.deepEqual({mode:read.camera.mode,aim:read.camera.aim,focalMm:read.camera.focalMm,crane:read.camera.craneHeight,keys:read.cameraKeys.length},
+   {mode:'rail',aim:{ids:['actor-a','actor-b']},focalMm:35,crane:{points:[{t:0,height:2.5},{t:1,height:2.5}]},keys:0});
+  // A re-laid rail keeps the aim, height and lens it is not given; null clears them; a world point aims there.
+  assert.equal((await run('shot.setCameraRail',{shotId:shot.id,points:[{x:-3,z:4},{x:3,z:4}]})).status,'applied');
+  read=await camera();assert.deepEqual([read.camera.aim,read.camera.focalMm,read.camera.craneHeight.points[0].height],[{ids:['actor-a','actor-b']},35,2.5]);
+  const low=await run('shot.setCameraRail',{shotId:shot.id,points:[{x:-3,z:4},{x:3,z:4}],aimHeight:0.9});
+  assert.match(low.summary,/aim actor-a, actor-b at 0\.90 m, 35 mm\.$/,low.summary);assert.deepEqual((await camera()).camera.aim,{ids:['actor-a','actor-b'],height:0.9},'aimHeight lowers the kept cast aim');
+  const point=await run('shot.setCameraRail',{shotId:shot.id,points:[{x:-3,z:4},{x:3,z:4}],aim:{x:0,y:1,z:0},focalMm:null,height:[{t:0,height:0.6},{t:1,height:3}]});
+  assert.match(point.summary,/height 0\.60-3\.00 m, aim \(0\.00, 1\.00, 0\.00\), scene lens\.$/,point.summary);
+  read=await camera();assert.deepEqual([read.camera.aim,'focalMm' in read.camera],[{point:{x:0,y:1,z:0}},false]);
+  // Past the dolly's speed cap it warns; an aim that is not in the scene is refused.
+  const fast=await run('shot.setCameraRail',{shotId:shot.id,points:[{x:-10,z:4},{x:10,z:4}]});
+  assert.deepEqual(fast.warnings.map(w=>w.code),['RAIL_TOO_FAST'],JSON.stringify(fast));
+  const ghost=await run('shot.setCameraRail',{shotId:shot.id,points:[{x:-2,z:4},{x:2,z:4}],aim:['actor-ghost']});
+  assert.equal(ghost.ok,false);assert.equal(ghost.code,'STALE_TARGET',JSON.stringify(ghost));
+  // frame_shot answers what it measured; on a rail shot it says the rail stopped driving it.
+  const frame=(keyAtFrame,x)=>f.call('frame_shot',f.request('frame_shot',{shotId:shot.id,subjectIds:['actor-a'],keyAtFrame,framing:{exact:{position:{x,y:1.6,z:5},lookAt:{x:0,y:1,z:0},focalMm:35}}}));
+  const first=await frame(0,-2);
+  assert.equal(first.ok,true,JSON.stringify(first));assert.deepEqual(first.warnings.map(w=>w.code),['RAIL_REPLACED']);
+  assert.match(first.summary,/^Framed Orbit \[0, 48\): (wide|medium|extreme)[a-z -]* at frame 0, 1 camera key\.$/,first.summary);
+  assert.equal(typeof first.checks.derivedSize,'string');assert.equal(typeof first.checks.screenFraction,'number');
+  assert.deepEqual((await frame(47,2)).warnings,[],'a two-key move is clean');
+  assert.deepEqual((await frame(24,0)).warnings.map(w=>[w.code,w.count]),[['CAMERA_KEY_STOPS',1]],'a key in the middle of the move stops it');
  },
  async 'run-action-view-toggles'(f){
   const run=(action,args)=>f.call('run_action',f.request('run_action',{action,args}));

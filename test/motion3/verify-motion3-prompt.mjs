@@ -15,7 +15,8 @@ const motion = prompt.slice(prompt.indexOf("Motion is computed"), prompt.indexOf
 const sentences = text => text.split(/(?<=[.;:])\s+/).map(s => s.trim()).filter(s => s.length >= 40);
 
 // +291 characters for the efficiency round (the motion reference, describe topics, one script for sweeps): budgets +300
-check("the whole prompt is at most 11,550 characters", () => assert.ok(prompt.length <= 11550, `${prompt.length}`));
+// +332 for the camera round (a new view is a cut, a move is one rail, no camera-key chains): +350
+check("the whole prompt is at most 11,900 characters", () => assert.ok(prompt.length <= 11900, `${prompt.length}`));
 check("the motion part is at most 1,800 characters", () => {
 	assert.ok(motion.length > 0 && motion.length <= 1800, `${motion.length}`);
 });

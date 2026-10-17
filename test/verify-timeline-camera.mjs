@@ -16,7 +16,9 @@ function expect(name, condition) {
 import { readStudioSource } from "./bus/verify-domain-modules.mjs";
 const app = readStudioSource()
 	+ readFileSync(new URL("../src/app-stage.jsx", import.meta.url), "utf8")
-	+ readFileSync(new URL("../src/stage-canvas-rigs.jsx", import.meta.url), "utf8");
+	+ readFileSync(new URL("../src/stage-canvas-rigs.jsx", import.meta.url), "utf8")
+	// the per-shot follow/rail tracks the app plays
+	+ readFileSync(new URL("../src/camera-direction.js", import.meta.url), "utf8");
 const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
 const v2Css = readFileSync(new URL("../src/motion/timeline.css", import.meta.url), "utf8");
 const timeline = readFileSync(new URL("../src/motion/timeline.jsx", import.meta.url), "utf8");

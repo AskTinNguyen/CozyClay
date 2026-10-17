@@ -7,6 +7,9 @@ import { track } from '../analytics.js';
 import { isImageAssetId } from '../scene-assets.js';
 import { createStableItemId, updateStableItem } from '../stable-items.js';
 import { railFollowForNewGeometry } from '../camera-rail-schedule.js';
+import { buildRail } from '../camera-follow.js';
+import { cameraKeyWarnings } from '../camera-direction.js';
+import { TIMELINE_FPS } from '../timeline-defaults.js';
 import { studioActionDeclaration, studioActionRefusal } from '../studio-actions.js';
 import { STUDIO_TOOL_SCHEMAS, StudioSchemas } from '../studio-agent-protocol.js';
 import { elementSetSchema, registerElementSet } from './elements.js';
@@ -18,7 +21,7 @@ const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const number = { type: 'number' };
 const frame = { type: 'integer', minimum: 0 };
 const input = (properties, required = Object.keys(properties)) => ({ type: 'object', properties, required, additionalProperties: false });
-const mutation = (id, label, schema) => ({ id, label, description: label, kind: 'mutation', undoDomain: 'shot', input: schema });
+const mutation = (id, label, schema, description = label) => ({ id, label, description, kind: 'mutation', undoDomain: 'shot', input: schema });
 const existing = ['shot.create', 'shot.createStill', 'shot.setCaption', 'shot.setCastOverride', 'shot.setHold', 'shot.split', 'shot.duplicate', 'shot.remove', 'shot.setRange', 'shot.setCameraRail', 'shot.clearCameraRail', 'shot.reorder'].map(studioActionDeclaration);
 const extra = [
   mutation('shot.set', 'Set shot fields', elementSetSchema('shot')),
@@ -30,7 +33,8 @@ const extra = [
   mutation('shot.clearKeys', 'Clear camera keys', input({ shotId: id })),
   mutation('shot.setTimeline', 'Set shot timeline', input({ frameCount: { type: 'integer', minimum: 24, maximum: 28800 } })),
   mutation('shot.setLens', 'Set camera lens', input({ fovDeg: { ...number, minimum: 14, maximum: 90 } })),
-  mutation('shot.frame', 'Frame the shot', { ...input({ ...STUDIO_TOOL_SCHEMAS.frame_shot.properties, preset: { type: 'string' } }, []), oneOf: [STUDIO_TOOL_SCHEMAS.frame_shot, input({ preset: { type: 'string' } })] }),
+  mutation('shot.frame', 'Frame the shot', { ...input({ ...STUDIO_TOOL_SCHEMAS.frame_shot.properties, preset: { type: 'string' } }, []), oneOf: [STUDIO_TOOL_SCHEMAS.frame_shot, input({ preset: { type: 'string' } })] },
+    'Frame a shot on one character (the frame_shot tool): framing.intent { size, level, view, side, focalMm } or framing.exact { position, lookAt, focalMm }. Without keyAtFrame a shot that holds one framing is reframed whole: a held shot. keyAtFrame adds a camera key there; every key eases in and out, so the camera slows to a stop at each one: key a pan or zoom from one spot with two keys (its start and end), lay a moving camera as a rail (shot.setCameraRail) and cut to a new shot for a new view. On a rail shot it puts the shot back on keys. Answers checks { derivedSize, screenFraction, clipped, behindCamera, occluded, cameraSide } for the subject at that frame.'),
   { ...mutation('shot.replace', 'Replace shot authoring', input({ shots: { type: 'array', items: { type: 'object', properties: {}, additionalProperties: true } } })), exposure: 'ui-only' },
   { ...mutation('shot.captureCamera', 'Capture camera framing', input({ shotId: id }, [])), exposure: 'ui-only' },
   // The Board's Stylize result (or null to clear it). UI-only: the picture has
@@ -105,6 +109,27 @@ export function register(registry, ports) {
     let next = 0;
     writeStills(current.map(row => row.kind === 'still' ? order[next++] : row));
   }
+  // A rail owns the frames it covers, so the camera keys there go. Its answer
+  // names the move it makes: length, speed, height, aim and lens.
+  function setRail({ shotId, points, height, aim, aimHeight, focalMm }) {
+    const shot = shotOf(shotId), cast = [...ports.state().characters, ...ports.state().objects];
+    for (const id of Array.isArray(aim) ? aim : []) if (!cast.some(row => row.id === id)) fail('STALE_TARGET', `Aim ${id} is not a character or object in this scene.`);
+    const railFollow = railFollowForNewGeometry(shot.camera?.railFollow, shot.endFrame - shot.startFrame + 1);
+    const span = railFollow?.mode === 'range' ? [shot.startFrame + railFollow.startFrame, shot.startFrame + railFollow.endFrame] : [shot.startFrame, shot.endFrame];
+    const patch = { cameraRail: points, mode: 'rail', railFollow, ...(focalMm === undefined ? {} : { focalMm }),
+      ...(height === undefined ? {} : { craneHeight: { points: typeof height === 'number' ? [{ t: 0, height }, { t: 1, height }] : height } }),
+      ...(aim === undefined && aimHeight === undefined ? {} : { aim: aimOf(aim === undefined ? createCameraBlock(shot.camera).aim : aim && (Array.isArray(aim) ? { ids: aim } : { point: aim }), aimHeight) }) };
+    const keys = shot.cameraKeys.filter(key => key.frame < span[0] || key.frame > span[1]);
+    patchShot(shotId, row => ({ ...row, cameraKeys: keys, camera: updateCameraBlock(row.camera, patch) }));
+    const camera = createCameraBlock(shotOf(shotId).camera), metres = buildRail(camera.cameraRail)?.length ?? 0, seconds = (span[1] - span[0] + 1) / TIMELINE_FPS;
+    const heights = camera.craneHeight?.points.map(point => point.height) ?? [camera.followCam.height], speed = metres / seconds;
+    const aimed = camera.aim?.ids ? `${camera.aim.ids.join(', ')}${camera.aim.height === undefined ? '' : ` at ${camera.aim.height.toFixed(2)} m`}` : (camera.aim ? `(${['x', 'y', 'z'].map(axis => camera.aim.point[axis].toFixed(2)).join(', ')})` : 'the follow subject');
+    const note = `${metres.toFixed(1)} m over ${seconds.toFixed(1)} s (${speed.toFixed(2)} m/s), height ${[...new Set([heights[0], heights.at(-1)])].map(h => h.toFixed(2)).join('-')} m, aim ${aimed}, ${camera.focalMm ? `${camera.focalMm} mm` : 'scene lens'}${shot.cameraKeys.length > keys.length ? `; ${shot.cameraKeys.length - keys.length} camera keys removed` : ''}.`;
+    const fast = speed > camera.followCam.maxDollySpeed ? [{ code: 'RAIL_TOO_FAST', id: shotId, message: `${speed.toFixed(1)} m/s is past the ${camera.followCam.maxDollySpeed} m/s dolly cap, so the camera lags; lengthen the shot or the rail.` }] : [];
+    return { note, warnings: fast };
+  }
+  // aimHeight moves a cast aim off the chest to a world height (a whole body, a face).
+  const aimOf = (aim, aimHeight) => (aim?.ids && aimHeight !== undefined ? { ids: aim.ids, height: aimHeight } : aim);
   const methods = {
     'shot.create': () => storyboard() ? createStill() : owner().write(current => addShotAtFrame(current, ports.state().frame, owner().state().frameCount, owner().capture())),
     'shot.createStill': args => createStill(args),
@@ -127,9 +152,7 @@ export function register(registry, ports) {
       const edges = startFrame > shot.endFrame ? [['end', endFrame], ['start', startFrame]] : [['start', startFrame], ['end', endFrame]];
       owner().write(current => edges.reduce((rows, [edge, frame]) => resizeShot(rows, shotId, edge, frame, owner().state().frameCount), current));
     },
-    'shot.setCameraRail': ({ shotId, points }) => patchShot(shotId, shot => ({ ...shot, camera: updateCameraBlock(shot.camera, {
-      cameraRail: points, mode: 'rail', railFollow: railFollowForNewGeometry(shot.camera?.railFollow, shot.endFrame - shot.startFrame + 1),
-    }) })),
+    'shot.setCameraRail': args => setRail(args),
     'shot.clearCameraRail': ({ shotId }) => {
       const shot = shotOf(shotId);
       if (!createCameraBlock(shot.camera).cameraRail) fail('TARGET_NOT_READY', `${shot.name || shotId} has no camera rail.`);
@@ -170,12 +193,9 @@ export function register(registry, ports) {
     ...(declaration.id === 'shot.setRange' ? { normalizeArgs: lenientRange } : {}),
     available: state => mounted() === true ? (availability[declaration.id] ?? (existing.includes(declaration) ? hasShots : () => true))(state) : mounted(),
     run(args, context) {
-      if (declaration.id === 'shot.frame') {
-        const plan = owner().frame(args);
-        return { affectedIds: plan.affectedIds, summary: 'Framed the shot.' };
-      }
+      if (declaration.id === 'shot.frame') return framed(args);
       const before = owner().read(), newPanel = declaration.id === 'shot.createStill' || (declaration.id === 'shot.create' && storyboard());
-      methods[declaration.id](args);
+      const answered = methods[declaration.id](args), answer = typeof answered?.note === 'string' ? answered : null;
       // Only the origin travels: never the caption, name or id of the panel.
       if (newPanel) track('storyboard:panel_created', { source: context?.origin && context.origin !== 'ui' ? 'agent' : 'manual' });
       // The owner re-normalizes every shot on write, so compare content, not
@@ -183,8 +203,17 @@ export function register(registry, ports) {
       // names (100), and the first 100 stand for the batch.
       const after = owner().read(), changed = changedIds(before.map(row => after.find(next => next.id === row.id && same(next, row)) ?? row), after).slice(0, 100);
       const affectedIds = changed.length ? changed : [args.shotId ?? ports.state().activeSceneId];
-      return { affectedIds, summary: changed.length ? `${declaration.label}: ${changed.map(id => after.find(row => row.id === id)).filter(Boolean).map(shotLabel).join('; ')}.` : `${declaration.label}.` };
+      const summary = changed.length ? `${declaration.label}: ${changed.map(id => after.find(row => row.id === id)).filter(Boolean).map(shotLabel).join('; ')}.` : `${declaration.label}.`;
+      return { affectedIds, summary: answer?.note ? `${summary.slice(0, -1)}: ${answer.note}`.slice(0, 240) : summary, ...(answer?.warnings ? { warnings: answer.warnings } : {}) };
     },
   });
+  // frame_shot answers what it measured, and what its keys do to a move.
+  function framed(args) {
+    const before = owner().read(), plan = owner().frame(args), shot = owner().read().find(row => row.id === plan.details.shotId);
+    const wasRail = createCameraBlock(before.find(row => row.id === shot.id)?.camera).mode === 'rail';
+    return { affectedIds: plan.affectedIds, summary: `Framed ${shotLabel(shot)}: ${plan.checks.derivedSize} at frame ${plan.details.frame}, ${shot.cameraKeys.length} camera key${shot.cameraKeys.length === 1 ? '' : 's'}.`.slice(0, 240),
+      checks: plan.checks, warnings: [...plan.warnings, ...(wasRail ? [{ code: 'RAIL_REPLACED', id: shot.id, message: 'This shot is back on camera keys; its rail no longer drives it. Re-lay it with shot.setCameraRail.' }] : []),
+        ...cameraKeyWarnings(shot)] };
+  }
   if (ports.storeDomain?.('shot')) registry.registerToolAlias('frame_shot', 'shot.frame');
 }

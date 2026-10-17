@@ -69,20 +69,8 @@ import { useUiTheme } from "./theme.js";
 
 import { Room, StageLights, StageAtmosphere } from "./room.jsx";
 import { createDocumentMirrors } from "./document-mirrors.js";
-import {
-	buildFollowTrack,
-	buildRail,
-	buildRailFollowTrack,
-	simplifyStroke,
-} from "./camera-follow.js";
-import {
-	createCameraBlock,
-} from "./camera-block.js";
-import {
-	RAIL_SCHEDULE_LEGACY,
-	RAIL_SCHEDULE_RANGE,
-	resolveRailSchedule,
-} from "./camera-rail-schedule.js";
+import { buildRail, simplifyStroke } from "./camera-follow.js";
+import { useShotCameraTracks } from "./use-shot-camera-tracks.js";
 import { ObjectCarrier, SetProps } from "./props.jsx";
 import {
 	CUTOUT_KIND,
@@ -4084,32 +4072,8 @@ export default function App() {
 	// the follow controller and the Top-View display.
 	const railCurve = useMemo(() => (cameraRail ? buildRail(cameraRail) : null), [cameraRail]);
 
-	const followTrack = useMemo(() => {
-		if (!subjectTrack) return null;
-		const yaw = (charA.rot * Math.PI) / 180;
-		const combined = new Array(subjectTrack.length).fill(null);
-		for (let index = 0; index < shots.length; index += 1) {
-			const shot = shots[index];
-			const camera = createCameraBlock(shot.camera);
-			if (camera.mode === "keys") continue;
-			const start = shot.startFrame;
-			const end = Math.min(subjectTrack.length, shot.endFrame + 1);
-			const subjectSlice = subjectTrack.slice(start, end);
-			const params = { ...camera.followCam, craneHeight: camera.craneHeight, dollyTiming: camera.dollyTiming, initialDir: { x: Math.sin(yaw), z: Math.cos(yaw) } };
-			const rail = camera.mode === "rail" ? buildRail(camera.cameraRail) : null;
-			if (rail) {
-				const schedule = resolveRailSchedule({ railFollow: camera.railFollow, cameraRail: camera.cameraRail, frameCount: subjectSlice.length });
-				if (schedule.kind !== RAIL_SCHEDULE_RANGE && schedule.kind !== RAIL_SCHEDULE_LEGACY) continue;
-				const railSlice = subjectSlice.slice(schedule.startFrame, schedule.endFrame + 1);
-				const track = buildRailFollowTrack(railSlice, tlFps, rail, params);
-				track.forEach((sample, offset) => { combined[start + schedule.startFrame + offset] = sample; });
-			} else {
-				const track = buildFollowTrack(subjectSlice, tlFps, params);
-				track.forEach((sample, offset) => { combined[start + offset] = sample; });
-			}
-		}
-		return combined;
-	}, [shots, subjectTrack, tlFps, charA.rot]);
+	// A rail shot with an aim holds its cast (or a world point) instead of the subject.
+	const followTrack = useShotCameraTracks({ shots, subjectTrack, subjectId: charA.id, fps: tlFps, yawDeg: charA.rot, filmback, characters, objects: sceneObjects, frameCount: tlFrameCount, activeId: activeChar.id, motion });
 
 	const playbackScene = useMemo(() => ({
 		...playbackSceneBase,

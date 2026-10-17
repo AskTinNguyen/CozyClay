@@ -402,7 +402,7 @@ export function useShots(appContext) {
     const target = shotId ? shots.find(entry => entry.id === shotId) : shots[atPlayhead >= 0 ? atPlayhead : 0] ?? null;
     if (shotId && !target) return null;
     let exportShots = shots;
-    if (target && target.cameraKeys.length === 0 && !shotId && scope !== 'timeline') {
+    if (target && target.cameraKeys.length === 0 && (target.camera?.mode ?? 'keys') === 'keys' && !shotId && scope !== 'timeline') {
       appContext.bus.run('shot.addKey', { shotId: target.id, frame: target.startFrame });
       exportShots = appContext.storeDomain('shot').read();
     }

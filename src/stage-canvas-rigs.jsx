@@ -212,9 +212,7 @@ export function FollowCamRig({ enabled, frame, frameRef, scene, shot, camRef, lo
 		applied.current = null;
 		if (enabled) invalidate();
 	}, [scene, shot, enabled, invalidate]);
-	useEffect(() => {
-		if (enabled) invalidate();
-	}, [frame, enabled, invalidate]);
+	useEffect(() => { if (enabled) invalidate(); }, [frame, enabled, invalidate]);
 	useFrame(() => {
 		if (!enabled) return;
 		if (isInterrupted?.()) return; // the user is flying; yield until released
@@ -227,6 +225,8 @@ export function FollowCamRig({ enabled, frame, frameRef, scene, shot, camRef, lo
 		cam.position.set(sample.pos.x, sample.pos.y, sample.pos.z);
 		look.current.yaw = sample.yaw;
 		look.current.pitch = sample.pitch;
+		// A rail with a lens of its own carries it; otherwise this is the scene lens.
+		if (Math.abs(cam.fov - sample.fovDeg) > 1e-3) { cam.fov = sample.fovDeg; cam.updateProjectionMatrix(); }
 		invalidate();
 	});
 	return null;

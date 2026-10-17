@@ -154,16 +154,17 @@ export function elementPatchReceipt(receipt, request, projection) {
 }
 export function registerElementSet(registry, ports, declaration) {
   const kind = declaration.id.slice(0, declaration.id.indexOf('.'));
-  const { normalize, collection, carry } = kinds.get(kind);
+  const { normalize, collection, carry, warn } = kinds.get(kind);
   registry.register({ ...declaration, available: () => true, run(args) {
     const domain = ports.storeDomain(declaration.undoDomain ?? kind);
     let next = domain.read();
     const ops = collection ? args.ops ?? [args] : [{ id: ports.state().activeSceneId, set: args }];
-    const carried = new Set();
+    const carried = new Set(), warnings = [];
     for (const { id, set } of ops) {
       const before = collection ? next.find(row => row.id === id) : next;
       if (!before) throw new StudioProtocolError('TARGET_NOT_READY', `Unknown ${kind} id: ${id}`);
       const after = normalize(mergeElementSet(before, storedElementSet(kind, set)));
+      if (warn) warnings.push(...warn({ ...after, id }, set));
       // A kind whose rows hang off each other (a group's parts) moves the rows its target carries.
       if (collection && carry) {
         const rows = carry(next, id, after);
@@ -173,6 +174,6 @@ export function registerElementSet(registry, ports, declaration) {
       next = collection ? next.map(row => row.id === id ? { ...after, id } : row) : after;
     }
     if (JSON.stringify(next) !== JSON.stringify(domain.read())) domain.write(next);
-    return { affectedIds: [...new Set([...ops.map(op => op.id), ...carried])], summary: `Updated ${kind}.` };
+    return { affectedIds: [...new Set([...ops.map(op => op.id), ...carried])], summary: `Updated ${kind}.`, ...(warnings.length ? { warnings } : {}) };
   } });
 }

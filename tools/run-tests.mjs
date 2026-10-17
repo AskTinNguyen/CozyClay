@@ -96,7 +96,7 @@ const NODE_FILES = [
 	"test/verify-blocking-depth.mjs",
 	"test/verify-render-passes-video.mjs",
 	"test/verify-burn-in.mjs",
-	"test/verify-camera-block.mjs",
+	"test/verify-camera-block.mjs", "test/verify-camera-direction.mjs",
 	"test/verify-camera-follow.mjs",
 	"test/verify-camera-move.mjs",
 	"test/verify-camera-rail-schedule.mjs",

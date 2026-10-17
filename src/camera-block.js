@@ -59,6 +59,26 @@ function cloneRailFollow(value) {
 	return null;
 }
 
+/**
+ * What a rail shot's head holds: up to 4 cast ids (their middle, frame by
+ * frame, at their chest or at a world height) or one world point. Null = the follow subject (every older shot).
+ * Like the crane, an aim and a lens of its own (focalMm) ride the rail and
+ * are left out of the block without one, so untouched shots stay byte-stable.
+ */
+function cloneRailAim(value) {
+	const ids = Array.isArray(value?.ids) ? value.ids.filter((id) => typeof id === "string" && id).slice(0, 4) : [];
+	if (ids.length) return Number.isFinite(value.height) ? { ids, height: value.height } : { ids };
+	const point = value?.point;
+	return point && [point.x, point.y, point.z].every(Number.isFinite) ? { point: { x: point.x, y: point.y, z: point.z } } : null;
+}
+
+/** The aim and lens fields a block with a rail carries (none without one). */
+export function railShotFields(value, cameraRail) {
+	const aim = cameraRail ? cloneRailAim(value.aim) : null;
+	const focalMm = cameraRail && Number.isFinite(value.focalMm) && value.focalMm > 0 ? value.focalMm : null;
+	return { ...(aim ? { aim } : {}), ...(focalMm ? { focalMm } : {}) };
+}
+
 /** Build a complete block from a partial or stored camera value. */
 export function createCameraBlock(input = {}) {
 	const value = input && typeof input === "object" ? input : {};
@@ -82,6 +102,7 @@ export function createCameraBlock(input = {}) {
 		railFollow: cloneRailFollow(value.railFollow),
 		craneHeight,
 		dollyTiming: timingIsFlat(dollyTiming) ? null : dollyTiming,
+		...railShotFields(value, cameraRail),
 	};
 }
 
