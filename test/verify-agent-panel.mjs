@@ -101,7 +101,7 @@ for (const state of ["signed-out", "signing-in", "no-entitlement", "ready", "str
 }
 
 // --- SSE event types -----------------------------------------------------
-for (const type of ["text.delta", "tool.start", "tool.done", "image", "quota", "error", "done"]) {
+for (const type of ["text.delta", "tool.start", "tool.done", "thinking.delta", "tool.compose", "tool.progress", "image", "quota", "error", "done"]) {
 	expect(`the panel or client handles the "${type}" event`, client.includes(`"${type}"`) || panel.includes(`"${type}"`));
 }
 // The turn now lives in the shared chat store, so cancellation identity is
@@ -128,7 +128,7 @@ const controls = [
 	["resets-in label", "resets in "],
 	["aria-live transcript", 'aria-live="polite"'],
 	["user bubble", "agent-bubble"],
-	["tool call card", "ToolCallCard"],
+	["turn step list", "<TurnSteps"],
 	["image result card", "ImageResultCard"],
 	["Use in scene", "Use in scene"],
 	["Download", "Download"],
@@ -143,7 +143,7 @@ const controls = [
 	["Wait & retry", "Wait &amp; retry"],
 	["Switch model", "Switch model"],
 	["error Retry", ">Retry<"],
-	["error Details", ">Details<"],
+	["step list Retry", "onRetry={() => runTurn(chat.lastPrompt)} />"],
 ];
 for (const [name, needle] of controls) expect(`composer/transcript exposes the ${name}`, panel.includes(needle), needle);
 
@@ -518,10 +518,14 @@ const activityState = (patch) => ({ items: [], streaming: false, turnStartedAt: 
 const phase = (patch, now = 4000) => module_.describeActivity(activityState(patch), { now });
 const prompt = { kind: "user", id: "u1", text: "frame a two-shot" };
 
-const sending = phase({ streaming: true, turnStartedAt: 1000, items: [prompt] });
-expect('a request in flight reads "Sending… · 3 s"', sending.phase === "sending" && sending.text === "Sending… · 3 s" && sending.ticking, sending.text);
-const thinking = phase({ streaming: true, turnStartedAt: 1000, items: [prompt, { kind: "assistant", id: "a1", text: "Framing" }] });
-expect('a streaming model reads "Thinking… · 3 s"', thinking.phase === "thinking" && thinking.text === "Thinking… · 3 s", thinking.text);
+const sending = phase({ streaming: true, turnStartedAt: 1000, items: [prompt] }, 2000);
+expect('a request in flight reads "Sending… · 1 s"', sending.phase === "sending" && sending.text === "Sending… · 1 s" && sending.ticking, sending.text);
+const unanswered = phase({ streaming: true, turnStartedAt: 1000, items: [prompt] });
+expect('a request the model has not answered yet reads "Waiting for the model… · 3 s"', unanswered.text === "Waiting for the model… · 3 s", unanswered.text);
+const thinking = phase({ streaming: true, turnStartedAt: 1000, items: [prompt, { kind: "tool", id: "t0", name: "inspect_studio", status: "done" }] });
+expect('a model deciding its next step reads "Thinking… · 3 s"', thinking.phase === "thinking" && thinking.text === "Thinking… · 3 s", thinking.text);
+const replying = phase({ streaming: true, turnStartedAt: 1000, items: [prompt, { kind: "assistant", id: "a1", text: "Framing" }] });
+expect('a streaming reply reads "Writing the reply… · 3 s"', replying.phase === "reply" && replying.text === "Writing the reply… · 3 s", replying.text);
 const runningTool = phase({ streaming: true, turnStartedAt: 1000, items: [prompt, { kind: "tool", id: "t1", name: "capture_blocking_frame", status: "running" }] });
 expect('an open tool call names the tool it is running', runningTool.phase === "tool" && runningTool.text === "Running Capture blocking frame… · 3 s", runningTool.text);
 const generating = phase({ streaming: true, turnStartedAt: 1000, items: [prompt, { kind: "tool", id: "t1", name: "generate_motion", status: "running" }, { kind: "job", id: "j1", jobId: "job-1", state: "generating", progress: 0.25 }] });

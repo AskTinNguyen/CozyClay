@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { FiAlertTriangle, FiArrowUp, FiCheck, FiChevronRight, FiClock, FiDownload, FiImage, FiMoreHorizontal, FiPaperclip, FiPlus, FiRotateCw, FiX } from "react-icons/fi";
 import { ATTACHMENT_FAILED_NOTICE, ATTACHMENT_LIMIT_NOTICE, ATTACHMENT_TYPE_NOTICE, attachmentFilesFromTransfer, attachmentFromFile, transferCarriesFiles } from "./attachment-image.js";
 import { isImeComposing } from "../ime.js";
@@ -25,8 +25,7 @@ import {
 	createAgentTransport,
 	panelPresentation,
 	requestHostImageAction,
-	resolveToolLabel,
-	formatElapsed,
+	formatTurnClock,
 	formatResetIn,
 	readStoredPanelWidth,
 	readStoredSupervisor,
@@ -41,6 +40,8 @@ import {
 import "./agent-panel.css";
 import { AgentProgressCard } from "./AgentProgressCard.jsx";
 import { LoginPanel } from "./LoginPanel.jsx";
+import { TurnSteps } from "./AgentTurnSteps.jsx";
+import { stepLabel, turnLayout } from "./agent-turn.js";
 
 function relativeTime(value, now = Date.now()) {
 	const at = Date.parse(value || "");
@@ -57,32 +58,6 @@ function relativeTime(value, now = Date.now()) {
 
 function StatusDot({ tone, title }) {
 	return <span className={`agent-status-dot ${tone}`} title={title} aria-hidden="true" />;
-}
-
-function ToolCallCard({ call, presentation, onRetry }) {
-	const tone = call.status === "running" ? "busy" : ["failed", "cancelled"].includes(call.status) ? "alert" : "ok";
-	// The badge marks a call that edits the host surface, so it is drawn exactly
-	// for the families that surface names.
-	const hostTool = Object.hasOwn(presentation.toolLabels, call.name);
-	const detail = call.error ? `error: ${call.error}` : JSON.stringify(call.result ?? call.args ?? {}, null, 2);
-	return <div className={`agent-card agent-tool-card${call.status === "failed" ? " failed" : ""}`} data-tool-status={call.status} data-tool-name={call.name}>
-		<details>
-			<summary>
-				<StatusDot tone={tone} title={call.status} />
-				<span className="agent-tool-label">{resolveToolLabel(call, presentation.toolLabels)}</span>{hostTool && <span className="agent-tool-badge">{presentation.toolBadge}</span>}
-				<span className="agent-tool-elapsed">{call.status === "running" ? "running…" : call.status === "cancelled" ? (call.result?.status === "not_applied" ? "not applied" : "result unknown") : formatElapsed(call.elapsedMs)}</span>
-				<FiChevronRight size={12} aria-hidden="true" />
-			</summary>
-			<pre className="agent-tool-detail">{detail}</pre>
-		</details>
-		{call.failure && <div className="agent-error" role="alert">
-			<span>{call.failure.message || ERROR_COPY[call.failure.code] || "The turn failed."}</span>
-			<div className="agent-error-actions">
-				<button type="button" className="agent-ghost-button agent-error-retry" onClick={onRetry}>Retry</button>
-				<button type="button" className="agent-ghost-button agent-error-details" onClick={(event) => { const card = event.currentTarget.closest(".agent-tool-card"); const details = card?.querySelector("details"); if (details) details.open = !details.open; }}>Details</button>
-			</div>
-		</div>}
-	</div>;
 }
 
 function ImageResultCard({ image, onUse, onUndo, onRegenerate, onOpen }) {
@@ -414,10 +389,15 @@ export default function AgentPanel({
 	// is live and holding the turn's outcome for a few seconds after it ends.
 	const [activityNow, setActivityNow] = useState(() => Date.now());
 	const activity = model
-		? describeActivity(chat, { now: activityNow, toolLabel: (call) => resolveToolLabel(call, presentation.toolLabels) })
+		? describeActivity(chat, { now: activityNow, toolLabel: (call) => stepLabel(call, presentation.toolLabels) })
 		: modelsState === "failed"
 			? { phase: "no-model", kind: "terminal", tone: "alert", text: "No model available — the agent service did not answer with one", ticking: false }
 			: { phase: "models", kind: "live", tone: "busy", text: "Loading models…", ticking: false };
+	// The transcript grouped per turn, and the motion progress card (above the latest turn's steps, so the live
+	// step stays at the bottom where the transcript scrolls) limited to that turn's drafts.
+	const layout = useMemo(() => turnLayout(items, { streaming }), [items, streaming]);
+	const turnSince = streaming ? chat.turnStartedAt : chat.lastTurn ? chat.lastTurn.endedAt - chat.lastTurn.durationMs : null;
+	const progressCard = <AgentProgressCard items={items} since={turnSince} live={streaming} />;
 	useEffect(() => {
 		if (!activity.ticking) return;
 		const timer = setInterval(() => setActivityNow(Date.now()), 500);
@@ -881,7 +861,13 @@ export default function AgentPanel({
 				</div>
 			</div>}
 
-			{items.map((item) => {
+			{/* One step list per turn (AgentTurnSteps.jsx); the motion progress card sits just above the latest one. */}
+			{layout.map((entry) => {
+				if (entry.type === "steps") return <Fragment key={entry.id}>
+					{entry.last && progressCard}
+					<div className="agent-row"><TurnSteps block={entry} now={activityNow} toolLabels={presentation.toolLabels} formatClock={formatTurnClock} onRetry={() => runTurn(chat.lastPrompt)} /></div>
+				</Fragment>;
+				const { item } = entry;
 				if (item.kind === "user") return <div className="agent-row user" key={item.id}>
 					{item.attachments?.length > 0 && <div className="agent-bubble-attachments">
 						{item.attachments.map((attachment, index) => <img key={`${item.id}-${index}`} src={attachment.dataUrl} alt={attachment.name || "Attached image"} onClick={() => setLightbox({ dataUrl: attachment.dataUrl, prompt: attachment.name })} />)}
@@ -889,7 +875,6 @@ export default function AgentPanel({
 					<div className="agent-bubble">{item.text}</div>
 				</div>;
 				if (item.kind === "assistant") return <div className="agent-row assistant" key={item.id}><div className="agent-assistant-text">{item.text}{streaming && <span className="agent-caret">▌</span>}</div></div>;
-				if (item.kind === "tool") return <div className="agent-row" key={item.id}><ToolCallCard call={item} presentation={presentation} onRetry={() => runTurn(chat.lastPrompt)} /></div>;
 				if (item.kind === "job") return <div className="agent-row" key={item.id}><JobCard job={item} onStop={stopTurn} onAccept={(job) => store.acceptJob(job.jobId)} /></div>;
 				if (item.kind === "receipt") return <div className="agent-row" key={item.id}><ReceiptCard item={item} /></div>;
 				if (item.kind === "failure") return <div className="agent-row" key={item.id}><FailureCard failure={item.failure} onRetry={() => runTurn(chat.lastPrompt)} onFixKey={openProviderKeys} /></div>;
@@ -897,7 +882,7 @@ export default function AgentPanel({
 				return <div className="agent-row" key={item.id}><ImageResultCard image={item} onUse={(image) => store.applyImage(image.id)} onUndo={(image) => store.undoImage(image.id)} onRegenerate={() => runTurn(chat.lastPrompt)} onOpen={setLightbox} /></div>;
 			})}
 
-			<AgentProgressCard items={items} />
+			{!layout.some((entry) => entry.type === "steps" && entry.last) && progressCard}
 			{rateLimit && <PausedCard resetAt={rateLimit.resetAt} onRetry={() => { store.clearRateLimit(); runTurn(chat.lastPrompt); }} onSwitchModel={switchModel} />}
 		</div>
 
@@ -906,6 +891,7 @@ export default function AgentPanel({
 		{authenticated && <div className="agent-activity" data-agent-activity={activity.phase} data-agent-activity-kind={activity.kind} role="status" aria-live="polite">
 			<span className={`agent-activity-indicator ${activity.tone}`} aria-hidden="true" />
 			<span className="agent-activity-text">{activity.text}</span>
+			{activity.detail && <span className="agent-activity-detail">{activity.detail}</span>}
 		</div>}
 
 		{authenticated && <div

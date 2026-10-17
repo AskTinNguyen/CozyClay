@@ -62,7 +62,10 @@ const turnId = "a".repeat(32);
 const response = await fetch(`http://127.0.0.1:${port}/agent/turn`, { method: "POST", headers: { "content-type": "application/json", origin: `http://127.0.0.1:${port}` }, body: JSON.stringify({ sessionId: "s", text: "hi", model: "faux/scripted", attachFrame: false, turn_id: turnId }) });
 const text = await response.text();
 const events = [...text.matchAll(/^data: (.+)$/gm)].map((match) => JSON.parse(match[1]));
-assert.deepEqual(events.filter((event) => !["execution_telemetry", "execution_tool_started"].includes(event.type)).map((event) => event.type), ["quota", "text.delta", "tool.start", "tool.done", "tool.start", "tool.done", "text.delta", "tool.start", "tool.done", "text.delta", "done"]);
+assert.deepEqual(events.filter((event) => !["execution_telemetry", "execution_tool_started", "tool.compose", "thinking.delta"].includes(event.type)).map((event) => event.type), ["quota", "text.delta", "tool.start", "tool.done", "tool.start", "tool.done", "text.delta", "tool.start", "tool.done", "text.delta", "done"]);
+// The panel's live frames (bin/agent/turn-frames.mjs): each call is announced while the model writes it.
+const relayed = events.filter((event) => !["execution_telemetry", "execution_tool_started"].includes(event.type));
+assert.ok(relayed.filter((event) => event.type === "tool.start").every((start) => relayed.slice(0, relayed.indexOf(start)).some((event) => event.type === "tool.compose" && event.name === start.name)), "every tool call is announced by a tool.compose frame first");
 const executionTelemetry = events.filter((event) => event.type === "execution_telemetry");
 assert.deepEqual(executionTelemetry.map((event) => event.event), [
 	"agent:tool_executed", "agent:tool_executed", "agent:tool_executed", "agent:turn_succeeded",
@@ -112,7 +115,7 @@ assert.equal(JSON.stringify(fauxMain.calls[0].messages).includes(png), false);
 	const unknownOrigin = `http://127.0.0.1:${unknownServer.address().port}`;
 	const unknownText = await fetch(`${unknownOrigin}/agent/turn`, { method: "POST", headers: { "content-type": "application/json", origin: unknownOrigin }, body: JSON.stringify({ sessionId: "unknown", text: "hi", model: "faux/scripted", turn_id: "b".repeat(32) }) }).then((r) => r.text());
 	const unknownEvents = [...unknownText.matchAll(/^data: (.+)$/gm)].map((match) => JSON.parse(match[1]));
-	assert.deepEqual(unknownEvents.map((event) => event.type), ["quota", "execution_tool_started", "tool.start", "tool.done", "execution_telemetry", "text.delta", "execution_telemetry", "done"], "unknown tool frame order is stable");
+	assert.deepEqual(unknownEvents.filter((event) => event.type !== "tool.compose").map((event) => event.type), ["quota", "execution_tool_started", "tool.start", "tool.done", "execution_telemetry", "text.delta", "execution_telemetry", "done"], "unknown tool frame order is stable");
 	assertUniqueToolPairs(unknownEvents, "unknown tool");
 	const unknownDone = unknownEvents.find((event) => event.type === "tool.done");
 	assert.equal(unknownDone?.callId, "u1");

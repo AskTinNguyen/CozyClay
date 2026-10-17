@@ -146,3 +146,22 @@
 	font: 12px/1.4 system-ui, sans-serif;
 }
 .agent-progress-viewer:focus-visible { outline: 2px solid #8994ff; outline-offset: -4px; }
+
+/* A folded goal or issue list: its heading and a one-line summary, the list on click. */
+.agent-progress-fold {
+	display: flex;
+	align-items: baseline;
+	gap: var(--agent-space-3, 6px);
+	min-width: 0;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--agent-text-muted);
+	font: inherit;
+	font-size: var(--agent-font-md);
+	text-align: left;
+	cursor: pointer;
+}
+.agent-progress-fold h4 { flex: none; }
+.agent-progress-fold span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent-progress-fold[aria-expanded="true"] span { display: none; }

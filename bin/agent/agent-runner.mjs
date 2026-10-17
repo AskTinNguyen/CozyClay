@@ -1,4 +1,5 @@
 import { summariseCanvasResult } from "./agent-tools.mjs";
+import { createReasoningFrames } from "./turn-frames.mjs";
 import { sanitizeUpstreamDetail } from "./agent-routes.mjs";
 
 const DEFAULT_MODEL = "gpt-6-astra";
@@ -449,27 +450,25 @@ export function createAgentRunner({ models: suppliedModels, sessionStore, tools 
 				queue.push(frame);
 			};
 			const subscribe = (type, listener) => eventUnsubscribers.push(state.harness.events.on(type, listener));
+			// The reasoning summary and the tool call being written, for the panel (turn-frames.mjs).
+			const reasoning = createReasoningFrames(pushFrame, clock);
 			subscribe("message_update", (event) => {
+				reasoning.onMessageEvent(event.event);
 				if (event.event?.type === "text_delta") pushFrame({ type: "text.delta", text: event.event.delta });
 				if (event.event?.type === "error") pushFrame(errorFrame(event.event.error, event.event.reason === "aborted"));
 			});
-			subscribe("tool_start", (event) => {
+			const startTool = (event) => {
 				if (toolStarted.has(event.toolCallId)) return;
 				toolStarted.add(event.toolCallId);
 				toolStartedAt.set(event.toolCallId, clock());
 				const activeTools = state.lastInput?.tools || tools;
 				const tool = (Array.isArray(activeTools) ? activeTools : []).find((candidate) => candidate.name === event.toolName);
 				pushFrame({ type: "tool.start", callId: event.toolCallId, name: event.toolName, label: tool?.label || event.toolName.replaceAll("_", " "), args: summariseCanvasResult(event.args) });
-			});
+			};
+			subscribe("tool_start", startTool);
 			subscribe("tool_end", (event) => {
 				if (toolCompleted.has(event.toolCallId)) return;
-				if (!toolStarted.has(event.toolCallId)) {
-					toolStarted.add(event.toolCallId);
-					toolStartedAt.set(event.toolCallId, clock());
-					const activeTools = state.lastInput?.tools || tools;
-					const tool = (Array.isArray(activeTools) ? activeTools : []).find((candidate) => candidate.name === event.toolName);
-					pushFrame({ type: "tool.start", callId: event.toolCallId, name: event.toolName, label: tool?.label || event.toolName.replaceAll("_", " "), args: summariseCanvasResult(event.args) });
-				}
+				startTool(event);
 				toolCompleted.add(event.toolCallId);
 				const started = toolStartedAt.get(event.toolCallId) ?? clock();
 				const elapsedMs = Math.round(clock() - started);

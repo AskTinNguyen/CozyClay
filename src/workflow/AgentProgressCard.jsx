@@ -42,25 +42,31 @@ function SheetViewer({ sheet, onClose }) {
 	</button>, document.body);
 }
 
-export function AgentProgressCard({ items }) {
+/** `since`: when the latest turn started (null: no turn yet). Drafts and images from before it are not this turn's
+ * work, such as the take the camera tutorial compiles at startup. `live`: that turn is still running. */
+export function AgentProgressCard({ items, since = null, live = false }) {
 	useSyncExternalStore(subscribeProgress, progressVersion);
 	const [open, setOpen] = useState(null);
+	// The goal and issue lists fold to one line each: the panel is short and the live steps sit below the card.
+	const [shown, setShown] = useState({});
+	const toggle = key => setShown(now => ({ ...now, [key]: !now[key] }));
 	// a new turn (not a steer of the running one) starts the card over
 	const turns = turnCount(items), seen = useRef(turns);
 	useEffect(() => {
 		if (turns > seen.current) clearProgress();
 		seen.current = turns;
 	}, [turns]);
-	const latest = latestDraft(), sheets = progressSheets();
+	const ours = record => since !== null && record.at >= since;
+	const newest = latestDraft(), latest = newest && ours(newest) ? newest : null, sheets = progressSheets().filter(ours);
 	const viewing = open && sheets.find(sheet => sheet.seq === open);
 	if (!latest && !sheets.length) return null;
-	const drafts = latest ? draftsOf(latest.characterId) : [];
+	const drafts = latest ? draftsOf(latest.characterId).filter(ours) : [];
 	const goals = goalRows(latest?.qa.goals), issues = latest && !latest.qa.ok ? issueRows(latest.qa.groups) : [];
 	return <div className="agent-row">
 		<div className="agent-card agent-progress-card" data-agent-card="progress" data-drafts={drafts.length} data-installed={latest?.installed ? "true" : "false"} role="status" aria-live="polite">
 			{latest && <div className="agent-progress-head">
 				<span className="agent-progress-title">{ko("Draft", "초안")} {latest.n} · QA {latest.qa.total}</span>
-				<span className={`agent-progress-chip ${latest.installed ? "installed" : "draft"}`}>{latest.installed ? ko("Installed", "설치됨") : ko("Not installed yet", "아직 설치 전")}</span>
+				<span className={`agent-progress-chip ${latest.installed ? "installed" : "draft"}`}>{latest.installed ? ko("Installed", "설치됨") : live ? ko("Not installed yet", "아직 설치 전") : ko("Not installed", "설치 안 됨")}</span>
 			</div>}
 			{latest?.label && <p className="agent-progress-label">{latest.label}</p>}
 			{drafts.length > 0 && <section className="agent-progress-section">
@@ -68,20 +74,24 @@ export function AgentProgressCard({ items }) {
 				<Trend totals={drafts.map(d => d.qa.total)} />
 			</section>}
 			{goals.length > 0 && <section className="agent-progress-section">
-				<h4>{ko("Goals", "목표")}</h4>
-				<ul className="agent-progress-goals">
+				<button type="button" className="agent-progress-fold" aria-expanded={!!shown.goals} onClick={() => toggle("goals")}>
+					<h4>{ko("Goals", "목표")}</h4><span>{ko(`${goals.filter(g => g.ok).length} of ${goals.length} met`, `${goals.length}개 중 ${goals.filter(g => g.ok).length}개 충족`)}</span>
+				</button>
+				{shown.goals && <ul className="agent-progress-goals">
 					{goals.map((g, i) => <li key={i} data-goal-ok={g.ok ? "true" : "false"}>
 						<span className={`agent-progress-mark ${g.ok ? "ok" : "miss"}`} aria-label={g.ok ? ko("met", "충족") : ko("missed", "미충족")}>{g.ok ? <FiCheck size={11} /> : <FiX size={11} />}</span>
 						<span className="agent-progress-goal-name">{g.name}</span>
 						<span className="agent-progress-goal-value">{g.value}{g.need && <span className="need"> / {g.need}</span>}</span>
 					</li>)}
-				</ul>
+				</ul>}
 			</section>}
 			{issues.length > 0 && <section className="agent-progress-section">
-				<h4>{ko("Largest issues", "가장 큰 문제")}</h4>
-				<ul className="agent-progress-issues">
+				<button type="button" className="agent-progress-fold" aria-expanded={!!shown.issues} onClick={() => toggle("issues")}>
+					<h4>{ko("Largest issues", "가장 큰 문제")}</h4><span>{issues[0].kind} {issues[0].subject}</span>
+				</button>
+				{shown.issues && <ul className="agent-progress-issues">
 					{issues.map((row, i) => <li key={i}><span className="kind">{row.kind}</span> {row.subject} <span className="meta">×{row.count}{row.frames && ` · ${row.frames}`}</span></li>)}
-				</ul>
+				</ul>}
 			</section>}
 			{sheets.length > 0 && <section className="agent-progress-section">
 				<h4>{ko("What the agent looked at", "에이전트가 본 화면")}</h4>

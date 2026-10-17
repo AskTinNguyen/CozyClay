@@ -192,6 +192,10 @@ const toolCommands = () => commands.filter(command => command.name !== "resolve_
 	assert.equal(result.calls.length, 7);
 	assert.deepEqual(result.calls.map(call => call.name), ["inspect_studio", "run_action", "run_action", "run_action", "run_action", "run_action", "verify_result"]);
 	assert.ok(result.calls.every(call => call.ok));
+	// The panel watched the script: every nested call started and ended on the stream, before the script's tool.done.
+	const progress = events.filter(event => event.type === "tool.progress");
+	assert.deepEqual(progress.map(event => [event.callId, event.index, event.action ?? event.name, event.status]), result.calls.flatMap((call, i) => [[starts[0].callId, i + 1, i && i < 6 ? "object.add" : call.name, "running"], [starts[0].callId, i + 1, i && i < 6 ? "object.add" : call.name, "done"]]));
+	assert.ok(events.indexOf(progress.at(-1)) < events.indexOf(dones[0]), "the progress frames come before the script ends");
 	assert.deepEqual(result.value, { placed: ["pillar-0", "pillar-1", "pillar-2", "pillar-3", "pillar-4"], visualStatus: "attached", carriesImage: false });
 	assert.deepEqual(result.output, ["placed 5 at revision 41"]);
 	assert.ok(!JSON.stringify(result).includes("dataUrl"), "no dataUrl anywhere in the script result");
