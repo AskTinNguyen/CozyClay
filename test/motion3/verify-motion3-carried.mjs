@@ -40,8 +40,7 @@ expect("an unknown prop and a bad offset are refused by name", /objects\.Bad\.pr
 
 const out = compileMotion({ fps: 24, ...spec }, { sk, scene });
 const qa = runMotionQa(sk, out, spec);
-// QA WRIST: the smoking wrist fix.self bends (verify-motion3-self) is the scene's one group; the records add none
-expect("the scene keeps its QA with two carried records: only the wrist fix.self bends (hand_r radial 57 deg, 88 frames)", qa.total === 88 && qa.groups.length === 1 && qa.groups[0].kind === "WRIST" && /^hand_r radial deviation 57deg/.test(qa.groups[0].subject), JSON.stringify(qa.groups.slice(0, 3)));
+expect("the scene stays at QA 0 with two carried records", qa.ok && qa.total === 0, JSON.stringify(qa.groups.slice(0, 3)));
 const take = bakeTake(sk, out, { position: [0, 0, 0], yaw: 0 });
 const cig = take.objects.Cigarette, lit = take.objects.Lighter;
 expect("the take carries both records with a visibility track", cig?.vis?.length === 730 && lit?.vis?.length === 730);

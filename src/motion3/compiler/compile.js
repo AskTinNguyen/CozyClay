@@ -82,7 +82,7 @@ function hooksFor(ctx, c, f, inFit = false, lead = true, fitSide = null) {
 		hold: lead && ctx.hold ? (k, s) => (k === fitSide ? null : ctx.hold.lead(k, f, s, c)) : undefined,
 		// auto-fix offsets ride on the final pose only, so a fit never cancels them
 		push: inFit ? undefined : k => ctx.push?.[k]?.get(f),
-		swivel: inFit ? undefined : k => ctx.swivel?.[k]?.get(f),
+		swivel: k => ctx.swivel?.[k]?.get(f), // in a fit's passes too: a turn that stops at the wrist's limit moves the fit's point (wrist-clamp.js)
 		skinPush: inFit ? undefined : k => ctx.skinPush?.[k]?.get(f),
 		handTarget(k, s, diag) {
 			diag.frame = f;

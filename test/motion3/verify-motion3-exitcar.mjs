@@ -30,10 +30,8 @@ const qaMs = performance.now() - t0;
 console.log(`compiled ${out.frameCount} frames in ${compileMs.toFixed(0)} ms, QA in ${qaMs.toFixed(0)} ms: ${qa.total} issues in ${qa.groups.length} groups`);
 for (const g of qa.groups) console.log(`  [${g.count}] ${g.kind} ${g.subject} f${g.first}-${g.last} worst ${g.worst} @${g.worstFrame} (limit ${g.limit})`);
 expect("730 frames at 24 fps", out.frameCount === 730 && out.fps === 24);
-// QA WRIST (qa/wrist-checks.js): fix.self's elbow turn bends the smoking wrist past its radial limit (verify-motion3-self)
-const wr = qa.groups[0];
-expect("QA reports one group: the wrist fix.self bends (WRIST hand_r radial 57 deg, limit 20, 88 frames f490-f661)", qa.total === 88 && qa.groups.length === 1 && wr.kind === "WRIST"
-	&& wr.subject === "hand_r radial deviation 57deg (limit 20)" && wr.first === 490 && wr.last === 661 && /^fix\.self elbow turn/.test(wr.cause), `${qa.total} issues ${JSON.stringify(qa.groups.slice(0, 2))}`);
+// QA WRIST (qa/wrist-checks.js) is clear too: fix.self's elbow turn stops the smoking wrist at its limit (compiler/wrist-clamp.js)
+expect("QA reports 0 issues", qa.ok && qa.total === 0, `${qa.total} issues ${JSON.stringify(qa.groups.slice(0, 2))}`);
 expect("compile + QA stay fast (< 3 s)", compileMs + qaMs < 3000, `${(compileMs + qaMs).toFixed(0)} ms`);
 
 // Each declared contact: active on enough frames, and within its tolerance on every one of them.

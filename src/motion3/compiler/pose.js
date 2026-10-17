@@ -6,6 +6,7 @@ import { add, sub, scale, norm, len, apply, mul, rx, ry, rz } from "./math.js";
 import { restState, rotateSubtree } from "./skeleton.js";
 import { twoBone, orientFoot, wrist, fingers, limitFold, askedFold, swivelElbow, ELBOW_FOLD, KNEE_FOLD } from "./limbs.js";
 import { holdHand } from "./hold.js";
+import { clampWrist } from "./wrist-clamp.js";
 import { ELBOW_REST } from "./arm-orient.js";
 
 export const SIDES = { l: "Left", r: "Right" };
@@ -122,7 +123,9 @@ export function pose(sk, c, hooks = {}) {
 		// after a held object's grip, so its hand keeps the grip the hold solved; an arm coming in from FK turns
 		// no more than its IK weight (the IK elbow already lands somewhere else than the FK one)
 		const turn = hooks.swivel?.(k);
-		if (turn) swivelElbow(sk, s, side, turn * turnWeight(w));
+		// the turn keeps the hand's world turn; a wrist it takes past its limits stops there and the hand turns with the elbow
+		// (wrist-clamp.js), unless keys lead what the hand holds: that hand keeps the object's grip (hold.js limits its wrist)
+		if (turn) { swivelElbow(sk, s, side, turn * turnWeight(w)); if (!held) clampWrist(sk, s, side); }
 		hooks.afterArm?.(k, s, diag);
 	}
 	return { s, diag };

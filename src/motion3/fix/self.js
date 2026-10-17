@@ -24,8 +24,21 @@ const PASSES = 3, EASE = 5, MARGIN = 0.003, ALLOW = 0.003, STEP = 0.03, REACH = 
 const TOUCH = 0.03;
 /** Plan weights: per cm^2 of depth, per (10 deg)^2 of turn, per cm^2 of elbow over the shoulder, per (10 deg)^2 of change a frame. */
 const DEEP = 40, TURN = 0.05, RISE = 4, CHANGE = 2;
-/** How far (m) under the shoulder the elbow may come before RISE counts. */
-const LOW = 0.09;
+/** How far (m) under the shoulder the elbow may come before RISE counts. Where the spec declares a chicken-wing check
+ * on this elbow (checks.below, joint <Side>ForeArm under <Side>Arm: the smoke skill's), rising past its min costs
+ * WING_PRICE: a smoking elbow the turn raised past it broke that check once the wrist stopped at its limit (wrist-clamp.js). */
+const LOW = 0.09, WING_PRICE = 400;
+
+/** The spec's chicken-wing min (m) for the elbow of `side` on frame i (a below check on it at least half on), else null. */
+function wingMin(out, i, side) {
+	let min = null;
+	for (const b of out.ctx.spec.checks?.below ?? []) {
+		const joint = String(b.joint).replace(/^joint:/, ""), ref = String(b.ref).replace(/^joint:/, ""), f = out.f0 + i;
+		const on = Array.isArray(b.when) ? f >= b.when[0] && f <= b.when[1] : b.when ? (out.frames[i].c[b.when] ?? 0) > 0.5 : true;
+		if (on && joint === `${side}ForeArm` && ref === `${side}Arm` && Number.isFinite(b.min)) min = Math.max(min ?? 0, b.min);
+	}
+	return min;
+}
 /** The most the turn changes in one frame (deg): a fast arm turned faster than this pops. */
 const STEP_TURN = 10;
 const SIDES = { l: "Left", r: "Right" };
@@ -56,7 +69,7 @@ function elbowDepth(body, sk, s, side, deg, boxes = []) {
 	const E = deg ? add(S, apply(axisRot(sub(W, S), deg), sub(s.P[fa], S))) : s.P[fa];
 	const worst = Math.max(segmentDepth(body, sk, s, a, S, E), segmentDepth(body, sk, s, fa, E, W));
 	const k = side === "Left" ? "l" : "r", scene = boxes.length ? Math.max(sceneDepth(boxes, S, E, CAP[`uarm_${k}`]), sceneDepth(boxes, E, W, CAP[`farm_${k}`])) : 0;
-	return { depth: worst, scene, rise: Math.max(0, E[1] - (S[1] - LOW)) };
+	return { depth: worst, scene, rise: Math.max(0, E[1] - (S[1] - LOW)), under: S[1] - E[1] };
 }
 
 /** Shoulder to wrist at full stretch (m), at bind. */
@@ -71,12 +84,13 @@ function planTurns(out, body, k) {
 		// only the boxes the arm can reach this frame (their bounding sphere within the arm's length of the shoulder)
 		const S = s.P[sk.index[`${side}Arm`]], reach = armLength(sk, side) + 0.15;
 		const boxes = Object.values(out.objectsAt(i)).filter(box => box.half && !box.ignore && len(sub(add(box.pos, apply(box.R, [0, box.half[1], 0])), S)) - len(box.half) < reach);
-		const base = elbowDepth(body, sk, s, side, -cur, boxes).scene;
+		const base = elbowDepth(body, sk, s, side, -cur, boxes).scene, wmin = wingMin(out, i, side);
 		return TURNS.map(deg => {
-			const { depth, scene, rise } = elbowDepth(body, sk, s, side, deg * tw - cur, boxes), cm = Math.max(0, depth - ALLOW) * 100;
+			const { depth, scene, rise, under } = elbowDepth(body, sk, s, side, deg * tw - cur, boxes), cm = Math.max(0, depth - ALLOW) * 100;
+			const wing = wmin === null ? 0 : Math.max(0, wmin - under);
 			// a box the arm was already in at no turn is QA's COLLIDE to report, not this plan's to avoid
 			const hit = Math.max(0, scene - Math.max(base, ALLOW)) * 100;
-			return DEEP * (cm * cm + hit * hit) + TURN * (deg / 10) ** 2 + RISE * (rise * 100) ** 2;
+			return DEEP * (cm * cm + hit * hit) + TURN * (deg / 10) ** 2 + RISE * (rise * 100) ** 2 + WING_PRICE * (wing * 100) ** 2;
 		});
 	});
 	if (cost.every(c => !c)) return null;
