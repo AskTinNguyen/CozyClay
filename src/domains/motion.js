@@ -732,9 +732,11 @@ export function useMotion(appContext) {
 		// Exit: the keyed pose stays — the evaluate effect re-applies the
 		// current frame's keyed rotations the moment ikMode flips, so nothing
 		// the user authored is lost by toggling. Untracked/unkeyed parts keep
-		// their current (FK) pose.
+		// their current (FK) pose. A correction still in preview is applied, as
+		// Apply range would: leaving the mode (the Stage tab, a mode key) is not
+		// a Cancel, and dropping it threw away what the user just posed.
+		if (!applyPendingIkEdit()) appContext.notify(ko("Pose mode off — keyed poses keep playing", "포즈 모드 꺼짐 — 키로 찍은 포즈는 계속 재생됩니다"));
 		leaveIkMode();
-		appContext.notify(ko("Pose mode off — keyed poses keep playing", "포즈 모드 꺼짐 — 키로 찍은 포즈는 계속 재생됩니다"));
 	}
 
 	// Drag solve, routed by handle kind: chain targets solve the two-bone
