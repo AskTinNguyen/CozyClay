@@ -91,12 +91,28 @@ function validateKeys(spec, err, frames, unknown, past = "") {
  * Throws MOTION_SPEC_INVALID listing every problem; scene objects are checked when given.
  * lenient (a saved take compiled again, take-source.js) ignores unknown fields.
  */
+/** spec.flow: false, or { smooth?: boolean, lag?: false | 0..6 frames | { spine?, head?, arms? } } (channels.js). */
+function validateFlow(flow, err, unknown) {
+	if (flow === undefined || flow === false) return;
+	if (!flow || typeof flow !== "object" || Array.isArray(flow)) return err(`spec.flow must be false or { smooth?, lag? }, got ${fmt(flow)}`);
+	for (const k of Object.keys(flow)) if (k !== "smooth" && k !== "lag") unknown(`spec.flow has unknown field "${k}" (fields: smooth, lag)`);
+	if (flow.smooth !== undefined && typeof flow.smooth !== "boolean") err(`spec.flow.smooth must be true or false, got ${fmt(flow.smooth)}`);
+	const frames = v => Number.isFinite(v) && v >= 0 && v <= 6, lag = flow.lag, LAG = "false, 0..6 frames or { spine?, head?, arms? }";
+	if (lag === undefined || lag === false || frames(lag)) return;
+	if (!lag || typeof lag !== "object" || Array.isArray(lag)) return err(`spec.flow.lag must be ${LAG}, got ${fmt(lag)}`);
+	for (const [k, v] of Object.entries(lag)) {
+		if (!["spine", "head", "arms"].includes(k)) unknown(`spec.flow.lag has unknown field "${k}" (fields: spine, head, arms)`);
+		else if (!frames(v)) err(`spec.flow.lag.${k} must be 0..6 frames, got ${fmt(v)}`);
+	}
+}
+
 export function validateSpec(spec, { sk, scene, lenient = false } = {}) {
 	const errors = [], err = m => { if (errors.length < MAX_ERRORS) errors.push(m); }, unknown = lenient ? () => {} : err;
 	if (!spec || typeof spec !== "object") throw new Error("MOTION_SPEC_INVALID: spec must be an object");
 	if (spec.schema !== "cozyclay.motion-spec.v1") err(`spec.schema must be "cozyclay.motion-spec.v1", got ${fmt(spec.schema)}`);
 	for (const k of Object.keys(spec)) if (!SPEC_FIELDS.includes(k)) unknown(`spec.${k} is not a spec field${didYouMean(k, SPEC_FIELDS)} (fields: ${SPEC_FIELDS.join(", ")})`);
 	if (spec.fps !== undefined && spec.fps !== 24) err(`spec.fps must be 24, the timeline rate, got ${fmt(spec.fps)}`);
+	validateFlow(spec.flow, err, unknown);
 	const frames = spec.frames;
 	if (!Number.isInteger(frames) || frames < 1 || frames > 20000) err(`spec.frames must be an integer 1..20000 or "auto", got ${fmt(frames)}`);
 	const past = Number.isInteger(frames) ? pastEndAdvice(spec, frames) : "";

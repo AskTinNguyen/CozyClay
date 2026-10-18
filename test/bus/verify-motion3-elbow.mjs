@@ -108,15 +108,17 @@ const foldScene = motionScene(buildKit("bat", [], { position: { x: FOLD_KIT_AT[0
 // The walking takes (exitcar, walk, cup run3) carry the hashes of the walk's natural rhythm (compiler/gait-rhythm.js)
 // its foot rockers and arms (compiler/walk.js: heel strike, push-off over the ball, elbows bending with the swing) and hips (compiler/walk-pelvis.js); exitcar also the left hand's grip turn
 // on the door handle (compiler/grip.js).
+// Flow (compiler/channels.js: the free spine, head and arms carry through keys and trail) re-baked the takes whose arms swing
+// free (exitcar, walk, cup run3, the standing smokes, df6acdcc, 6262a69c); their QA did not change.
 const TAKES = [
-	["exitcar", "x-bot-tpose", { fps: 24, ...EXITCAR_SPEC }, motionScene(CAR), 137.07, "873bde7849fb86a9", null],
-	["smoke stand (Y Bot)", "y-bot-tpose", smoke(266, { use: STAND }, false), { objects: {} }, 134.57, "02f0451771581391", null],
-	["smoke stand (X Bot)", "x-bot-tpose", smoke(266, { use: STAND }, false), { objects: {} }, 137.07, "dc28a7fcc260fffa", null],
+	["exitcar", "x-bot-tpose", { fps: 24, ...EXITCAR_SPEC }, motionScene(CAR), 137.07, "705256afb83973e3", null],
+	["smoke stand (Y Bot)", "y-bot-tpose", smoke(266, { use: STAND }, false), { objects: {} }, 134.57, "00ca3255cfb92447", null],
+	["smoke stand (X Bot)", "x-bot-tpose", smoke(266, { use: STAND }, false), { objects: {} }, 137.07, "58d3a897e5cbb330", null],
 	["smoke squat, kits (Y Bot)", "y-bot-tpose", smoke(240, { keys: [{ f: 0, set: SQUAT }] }, true), kitScene, 132.24, "2be7e02a30c4290f", null],
 	["smoke squat, kits (X Bot)", "x-bot-tpose", smoke(240, { keys: [{ f: 0, set: SQUAT }] }, true), kitScene, 134.53, "bff1a9c3ec10ad34", null],
 	["squat smoke cea7fa46", "y-bot-tpose", G.SQUAT_SPEC, motionScene(G.smokeScene()), 131.75, "096cf692ba1a2cbf", null],
-	["walk", "y-bot-tpose", { ...spec0, frames: 160, use: [...STAND, { skill: "walkTo", f0: 1, args: { to: [0, 2.4], steps: 6, heading: 0 } }] }, { objects: {} }, 9.51, "3b371dedbcc7f700", null],
-	["cup run3", "y-bot-tpose", RUN3_SPEC, motionScene(CUP_SCENE), 133.27, "2a464d69f7ff6c64", null],
+	["walk", "y-bot-tpose", { ...spec0, frames: 160, use: [...STAND, { skill: "walkTo", f0: 1, args: { to: [0, 2.4], steps: 6, heading: 0 } }] }, { objects: {} }, 9.51, "43a2c0e36a04722d", null],
+	["cup run3", "y-bot-tpose", RUN3_SPEC, motionScene(CUP_SCENE), 133.27, "2dc4a03d23b71556", null],
 	["J2 bat, no keys", "y-bot-tpose", J2.SWING_SPEC, motionScene(J2.SCENE_OBJECTS), 141.52, "0ac49bec6e194bac", null],
 	["J2 bat, keys", "y-bot-tpose", j2keyed, motionScene(J2.SCENE_OBJECTS), 140.96, "94db1cc27a325334", null],
 	["K8 16d12ba9", "y-bot-tpose", K8.SWING_SPEC, motionScene(K8.batKit(K8.SWING_KIT_AT)), 143.57, "775b0255507bb9dc", null],
@@ -124,7 +126,7 @@ const TAKES = [
 	["N1 d5c110a7", "y-bot-tpose", N1.STANCE_SPEC, motionScene(K8.batKit(N1.STANCE_KIT_AT)), 154.06, "fa22fc331b91e0aa", "defd0c87fda19945"],
 	["N1 f0f2be59", "y-bot-tpose", N1.CLEAN_SPEC, motionScene(K8.batKit(N1.CLEAN_KIT_AT)), 152.2, "3d73c4b9e175a657", "aa132d1a9429a769"],
 	["L2 9dcf19c5", "y-bot-tpose", G.SWING_SPEC, motionScene(G.batScene()), 150.87, "a7ffbc022b463875", "ed7327d5d8d8c15e"],
-	["P2 df6acdcc", "y-bot-tpose", FOLD_SPEC, foldScene, 170.87, "cba7efc1642eee3a", "f26fdd7ea04b04e3"],
+	["P2 df6acdcc", "y-bot-tpose", FOLD_SPEC, foldScene, 170.87, "cba7efc1642eee3a", "89be9795b7aa8758"],
 ];
 const runs = {}, wrong = [];
 for (const [name, rig, spec, scene, before, h0, h1] of TAKES) {

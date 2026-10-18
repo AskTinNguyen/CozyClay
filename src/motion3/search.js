@@ -5,7 +5,7 @@
 // search around the best, at most spec.search.budget (default 32, max 64) compiles, stopping at
 // the first value with QA 0. Each trial compiles only the frames the parameters can change.
 import { compileMotion } from "./compiler/compile.js";
-import { bakeChannels } from "./compiler/channels.js";
+import { bakeChannels, flowOptions } from "./compiler/channels.js";
 import { expandGenerators } from "./compiler/walk.js";
 import { runMotionQa } from "./qa/index.js";
 import { weightOf } from "./qa/severity.js";
@@ -46,7 +46,7 @@ const costOf = qa => qa.groups.reduce((c, g) => c + weightOf(g), 0);
 function dirtyWindow(spec, params, mid, prepare, sk) {
 	const expand = values => prepare(resolveParams(spec, params, values));
 	const base = expand(mid), parts = s => JSON.stringify({ ...s, keys: undefined, generators: undefined });
-	const bake = s => bakeChannels(expandGenerators(s, sk), s.frames);
+	const bake = s => bakeChannels(expandGenerators(s, sk), s.frames, flowOptions(s.flow));
 	const b0 = bake(base);
 	let a = Infinity, b = -Infinity;
 	for (let i = 0; i < params.length; i++) for (const end of [params[i].lo, params[i].hi]) {

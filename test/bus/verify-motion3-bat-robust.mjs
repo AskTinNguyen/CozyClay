@@ -76,7 +76,7 @@ delete bare.checks.allow;
 const unallowed = compileSpec(bare, { sk, scene: bat(Q.CLEAN_KIT_AT) });
 // WRIST (qa/wrist-checks.js): the follow-through's keys ask the right forearm 1 deg past its 85 deg twist for a frame or two
 const onlyTwist = r => r.qa.groups.every(g => g.kind === "WRIST" && /^hand_r twist/.test(g.subject) && g.count <= 2);
-expect("6262a69c: QA 0 but a frame or two of WRIST hand_r twist past 85 deg, and the same take, bit for bit", onlyTwist(clean) && hashOf(bakeTake(sk, clean.out)) === "dc5ae1ba09b23d2b", kinds(clean).join(" | "));
+expect("6262a69c: QA 0 but a frame or two of WRIST hand_r twist past 85 deg, and the same take, bit for bit", onlyTwist(clean) && hashOf(bakeTake(sk, clean.out)) === "20f7f798f8d85159", kinds(clean).join(" | "));
 expect("6262a69c without its checks.allow (hand_l x empty 5 cm) is QA 0 too (but that WRIST): the left palm is on the handle at f37-40 while the grip fades (weight 0.3-0.6)",
 	onlyTwist(unallowed), kinds(unallowed).join(" | "));
 
@@ -103,16 +103,18 @@ expect("a flat foot keyed to turn while flat: no SLIDE; it keeps its heading whi
 	held.qa.ok && Math.abs(heading(held, 19) - heading(held, 0)) < 0.1 && Math.abs(heading(held, 47) - heading(slid, 47)) < 0.1 && held.fixed.slide?.turns?.frames > 0, kinds(held).join(" | "));
 expect("with fix.slide off the same turn is a SLIDE (the foot turns flat)", slid.qa.groups.some(g => g.kind === "SLIDE" && g.subject.startsWith("Right")), kinds(slid).join(" | "));
 
+// Flow (compiler/channels.js: the free spine, head and arms carry through keys and trail) re-baked the takes whose arms swing
+// free (exitcar, walk, cup run3, the standing smokes, df6acdcc, 6262a69c); their QA did not change.
 // ---- 5. take hashes: what lane Q1 changed and why -----------------------------------------------------------
 const spec0 = { schema: "cozyclay.motion-spec.v1", fps: 24 }, STAND = [{ skill: "standIdle", f0: 0, args: { at: [0, 0], heading: 0 } }];
 const j2keyed = structuredClone(J2.SWING_SPEC);
 j2keyed.objects[J2.BAT].keys = J2.SWING_KEYS;
 // [name, rig, spec, scene, hash before (v3@4087806b), hash after (null: the same), why]
 const TAKES = [
-	["exitcar", "x-bot-tpose", { fps: 24, ...EXITCAR_SPEC }, motionScene(CAR), "9e35eb6aa9a2c9f8", "873bde7849fb86a9", "the walk's natural rhythm (compiler/gait-rhythm.js) and foot rockers and arms (compiler/walk.js), and the left hand's grip turn on the door handle (compiler/grip.js) and hips (compiler/walk-pelvis.js)"],
+	["exitcar", "x-bot-tpose", { fps: 24, ...EXITCAR_SPEC }, motionScene(CAR), "9e35eb6aa9a2c9f8", "705256afb83973e3", "the walk's natural rhythm (compiler/gait-rhythm.js) and foot rockers and arms (compiler/walk.js), and the left hand's grip turn on the door handle (compiler/grip.js) and hips (compiler/walk-pelvis.js)"],
 	["smoke squat cea7fa46", "y-bot-tpose", G.SQUAT_SPEC, motionScene(G.smokeScene()), "096cf692ba1a2cbf", null],
-	["walk", "y-bot-tpose", { ...spec0, frames: 160, use: [...STAND, { skill: "walkTo", f0: 1, args: { to: [0, 2.4], steps: 6, heading: 0 } }] }, { objects: {} }, "6a6295472b4a4781", "3b371dedbcc7f700", "the walk's natural rhythm (compiler/gait-rhythm.js) and foot rockers and arms (compiler/walk.js) and hips (compiler/walk-pelvis.js)"],
-	["cup run3", "y-bot-tpose", RUN3_SPEC, motionScene(CUP_SCENE), "b2e90da88e394432", "2a464d69f7ff6c64", "the walk's natural rhythm (compiler/gait-rhythm.js) and foot rockers and arms (compiler/walk.js) and hips (compiler/walk-pelvis.js)"],
+	["walk", "y-bot-tpose", { ...spec0, frames: 160, use: [...STAND, { skill: "walkTo", f0: 1, args: { to: [0, 2.4], steps: 6, heading: 0 } }] }, { objects: {} }, "6a6295472b4a4781", "43a2c0e36a04722d", "the walk's natural rhythm (compiler/gait-rhythm.js) and foot rockers and arms (compiler/walk.js) and hips (compiler/walk-pelvis.js)"],
+	["cup run3", "y-bot-tpose", RUN3_SPEC, motionScene(CUP_SCENE), "b2e90da88e394432", "2dc4a03d23b71556", "the walk's natural rhythm (compiler/gait-rhythm.js) and foot rockers and arms (compiler/walk.js) and hips (compiler/walk-pelvis.js)"],
 	["K8 6912547c", "y-bot-tpose", K8.EARLIER_SPEC, motionScene(K8.batKit(K8.EARLIER_KIT_AT)), "75c54a3970cf8ff0", null],
 	["N1 f0f2be59", "y-bot-tpose", N1.CLEAN_SPEC, motionScene(K8.batKit(N1.CLEAN_KIT_AT)), "aa132d1a9429a769", null],
 	["J2 bat, no keys", "y-bot-tpose", J2.SWING_SPEC, motionScene(J2.SCENE_OBJECTS), "681b862de6399b43", "0ac49bec6e194bac", "the flat back foot turned 7.2 deg (turn.js)"],
@@ -120,7 +122,7 @@ const TAKES = [
 	["K8 16d12ba9", "y-bot-tpose", K8.SWING_SPEC, motionScene(K8.batKit(K8.SWING_KIT_AT)), "35a73f309c9fe95f", "775b0255507bb9dc", "the left hand's roll priced past SELF on the right hand"],
 	["N1 d5c110a7", "y-bot-tpose", N1.STANCE_SPEC, motionScene(K8.batKit(N1.STANCE_KIT_AT)), "38d773bb8b474f7a", "defd0c87fda19945", "the left hand's roll priced past BODY in the torso"],
 	["L2 9dcf19c5", "y-bot-tpose", G.SWING_SPEC, motionScene(G.batScene()), "ad773fd24b96b59b", "ed7327d5d8d8c15e", "the flat front foot turned 18.5 deg (turn.js)"],
-	["P2 df6acdcc", "y-bot-tpose", FOLD_SPEC, bat(FOLD_KIT_AT), "f3d9e1c7e86e7d08", "f26fdd7ea04b04e3", "the left hand's roll priced past BODY"],
+	["P2 df6acdcc", "y-bot-tpose", FOLD_SPEC, bat(FOLD_KIT_AT), "f3d9e1c7e86e7d08", "89be9795b7aa8758", "the left hand's roll priced past BODY"],
 	["Q1 4db5d447", "y-bot-tpose", Q.SEVENTEEN_SPEC, bat(Q.SEVENTEEN_KIT_AT), "9521e2c61c85f8b1", "6527da5bac378a87", "all four"],
 ];
 const wrong = [];

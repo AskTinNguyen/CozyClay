@@ -4,7 +4,8 @@
 import fs from "node:fs";
 import { createSkeleton, restState, toLocal, fk } from "../../src/motion3/compiler/skeleton.js";
 import { pose } from "../../src/motion3/compiler/pose.js";
-import { bakeChannels } from "../../src/motion3/compiler/channels.js";
+import { bakeChannels, flowOptions } from "../../src/motion3/compiler/channels.js";
+import { validateSpec } from "../../src/motion3/compiler/validate.js";
 import { compileMotion } from "../../src/motion3/compiler/compile.js";
 import { runMotionQa } from "../../src/motion3/qa/index.js";
 import { solePoints } from "../../src/motion3/qa/geometry.js";
@@ -38,6 +39,22 @@ for (const model of ["x-bot-tpose", "y-bot-tpose"]) {
 const ch = bakeChannels([{ f: 0, set: { a: 0 } }, { f: 10, set: { a: 1 } }, { f: 20, set: { a: 1 } }, { f: 30, set: { a: 0, v: 1 }, step: ["v"] }, { f: 5, set: { v: 0 } }], 40);
 expect("PCHIP never overshoots a held value", Math.max(...ch.a) <= 1 + 1e-12 && ch.a.slice(10, 21).every(v => Math.abs(v - 1) < 1e-12));
 expect("step keys switch on their frame", ch.v[29] === 0 && ch.v[30] === 1);
+// Flow (channels.js): the body's own swing carries through keys and trails; contacts and held values stay exact.
+{
+	const keys = [{ f: 0, set: { head_yaw: 0, aswing_r: 0, foot_l: [0, 0, 0] } }, { f: 10, set: { head_yaw: 20, aswing_r: 20, foot_l: [1, 0, 0] } },
+		{ f: 20, set: { head_yaw: 50, aswing_r: 50 } }, { f: 30, set: { head_yaw: 50, aswing_r: 50 } }, { f: 40, set: { head_yaw: 0, aswing_r: 0 } }];
+	const on = bakeChannels(keys, 46), off = bakeChannels(keys, 46, flowOptions(false)), plainHead = bakeChannels(keys.map(k => ({ ...k, set: { ...k.set } })), 46, flowOptions({ lag: false }));
+	expect("flow: the head trails 2 frames and the arm 3; a foot is on time", Math.abs(on.head_yaw[12] - plainHead.head_yaw[10]) < 1e-9 && Math.abs(on.aswing_r[13] - plainHead.aswing_r[10]) < 1e-9 && on.foot_l[10][0] === 1);
+	expect("flow: a hold stays flat and the last value is reached", on.head_yaw.slice(22, 33).every(v => Math.abs(v - 50) < 1e-9) && on.head_yaw[45] === 0);
+	expect("flow: the speed through a key is kept (not the monotone cubic's)", Math.abs(plainHead.head_yaw[11] - plainHead.head_yaw[9]) > Math.abs(off.head_yaw[11] - off.head_yaw[9]));
+	expect("flow: false is the monotone cubic everywhere", JSON.stringify(off.head_yaw) === JSON.stringify(bakeChannels(keys.map(k => ({ ...k, set: { head_yaw: k.set.head_yaw } })), 46, flowOptions(false)).head_yaw));
+	const ik = bakeChannels([{ f: 0, set: { armw_r: 1, aswing_r: 0 } }, { f: 10, set: { aswing_r: 30 } }, { f: 20, set: { aswing_r: 60 } }], 30);
+	const ikOff = bakeChannels([{ f: 0, set: { armw_r: 1, aswing_r: 0 } }, { f: 10, set: { aswing_r: 30 } }, { f: 20, set: { aswing_r: 60 } }], 30, flowOptions(false));
+	expect("flow: an arm on its IK keeps its keys on time", ik.aswing_r.every((v, f) => Math.abs(v - ikOff.aswing_r[f]) < 1e-9));
+	let refused = "";
+	try { validateSpec({ schema: "cozyclay.motion-spec.v1", frames: 10, flow: { lag: { neck: 2 }, smooth: 1 } }, { sk: rig("x-bot-tpose") }); } catch (e) { refused = e.message; }
+	expect("flow: a bad spec.flow is refused with its fields", refused.includes('spec.flow.lag has unknown field "neck"') && refused.includes("spec.flow.smooth must be true or false"), refused);
+}
 
 const sk = rig("x-bot-tpose"), I = sk.index, P = sk.restWorldPos, ank = P[I.LeftFoot][1];
 const walkSpec = { schema: "cozyclay.motion-spec.v1", fps: 30, frames: 220,
@@ -75,7 +92,8 @@ for (const side of ["Left", "Right"]) {
 	const chest = spanOf(swayed, I.Spine2, I.Neck), head = spanOf(swayed, I.Neck, I.HeadTop_End), keyed = spanOf(looked, I.Neck, I.HeadTop_End);
 	// (the walk sways the trunk itself, once a stride (walk.js LIST, SWAY), about the head's averaging window, so a little more of
 	// that slow sway stays in the head: 0.61 of the chest here, 0.6 before)
-	expect("a walking head sways less than the trunk under it, and a keyed head is left alone", head < 0.65 * chest && Math.abs(keyed - chest) < 0.5, JSON.stringify({ chest, head, keyed }));
+	// a keyed head is not steadied: it sways with the trunk (a little more, the neck on top; 10.65 vs 10.18 deg, with flow 10.73 vs 10.16)
+	expect("a walking head sways less than the trunk under it, and a keyed head is left alone", head < 0.65 * chest && keyed > chest - 0.5, JSON.stringify({ chest, head, keyed }));
 }
 const take = bakeTake(sk, walk, { position: [0, 0, 0], yaw: 0 });
 const f = 120, q = Array.from({ length: 65 }, (_, b) => takeQuat(take, f, b)), back = fk(sk, q, takeHips(take, f));

@@ -55,6 +55,7 @@ export const SPEC_TYPES = {
 	detourRadius: num("m; a hand moving between targets arcs around the torso this far out", { default: 0.25 }),
 	search: { type: "object", properties: { budget: int("compiles at most", { minimum: 1, maximum: 64, default: 32 }) }, additionalProperties: false },
 	goals: { type: "array", description: "topic goals" },
+	flow: { oneOf: [{ const: false }, { type: "object" }] },
 };
 
 export const ANCHOR_TYPES = {

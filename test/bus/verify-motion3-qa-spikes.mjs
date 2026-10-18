@@ -125,7 +125,9 @@ expect("a walking knee turned 120 deg for one frame is a FLIP", flipAt(swivel(wa
 // ---- 5. QA does not change takes: the swings bake as before -------------------------------------------
 // lane P3 changed all three: each folds an elbow past 145 deg (df6acdcc right 171, f0f2be59 right 152, 9dcf19c5 left 151), where the elbow now eases onto its stop;
 // lane Q1 df6acdcc (the left hand's roll priced past the BODY allowance) and 9dcf19c5 (the flat front foot keeps its heading until it lifts)
-const HASHES = { df6acdcc: [fold, "f26fdd7ea04b04e3"], "f0f2be59 without limits": [clean, "881d97a81ca23b8e"], "9dcf19c5": [l2, "ed7327d5d8d8c15e"] };
+// Flow (compiler/channels.js: the free spine, head and arms carry through keys and trail) re-baked the takes whose arms swing
+// free (exitcar, walk, cup run3, the standing smokes, df6acdcc, 6262a69c); their QA did not change.
+const HASHES = { df6acdcc: [fold, "89be9795b7aa8758"], "f0f2be59 without limits": [clean, "881d97a81ca23b8e"], "9dcf19c5": [l2, "ed7327d5d8d8c15e"] };
 const changed = Object.entries(HASHES).map(([k, [r, h]]) => [k, hashOf(bakeTake(sk, r.out)), h]).filter(([, got, h]) => got !== h);
 expect("the three swings bake bit for bit as before (df6acdcc and f0f2be59 retime: what QA calls a pop did not change there)", changed.length === 0, JSON.stringify(changed));
 

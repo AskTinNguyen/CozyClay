@@ -15,6 +15,7 @@
 //               id is a body or a group (Empty); a group moves every body under it
 //   generators: [{ type: "walk", f0, ... }]  (walk.js)
 //   fix:        { reach, slide, penetration, retime }  deterministic auto-fixes (../fix/)
+//   flow:       { smooth, lag } | false  the body's swing carries through keys and trails (channels.js)
 // ctx = { sk, scene: { objects: { id: { pos, R, half, ancestors } } } }; out.ctx.scene keeps the scene (object-pose.js)
 import { add, sub, scale, norm, len, dot, apply, axisRot } from "./math.js";
 import { isCarried, isFollow, hingePose, movesRecord, compose, relative } from "../carried.js";
@@ -22,7 +23,7 @@ import { isFree, freePoseAt } from "../free-motion.js";
 import { groupsOf } from "../scene.js";
 import { pose, SIDES } from "./pose.js";
 import { gripHand } from "./grip.js";
-import { bakeChannels, channelsAt } from "./channels.js";
+import { bakeChannels, channelsAt, flowOptions } from "./channels.js";
 import { resolveAnchor, measureProps } from "./anchors.js";
 import { expandGenerators } from "./walk.js";
 import { steadyHead } from "./head-steady.js";
@@ -178,7 +179,7 @@ export function compileMotion(spec, { sk, scene }, opts = {}) {
 	const engine = {
 		rebake(keys) {
 			out.keys = keys;
-			out.baked = bakeChannels(keys, frameCount);
+			out.baked = bakeChannels(keys, frameCount, flowOptions(spec.flow));
 			steadyHead(out.baked, keys, frameCount);
 			const tracks = objectTracks(spec, scene, out.baked, () => out.timeMap);
 			ctx.objectsAt = tracks.all;

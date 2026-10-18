@@ -53,9 +53,9 @@ const NO_JUMP = "Without at/along it keeps its grab-frame offset to the palm: no
 const CARRY = { props: EXAMPLES.objects.props, objects: { cup: EXAMPLES.objects.objects.cup } };
 
 export const NOTES = {
-	essentials: ["types: ? optional, =v default, lo..hi range, A | B one of, [key]: T a map, a|b?: T both fields, x_l|r left and right, (text) the meaning.",
+	essentials: ["types: ? optional, =v default, lo..hi range, A | B one of, [key]: T a map, a|b?: T both fields, x_l|r each side, (text) the meaning.",
 		`A carried object: ${literal(CARRY)}. ${NO_JUMP}`,
-		"motion.describe { topic } or { topic: 'skills', name }: the rest, with examples."],
+		"motion.describe { topic } or { topic: 'skills', name }: the rest."],
 	spec: [UNITS,
 		"frames: an integer, or \"auto\" (the last skill end, generator end or key f, plus 1); the stored spec keeps the number.",
 		"Any number may be { range: [lo, hi] } (int: true for frames): the compiler searches it, QA 0 first, at most search.budget compiles.",
@@ -99,6 +99,7 @@ export const NOTES = {
 	probes: ["motion.compile { probes } (at most 16); spec.probes are measured too, not stored; answered whether or not it installs.",
 		"distance [a, b] -> { min, minAt, max, maxAt, mean, first, last } in m; a bare object:<id> measures to its surface. position -> { at: [{ f, p }] }, at most 16 rows."],
 	channels: ["key.set names channels; values ease between keys and hold after the last key. step: [channel] jumps at f instead.",
+		"Flow (spec.flow, on by default): the spine, head, arm swing/bend and wrist carry their speed through a key (a small overshoot) and trail the body (spine 1, head 2, arms 3 frames; lag: { spine, head, arms } or a number); feet, root, hand targets, weights, poles, fingers and objects land on their keys on time. flow: false turns it off; { smooth: false } or { lag: false } one part.",
 		"w_<anchor>_<side> (0..1) weights a hand onto an anchor; the weights of one hand add up to at most 1.",
 		"Any other numeric channel must come from spec.channels, a hinge (objects.<id>.channel), a check's when or a visible switch; names ending _vis are visibility switches (shown above 0.5)."],
 	refs: ["A ref names a point: joint:/bone:<Bone>, prop:<prop>.<point>, anchor:<name>, landmark:mouth, object:<id>[.center|.top|.base].",

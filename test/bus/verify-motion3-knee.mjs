@@ -103,9 +103,11 @@ const smoke = (frames, start, kit) => ({ ...spec0, frames, ...start, use: [...(s
 const lifted = [{ x: 0.25, y: 0.3, z: 0.1 }, { x: -0.25, y: 0.3, z: 0.1 }];
 // [name, rig, spec, scene, max knee flexion (v3@f51e47e8, deg), take hash, filter-to-lips (mm, null: no cigarette)]; the exit-car and
 // the walk as the walk's natural rhythm (compiler/gait-rhythm.js), foot rockers and arm swing (compiler/walk.js) and hips (compiler/walk-pelvis.js) bake them (the walk's knee 56.45 deg in the even walk)
+// Flow (compiler/channels.js: the free spine, head and arms carry through keys and trail) re-baked the takes whose arms swing
+// free (exitcar, walk, cup run3, the standing smokes, df6acdcc, 6262a69c); their QA did not change.
 const TAKES = [
-	["exitcar", xb, { fps: 24, ...EXITCAR_SPEC }, motionScene(CAR), 129.71, "873bde7849fb86a9", null],
-	["walk", yb, { ...spec0, frames: 160, use: [...STAND, { skill: "walkTo", f0: 1, args: { to: [0, 2.4], steps: 6, heading: 0 } }] }, { objects: {} }, 58.61, "3b371dedbcc7f700", null],
+	["exitcar", xb, { fps: 24, ...EXITCAR_SPEC }, motionScene(CAR), 129.71, "705256afb83973e3", null],
+	["walk", yb, { ...spec0, frames: 160, use: [...STAND, { skill: "walkTo", f0: 1, args: { to: [0, 2.4], steps: 6, heading: 0 } }] }, { objects: {} }, 58.61, "43a2c0e36a04722d", null],
 	["smoke squat (Y Bot)", yb, smoke(240, { keys: [{ f: 0, set: SQUAT }] }, false), { objects: {} }, 133.46, "38c6581740baf1fd", 2.081],
 	["smoke squat (X Bot)", xb, smoke(240, { keys: [{ f: 0, set: SQUAT }] }, false), { objects: {} }, 134.67, "59389508b5bbd838", 0.29],
 	["smoke squat, kits (Y Bot)", yb, smoke(240, { keys: [{ f: 0, set: SQUAT }] }, true), kitScene, 133.46, "2be7e02a30c4290f", 2.081],

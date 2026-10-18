@@ -7,6 +7,8 @@
 // The car exit's take hash changed with the walk's foot rockers (compiler/walk.js: its walk strikes with the heel and
 // pushes off the ball), its arms (the elbows bend with the swing) and its hips (compiler/walk-pelvis.js); the swing's changed with lane L2 (its sunk Y Bot soles lift onto the floor and the
 // back foot pivots on its ball), the keyed swing's before that with lane K8 (the arm follows).
+// Flow (compiler/channels.js: the free spine, head and arms carry through keys and trail) re-baked the takes whose arms swing
+// free (exitcar, walk, cup run3, the standing smokes, df6acdcc, 6262a69c); their QA did not change.
 import { createHash } from "node:crypto";
 import { SCENE_OBJECTS, CHARACTER, SWING_SPEC, SWING_KEYS, BAT } from "../motion3/fixtures/bat-swing.mjs";
 import { EXITCAR_SPEC, SCENE_OBJECTS as CAR_OBJECTS, CHARACTER as DRIVER } from "../motion3/fixtures/exitcar-scene.mjs";
@@ -39,7 +41,7 @@ const plain = compileSpec(SWING_SPEC, { sk, scene }), keyed = compile(SWING_KEYS
 const car = compileSpec({ fps: 24, ...EXITCAR_SPEC }, { sk: dsk, scene: motionScene(CAR_OBJECTS) });
 const hashes = { plain: hashOf(bakeTake(sk, plain.out)), keyed: hashOf(bakeTake(sk, keyed.out)), exitcar: hashOf(bakeTake(dsk, car.out)) };
 expect("the car exit bakes the take of the grip turn on its door handle (compiler/grip.js), bit for bit; the swing without keys bakes the take of lane Q1, with the J2 rot keys the take of lane Q1",
-	hashes.plain === "0ac49bec6e194bac" && hashes.keyed === "94db1cc27a325334" && hashes.exitcar === "873bde7849fb86a9", JSON.stringify(hashes));
+	hashes.plain === "0ac49bec6e194bac" && hashes.keyed === "94db1cc27a325334" && hashes.exitcar === "705256afb83973e3", JSON.stringify(hashes));
 
 // 2. the same keys as aims: +Y of each rot; roll = its turn about aim from where the plain carry holds the bat at that frame
 const rollFrom = (q, from, aim) => {

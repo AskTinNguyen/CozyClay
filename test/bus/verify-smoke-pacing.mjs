@@ -71,6 +71,8 @@ const shortUntil = refusal(smoke(300, { keys: [{ f: 0, set: SQUAT }] }, false, {
 expect("a short args.until says to raise it", shortUntil.endsWith("it has f1..f150, so set args.until >= 199"), shortUntil);
 expect("motion.describe tells the range", SKILL_INFO.smokeCigarette.frames === "265 nominal; fits 199..264 by pacing", SKILL_INFO.smokeCigarette.frames);
 
+// Flow (compiler/channels.js: the free spine, head and arms carry through keys and trail) re-baked the takes whose arms swing
+// free (exitcar, walk, cup run3, the standing smokes, df6acdcc, 6262a69c); their QA did not change.
 // 3. at its own length nothing changes (hashes of v3@6b8b3669; the exitcar's walk as the walk's natural rhythm bakes it)
 const exitcar = { schema: "cozyclay.motion-spec.v1", fps: 24, frames: 730, use: [
 	{ skill: "sitInSeat", f0: 0, args: { car: "Car", offset: [-0.06, 0.17, 0.023] } }, { skill: "exitCar", f0: 0, args: { car: "Car", side: "l" } },
@@ -81,8 +83,8 @@ const xb = skeletonFor("x-bot-tpose"), car = compileSpec(exitcar, { sk: xb, scen
 // and its walk strikes with the heel and pushes off the ball since the foot rockers (compiler/walk.js; was 74582d7bb52a8a7a),
 // its elbows bend with the arm swing since the walk's arms (compiler/walk.js; was cde50567a618c2b2),
 // and its hips follow the legs since compiler/walk-pelvis.js (was 42daab3008d5072e)
-expect("the exitcar take from skills bakes bit for bit as before", hashOf(bakeTake(xb, car.out)) === "7c291df770a6f4b4" && !car.observations.paced, hashOf(bakeTake(xb, car.out)));
-const HASHES = { "y-bot-tpose": "02f0451771581391", "x-bot-tpose": "dc28a7fcc260fffa" };
+expect("the exitcar take from skills bakes bit for bit as before", hashOf(bakeTake(xb, car.out)) === "2f6c5ac393b2b2aa" && !car.observations.paced, hashOf(bakeTake(xb, car.out)));
+const HASHES = { "y-bot-tpose": "00ca3255cfb92447", "x-bot-tpose": "58d3a897e5cbb330" };
 for (const [rig, hash] of Object.entries(HASHES)) {
 	const r = compile(rig, smoke(266, STAND, false), false), got = hashOf(bakeTake(skeletonFor(rig), r.out));
 	expect(`${rig}: the standing smoke at its own length bakes bit for bit as before`, got === hash && !r.observations.paced && !("paced" in r.used[1]), got);
