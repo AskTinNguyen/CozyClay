@@ -78,8 +78,9 @@ const exitcar = { schema: "cozyclay.motion-spec.v1", fps: 24, frames: 730, use: 
 	{ skill: "smokeCigarette", f0: 440 }] };
 const xb = skeletonFor("x-bot-tpose"), car = compileSpec(exitcar, { sk: xb, scene: motionScene(SCENE_OBJECTS) });
 // the exitCar skill's handle fit turns the hand onto the handle since lane wrist (compiler/grip.js; was df302cb1a12b1a31),
-// and its walk strikes with the heel and pushes off the ball since the foot rockers (compiler/walk.js; was 74582d7bb52a8a7a)
-expect("the exitcar take from skills bakes bit for bit as before", hashOf(bakeTake(xb, car.out)) === "cde50567a618c2b2" && !car.observations.paced, hashOf(bakeTake(xb, car.out)));
+// and its walk strikes with the heel and pushes off the ball since the foot rockers (compiler/walk.js; was 74582d7bb52a8a7a),
+// and its elbows bend with the arm swing since the walk's arms (compiler/walk.js; was cde50567a618c2b2)
+expect("the exitcar take from skills bakes bit for bit as before", hashOf(bakeTake(xb, car.out)) === "42daab3008d5072e" && !car.observations.paced, hashOf(bakeTake(xb, car.out)));
 const HASHES = { "y-bot-tpose": "02f0451771581391", "x-bot-tpose": "dc28a7fcc260fffa" };
 for (const [rig, hash] of Object.entries(HASHES)) {
 	const r = compile(rig, smoke(266, STAND, false), false), got = hashOf(bakeTake(skeletonFor(rig), r.out));

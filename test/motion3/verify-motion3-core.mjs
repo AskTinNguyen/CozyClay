@@ -9,7 +9,7 @@ import { compileMotion } from "../../src/motion3/compiler/compile.js";
 import { runMotionQa } from "../../src/motion3/qa/index.js";
 import { solePoints } from "../../src/motion3/qa/geometry.js";
 import { bakeTake, takeQuat, takeHips } from "../../src/motion3/take.js";
-import { dist, I3 } from "../../src/motion3/compiler/math.js";
+import { dist, I3, angle, sub } from "../../src/motion3/compiler/math.js";
 
 let failures = 0;
 function expect(name, condition, detail = "") {
@@ -59,6 +59,21 @@ for (const side of ["Left", "Right"]) {
 	expect(`${side}: the heel strikes before the ball and holds while the foot rolls down; the heel rises on a still ball before lift-off`,
 		strikes.length >= 3 && heelFirst.length >= strikes.length - 1 && lifts.length >= 3 && rolled.length === lifts.length && push >= 35,
 		JSON.stringify({ strikes, heelFirst, lifts, rolled, push }));
+}
+// The arms swing with bending elbows (compiler/walk.js): the elbow's bend changes through the walk, and at each landing the
+// forward arm's elbow is the more bent. The head takes back part of a trunk sway (compiler/head-steady.js), unless the spec keys it.
+{
+	const bend = (fr, S) => angle(sub(fr.s.P[I[`${S}ForeArm`]], fr.s.P[I[`${S}Arm`]]), sub(fr.s.P[I[`${S}Hand`]], fr.s.P[I[`${S}ForeArm`]]));
+	const lb = walk.frames.map(fr => bend(fr, "Left")), mid = walk.frames.slice(60, 160);
+	const fwdMore = mid.filter(fr => Math.abs((fr.c.aswing_l ?? 0) - (fr.c.aswing_r ?? 0)) > 15).every(fr => ((fr.c.aswing_l > fr.c.aswing_r) === (bend(fr, "Left") > bend(fr, "Right"))));
+	expect("the elbows bend with the arm swing, the forward arm's the more", Math.max(...lb) - Math.min(...lb) > 18 && fwdMore, JSON.stringify([Math.min(...lb), Math.max(...lb), fwdMore]));
+	const sway = Array.from({ length: 14 }, (_, i) => ({ f: 30 + i * 10, set: { spine_roll: i % 2 ? 5 : -5 } }));
+	const roll = (fr, a, b) => { const v = sub(fr.s.P[b], fr.s.P[a]); return Math.atan2(v[0], v[1]) * 180 / Math.PI; };
+	const spanOf = (out, a, b) => { const xs = out.frames.slice(60, 160).map(fr => roll(fr, a, b)); return Math.max(...xs) - Math.min(...xs); };
+	const swayed = compileMotion({ ...walkSpec, keys: [...walkSpec.keys, ...sway] }, { sk, scene: { objects: {} } });
+	const looked = compileMotion({ ...walkSpec, keys: [...walkSpec.keys, ...sway, { f: 100, set: { head_roll: 0 } }] }, { sk, scene: { objects: {} } });
+	const chest = spanOf(swayed, I.Spine2, I.Neck), head = spanOf(swayed, I.Neck, I.HeadTop_End), keyed = spanOf(looked, I.Neck, I.HeadTop_End);
+	expect("a walking head sways less than the trunk under it, and a keyed head is left alone", head < 0.6 * chest && Math.abs(keyed - chest) < 0.5, JSON.stringify({ chest, head, keyed }));
 }
 const take = bakeTake(sk, walk, { position: [0, 0, 0], yaw: 0 });
 const f = 120, q = Array.from({ length: 65 }, (_, b) => takeQuat(take, f, b)), back = fk(sk, q, takeHips(take, f));

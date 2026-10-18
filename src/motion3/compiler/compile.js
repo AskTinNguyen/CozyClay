@@ -25,6 +25,7 @@ import { gripHand } from "./grip.js";
 import { bakeChannels, channelsAt } from "./channels.js";
 import { resolveAnchor, measureProps } from "./anchors.js";
 import { expandGenerators } from "./walk.js";
+import { steadyHead } from "./head-steady.js";
 import { fixOptions, applyFixes } from "../fix/index.js";
 import { fitWeight } from "../fix/self.js";
 import { holdHook } from "../object-keys.js";
@@ -178,6 +179,7 @@ export function compileMotion(spec, { sk, scene }, opts = {}) {
 		rebake(keys) {
 			out.keys = keys;
 			out.baked = bakeChannels(keys, frameCount);
+			steadyHead(out.baked, keys, frameCount);
 			const tracks = objectTracks(spec, scene, out.baked, () => out.timeMap);
 			ctx.objectsAt = tracks.all;
 			out.objectsAt = a ? f => tracks.obstacles(f + a) : tracks.obstacles;

@@ -16,10 +16,15 @@
 // STRIKE_DF); TOE_OFF is the push-off pitch at a full stride (STRIDE_REF m of foot travel), less for
 // a shorter one. A pivot is the very point QA reads (qa/geometry.js solePoints), so a rolling foot
 // never counts as sliding.
+// The arms swing wider the faster the walk (armSwing, when not given, from the speed against the default
+// walk's 0.5 m per 20 frames: about 23 deg front to back there, about 30 at twice the speed); each elbow
+// bends with its swing, most with the arm forward and least behind (ELBOW +- ELBOW_SWING, both growing
+// with the speed), and the hands hang with the wrists a little flexed (WRIST). All of it fades in over
+// the first steps and back out on the closing one.
 import { add, sub, scale, len, apply, ry, rx, clamp } from "./math.js";
 import { walkRhythm } from "./gait-rhythm.js";
 
-const SHIN = 0.45, STRIKE_DF = 3, TOE_OFF = 50, STRIDE_REF = 1.1;
+const SHIN = 0.45, STRIKE_DF = 3, TOE_OFF = 50, STRIDE_REF = 1.1, ELBOW = [24, 4], ELBOW_SWING = [6, 3], WRIST = 8;
 const fwd = h => apply(ry(h), [0, 0, 1]);
 const leftOf = h => apply(ry(h), [1, 0, 0]);
 const smoothstep = x => { const t = Math.min(1, Math.max(0, x)); return t * t * (3 - 2 * t); };
@@ -51,7 +56,10 @@ export function walk(gen, keys, sk, tag = "walk") {
 	const hipDrop = P[I.Hips][1] - P[I.LeftUpLeg][1], step0 = gen.step ?? 0.5, hw = gen.halfWidth ?? 0.1;
 	const hipsAt = horiz => Math.sqrt(Math.max(0, (0.98 * leg) ** 2 - horiz ** 2)) + ank + hipDrop - standY;
 	const W = { steps: 8, step: step0, period: 20, swing: 14, halfWidth: hw, lift: 0.08, turnDistance: 0.4, firstStep: 0.4,
-		pelvisHigh: Math.min(-0.005, hipsAt(Math.hypot(0.03, hw - 0.035))), pelvisLow: hipsAt(Math.hypot(step0 / 2, hw)), armSwing: 14, vary: 1, ...gen };
+		pelvisHigh: Math.min(-0.005, hipsAt(Math.hypot(0.03, hw - 0.035))), pelvisLow: hipsAt(Math.hypot(step0 / 2, hw)), vary: 1, ...gen };
+	const pace = (W.step / W.period) / (0.5 / 20);
+	W.armSwing = gen.armSwing ?? clamp(10 + 4.5 * pace, 12, 22);
+	const elbow = ELBOW[0] + ELBOW[1] * Math.min(pace, 2.5), elbowSwing = ELBOW_SWING[0] + ELBOW_SWING[1] * Math.min(pace, 2.5);
 	const [h0, h1] = W.heading ?? [st.yaw ?? 0, st.yaw ?? 0];
 	const hs = s => h0 + (h1 - h0) * smoothstep(s / W.turnDistance);
 	const c0 = scale(add(st.foot_l, st.foot_r), 0.5); c0[1] = 0;
@@ -60,7 +68,7 @@ export function walk(gen, keys, sk, tag = "walk") {
 	const C = s => path[Math.max(0, Math.min(path.length - 1, Math.round(s / 0.01)))];
 	const footAt = (s, k) => { const p = add(C(s), scale(leftOf(hs(s)), (k === "l" ? 1 : -1) * W.halfWidth)); p[1] = ank; return p; };
 	const stance = { l: -0.07, r: 0.07 }, state = { foot_l: st.foot_l, foot_r: st.foot_r, fyaw_l: st.fyaw_l ?? h0, fyaw_r: st.fyaw_r ?? h0 };
-	const holdAll = ["root", "yaw", "foot_l", "foot_r", "fyaw_l", "fyaw_r", "spine_yaw", "aswing_l", "aswing_r", "abend_l", "abend_r", "head_yaw"];
+	const holdAll = ["root", "yaw", "foot_l", "foot_r", "fyaw_l", "fyaw_r", "spine_yaw", "aswing_l", "aswing_r", "abend_l", "abend_r", "wflex_l", "wflex_r", "head_yaw"];
 	at(gen.f0, Object.fromEntries(holdAll.map(ch => [ch, st[ch] ?? state[ch] ?? (ch === "yaw" ? h0 : 0)])));
 	let sLast = stance.r;
 	const R = walkRhythm(W, { s0: sLast, turn: (a, b) => hs(b) - hs(a),
@@ -109,8 +117,10 @@ export function walk(gen, keys, sk, tag = "walk") {
 		state[`foot_${k}`] = land; state[`fyaw_${k}`] = lyaw; stance[k] = sNew;
 		const swing = (last ? 0 : i < 3 ? [0, 0.3, 0.7][i] : 1) * R.arm[i], sg = k === "l" ? 1 : -1;
 		at(tm, { root: pm, yaw: hs(sMid) });
+		// the arm opposite the landing foot is forward: its elbow bends most, the other's least
 		at(tl, { root: pl, yaw: hs(sLand) - 3 * sg * swing, spine_yaw: 3 * sg * swing, aswing_l: -0.85 * W.armSwing * sg * swing,
-			aswing_r: W.armSwing * sg * swing, abend_l: 10 * swing, abend_r: 10 * swing, head_yaw: 0 });
+			aswing_r: W.armSwing * sg * swing, abend_l: swing * (elbow - sg * elbowSwing), abend_r: swing * (elbow + sg * elbowSwing),
+			wflex_l: WRIST * swing, wflex_r: WRIST * swing, head_yaw: 0 });
 		sLast = sNew;
 	}
 	const tend = gen.f0 + 16 + W.steps * W.period + 18;
