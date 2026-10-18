@@ -11,6 +11,7 @@ import { motionScene } from "../../src/motion3/scene.js";
 import { skeletonFor } from "../../src/motion3/rigs/index.js";
 import { bakeTake } from "../../src/motion3/take.js";
 import { dist } from "../../src/motion3/compiler/math.js";
+import { budgetMs } from "./fixtures/time-budget.mjs";
 
 let failures = 0;
 function expect(name, condition, detail = "") {
@@ -32,7 +33,7 @@ for (const g of qa.groups) console.log(`  [${g.count}] ${g.kind} ${g.subject} f$
 expect("730 frames at 24 fps", out.frameCount === 730 && out.fps === 24);
 // QA WRIST (qa/wrist-checks.js) is clear too: fix.self's elbow turn stops the smoking wrist at its limit (compiler/wrist-clamp.js)
 expect("QA reports 0 issues", qa.ok && qa.total === 0, `${qa.total} issues ${JSON.stringify(qa.groups.slice(0, 2))}`);
-expect("compile + QA stay fast (< 3 s)", compileMs + qaMs < 3000, `${(compileMs + qaMs).toFixed(0)} ms`);
+expect("compile + QA stay fast (< 3 s)", compileMs + qaMs < budgetMs(3000), `${(compileMs + qaMs).toFixed(0)} ms`);
 
 // Each declared contact: active on enough frames, and within its tolerance on every one of them.
 function contact(name, active, a, b, tol, minFrames) {

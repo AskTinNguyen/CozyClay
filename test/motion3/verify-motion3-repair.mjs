@@ -18,6 +18,7 @@ import { SCENE_OBJECTS as CUP_OBJECTS } from "./fixtures/cup-scene.mjs";
 import { RUN3_SPEC, RUN3_MANUAL } from "./fixtures/cup-run3-spec.mjs";
 import { F275_FULL, F275_REPAIR8, F275_PATCH9, F275_REPAIR9, C8F2_FULL } from "./fixtures/cup-goal-stuck.mjs";
 import { press } from "./fixtures/reach-press.mjs";
+import { budgetMs } from "./fixtures/time-budget.mjs";
 
 let failures = 0;
 function expect(name, condition, detail = "") {
@@ -51,7 +52,7 @@ low.keys[0].set.root = [0.48, 0.85, -0.052];
 r = repair(low);
 const first = r;
 expect("exit car, hips sunk: the seat collision is repaired", !r.result.qa.groups.some(g => /hips x Car_Seat_Driver/.test(g.subject)) && r.repair.applied[0].patch[0].path === "/keys/0/set/root", json(r.repair));
-expect("exit car, hips sunk: under 10 s", r.ms < 10000, `${r.ms} ms`);
+expect("exit car, hips sunk: under 10 s", r.ms < budgetMs(10000), `${r.ms} ms`);
 expect("exit car: result.spec is the repaired spec", r.result.spec.keys[0].set.root[1] > 0.87);
 
 // 3. Twice the same input, twice the same answer.
@@ -67,7 +68,7 @@ expect("no improvement: spec unchanged, nothing applied, rejected counted, one r
 
 // 5. A clean take compiles once; rounds is a ceiling.
 r = repair(EXITCAR_SPEC);
-expect("exit car (clean): one compile, no rounds, under 10 s", r.result.qa.ok && r.repair.compiles === 1 && r.repair.rounds === 0 && r.ms < 10000, json(r.repair));
+expect("exit car (clean): one compile, no rounds, under 10 s", r.result.qa.ok && r.repair.compiles === 1 && r.repair.rounds === 0 && r.ms < budgetMs(10000), json(r.repair));
 const wing = structuredClone(EXITCAR_SPEC);
 for (const k of wing.keys) if (json(k.set.elbow_r) === "[0.4,-1,0.6]") k.set.elbow_r = [0.4, 1, 0.6];
 r = repair(wing, car, 1);
@@ -113,7 +114,7 @@ expect("tune: nothing for a group far past its limit or one that has a patch", !
 r = cupRepair(RUN3_SPEC);
 const run3 = r;
 expect("run3: repair { rounds: 4 } reaches qa.ok with every goal met, by a walkTo arg", r.result.qa.ok && r.result.qa.goals.every(g => g.ok) && r.repair.applied.every(a => a.patch[0].path.startsWith("/use/1/args/")), json(r.result.qa.groups));
-expect("run3: under the 20 s cap (and 10 s here); compiles = 1 + applied + rejected", r.ms < 10000 && r.repair.compiles === 1 + r.repair.applied.length + r.repair.rejected, `${r.ms} ms ${json(r.repair)}`);
+expect("run3: under the 20 s cap (and 10 s here); compiles = 1 + applied + rejected", r.ms < budgetMs(10000) && r.repair.compiles === 1 + r.repair.applied.length + r.repair.rejected, `${r.ms} ms ${json(r.repair)}`);
 expect("run3: twice the same answer", json(cupRepair(RUN3_SPEC).spec) === json(run3.spec) && json(cupRepair(RUN3_SPEC).repair) === json(run3.repair));
 expect("run3: rounds 1, as the agent sent it, is enough", cupRepair(RUN3_SPEC, 1).result.qa.ok);
 // The forearm's 4.95 cm/f^2 acceleration is smooth (C13): measured, not an error, unless the
@@ -162,7 +163,7 @@ for (const [name, spec, f, leak, value] of [["f275", atRecording(f275), 114, "w_
 	expect(`${name}: the GOAL hint names the stray weight and its patch keys it 0 at f${f}`, new RegExp(`^${leak} is [\\d.]+ at f${f}, so anchor \\w+ takes \\d+% of the hand target from anchor handle: key ${leak} 0 at f${f} `).test(g.hint)
 		&& json(g.patch) === json([{ op: "add", path: "/keys/-", value: { f, set: { [leak]: 0 } } }]), `${g.hint} ${json(g.patch)}`);
 	r = cupRepair(spec);
-	expect(`${name}: repair { rounds: 4 } reaches qa.ok with every goal met, in one round, under 10 s`, r.result.qa.ok && r.result.qa.goals.every(x => x.ok) && r.repair.rounds === 1 && r.ms < 10000
+	expect(`${name}: repair { rounds: 4 } reaches qa.ok with every goal met, in one round, under 10 s`, r.result.qa.ok && r.result.qa.goals.every(x => x.ok) && r.repair.rounds === 1 && r.ms < budgetMs(10000)
 		&& r.repair.compiles === 1 + r.repair.applied.length + r.repair.rejected, json(r.repair));
 	const again = cupRepair(spec);
 	expect(`${name}: twice the same answer`, json(again.spec) === json(r.spec) && json(again.repair) === json(r.repair) && json(again.result.qa) === json(r.result.qa));

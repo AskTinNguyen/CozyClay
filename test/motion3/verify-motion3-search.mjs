@@ -7,6 +7,7 @@ import { motionScene } from "../../src/motion3/scene.js";
 import { skeletonFor } from "../../src/motion3/rigs/index.js";
 import { I3 } from "../../src/motion3/compiler/math.js";
 import { createStudioAppActions } from "../../src/commands/index.js";
+import { budgetMs } from "./fixtures/time-budget.mjs";
 
 let failures = 0;
 function expect(name, condition, detail = "") {
@@ -27,7 +28,7 @@ say("post, heading[1] in [-60, 60]", r);
 const h = r.search?.values["use[1].args.heading[1]"];
 expect("the search finds a clean end heading", r.qa.ok && Math.abs(h) >= 10 && r.search.cost === 0, JSON.stringify(r.search));
 expect("it returns the spec with the value filled in", r.spec.use[1].args.heading[1] === h);
-expect("it stays within budget and is fast", r.search.evals <= 32 && r.search.ms < 3000, JSON.stringify(r.search));
+expect("it stays within budget and is fast", r.search.evals <= 32 && r.search.ms < budgetMs(3000), JSON.stringify(r.search));
 
 // 2. The car scene: walking off toward heading 80 swings through the open door unless the turn is
 //    spread out; the turn distance is open.
