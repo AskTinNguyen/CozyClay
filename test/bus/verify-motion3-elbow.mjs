@@ -110,14 +110,15 @@ const foldScene = motionScene(buildKit("bat", [], { position: { x: FOLD_KIT_AT[0
 // on the door handle (compiler/grip.js).
 // Flow (compiler/channels.js: the free spine, head and arms carry through keys and trail) re-baked the takes whose arms swing
 // free (exitcar, walk, cup run3, the standing smokes, df6acdcc, 6262a69c); their QA did not change.
+// exitcar and walk also bake the idle layer of their holds (compiler/idle.js: a held pose breathes and shifts its weight).
 const TAKES = [
-	["exitcar", "x-bot-tpose", { fps: 24, ...EXITCAR_SPEC }, motionScene(CAR), 137.07, "705256afb83973e3", null],
+	["exitcar", "x-bot-tpose", { fps: 24, ...EXITCAR_SPEC }, motionScene(CAR), 137.07, "1b621fd48cb2e29e", null],
 	["smoke stand (Y Bot)", "y-bot-tpose", smoke(266, { use: STAND }, false), { objects: {} }, 134.57, "00ca3255cfb92447", null],
 	["smoke stand (X Bot)", "x-bot-tpose", smoke(266, { use: STAND }, false), { objects: {} }, 137.07, "58d3a897e5cbb330", null],
 	["smoke squat, kits (Y Bot)", "y-bot-tpose", smoke(240, { keys: [{ f: 0, set: SQUAT }] }, true), kitScene, 132.24, "2be7e02a30c4290f", null],
 	["smoke squat, kits (X Bot)", "x-bot-tpose", smoke(240, { keys: [{ f: 0, set: SQUAT }] }, true), kitScene, 134.53, "bff1a9c3ec10ad34", null],
 	["squat smoke cea7fa46", "y-bot-tpose", G.SQUAT_SPEC, motionScene(G.smokeScene()), 131.75, "096cf692ba1a2cbf", null],
-	["walk", "y-bot-tpose", { ...spec0, frames: 160, use: [...STAND, { skill: "walkTo", f0: 1, args: { to: [0, 2.4], steps: 6, heading: 0 } }] }, { objects: {} }, 9.51, "43a2c0e36a04722d", null],
+	["walk", "y-bot-tpose", { ...spec0, frames: 160, use: [...STAND, { skill: "walkTo", f0: 1, args: { to: [0, 2.4], steps: 6, heading: 0 } }] }, { objects: {} }, 9.51, "b5891d2b75cdd902", null],
 	["cup run3", "y-bot-tpose", RUN3_SPEC, motionScene(CUP_SCENE), 133.27, "2dc4a03d23b71556", null],
 	["J2 bat, no keys", "y-bot-tpose", J2.SWING_SPEC, motionScene(J2.SCENE_OBJECTS), 141.52, "0ac49bec6e194bac", null],
 	["J2 bat, keys", "y-bot-tpose", j2keyed, motionScene(J2.SCENE_OBJECTS), 140.96, "94db1cc27a325334", null],

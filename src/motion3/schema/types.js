@@ -56,6 +56,7 @@ export const SPEC_TYPES = {
 	search: { type: "object", properties: { budget: int("compiles at most", { minimum: 1, maximum: 64, default: 32 }) }, additionalProperties: false },
 	goals: { type: "array", description: "topic goals" },
 	flow: { oneOf: [{ const: false }, { type: "object" }] },
+	idle: { const: false, description: "held poses do not breathe" },
 };
 
 export const ANCHOR_TYPES = {

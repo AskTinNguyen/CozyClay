@@ -82,8 +82,9 @@ const xb = skeletonFor("x-bot-tpose"), car = compileSpec(exitcar, { sk: xb, scen
 // the exitCar skill's handle fit turns the hand onto the handle since lane wrist (compiler/grip.js; was df302cb1a12b1a31),
 // and its walk strikes with the heel and pushes off the ball since the foot rockers (compiler/walk.js; was 74582d7bb52a8a7a),
 // its elbows bend with the arm swing since the walk's arms (compiler/walk.js; was cde50567a618c2b2),
-// and its hips follow the legs since compiler/walk-pelvis.js (was 42daab3008d5072e)
-expect("the exitcar take from skills bakes bit for bit as before", hashOf(bakeTake(xb, car.out)) === "2f6c5ac393b2b2aa" && !car.observations.paced, hashOf(bakeTake(xb, car.out)));
+// its hips follow the legs since compiler/walk-pelvis.js (was 42daab3008d5072e),
+// and its holds breathe and shift their weight since the idle layer (compiler/idle.js; was 2f6c5ac393b2b2aa)
+expect("the exitcar take from skills bakes bit for bit as before", hashOf(bakeTake(xb, car.out)) === "9230a88561f639ab" && !car.observations.paced, hashOf(bakeTake(xb, car.out)));
 const HASHES = { "y-bot-tpose": "00ca3255cfb92447", "x-bot-tpose": "58d3a897e5cbb330" };
 for (const [rig, hash] of Object.entries(HASHES)) {
 	const r = compile(rig, smoke(266, STAND, false), false), got = hashOf(bakeTake(skeletonFor(rig), r.out));

@@ -16,6 +16,7 @@
 //   generators: [{ type: "walk", f0, ... }]  (walk.js)
 //   fix:        { reach, slide, penetration, retime }  deterministic auto-fixes (../fix/)
 //   flow:       { smooth, lag } | false  the body's swing carries through keys and trails (channels.js)
+//   idle:       false turns off the idle layer (idle.js: a held pose breathes, drifts its head, shifts its weight)
 // ctx = { sk, scene: { objects: { id: { pos, R, half, ancestors } } } }; out.ctx.scene keeps the scene (object-pose.js)
 import { add, sub, scale, norm, len, dot, apply, axisRot } from "./math.js";
 import { isCarried, isFollow, hingePose, movesRecord, compose, relative } from "../carried.js";
@@ -24,6 +25,7 @@ import { groupsOf } from "../scene.js";
 import { pose, SIDES } from "./pose.js";
 import { gripHand } from "./grip.js";
 import { bakeChannels, channelsAt, flowOptions } from "./channels.js";
+import { idleLayer, withIdle } from "./idle.js";
 import { resolveAnchor, measureProps } from "./anchors.js";
 import { expandGenerators } from "./walk.js";
 import { steadyHead } from "./head-steady.js";
@@ -136,7 +138,7 @@ function hooksFor(ctx, c, f, inFit = false, lead = true, fitSide = null) {
 
 /** One frame with every active fit solved (fits run in spec order); lead false leaves the object keys out. */
 export function solveFrame(ctx, c0, f, lead = true) {
-	const c = { ...c0 };
+	const c = { ...withIdle(c0, ctx.idle, f) };
 	for (const fit of ctx.spec.fits ?? []) {
 		const wch = `w_${fit.anchor}_${fit.side}`;
 		if (!(c[wch] > 1e-4)) continue;
@@ -181,6 +183,8 @@ export function compileMotion(spec, { sk, scene }, opts = {}) {
 			out.keys = keys;
 			out.baked = bakeChannels(keys, frameCount, flowOptions(spec.flow));
 			steadyHead(out.baked, keys, frameCount);
+			// a held pose breathes and shifts its weight (idle.js): offsets solveFrame adds, contacts and out.baked stay as keyed
+			ctx.idle = idleLayer(out.baked, { spec, sk, frameCount });
 			const tracks = objectTracks(spec, scene, out.baked, () => out.timeMap);
 			ctx.objectsAt = tracks.all;
 			out.objectsAt = a ? f => tracks.obstacles(f + a) : tracks.obstacles;

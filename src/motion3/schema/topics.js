@@ -53,7 +53,7 @@ const NO_JUMP = "Without at/along it keeps its grab-frame offset to the palm: no
 const CARRY = { props: EXAMPLES.objects.props, objects: { cup: EXAMPLES.objects.objects.cup } };
 
 export const NOTES = {
-	essentials: ["types: ? optional, =v default, lo..hi range, A | B one of, [key]: T a map, a|b?: T both fields, x_l|r each side, (text) the meaning.",
+	essentials: ["types: ? optional, =v default, a..b range, A | B one of, [key]: T map, a|b?: T both, x_l|r each side, (text) meaning.",
 		`A carried object: ${literal(CARRY)}. ${NO_JUMP}`,
 		"motion.describe { topic } or { topic: 'skills', name }: the rest."],
 	spec: [UNITS,

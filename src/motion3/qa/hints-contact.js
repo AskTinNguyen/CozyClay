@@ -40,7 +40,8 @@ export function moveHint(X, part, f, delta, why = "") {
 		if (on && fix) { label = `anchors.${d.anchor}.local (a point on ${on}, in ${on}'s axes; ${on} stays)`; shown = fix.delta; }
 		cause = d.anchor ? `anchor ${d.anchor}${d.fit !== null ? ` (fits[${d.fit}])` : ""} via ${X.cause(d.ch, f)}` : X.cause(d.ch, f);
 	} else if (/^(shin|foot|sole)_/.test(part)) { label = `foot_${k}`; cause = X.cause(label, f); fix = { channel: label, f, delta }; }
-	else { label = "root"; cause = X.cause("root", f); fix = { channel: "root", f, delta }; }
+	// a body held since its key (it breathes and sways there, compiler/idle.js): move what placed it (patch.js hold)
+	else { label = "root"; cause = X.cause("root", f); fix = { channel: "root", f, delta, ...(/^root held since /.test(cause) ? { hold: true } : {}) }; }
 	// a key the walk generator wrote: the agent changes the walk, not the key
 	const walk = / (walk|walkTo) /.test(` ${cause}`) && /step|start|end/.test(cause);
 	if (walk && !/^anchor/.test(label)) return { cause, hint: `walk path: ${label} needs ${vec(delta)} m at f${f}${why}; change that walk's heading/turnDistance/step (or give one a { range: [lo, hi] })` };
