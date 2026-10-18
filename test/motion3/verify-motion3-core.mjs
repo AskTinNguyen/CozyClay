@@ -90,9 +90,9 @@ for (const side of ["Left", "Right"]) {
 	const swayed = compileMotion({ ...walkSpec, keys: [...walkSpec.keys, ...sway] }, { sk, scene: { objects: {} } });
 	const looked = compileMotion({ ...walkSpec, keys: [...walkSpec.keys, ...sway, { f: 100, set: { head_roll: 0 } }] }, { sk, scene: { objects: {} } });
 	const chest = spanOf(swayed, I.Spine2, I.Neck), head = spanOf(swayed, I.Neck, I.HeadTop_End), keyed = spanOf(looked, I.Neck, I.HeadTop_End);
-	// (the walk sways the trunk itself, once a stride (walk.js LIST, SWAY), about the head's averaging window, so a little more of
-	// that slow sway stays in the head: 0.61 of the chest here, 0.6 before)
-	// a keyed head is not steadied: it sways with the trunk (a little more, the neck on top; 10.65 vs 10.18 deg, with flow 10.73 vs 10.16)
+	// (the walk sways the trunk itself, once a stride (walk.js LIST, SWAY, SIDE), about the head's averaging window, so a little more
+	// of that slow sway stays in the head: 0.59 of the chest here)
+	// a keyed head is not steadied: it sways with the trunk (a little more, the neck on top; 13.09 vs 12.34 deg)
 	expect("a walking head sways less than the trunk under it, and a keyed head is left alone", head < 0.65 * chest && keyed > chest - 0.5, JSON.stringify({ chest, head, keyed }));
 }
 const take = bakeTake(sk, walk, { position: [0, 0, 0], yaw: 0 });

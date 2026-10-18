@@ -114,13 +114,15 @@ const lifted = [{ x: 0.25, y: 0.3, z: 0.1 }, { x: -0.25, y: 0.3, z: 0.1 }];
 // (0 before and after); the walk's knee peak moved 59.09 -> 85.29 deg (its swing knee folds right after toe-off).
 // The walking takes (exitcar, walk, cup run3) re-baked with the narrower default foot width (walk.js halfWidth 0.08), the
 // flat-ish heel strike (STRIKE_DF 4, no slant term) and less stride-time noise (gait-rhythm.js TIME.noise 0.02); their QA
-// did not change (0 before and after); the walk's knee peak moved 85.29 -> 85.62 deg, then 85.62 -> 72.735 deg with the walk by pace.
+// did not change (0 before and after); the walk's knee peak moved 85.29 -> 85.62 deg, then 85.62 -> 72.735 deg with the walk by pace,
+// then 72.735 -> 72.77 deg with its upper body by pace.
 const TAKES = [
 // re-pinned when standIdle and walks began keying arm_hang (compiler/pose.js: a free forearm hangs plumb); QA unchanged
 // re-pinned when the walk scaled its knees, swing kick, heel strike and hips at the strike with its pace and the swing foot
 // began following the shank (walk.js, walk-pelvis.js); QA 0 before and after
-	["exitcar", xb, { fps: 24, ...EXITCAR_SPEC }, motionScene(CAR), 129.71, "0931110ad3268da1", null],
-	["walk", yb, { ...spec0, frames: 160, use: [...STAND, { skill: "walkTo", f0: 1, args: { to: [0, 2.4], steps: 6, heading: 0 } }] }, { objects: {} }, 72.735, "8daa0a7ed8869efa", null],
+// re-pinned when the walk's upper body began following its pace and leading the legs (walk.js, head-steady.js); QA 0 before and after
+	["exitcar", xb, { fps: 24, ...EXITCAR_SPEC }, motionScene(CAR), 129.71, "77ed54982843c0b3", null],
+	["walk", yb, { ...spec0, frames: 160, use: [...STAND, { skill: "walkTo", f0: 1, args: { to: [0, 2.4], steps: 6, heading: 0 } }] }, { objects: {} }, 72.77, "e174422995712d16", null],
 	["smoke squat (Y Bot)", yb, smoke(240, { keys: [{ f: 0, set: SQUAT }] }, false), { objects: {} }, 133.46, "38c6581740baf1fd", 2.081],
 	["smoke squat (X Bot)", xb, smoke(240, { keys: [{ f: 0, set: SQUAT }] }, false), { objects: {} }, 134.67, "59389508b5bbd838", 0.29],
 	["smoke squat, kits (Y Bot)", yb, smoke(240, { keys: [{ f: 0, set: SQUAT }] }, true), kitScene, 133.46, "2be7e02a30c4290f", 2.081],

@@ -1,10 +1,11 @@
 // While a walk runs the head keeps the gaze steadier than the trunk: the trunk's quick sway (the root's and the
 // spine's yaw, pitch and roll less their moving average over about a stride, so a turn, a lean or a bow the keys
-// hold is not swayed against) is taken back by the head, a part of it (STEADY) and no more than LIMIT degrees.
+// hold is not swayed against) is taken back by the head, a part of it (STEADY) and no more than LIMIT degrees; little
+// of the pitch: a person's head nods with the trunk's dip at each step.
 // Only from a walk's start to its last step (walk.js tags them "<tag> start", "<tag> step <n>"; the settle after
 // holds still, and a take cut in it ends the same), faded in and out over FADE frames, and never on a head axis the
 // spec's own keys move during that walk: a keyed look wins. The average holds the take's end value past its end.
-const STEADY = { yaw: 0.5, pitch: 0.6, roll: 0.6 }, LIMIT = { yaw: 4, pitch: 6, roll: 6 }, WINDOW = 33, FADE = 8;
+const STEADY = { yaw: 0.5, pitch: 0.2, roll: 0.7 }, LIMIT = { yaw: 4, pitch: 6, roll: 10 }, WINDOW = 33, FADE = 8;
 const AXES = ["yaw", "pitch", "roll"];
 
 /** The walk spans in the keys, start to last step: [[f0, f1], ...]. */

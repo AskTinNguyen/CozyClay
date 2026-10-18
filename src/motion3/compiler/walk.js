@@ -15,21 +15,31 @@
 // capture lands with the foot nearly flat: the heel touches a frame or two before the sole); TOE_OFF is the push-off pitch at a full stride (STRIDE_REF m of foot travel), less for
 // a shorter one. A pivot is the very point QA reads (qa/geometry.js solePoints), so a rolling foot
 // never counts as sliding.
-// The arms swing wider the faster the walk (armSwing, when not given, from the speed against the default
-// walk's 0.5 m per 20 frames: about 23 deg front to back there, about 30 at twice the speed); each elbow
-// bends with its swing, most with the arm forward and least behind (ELBOW +- ELBOW_SWING, both growing
-// with the speed), and the hands hang with the wrists a little flexed (WRIST). All of it fades in over
-// the first steps and back out on the closing one.
+// The upper body leads the legs and its sizes follow the pace (the speed against the default walk's 0.5 m per 20 frames),
+// as a person's do: the slower the walk, the less the arms swing and the more the trunk dips and sways. Each arm peaks
+// forward or back at a step's mid-swing (the arm's flow lag puts the visible peak about a quarter of a step before the
+// strike), ARM_SWING deg a unit of pace (armSwing, when not given); each elbow bends with its swing, most with the arm
+// forward and least behind (ELBOW +- ELBOW_SWING, both growing with the pace), and the hands hang with the wrists a
+// little flexed (WRIST). The pelvis and chest turns, the side sway and the dip each peak at their own phase of the step
+// (the constants below). All of it fades in over the first steps and back out on the closing one.
 import { add, sub, scale, len, apply, ry, clamp } from "./math.js";
 import { walkRhythm } from "./gait-rhythm.js";
 import { fitPelvis, fitTrail, fitSwing, pivot, brisk } from "./walk-pelvis.js";
 
 const STRIKE_DF = [6, 4], TOE_OFF = 50, STRIDE_REF = 1.1, ELBOW = [18, 3], ELBOW_SWING = [6, 3], WRIST = 8;
 // The trunk over the stepping hips (degrees at a full stride, less for a shorter one): the pelvis drops on the
-// swing side in single support (LIST) with the trunk held upright over it and swaying SWAY of that toward the
-// stance foot; the pelvis turns with the leading leg (PELVIS_TURN) and the chest the other way (CHEST_TURN);
-// the trunk dips forward at each strike and back up in single support (LEAN).
-const LIST = 4.5, SWAY = 0.35, PELVIS_TURN = 4.5, CHEST_TURN = 4, LEAN = 1.8, MID_SLOW = 0.015, STRIKE_AHEAD = [0.52, 0.64], HEEL_OFF = 0.3, HEEL_MIN = 4;
+// swing side in single support (LIST), the trunk held over it but for SWAY of it; the pelvis turns with the leading
+// leg (PELVIS_TURN) and the chest the other way (CHEST_TURN); the trunk dips forward before each strike and back in
+// single support (LEAN).
+const LIST = 4.5, SWAY = 0.26, PELVIS_TURN = 4.5, CHEST_TURN = 5.5, MID_SLOW = 0.015, STRIKE_AHEAD = [0.52, 0.64], HEEL_OFF = 0.3, HEEL_MIN = 4;
+// the upper body by the pace p (module doc), measured against motion-capture walks of 0.7 and 1.4 m/s: the arm swing
+// (ARM_SWING deg a unit of pace, at the strike ARM_FALL of its wave: a hanging arm falls back from its peak a little
+// ahead of a sine); the chest turn peaking CHEST_AT(p) steps before the strike and the pelvis turn PELVIS_AT(p)
+// steps after it (at a stroll the two turn nearly together, at a brisk walk against each other); the side sway SIDE(p)
+// deg peaking SIDE_AT steps before the strike (just after the last); the dip LEAN(p) deg with its peaks LEAN_AT steps
+// before the strike, about a forward lean of WALK_LEAN deg a unit of pace
+const ARM_SWING = 6.4, ARM_FALL = 0.8, CHEST_AT = p => clamp(0.66 - 0.18 * p, 0.2, 0.48), PELVIS_AT = p => clamp(0.32 - 0.11 * p, 0, 0.45);
+const SIDE = p => clamp(2.8 - 0.45 * p, 1.2, 3), SIDE_AT = 0.92, LEAN = p => clamp(4.7 - 1.1 * p, 1.8, 4), LEAN_AT = [0.2, 0.6], WALK_LEAN = 0.9;
 // the swing's path: the heel kicks up right after toe-off (EARLY_AT of the swing, 2 frames at least: EARLY_FWD of the
 // way to mid-swing, EARLY_LIFT m up at a full stride and a swing of KICK_AIR frames or more, KICK_STROLL of that at a stroll's
 // pace: a person strolling folds the knee less), so the knee folds as the
@@ -70,7 +80,8 @@ export function walk(gen, keys, sk, tag = "walk") {
 	const W = { steps: 8, step: step0, period: 20, swing: 14, halfWidth: hw, lift: 0.08, turnDistance: 0.4, firstStep: 0.4,
 		pelvisHigh: Math.min(-0.005, hipsAt(Math.hypot(0.03, hw - 0.035))), pelvisLow: hipsAt(Math.hypot(step0 / 2, hw)), vary: 1, ...gen };
 	const pace = (W.step / W.period) / (0.5 / 20);
-	W.armSwing = gen.armSwing ?? clamp(10 + 4.5 * pace, 12, 22);
+	W.armSwing = gen.armSwing ?? clamp(ARM_SWING * pace, 4, 22);
+	const chestAt = CHEST_AT(pace), pelvisAt = PELVIS_AT(pace), sideSway = SIDE(pace), dipBy = LEAN(pace), walkLean = clamp(WALK_LEAN * pace, 0, 3);
 	const elbow = ELBOW[0] + ELBOW[1] * Math.min(pace, 2.5), elbowSwing = ELBOW_SWING[0] + ELBOW_SWING[1] * Math.min(pace, 2.5);
 	const [h0, h1] = W.heading ?? [st.yaw ?? 0, st.yaw ?? 0];
 	const hs = s => h0 + (h1 - h0) * smoothstep(s / W.turnDistance);
@@ -153,12 +164,20 @@ export function walk(gen, keys, sk, tag = "walk") {
 		state[`foot_${k}`] = land; state[`fyaw_${k}`] = lyaw; stance[k] = sNew;
 		const swing = (last ? 0 : i < 3 ? [0, 0.3, 0.7][i] : 1) * R.arm[i], sg = k === "l" ? 1 : -1;
 		const sp = clamp(size, 0.4, 1.1), ramp = last ? 0 : i === 0 ? 0.5 : 1, list = LIST * sp * ramp * (other === "l" ? 1 : -1);
-		at(tm, { root: pm, yaw: hs(sMid), roll: r0 + list, spine_roll: sr0 - list * (1 + SWAY), spine_pitch: sp0 - 0.6 * LEAN * sp * ramp });
-		// the arm opposite the landing foot is forward: its elbow bends most, the other's least
-		at(tl, { root: pl, yaw: hs(sLand) - PELVIS_TURN * sp * sg * swing, roll: r0, spine_roll: sr0, spine_yaw: (PELVIS_TURN + CHEST_TURN) * sp * sg * swing,
-			spine_pitch: sp0 + LEAN * sp * ramp, aswing_l: -0.85 * W.armSwing * sg * swing,
-			aswing_r: W.armSwing * sg * swing, abend_l: swing * (elbow - sg * elbowSwing), abend_r: swing * (elbow + sg * elbowSwing),
-			wflex_l: WRIST * swing, wflex_r: WRIST * swing, head_yaw: 0 });
+		// the upper body leads the legs (module doc): the arms, the turns and the side sway are waves keyed at mid-swing (tm, dm
+		// of a step before the strike) and at the strike, the arms peaking at tm: a wave peaking `peak` steps before the strike,
+		// scaled so the larger of its two keys is 1 (the interpolation does not overshoot its keys); the dip is keyed at its peaks
+		const dm = (tl - tm) / W.period, wave = peak => { const v = [Math.cos(Math.PI * (peak - dm)), Math.cos(Math.PI * peak)]; return v.map(x => x / Math.max(...v.map(Math.abs))); };
+		const pelvis = wave(-pelvisAt).map(v => -PELVIS_TURN * sp * sg * swing * v), chest = wave(chestAt).map(v => CHEST_TURN * sp * sg * swing * v);
+		const sway = wave(SIDE_AT).map(v => -Math.sign(list) * sideSway * sp * ramp * v);
+		const arm = wave(dm).map((v, j) => (j ? ARM_FALL * v : v)), armAt = v => ({ aswing_l: -0.85 * W.armSwing * sg * swing * v,
+			aswing_r: W.armSwing * sg * swing * v, abend_l: swing * (elbow - sg * elbowSwing * v), abend_r: swing * (elbow + sg * elbowSwing * v) });
+		at(tm, { root: pm, yaw: hs(sMid) + pelvis[0], roll: r0 + list, spine_roll: sr0 - list * (1 + SWAY) + sway[0], spine_yaw: chest[0] - pelvis[0],
+			...armAt(arm[0]), wflex_l: WRIST * swing, wflex_r: WRIST * swing });
+		at(tl, { root: pl, yaw: hs(sLand) + pelvis[1], roll: r0, spine_roll: sr0 + sway[1], spine_yaw: chest[1] - pelvis[1], ...armAt(arm[1]), head_yaw: 0 });
+		const lean = sp0 + walkLean * ramp, dip = dipBy * sp * ramp;
+		at(Math.max(gen.f0 + 1, tl - Math.round(LEAN_AT[1] * W.period)), { spine_pitch: lean - 0.6 * dip });
+		at(Math.max(gen.f0 + 1, tl - Math.round(LEAN_AT[0] * W.period)), { spine_pitch: lean + dip });
 		sLast = sNew;
 	}
 	const tend = gen.f0 + 16 + W.steps * W.period + 18;
