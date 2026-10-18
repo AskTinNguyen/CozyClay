@@ -2182,5 +2182,57 @@
       "count": 3,
       "uniques": 1
     }
+  ],
+  "2026-10-18": [
+    {
+      "referrer": "github.com",
+      "count": 127,
+      "uniques": 97
+    },
+    {
+      "referrer": "Google",
+      "count": 115,
+      "uniques": 57
+    },
+    {
+      "referrer": "l.threads.com",
+      "count": 114,
+      "uniques": 86
+    },
+    {
+      "referrer": "t.co",
+      "count": 107,
+      "uniques": 67
+    },
+    {
+      "referrer": "cozyclay.org",
+      "count": 85,
+      "uniques": 60
+    },
+    {
+      "referrer": "ruanyifeng.com",
+      "count": 13,
+      "uniques": 10
+    },
+    {
+      "referrer": "chatgpt.com",
+      "count": 12,
+      "uniques": 4
+    },
+    {
+      "referrer": "libhunt.com",
+      "count": 5,
+      "uniques": 4
+    },
+    {
+      "referrer": "yandex.ru",
+      "count": 3,
+      "uniques": 1
+    },
+    {
+      "referrer": "l.meta.ai",
+      "count": 2,
+      "uniques": 2
+    }
   ]
 }
