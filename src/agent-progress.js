@@ -5,6 +5,7 @@
 // In-page only: nothing here is saved with the project, undone, or sent to the agent. Each character keeps its
 // last KEEP drafts; the images keep the last KEEP. A new agent turn starts clean (clearProgress).
 
+import { qaProblems } from "./qa-label.js";
 const KEEP = 12;
 const drafts = new Map(), sheets = [], listeners = new Set();
 let version = 0, counter = 0;
@@ -29,7 +30,7 @@ export function publishDraft(characterId, { take, installed = false, specId = nu
 	const draft = Object.freeze({
 		n: (list.at(-1)?.n ?? 0) + 1, at: Date.now(), seq: ++counter, characterId, take, frames: take?.frameCount ?? 0,
 		installed: !!installed, specId, label,
-		qa: { ok: !!qa?.ok, total: qa?.total ?? 0, problems: qa?.problems ?? qa?.groups?.length ?? 0,
+		qa: { ok: !!qa?.ok, total: qa?.total ?? 0, problems: qaProblems(qa),
 			groups: (qa?.groups ?? []).map(g => pick(g, ["kind", "subject", "count", "first", "last", "worst"])),
 			goals: (qa?.goals ?? []).map(g => pick(g, ["name", "kind", "ok", "value", "need", "at"])) },
 		timeline: timeline ?? [],

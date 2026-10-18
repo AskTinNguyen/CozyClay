@@ -3,8 +3,12 @@
 // problems (the groups); qa.total stays the frame-level count the agent, repair and search work with.
 import { ko } from "./locale.js";
 
-/** Problems in a QA result: its groups (qa.problems from runMotionQa; an older result counts its groups). */
-export const qaProblems = qa => qa?.problems ?? (Array.isArray(qa?.groups) ? qa.groups.length : (qa?.total ?? 0));
+/** Problems in a QA result: its groups (qa.problems from runMotionQa; an older result counts its groups). A failed result
+ * with neither, or with no groups, falls back to its frame-level count, so it never reads as clean. */
+export function qaProblems(qa) {
+	const n = qa?.problems ?? (Array.isArray(qa?.groups) ? qa.groups.length : 0);
+	return n || (qa?.ok ? 0 : (qa?.total ?? 0));
+}
 
 /** "QA clean" | "2 problems" ("QA 통과" | "문제 2개"). */
 export function qaLabel(qa) {

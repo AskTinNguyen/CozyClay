@@ -49,6 +49,7 @@ test('a receipt says problems and the frame-level count', () => {
 	assert.equal(qaSay({ ok: false, total: 321, problems: 1 }), '1 problem (321 frame issues)');
 	assert.equal(qaSay({ ok: true, total: 0, problems: 0 }), 'clean');
 	assert.equal(qaProblems({ total: 7 }), 7, 'with neither problems nor groups, the total is all there is');
+	assert.equal(qaProblems({ ok: false, total: 5, groups: [] }), 5, 'a failed result never counts as no problems');
 });
 
 test('the newest published draft drives the ghost; installing it fades it; a clear removes it', () => {
@@ -58,9 +59,13 @@ test('the newest published draft drives the ghost; installing it fades it; a cle
 	assert.equal(draftGhostState(first, first.at).shown, true);
 	assert.equal(first.qa.problems, 2, 'the stored draft keeps the problem count');
 	assert.equal(draftLabel(first), 'Draft 1 · 2 problems');
+	// an older caller's result (ok false, a total, neither problems nor groups) must not read as clean
+	publishDraft('actor-a', { take: take(), installed: false, qa: { ok: false, total: 12 } });
+	assert.equal(latestDraft().qa.problems, 12);
+	assert.equal(draftLabel(latestDraft()), 'Draft 2 · 12 problems');
 	publishDraft('actor-a', { take: take(), installed: true, qa: { ok: true, total: 0 } });
 	const second = latestDraft();
-	assert.equal(second.n, 2);
+	assert.equal(second.n, 3);
 	assert.equal(draftGhostState(second, second.at + DRAFT_GHOST_FADE_MS).shown, false, 'the installed draft is gone after the fade');
 	clearProgress();
 	assert.equal(draftGhostState(latestDraft(), Date.now()).shown, false);
