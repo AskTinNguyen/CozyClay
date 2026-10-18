@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { groupKeyRuns, KEY_RUN_MIN } from "../../src/ardy/timeline-coordinates.js";
+import { groupKeyRuns, KEY_RUN_MIN } from "../../src/motion/timeline-coordinates.js";
 
 let failures = 0;
 function expect(name, ok, detail = "") {

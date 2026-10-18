@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import * as THREE from "three";
 import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
-import { resolveIkRig, findBone } from "../../src/ardy/ik.js";
-import { SUPPORT_SITES, createSupportSampler } from "../../src/ardy/physics-review.js";
+import { resolveIkRig, findBone } from "../../src/motion/ik.js";
+import { SUPPORT_SITES, createSupportSampler } from "../../src/motion/physics-review.js";
 
 // Independent reference: original THREE CPU skinning, all duplicate vertices.
 function reference(rig) {

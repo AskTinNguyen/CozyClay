@@ -1,5 +1,8 @@
 // Shared by the browser and sidecar. No Node, React, renderer or provider imports.
 import { STUDIO_ELEMENTS, isSettableElement } from "./studio-elements.js";
+import { STUDIO_ERROR_CODES } from "./studio-error-codes.js";
+import { EFFECT_VALUE_SCHEMA } from "./effects/effect-record.js";
+import { wrongType, unknownField, missingField, arrayRefusal, duplicateItem, stringRefusal, enumRefusal, numberRefusal, unionRefusal } from "./studio-schema-errors.js";
 // Mirrors PREVIS_MODES (project.js) and POSTURES (scenes.js). Neither is imported:
 // both pull in three.js, which the agent sidecar must not load. The protocol test pins the lists to their owners.
 const PREVIS_MODES = ["storyboard", "animation"], POSTURES = ["stand", "sit", "lie"];
@@ -10,7 +13,7 @@ export const STUDIO_PROTOCOL_VERSION = "studio-agent-v1";
 export const STUDIO_CONTEXT_MAX_BYTES = 64 * 1024;
 export const STUDIO_CONTEXT_LIMITS = Object.freeze({ entities: 24, entityIndex: 400, shots: 8, assets: 48, recentReceipts: 3, jobs: 8 });
 export const STUDIO_TOOL_FAMILIES = Object.freeze(["inspect_studio", "run_action", "verify_result"]);
-export const STUDIO_TOOL_ALIASES = Object.freeze(["operate_studio", "arrange_objects", "arrange_characters", "patch_elements", "frame_shot", "generate_motion", "undo_edit"]);
+export const STUDIO_TOOL_ALIASES = Object.freeze(["operate_studio", "arrange_objects", "arrange_characters", "patch_elements", "frame_shot", "undo_edit"]);
 export const STUDIO_TOOL_LABELS = Object.freeze({
 	inspect_studio: "Read the scene",
 	operate_studio: "Selection and view",
@@ -18,7 +21,6 @@ export const STUDIO_TOOL_LABELS = Object.freeze({
 	arrange_characters: "Arrange characters",
 	patch_elements: "Edit properties",
 	frame_shot: "Frame the shot",
-	generate_motion: "Generate motion",
 	verify_result: "Verify the result",
 	undo_edit: "Undo an edit",
 	run_action: "Run an editor action",
@@ -28,12 +30,7 @@ export const STUDIO_TOOLS = Object.freeze(Object.keys(STUDIO_TOOL_LABELS));
  * object→objects, shot→shot, stage→stage. */
 export const STUDIO_PATCH_KINDS = Object.freeze(["character", "object", "shot", "stage"]);
 export const STUDIO_PATCH_DOMAINS = Object.freeze({ character: "cast", object: "objects", shot: "shot", stage: "stage" });
-export const STUDIO_ERROR_CODES = Object.freeze([
-	"INVALID_ARGUMENT", "INVALID_CONTEXT", "INVALID_IDENTITY", "INVALID_TURN_ID", "INVALID_SESSION_ID", "INVALID_RECEIPT", "INVALID_RANGE", "INVALID_REQUEST",
-	"UNKNOWN_TOOL", "UNKNOWN_VARIANT", "DUPLICATE_NAME", "CONTEXT_LIMIT", "CONTEXT_TOO_LARGE", "AMBIGUOUS_TARGET", "AMBIGUOUS_BASIS", "TARGET_NOT_READY", "TARGET_BUSY",
-	"STALE_TARGET", "STALE_SCENE", "STALE_ENVIRONMENT", "STALE_CURSOR", "CAPABILITY_MISSING", "LIVE_HUB_UNAVAILABLE", "AUTH_REQUIRED", "GENERATION_LIMIT", "RATE_LIMITED", "BACKEND_UNAVAILABLE",
-	"VERIFICATION_FAILED", "REPAIR_REGRESSED", "CANCELLED", "UNCERTAIN_APPLY", "UNDO_CONFLICT", "CONFIRMATION_REQUIRED", "TIMEOUT", "UNDO_EXPIRED",
-]);
+export { STUDIO_ERROR_CODES };
 export const STUDIO_VARIANTS = freezeStudioData({
 	selectionKinds: ["scene", "object", "character", "rig", "camera"], modes: ["scene", "pose", "camera", "motion"], shotModes: ["keys", "follow", "rail"],
 	framingSizes: ["extreme close-up", "close-up", "medium close-up", "medium shot", "medium-wide shot", "wide shot", "extreme wide shot"],
@@ -60,8 +57,7 @@ const record = value => value !== null && typeof value === "object" && !Array.is
 const text = (maxLength = 120) => ({ type: "string", minLength: 1, maxLength });
 const number = (minimum, maximum) => ({ type: "number", ...(minimum !== undefined ? { minimum } : {}), ...(maximum !== undefined ? { maximum } : {}) });
 const integer = (minimum = 0, maximum = Number.MAX_SAFE_INTEGER) => ({ ...number(minimum, maximum), type: "integer" });
-const bool = { type: "boolean" };
-const literal = value => ({ const: value });
+const bool = { type: "boolean" }, literal = value => ({ const: value });
 const choices = values => ({ type: "string", enum: values });
 const nullable = schema => ({ oneOf: [schema, { type: "null" }] });
 const array = (items, maxItems, minItems = 0, uniqueItems = false) => ({ type: "array", items, minItems, maxItems, ...(uniqueItems ? { uniqueItems } : {}) });
@@ -114,9 +110,6 @@ const characterOp = union(
 	object({ op: literal("update"), characterId: id }, { position, facing, scale: positive, name, hidden: bool }),
 	object({ op: literal("remove"), characterId: id }),
 );
-export const BEAT_TEXT_MAX = 500;
-const generateSource = object({ kind: literal("generate"), beats: array(object({ text: { ...text(BEAT_TEXT_MAX), description: 'An English description of the body movement starting with "A person". The editor refuses prompts over 500 characters.' } }, { seconds: number(0.5, 60) }), 8, 1) }, { durationSeconds: number(2, 60), seed: integer(-2147483648, 2147483647) });
-const source = union(generateSource, object({ kind: literal("reuse"), artifactId: id }));
 
 /* ----------------------------------------------- element patches ----
  * The accepted fields of `patch_elements` are DERIVED from the element
@@ -126,18 +119,20 @@ const source = union(generateSource, object({ kind: literal("reuse"), artifactId
  * (schedules, routes, pictures) declare their shape here, because the table
  * records what an element IS, not how JSON carries it. */
 const dataImage = { ...text(2 * 1024 * 1024), pattern: "^data:image/[A-Za-z0-9.+-]+[;,]" };
-const promptBlock = object({ startFrame: integer(), endFrame: integer(1), text: text(2000) }, { id });
+
 const cameraKey = object({ frame: integer(), framing: object({ pos: vec3, yaw: number(), pitch: number(), fovDeg: number(1, 179) }) }, { id });
 // A mark is an arc fraction, or { t, bank, pitch } when the object should lean
 // there (degrees, +-90). The route normaliser (src/object-path.js) owns the
 // rules; this only carries the shape through untouched.
 const routeMark = union(number(0, 1), object({ t: number(0, 1) }, { bank: number(-90, 90), pitch: number(-90, 90) }));
 const objectRoute = nullable(object({ points: array(vec3, 64, 2) }, { speed: number(0, 50), faceTravel: bool, loop: bool, extend: bool, marks: array(routeMark, 6) }));
+// A practical light and a glow (src/object-look.js owns the defaults and the repair).
+const objectLight = object({}, { type: choices(["point", "spot"]), color: { ...text(32), pattern: "^#[0-9a-fA-F]{6}$" }, intensity: number(0, 1000), range: number(0, 100), angle: number(1, 89), softness: number(0, 1), shadow: bool, flicker: number(0, 1), aim: nullable(vec3) });
+const objectGlow = nullable(object({}, { color: { ...text(32), pattern: "^#[0-9a-fA-F]{6}$" }, intensity: number(0, 20), halo: number(0, 4) }));
 const PATCH_VALUE_SCHEMAS = {
-	"character.pose": nullable(id), "character.identityImage": nullable(dataImage), "character.promptBlocks": array(promptBlock, 64),
+	"character.pose": nullable(id), "character.identityImage": nullable(dataImage), "object.light": objectLight, "object.glow": objectGlow, "object.effect": EFFECT_VALUE_SCHEMA,
 	"object.parent": nullable(id), "object.path": objectRoute, "stage.environmentImage": nullable(dataImage),
-	"shot.cameraKeys": array(cameraKey, 64), "shot.targetModel": nullable(id),
-};
+	"shot.cameraKeys": array(cameraKey, 64), "shot.targetModel": nullable(id) };
 /** One declared element as a JSON value schema, or null when the declaration
  * carries no carriable shape (a structured element without a declared value
  * schema above). Null elements are omitted from the patch schema, and
@@ -204,8 +199,7 @@ const toolSchemas = {
 	arrange_characters: object({ ops: array(characterOp, 8, 1) }),
 	patch_elements: object({ ops: array(patchOp, 32, 1) }),
 	frame_shot: object({ subjectIds: ids(1), framing }, { shotId: id, caption: { type: "string", maxLength: 500 }, keyAtFrame: integer() }),
-	generate_motion: object({ characterId: id, source }, { repair: { ...choices(["bounded", "none"]), default: "bounded" } }),
-	verify_result: object({ checks: array(choices(["placement", "framing", "motion"]), 3, 1, true) }, { receiptId: id, targets: ids(), range: union(literal("whole_clip"), range), visual: { ...choices(["none", "frame", "contact_sheet", "plan"]), default: "none" } }),
+	verify_result: object({ checks: { ...array(choices(["placement", "framing", "motion", "lighting"]), 4, 1, true), description: "lighting measures the shot frame rendered at the playhead: checks.lighting { meanLuma 0..1, clippedPct (a channel at full scale), crushedPct (pure black), subjects: [{ id, meanLuma, contrast (5th to 95th percentile luma spread, 0..1) }] inside each target character's projected box, look: { preset, envLight, ao } the stage look's environment light and occlusion strength }. motion also answers exportFraming (one per character with a take): what the camera the export renders shows of the take over sampledFrames: camera (shot where a shot covers the frame, studio = the Studio camera as it stands when none does; shotIds), character { screenFraction [min, max] of the frame height, inFrame [lowest share of its joints' screen box inside the frame, frame], behindCamera, cut { head, hand_l, hand_r, foot_l, foot_r } }, and every object the take names { id, name, inFrame, out, cut }; out, cut and behindCamera are spans [first, last] of sampled frames; { character: { id }, reason } when it cannot be measured" } }, { receiptId: id, targets: ids(), range: union(literal("whole_clip"), range), visual: { ...choices(["none", "frame", "contact_sheet", "plan", "trace"]), default: "none" }, frames: { ...union(choices(["even", "beats"]), array(integer(), 8, 1, true)), default: "even", description: "contact_sheet frames: even spacing, beats (grab/release, beat starts, the worst QA frames, then even fill, answered in visualRefs[0].picks), or up to 8 timeline frames of your choice" }, views: { ...array(choices(["front", "side", "three-quarter", "top"]), 2, 1, true), description: "contact_sheet from cameras of its own around the character instead of the shot camera (which stays as it is): a row per view, each held still over the frames and framed on focus, so small actions fill the tile; side and three-quarter look from the focus's side; a sheet always holds two views at least 60 degrees apart: if the asked ones look along nearly one line, side, front or top is added and named in visualRefs[0].addedView" }, focus: { ...union(text(120), array(text(120), 3, 1, true)), description: "with views: what to frame, as refs (object:<id>, joint:<Bone>, prop:<prop>.<point>, landmark:mouth); default the whole character" }, trail: { ...union(text(120), array(text(120), 3, 1, true)), description: "with views: refs whose path over the range is drawn as one dot per frame (spacing shows speed; later frames faint, the tile's own frame ringed), colours in visualRefs[0].trails" }, ghosts: { ...bool, description: "with views: each tile also shows the first target's poses around its frame as translucent ghosts (onion skin), earlier ones blue, later ones orange, carried props included, so spacing and arcs read in one tile; how many and how far apart is view.setGhosts (while it is off: 3 each side, every 4 frames), answered in visualRefs[0].ghosts" } }),
 	undo_edit: object({ receiptId: id }),
 	run_action: object({ action: id }, { args: openObject, confirmationToken: id }),
 };
@@ -219,7 +213,7 @@ const entity = object({ id, kind: choices(["object", "character", "rig"]), token
 	name, detailsOmitted: bool, position: vec3, yawDeg: number(), rotationDeg: vec3, scale: union(positive, positiveVec3), bounds: nullable(bounds),
 	libraryKind: id, renderer: id, color: nullable(text(32)), tint: nullable(text(32)), modelId: nullable(text(120)), assetId: id, parentId: nullable(id), attachment: nullable(object({ characterId: id, bone: nullable(id) })), pathPointCount: integer(0, 64), pathMarks: array(union(number(0, 1), object({ t: number(0, 1) }, { bank: number(-90, 90), pitch: number(-90, 90) })), 6),
 	local: object({ position: vec3, rotationDeg: vec3 }),
-	motion: object({ takeId: nullable(id), frames: integer(), ikKeyCount: integer(), promptBlockCount: integer() }, { poseId: nullable(id), keyIds: ids(8, 0) }),
+	motion: object({ takeId: nullable(id), frames: integer(), ikKeyCount: integer() }, { poseId: nullable(id), keyIds: ids(8, 0) }),
 	capabilities: object({ rigReady: bool, ik: bool, measuredFeet: bool }),
 	// `kind` above already names the entity class ("character"); a character's own
 	// kind is `characterKind`: a rigged model, or a rig-free capsule figure.
@@ -298,7 +292,9 @@ const authoredReceipt = { ...receiptBase, authored: literal(true), undo };
 // A run_action receipt names the registered action and what it did.
 const actionFields = { action: id, summary: text(240) };
 const receiptVariants = {
-	completed: object({ ...receiptBase, status: literal("completed"), kind: choices(["job", "document", "transaction", "mutation"]) }, { ...actionFields, ...batchDetails, output: openObject, jobId: id, txId: id, nextHost: identity }),
+	// A mutation inside an agent turn answers "completed" (the turn owns its undo entry); a patch
+	// among them still reports each op, so ops ride here too.
+	completed: object({ ...receiptBase, status: literal("completed"), kind: choices(["job", "document", "transaction", "mutation"]) }, { ...actionFields, ...batchDetails, output: openObject, jobId: id, txId: id, nextHost: identity, ops: opResults }),
 	started: object({ ...receiptBase, status: literal("started"), kind: literal("job"), jobId: id, authored: literal(false), undo: literal(null) }, { ...actionFields }),
 	applied: object({ ...authoredReceipt, status: literal("applied") }, { mutated: literal(true), ops: opResults, ...batchDetails, ...actionFields }),
 	partial: object({ ...authoredReceipt, status: literal("partial"), ops: opResults }, { mutated: literal(true), ...batchDetails }),
@@ -321,65 +317,66 @@ const failureSchema = object({ ok: literal(false), commandId: id, host: identity
 // These are JSON Schema data, not validators with hidden browser dependencies.
 // x-studio-range is the sole relational schema annotation: end > start.
 export const StudioSchemas = freezeStudioData({ catalogue: STUDIO_CATALOGUE, variants: STUDIO_VARIANTS, Vec3: vec3, FrameRange: range, PositionSpec: position, FacingSpec: facing,
-	ObjectOp: objectOp, CharacterOp: characterOp, Framing: framing, GenerateSource: generateSource, Source: source, Identity: identity, Host: host, TargetGuard: guardSchema,
+	ObjectOp: objectOp, CharacterOp: characterOp, Framing: framing, Identity: identity, Host: host, TargetGuard: guardSchema,
 	Entity: entity, ShotSummary: shotSummary, StudioContextV1: contextSchema, StudioTurn: turnSchema, StudioStop: stopSchema, Receipt: receiptSchema, ReceiptVariants: receiptVariants, Failure: failureSchema, GeometryFacts: geometryFacts });
 
-/** Validate the closed JSON Schema subset used above; return a detached value
- * with declared defaults. Errors contain schema paths, never payload values. */
+/** Validate the closed JSON Schema subset used above; return a detached value with declared
+ * defaults. Errors name the path and what it allows (studio-schema-errors.js). */
 export function validateStudioSchema(schema, value, code = "INVALID_ARGUMENT", path = "$") {
-	if (schema.oneOf) {
-		const matches = [];
-		const failures = [];
-		for (const branch of schema.oneOf) {
+	if (schema.oneOf || schema.anyOf) {
+		const matches = [], failures = [];
+		for (const branch of schema.oneOf ?? schema.anyOf) {
 			try { matches.push(validateStudioSchema(branch, value, code, path)); }
 			catch (error) { if (!(error instanceof StudioProtocolError)) throw error; failures.push({ branch, error }); }
 		}
 		// No variant matched: the generic "one of N" message hides which path and
 		// bound actually offended. Surface the failure from the variant the input
 		// discriminates to (matching target.kind), or else the deepest failing
-		// path, instead of the union's own shallow message.
+		// path, instead of the union's own shallow message. A union of plain values
+		// (true, false or "ifClean") that failed at its own path names every form.
 		if (matches.length === 0 && failures.length) {
-			const kind = record(value) && record(value.target) ? value.target.kind : undefined;
-			const discriminated = kind !== undefined && failures.find(({ branch }) => branch.properties?.target?.properties?.kind?.const === kind);
+			const kind = record(value) && record(value.target) ? value.target.kind : undefined, discriminated = kind !== undefined && failures.find(({ branch }) => branch.properties?.target?.properties?.kind?.const === kind);
+			const forms = !discriminated && unionRefusal(path, failures, value);
+			if (forms) fail(code, forms, path);
 			const chosen = discriminated || failures.reduce((best, next) => next.error.details.path.length > best.error.details.path.length ? next : best);
 			throw chosen.error;
 		}
-		if (matches.length !== 1) fail(code, "Expected exactly one supported variant.", path);
+		if (matches.length !== 1 && schema.oneOf) fail(code, `${path}: matches ${matches.length} variants; send the fields of exactly one.`, path);
 		return matches[0];
 	}
-	if (Object.hasOwn(schema, "const")) { if (value !== schema.const) fail(code, "Invalid constant.", path); return value; }
-	if (schema.type === "null") { if (value !== null) fail(code, "Expected null.", path); return null; }
+	if (Object.hasOwn(schema, "const")) { if (value !== schema.const) fail(code, wrongType(path, schema, value), path); return value; }
+	if (schema.type === "null") { if (value !== null) fail(code, wrongType(path, schema, value), path); return null; }
 	if (schema.type === "object") {
-		if (!record(value)) fail(code, "Expected object.", path);
+		if (!record(value)) fail(code, wrongType(path, schema, value), path);
 		const open = schema.additionalProperties === true;
-		for (const key of Object.keys(value)) if (!Object.hasOwn(schema.properties, key) && !open) fail(code, "Unexpected field.", path);
+		for (const key of Object.keys(value)) if (!Object.hasOwn(schema.properties, key) && !open) fail(code, unknownField(path, schema, key), path);
 		const result = {};
 		if (open) for (const key of Object.keys(value)) if (!Object.hasOwn(schema.properties, key)) result[key] = structuredClone(value[key]);
 		for (const [key, child] of Object.entries(schema.properties)) {
 			if (Object.hasOwn(value, key)) result[key] = validateStudioSchema(child, value[key], code, `${path}.${key}`);
-			else if (schema.required.includes(key)) fail(code, "Required field missing.", `${path}.${key}`);
+			else if (schema.required.includes(key)) fail(code, missingField(path, key), `${path}.${key}`);
 			else if (Object.hasOwn(child, "default")) result[key] = structuredClone(child.default);
 		}
 		if (schema["x-studio-range"] && result.endFrameExclusive <= result.startFrame) fail(code, "Frame range must be nonempty and half-open.", path);
 		return result;
 	}
 	if (schema.type === "array") {
-		if (!Array.isArray(value) || value.length < schema.minItems || value.length > schema.maxItems) fail(code, "Array outside supported bounds.", path);
+		if (!Array.isArray(value) || value.length < schema.minItems || value.length > schema.maxItems) fail(code, arrayRefusal(path, schema, value), path);
 		const result = value.map((item, i) => validateStudioSchema(schema.items, item, code, `${path}[${i}]`));
-		if (schema.uniqueItems && new Set(result.map(item => JSON.stringify(item))).size !== result.length) fail(code, "Duplicate array member.", path);
+		if (schema.uniqueItems && new Set(result.map(item => JSON.stringify(item))).size !== result.length) fail(code, duplicateItem(path, result), path);
 		return result;
 	}
 	if (schema.type === "string") {
-		if (typeof value !== "string" || !value.trim() || (schema.maxLength !== undefined && [...value].length > schema.maxLength) || (schema.pattern && !new RegExp(schema.pattern).test(value))) fail(code, typeof value === "string" && schema.description && [...value].length > schema.maxLength ? `Over ${schema.maxLength} characters. ${schema.description}` : "Invalid or oversized string.", path);
-		if (schema.enum && !schema.enum.includes(value)) fail(code, "Unsupported enum value.", path);
+		if (typeof value !== "string" || !value.trim() || (schema.maxLength !== undefined && [...value].length > schema.maxLength) || (schema.pattern && !new RegExp(schema.pattern).test(value))) fail(code, stringRefusal(path, schema, value), path);
+		if (schema.enum && !schema.enum.includes(value)) fail(code, enumRefusal(path, schema, value), path);
 		return value;
 	}
-	if (schema.type === "boolean") { if (typeof value !== "boolean") fail(code, "Expected boolean.", path); return value; }
+	if (schema.type === "boolean") { if (typeof value !== "boolean") fail(code, wrongType(path, schema, value), path); return value; }
 	if (schema.type === "number" || schema.type === "integer") {
-		if (typeof value !== "number" || !Number.isFinite(value) || (schema.type === "integer" && !Number.isSafeInteger(value)) || (schema.exclusiveMinimum !== undefined && value <= schema.exclusiveMinimum)) fail(code, "Number outside supported bounds.", path);
+		if (typeof value !== "number" || !Number.isFinite(value) || (schema.type === "integer" && !Number.isSafeInteger(value)) || (schema.exclusiveMinimum !== undefined && value <= schema.exclusiveMinimum)) fail(code, numberRefusal(path, schema, value), path);
 		if ((schema.minimum !== undefined && value < schema.minimum) || (schema.maximum !== undefined && value > schema.maximum)) {
 			const bounds = [schema.minimum, schema.maximum].filter(bound => bound !== undefined);
-			fail(code, `${path}: Expected a number within [${bounds.join(", ")}].`, path);
+			fail(code, `${path}: Expected a number within [${bounds.join(", ")}], got ${value}.`, path);
 		}
 		return value;
 	}
@@ -455,13 +452,6 @@ export function validateStudioContextFreshness(submitted, current) {
 }
 const pickIdentity = value => Object.fromEntries(Object.keys(identityFields).map(key => [key, value[key]]));
 
-function validateGenerationTiming(value) {
-	const timed = value.beats.filter(beat => beat.seconds !== undefined).length;
-	if ((value.durationSeconds !== undefined && timed !== 0) || (value.durationSeconds === undefined && timed !== value.beats.length)) fail("INVALID_ARGUMENT", "Use total duration or a duration for every beat, not mixed timing.");
-	const total = value.durationSeconds ?? value.beats.reduce((sum, beat) => sum + beat.seconds, 0);
-	if (total < 2 || total > 60 || total / value.beats.length < 0.5) fail("INVALID_ARGUMENT", "Generation must be 2-60 seconds with at least 0.5 seconds per beat.");
-	return total;
-}
 /** Unknown paths are answered with the paths that DO exist for that kind, so a
  * caller never has to guess the vocabulary from a rejection. */
 function validatePatchPaths(args) {
@@ -501,10 +491,6 @@ export function validateStudioCommand(command) {
 		// final batch is still checked for overlap.
 		if (args.collisionPolicy === "avoid" && !args.ops.some(op => ["create", "update"].includes(op.op) && op.position?.relativeTo)) fail("INVALID_ARGUMENT", "collisionPolicy avoid needs at least one op with position.relativeTo (it nudges outward from that reference); other ops are placed as given.");
 	}
-	if (command.name === "generate_motion" && args.source.kind === "generate") {
-		args.source.beats = args.source.beats.map(beat => ({ ...beat, text: beat.text.trim().replace(/\s+/g, " ") }));
-		validateGenerationTiming(args.source);
-	}
 	if (command.name === "frame_shot" && args.framing.exact && JSON.stringify(args.framing.exact.position) === JSON.stringify(args.framing.exact.lookAt)) fail("INVALID_ARGUMENT", "Camera position and aim cannot coincide.");
 	if (command.name === "patch_elements") {
 		for (const op of args.ops) if (!Object.keys(op.set).length) fail("INVALID_ARGUMENT", "Patch has no fields.");
@@ -517,22 +503,6 @@ export function validateStudioCommand(command) {
 		}
 	}
 	return { name: command.name, args };
-}
-export function compileStudioBeats(value) {
-	const source = validateStudioSchema(generateSource, value);
-	const totalSeconds = validateGenerationTiming(source);
-	const frameCount = Math.round(totalSeconds * 24);
-	const blocks = []; let cumulative = 0, startFrame = 0;
-	for (const [sourceBeat, beat] of source.beats.entries()) {
-		cumulative += beat.seconds ?? totalSeconds / source.beats.length;
-		const end = sourceBeat === source.beats.length - 1 ? frameCount : Math.round(cumulative * 24);
-		const pieces = Math.ceil((end - startFrame) / 120), start = startFrame;
-		for (let i = 0; i < pieces; i++) {
-			const endFrameExclusive = start + Math.round((end - start) * (i + 1) / pieces);
-			blocks.push({ sourceBeat, text: beat.text.trim().replace(/\s+/g, " "), startFrame, endFrameExclusive }); startFrame = endFrameExclusive;
-		}
-	}
-	return freezeStudioData({ fps: 24, frameCount, durationSeconds: frameCount / 24, blocks });
 }
 export function validateReceipt(value) {
 	if (value?.ok === false) {

@@ -3,14 +3,14 @@
 import * as THREE from 'three';
 import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { StudioProtocolError, freezeStudioData } from './studio-agent-protocol.js';
-import { applyMotionFrame } from './ardy/playback.js';
-import { resolveIkRig, createIkState, ikEvaluate, findBone, hasBindPose } from './ardy/ik.js';
-import { PHYSICS_LIMITS, createSupportSampler, copyPhysicsKeys, supportIntervals, physicsMetrics } from './ardy/physics-review.js';
-import { createDynamicsSampler, supportDiagnostics } from './ardy/physics-support.js';
-import { computeCenterOfMass } from './ardy/auto-physics.js';
-import { buildCollisionCapsules, detectPenetrations, supportsCollisionCleanup } from './ardy/fix-collisions.js';
-import { collisionBlockers, blockerSummary } from './ardy/collision-blockers.js';
-import { createGroundSampler } from './ardy/ground.js';
+import { applyTakeFrame } from './motion3/playback.js';
+import { resolveIkRig, createIkState, ikEvaluate, findBone, hasBindPose } from './motion/ik.js';
+import { PHYSICS_LIMITS, createSupportSampler, copyPhysicsKeys, supportIntervals, physicsMetrics } from './motion/physics-review.js';
+import { createDynamicsSampler, supportDiagnostics } from './motion/physics-support.js';
+import { computeCenterOfMass } from './motion/center-of-mass.js';
+import { buildCollisionCapsules, detectPenetrations, supportsCollisionCleanup } from './motion/fix-collisions.js';
+import { collisionBlockers, blockerSummary } from './motion/collision-blockers.js';
+import { createGroundSampler } from './motion/ground.js';
 import { OBJECT_LIBRARY } from './scene-objects.js';
 import { objectTransformAt } from './object-path.js';
 import { sampleAt } from './sample-at.js';
@@ -50,7 +50,7 @@ function disposeRig(value) {
 }
 function poseFrame(evaluator, motion, layer, frame) {
   restore(evaluator.rest);
-  if (motion) applyMotionFrame(evaluator.rig, motion, sampleAt({ frameCount: motion.frames, motion }, null, frame).motionFrame);
+  if (motion) applyTakeFrame(evaluator.rig, motion, sampleAt({ frameCount: motion.frames, motion }, null, frame).motionFrame);
   if (layer) ikEvaluate(evaluator.chains, layer, frame, evaluator.fkJoints, motion ? BLEND : 0);
   evaluator.parent.updateMatrixWorld(true);
 }

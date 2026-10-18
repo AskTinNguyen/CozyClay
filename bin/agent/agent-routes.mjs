@@ -10,6 +10,7 @@ import { createAgentTools, SYSTEM_PROMPT, pickWorkspace } from "./agent-tools.mj
 import { createVideoAdapters, validateFalVideoRequest } from "./video-adapters.mjs";
 import { createSessionStore, transcriptFromHistory } from "./session-store.mjs";
 import { createAgentRunner } from "./agent-runner.mjs";
+import { createProviderRoutes } from "./provider-routes.mjs";
 import { STUDIO_SYSTEM_PROMPT_STORYBOARD } from "./studio-prompt.mjs";
 
 // Values the codex backend accepts for reasoning.effort (its own 400 lists them).
@@ -85,9 +86,9 @@ const agentFailureCode = (error, signal, tool = false) => advisory(() => {
  * One user message is one editor transaction: every Studio turn whose editor
  * reports a previsMode opens agent.turn.begin and closes agent.turn.finish, so
  * all of its mutations land as ONE history entry and one receipt frame. A
- * context without a previsMode comes from an editor that predates turn
- * transactions and runs unwrapped. rollback() cancels the open transaction
- * (restoring the pre-turn document) and reopens it for the rest of the turn.
+ * context without a previsMode runs unwrapped (an editor that predates turn
+ * transactions). mark() records where a script starts; rollback() undoes only
+ * the edits after it and keeps the turn open, so earlier edits still land.
  */
 const agentTurn = ({ hub, context, turnId, admission }) => {
 	const wrapped = Boolean(context.scene?.previsMode);
@@ -102,12 +103,11 @@ const agentTurn = ({ hub, context, turnId, admission }) => {
 	};
 	const open = async () => { await control("agent.turn.begin"); admission.turnId = turnId; };
 	return {
+		mark: async () => (admission.turnId === turnId ? control("agent.turn.mark") : null),
 		async rollback() {
 			if (admission.turnId !== turnId) return null;
-			delete admission.turnId;
-			const receipt = await control("agent.turn.cancel");
+			const receipt = await control("agent.turn.rollback");
 			await admission.refresh();
-			await open();
 			return receipt;
 		},
 		run: start => async function* (input) {
@@ -119,7 +119,7 @@ const agentTurn = ({ hub, context, turnId, admission }) => {
 					if (frame.type === "done") terminal = frame; else yield frame;
 				}
 			} finally {
-				// A rollback whose reopen failed has already closed the transaction.
+				// Finish only the transaction this run opened (a rollback keeps it open).
 				if (admission.turnId === turnId) {
 					delete admission.turnId;
 					const receipt = await control("agent.turn.finish");
@@ -381,9 +381,10 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 		try { if (await auth.getAccessToken()) return true; } catch { /* an unavailable ChatGPT token is not a credential */ }
 		const registry = await ensureWorkflowModels();
 		if (typeof registry?.getAuth !== "function") return false;
-		const { PROVIDERS } = await import("./providers.mjs");
-		for (const provider of PROVIDERS) {
-			try { if (await registry.getAuth(provider.id)) return true; } catch { /* one broken provider does not break the gate */ }
+		// the curated providers and any other one a pi login stored a credential for (#pi-login)
+		const [{ PROVIDERS }, { readCredentials }] = await Promise.all([import("./providers.mjs"), import("./provider-keys.mjs")]);
+		for (const id of new Set([...PROVIDERS.map((provider) => provider.id), ...Object.keys(readCredentials())])) {
+			try { if (await registry.getAuth(id)) return true; } catch { /* one broken provider does not break the gate */ }
 		}
 		return false;
 	};
@@ -395,9 +396,9 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 	const studioOwnerTokens = new Map();
 	const parseCookies = req => Object.fromEntries(String(req.headers.cookie || "").split(";").map(part => part.trim().split("=")).filter(([key, value]) => key && value).map(([key, value]) => [key, decodeURIComponent(value)]));
 	const pruneStudioSessions = () => {
-		const now = clock();
-		for (const [id, session] of studioSessions) if (!session.activeJobId && now - session.updatedAt > 600_000) { studioSessions.delete(id); studioOwnerTokens.delete(id); for (const turn of session.turns.keys()) studioEvents.delete(turn); }
-		const retired = [...studioSessions.entries()].filter(([, session]) => !session.activeJobId).sort((a, b) => a[1].updatedAt - b[1].updatedAt);
+		const now = clock(), idle = session => !(session.activeTurnId && session.controller && !session.controller.signal.aborted); // a running turn keeps its session
+		for (const [id, session] of studioSessions) if (idle(session) && now - session.updatedAt > 600_000) { studioSessions.delete(id); studioOwnerTokens.delete(id); for (const turn of session.turns.keys()) studioEvents.delete(turn); }
+		const retired = [...studioSessions.entries()].filter(([, session]) => idle(session)).sort((a, b) => a[1].updatedAt - b[1].updatedAt);
 		while (studioSessions.size > 256 && retired.length) { const [id, session] = retired.shift(); studioSessions.delete(id); studioOwnerTokens.delete(id); for (const turn of session.turns.keys()) studioEvents.delete(turn); }
 	};
 	const studioOwner = (req, sessionId, create = false) => {
@@ -425,13 +426,16 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 		record.next = value.eventSeq;
 		const previous = record.events.at(-1);
 		if (value.type === "job.progress" && previous?.type === "job.progress" && previous.jobId === value.jobId) record.events[record.events.length - 1] = value;
+		// The panel's live frames (turn-frames.mjs, a script's nested calls) keep one replay slot per run of them.
+		else if (value.type === "thinking.delta" && previous?.type === "thinking.delta") record.events[record.events.length - 1] = { ...value, text: previous.text + value.text };
+		else if (value.type === "tool.progress" && previous?.type === "tool.progress" && previous.callId === value.callId) record.events[record.events.length - 1] = value;
 		else record.events.push(value);
 		if (record.events.length > 256) record.events.splice(0, record.events.length - 256);
 		if (["done", "error", "receipt"].includes(value.type)) record.terminal = true;
 		studioEvents.set(turnId, record); for (const listener of [...record.listeners]) listener(value);
 	};
-	const unsubscribe = auth.onAuthChange?.(({ kind }) => {
-		if (kind !== "signed_out" && kind !== "replaced") return;
+	// A sign-out, another account, or a provider key or server address that changed: the registry and every runner on it go.
+	const resetRegistry = () => {
 		for (const session of sessions.values()) session.controller?.abort();
 		for (const session of studioSessions.values()) session.controller?.abort();
 		for (const runner of [...workflowRunners.values(), ...studioRunners.values()]) void runner.close?.();
@@ -439,7 +443,9 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 		workflowModels = models;
 		workflowModelsPromise = models ? Promise.resolve(models) : null;
 		sessions.clear(); studioSessions.clear(); studioEvents.clear(); studioOwnerTokens.clear();
-	});
+	};
+	const unsubscribe = auth.onAuthChange?.(({ kind }) => { if (kind === "signed_out" || kind === "replaced") resetRegistry(); });
+	const providerRoutes = createProviderRoutes({ auth, getModels: ensureWorkflowModels, onChange: resetRegistry, json, readBody });
 
 	const studioIdentity = host => Object.fromEntries(["workspaceId", "documentEpoch", "sceneId", "sceneEpoch"].map(key => [key, host[key]]));
 	const writeStudioStream = (res, record, after = 0) => {
@@ -473,27 +479,12 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 		if (path === "/agent/stop") {
 			const session = studioSessions.get(value.sessionId);
 			if (!session || session.owner !== parseCookies(req).studio_owner || !session.turns.has(value.turnId)) throw new StudioProtocolError("AUTH_REQUIRED", "Studio stop is not owned by this session.");
-			const jobId = value.jobId ?? session.activeJobId;
-			// Explicit ids are checked against every motion job this session admitted.
-			// Retired ids remain in the set so a repeat Stop is idempotent, while an id
-			// admitted by another session is stale even when this session is idle.
-			if (value.jobId && !session.motionJobIds.has(value.jobId)) throw new StudioProtocolError("STALE_TARGET", "Stop does not own that motion job.");
-			// An owned retired id is still stale while another motion job is active:
-			// this Stop cannot acknowledge the current turn's different job.
-			if (value.jobId && session.activeJobId && value.jobId !== session.activeJobId) throw new StudioProtocolError("STALE_TARGET", "Stop does not target the active motion job.");
-			// Only this turn's held editor job can settle the tool quietly. A retired
-			// job from an earlier turn must never silence an unrelated turn's Stop.
-			const acknowledged = Boolean(session.activeJobId) && session.activeJobTurnId === value.turnId;
-			// The editor's outcome, not a sidecar abort, establishes application.
-			let outcome = null;
-			if (jobId) outcome = await session.controlJob('job.cancel', jobId);
-			if (jobId && session.activeJobId === jobId) { session.activeJobId = null; session.activeJobTurnId = null; }
-			// Let the acknowledged job settle its held tool with that outcome before
-			// aborting the model lane. Aborting the shared signal would interrupt the
-			// tool first and lose the editor's proof. Without a held job, abort both.
-			if (!acknowledged) session.controller?.abort();
-			await session.modelSession?.abort?.("studio stop", acknowledged ? { quiet: true } : undefined);
-			json(res, 200, { ok: true, status: jobId ? "stopped" : "detached", ...(outcome ? { outcome: { status: outcome.status ?? null, code: outcome.code ?? null, mutated: outcome.mutated ?? null } } : {}) }); return true;
+			// Studio turns hold no editor jobs since 3.0 (motion.compile answers
+			// synchronously), so a Stop names no job: it aborts the turn and the model lane.
+			if (value.jobId) throw new StudioProtocolError("STALE_TARGET", "Stop does not own that motion job.");
+			session.controller?.abort();
+			await session.modelSession?.abort?.("studio stop");
+			json(res, 200, { ok: true, status: "detached" }); return true;
 		}
 		if (!studioRuntime && !hub && hubDeps.hubPortBusy) throw new StudioProtocolError("CAPABILITY_MISSING", `The Studio live hub could not start: port ${hubDeps.hubPortBusy} is in use by another CozyClay or its dev server. Free that port and relaunch.`);
 		if (!studioRuntime && (!hub?.command || !hub?.workspaceId)) throw new StudioProtocolError("CAPABILITY_MISSING", "Studio execution is not installed.");
@@ -516,7 +507,7 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 			studioOwner(req, value.sessionId, true);
 			let persisted = null;
 			try { persisted = sessionStore.read(value.sessionId); } catch { /* an unreadable history starts the session fresh */ }
-			session = { owner: studioOwnerTokens.get(value.sessionId), history: persisted?.history ?? [], persistedItems: persisted?.history?.length ?? 0, meta: persisted?.meta ?? null, turns: new Map(), controller: null, activeJobId: null, activeJobTurnId: null, motionJobIds: new Set(Array.isArray(persisted?.meta?.motionJobIds) ? persisted.meta.motionJobIds.filter(id => typeof id === "string") : []), host: null, updatedAt: clock() };
+			session = { owner: studioOwnerTokens.get(value.sessionId), history: persisted?.history ?? [], persistedItems: persisted?.history?.length ?? 0, meta: persisted?.meta ?? null, turns: new Map(), controller: null, host: null, updatedAt: clock() };
 			studioSessions.set(value.sessionId, session);
 		}
 		session.updatedAt = clock();
@@ -530,7 +521,7 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 		let replySegment = "", lastReply = "";
 		const send = event => {
 			if (event.type === "text.delta") { replySegment += event.text ?? ""; lastReply = replySegment; }
-			else if (!["execution_telemetry", "execution_tool_started"].includes(event.type)) {
+			else if (!["execution_telemetry", "execution_tool_started", "thinking.delta", "tool.compose", "tool.progress"].includes(event.type)) {
 				if (event.type === "tool.start") replySegment = "";
 				turnFrames.push(event);
 			}
@@ -562,49 +553,11 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 				return refreshed;
 			},
 		};
-		// One motion generation per user message, whichever path starts it:
-		// generate_motion below and a run_action job action share this gate.
-		const generation = { used: false, failures: 0 };
-		// The editor's command index (authoritative context) declares each action's
-		// generation and hub timeout; no sidecar list of actions exists.
-		const controlJob = async (action, jobId) => {
-			await admission.refresh();
-			return hub.command('run_action', { name: 'run_action', args: { action, args: { jobId, ...(action === 'job.await' ? { timeoutMs: 300_000 } : {}) } },
-				commandId: randomUUID(), host: admission.host, expectedRevision: admission.revision }, value.context.host.workspaceHandle, { timeoutMs: 300_000 });
-		};
-		session.controlJob = controlJob;
-		const onJob = async started => {
-			const jobId = started.jobId;
-			session.motionJobIds.add(jobId);
-			persistenceMeta.motionJobIds = [...session.motionJobIds];
-			session.activeJobId = jobId; session.activeJobTurnId = value.turnId;
-			const cancel = () => { void controlJob('job.cancel', jobId).catch(error => send({ type: 'error', code: error.code ?? 'CANCEL_FAILED', message: error.message })); };
-			controller.signal.addEventListener('abort', cancel, { once: true });
-			if (controller.signal.aborted) cancel();
-			send({ type: 'job.state', jobId, commandId: started.commandId, state: 'generating', phase: 'generating' });
-			try {
-				const outcome = await controlJob('job.await', jobId);
-				send({ type: 'job.state', jobId, commandId: outcome.commandId, state: outcome.ok ? 'installed' : outcome.code === 'CANCELLED' ? 'cancelled' : 'failed', phase: 'complete' });
-				return outcome;
-			} finally {
-				controller.signal.removeEventListener('abort', cancel);
-				if (session.activeJobId === jobId) { session.activeJobId = null; session.activeJobTurnId = null; }
-			}
-		};
-		const tools = createStudioTools({ liveHub: hub, workspaceHandle: value.context.host.workspaceHandle, previsMode: value.context.scene?.previsMode, session: { signal: controller.signal, admission, generation, onJob, actionIndex: current?.actionIndex ?? [], baseline: value.context }, resolveImage: async (id, correlation) => hub.command("resolve_studio_image", { imageId: id, ...correlation }, value.context.host.workspaceHandle) });
-		const motion = async args => {
-			// Private artifact IDs belonged to the retired sidecar runtime. Reuse
-			// retained editor takes through motion.loadVersion, not another installer.
-			if (args.source.kind !== 'generate') throw new StudioProtocolError('CAPABILITY_MISSING', 'Private motion artifacts are no longer retained. Use motion.loadVersion for an editor take.');
-			await tools.internal.invoke('inspect_studio', { scope: 'motion', ids: [args.characterId] });
-			const receipt = await tools.internal.invoke('generate_motion', args);
-			if (receipt.ok && receipt.status === 'completed') send({ type: 'receipt', receipt });
-			return receipt;
-		};
+		const tools = createStudioTools({ liveHub: hub, workspaceHandle: value.context.host.workspaceHandle, previsMode: value.context.scene?.previsMode, session: { signal: controller.signal, admission, actionIndex: current?.actionIndex ?? [], baseline: value.context }, resolveImage: async (id, correlation) => hub.command("resolve_studio_image", { imageId: id, ...correlation }, value.context.host.workspaceHandle) });
 		const modelTools = tools.map(tool => ({
 			...tool,
 			handler: async args => {
-				const result = await (tool.name === "generate_motion" ? motion(args) : tool.handler(args));
+				const result = await tool.handler(args);
 				if (!result || !Array.isArray(result.visualRefs) || !result.visualRefs.length) return result;
 					const ref = result.visualRefs.find(item => item?.imageId || item?.id);
 				if (!ref) return result;
@@ -616,9 +569,11 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 		const script = createScriptTool({ tools: modelTools, signal: controller.signal, emit: send });
 		const scriptTool = {
 			...script,
-			// A script that fails after it edited the scene rolls the turn back, so
-			// the model retries from the pre-turn document, never from half a script.
+			// A script that fails after it edited the scene rolls back its own edits, so
+			// the model retries from the document the script started from, never from
+			// half a script; what the turn did before the script stays.
 			handler: async (args, options) => {
+				await turnTransaction.mark();
 				const result = await script.handler(args, options);
 				if (result.ok || !result.calls.some(call => call.ok && Number.isSafeInteger(call.revision?.after) && call.revision.after !== call.revision.before)) return result;
 				const rollback = await turnTransaction.rollback();
@@ -675,12 +630,12 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 			else telemetry.finished(turnOutcome, turnFailureCode || "tool_failed");
 			// Marked before the done frame leaves, so a client that asks for the
 			// review the moment its stream ends finds it pending, not absent.
-			// The author's own switch (value.supervisor === false) skips this turn's review.
-			if (supervisor && process.env.COZYCLAY_SUPERVISOR !== "off" && value.supervisor !== false && !controller.signal.aborted && shouldSupervise(turnFrames)) record.supervisor = "pending";
+			// Off by default: only a turn sent with value.supervisor === true is reviewed.
+			if (supervisor && process.env.COZYCLAY_SUPERVISOR !== "off" && value.supervisor === true && !controller.signal.aborted && shouldSupervise(turnFrames)) record.supervisor = "pending";
 			}
 			send(frame);
 		};
-		const persistenceMeta = { sceneName: value.context?.scene?.name ?? value.context?.sceneName ?? null, firstText: value.text, motionJobIds: [...session.motionJobIds] };
+		const persistenceMeta = { sceneName: value.context?.scene?.name ?? value.context?.sceneName ?? null, firstText: value.text };
 		const modelKey = value.model || (fauxProvider ? `${fauxProvider.provider?.id || fauxProvider.provider || "faux"}/scripted` : "gpt-6-astra");
 		let runner = studioRunners.get(value.sessionId);
 		if (!runner) {
@@ -789,35 +744,7 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 			await session.modelSession.steer(value.text, images);
 			json(res, 200, { ok: true, queued: true }); return true;
 		}
-		if (path === "/agent/providers" && req.method === "GET") {
-			const { providerStatus } = await import("./providers.mjs");
-			try { json(res, 200, { providers: providerStatus({ auth }) }); }
-			catch { json(res, 500, { error: "provider credentials unavailable" }); }
-			return true;
-		}
-		if (/^\/agent\/providers\/[^/]+$/.test(path) && ["PUT", "DELETE"].includes(req.method)) {
-			const { PROVIDERS } = await import("./providers.mjs");
-			const keys = await import("./provider-keys.mjs");
-			const { createCredentialStore } = await import("./credential-store.mjs");
-			const id = path.slice("/agent/providers/".length);
-			if (!PROVIDERS.some((provider) => provider.id === id)) { json(res, 404, { error: "provider not found" }); return true; }
-			const credentials = createCredentialStore({ auth, keys });
-			let key;
-			if (req.method === "PUT") {
-				if (id === "openai-codex") { json(res, 400, { error: "Use ChatGPT sign-in for OpenAI Codex." }); return true; }
-				try {
-					const value = await readBody(req);
-					if (typeof value?.key !== "string" || !value.key.trim()) throw new Error("Invalid key.");
-					key = value.key.trim();
-				} catch { json(res, 400, { error: "a non-empty API key is required" }); return true; }
-			}
-			try {
-				if (req.method === "PUT") await credentials.modify(id, async () => ({ type: "api_key", key }));
-				else await credentials.delete(id);
-				json(res, 200, { ok: true });
-			} catch { json(res, 500, { error: "provider credentials could not be saved" }); }
-			return true;
-		}
+		if (await providerRoutes(req, res, path)) return true;
 		if (path === "/agent/sessions" && req.method === "GET") {
 			const surface = new URL(req.url, "http://127.0.0.1").searchParams.get("surface") || undefined;
 			try { json(res, 200, { sessions: sessionStore.list({ surface }) }); }

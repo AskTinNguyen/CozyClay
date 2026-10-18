@@ -8,6 +8,8 @@ import { expandSculptParts, normalizeSculptRecipe, patchSculptRecipe } from '../
 import { rankingRow, scoreSculptAgainstReference } from '../sculpt-compare.js';
 import { browserSculptImages, shrinkRgba } from './sculpt-images.js';
 import { clampWarning } from '../receipt-findings.js';
+import { effectPresetSet } from '../effects/effect-record.js';
+import { withLightWarnings } from '../light-blockers.js';
 import { STUDIO_TOOL_SCHEMAS, StudioSchemas } from '../studio-agent-protocol.js';
 
 const id = StudioSchemas.TargetGuard.properties.targetId;
@@ -80,7 +82,7 @@ export function register(registry, ports) {
 			// goes to the top where it is seen, not below a long expanded group.
 			const next = args.first ? [placed, ...before] : [...before, placed];
 			owned().write(args.parent === undefined ? next : setSceneObjectParent(next, placed.id, args.parent));
-			return result(before, 'Added object.');
+			return withLightWarnings(result(before, 'Added object.'), owned().read());
 		},
 		'object.sculpt': args => {
 			const before = owned().read();
@@ -156,13 +158,13 @@ export function register(registry, ports) {
 		},
 		'objects.arrange': args => {
 			const plan = owned().arrange(args);
-			return { affectedIds: plan.affectedIds, summary: 'Arranged objects.', checks: plan.checks, warnings: plan.warnings };
+			return withLightWarnings({ affectedIds: plan.affectedIds, summary: 'Arranged objects.', checks: plan.checks, warnings: plan.warnings }, owned().read());
 		},
 	};
 	// Scalar scale is a convenience at the command boundary; the registry still
 	// owns all field mapping, normalization, publication and patch aliases.
 	registerElementSet({ register(entry) {
-		const expand = op => typeof op.set.scale === 'number' ? { ...op, set: { ...op.set, scale: { x: op.set.scale, y: op.set.scale, z: op.set.scale } } } : op;
+		const expand = op => effectPresetSet(typeof op.set.scale === 'number' ? { ...op, set: { ...op.set, scale: { x: op.set.scale, y: op.set.scale, z: op.set.scale } } } : op, ports.state().objects);
 		registry.register({ ...entry, available, run: args => {
 			const ops = (args.ops ?? [args]).map(expand);
 			let draft = owned().read();
@@ -173,7 +175,7 @@ export function register(registry, ports) {
 				if (object.attach) fail('CAPABILITY_MISSING', 'Use object.group to preserve an attached object world transform.');
 				draft = setSceneObjectParent(draft, id, parent);
 			}
-			return entry.run(args.ops ? { ops } : ops[0]);
+			return withLightWarnings(entry.run(args.ops ? { ops } : ops[0]), owned().read());
 		} });
 	} }, ports, semantic[0]);
 	for (const declaration of semantic.slice(1)) registry.register({ ...declaration, available, run: methods[declaration.id] });

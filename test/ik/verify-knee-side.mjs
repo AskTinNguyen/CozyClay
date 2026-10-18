@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import * as THREE from "three";
-import { resolveIkRig, solveIk } from "../../src/ardy/ik.js";
+import { resolveIkRig, solveIk } from "../../src/motion/ik.js";
 
 // Synthetic mixamo leg (45 + 45 cm, cm bones under a 0.01 group), facing +Z.
 function makeRig() {

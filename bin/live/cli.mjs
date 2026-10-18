@@ -31,7 +31,7 @@ const USAGE = `cclay live - drive a running CozyClay studio from a terminal
                                          [--play | --pause]
   cclay live verify (--receipt <id> | --targets a,b) --checks placement,framing
                                          [--range whole_clip|start:end] [--strict]
-                                         [--visual frame|contact_sheet --out check.png]
+                                         [--visual frame|contact_sheet|plan|trace [--frames even|beats] --out check.png]
   cclay live undo --receipt <id>
   cclay live commands [--ids a,b]        the commands the editor registers; ids add schemas
   cclay live run <id> [--args '<json>']  any command the editor registers, admitted like
@@ -62,7 +62,7 @@ const VERBS = new Map([
 	["patch", { flags: ["--target", "--set"], command: "patch_elements" }],
 	["frame-shot", { flags: ["--subject", "--size", "--view", "--level", "--side", "--focal", "--exact"] }],
 	["operate", { flags: ["--select", "--frame", "--mode", "--play", "--pause"] }],
-	["verify", { flags: ["--receipt", "--targets", "--checks", "--range", "--strict", "--visual", "--out"] }],
+	["verify", { flags: ["--receipt", "--targets", "--checks", "--range", "--strict", "--visual", "--frames", "--out"] }],
 	["undo", { flags: ["--receipt"] }],
 	["commands", { flags: ["--ids"] }],
 	["run", { flags: ["--args"], argument: "command id" }],
@@ -426,7 +426,7 @@ async function runVerb({ client, verb, spec, name, flags }) {
 		const args = { checks: commaList(required(flags, "--checks", verb)), ...(hasReceipt ? { receiptId: required(flags, "--receipt", verb) } : { targets: commaList(required(flags, "--targets", verb)) }) };
 		if (flags.has("--range")) args.range = frameRangeFlag(flags, "--range");
 		const visual = flags.has("--visual") ? String(flags.get("--visual")) : "none";
-		if (visual !== "none") args.visual = visual;
+		if (visual !== "none") Object.assign(args, { visual }, flags.has("--frames") ? { frames: String(flags.get("--frames")) } : {});
 		const out = visual === "none" ? null : resolvePath(required(flags, "--out", verb));
 		const value = await admitted("verify_result", args);
 		if (flags.get("--strict") === true && value?.checks?.framing?.issueFrames?.length) {

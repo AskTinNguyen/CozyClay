@@ -98,7 +98,7 @@ if (process.env.QA_FULL) {
 	}
 	// Read the live rendered skeleton, independently of the solver's saved
 	// samples. This catches preview/evaluation and asynchronous-frame errors.
-	await ev("(async()=>{window.__qaSurface=(await import('/src/ardy/physics-review.js')).createSupportSampler(window.__cozyclay.rigA)})()");
+	await ev("(async()=>{window.__qaSurface=(await import('/src/motion/physics-review.js')).createSupportSampler(window.__cozyclay.rigA)})()");
 	let playbackError = 0;
 	for (let f = 0; f < summary.frames; f += 1) {
 		await selectFrame(f);

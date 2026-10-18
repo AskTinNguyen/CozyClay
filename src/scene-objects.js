@@ -22,6 +22,13 @@ import { createObjectPath, translateObjectPath } from "./object-path.js";
 import { elementByPath } from "./studio-elements.js";
 import { MESH_DEFAULT_HEIGHT, MESH_HEIGHT_MIN } from "./scene-mesh.js";
 import { normalizeSculptRecipe, sculptStandingBox } from "./sculpt-recipe.js";
+import { GREY_BOX } from "./object-colors.js";
+import { isEffectivelyHidden } from "./object-hidden.js";
+import { objectSize } from "./object-size.js";
+import { EFFECT_ENTRY, effectFields } from "./effects/effect-record.js";
+import { LIGHT_KIND, LIGHT_MENU_ENTRIES, lightLibraryEntry, objectLookFields, objectLookPatch } from "./object-look.js";
+export { OBJECT_COLORS, normalizeObjectColor, rememberObjectColor, readStoredObjectColors, writeStoredObjectColors } from "./object-colors.js";
+export { isEffectivelyHidden };
 
 export const DEFAULT_SCENE_OBJECTS = [];
 /** The persistence contract (plan §8.1): the version lives in the key AND in
@@ -60,7 +67,6 @@ const snapTo = (value, step) => Number((step > 0 ? Math.round(value / step) * st
  * else, and a tinted maquette reads as a finished prop. The hand-built set
  * pieces keep their clay colours because they ARE the thing they depict.
  */
-const GREY_BOX = "#c2c6c8";
 export const OBJECT_LIBRARY = [
 	{ kind: "cube", label: "Cube", group: "Primitives", footprint: { width: 1, depth: 1 }, height: 1, color: GREY_BOX },
 	{ kind: "sphere", label: "Sphere", group: "Primitives", footprint: { width: 1, depth: 1 }, height: 1, color: GREY_BOX },
@@ -74,96 +80,6 @@ export const OBJECT_LIBRARY = [
 	{ kind: "car", label: "Car", group: "Set pieces", footprint: { width: 1.8, depth: 4.5 }, height: 1.4, color: "#d98770" },
 	{ kind: "small-plane", label: "Plane (aircraft)", group: "Set pieces", footprint: { width: 3.4, depth: 3.6 }, height: 1.4, color: "#7896a4" },
 ];
-
-/** Blockout greys first, then the clay accents, then the blocking chromatics,
- * for re-tinting from the inspector. The greys lead because a blockout starts
- * grey; the saturated four exist so a shot can say "the red ball, the blue
- * box" at a glance — the inspector had no way to say that at all (#88). They
- * are muted off pure RGB so they still read as clay under the set's lighting.
- * Any other colour is authored through the inspector's free colour input. */
-export const OBJECT_COLORS = [
-	"#e2e5e6",
-	GREY_BOX,
-	"#9aa1a5",
-	"#767d81",
-	"#d9b18c",
-	"#8fae9b",
-	"#d94a4a",
-	"#4a7bd9",
-	"#e2c04a",
-	"#4fa86a",
-];
-
-/** How many hand-mixed colours the inspector remembers. Six is one palette
- * row: enough to keep a scene's custom tints reachable, short enough that the
- * popover never turns into a second, unruly palette. */
-const RECENT_OBJECT_COLORS_MAX = 6;
-/** Session memory of hand-mixed tints; versioned like every other key here. */
-const RECENT_OBJECT_COLORS_KEY = "cozyclay.objectColors.recent";
-
-const HEX_SHORT = /^#?([0-9a-f]{3})$/i;
-const HEX_LONG = /^#?([0-9a-f]{6})$/i;
-
-/**
- * What a colour input typed by a human means, or null if it means nothing.
- *
- * The hex field accepts what people actually type — `#f36`, `ff3366`, upper
- * case, stray spaces — and folds it to the one form the record stores, so a
- * colour typed by hand and the same colour picked from the native swatch are
- * byte-identical (and therefore compare equal against the palette). Anything
- * else returns null rather than throwing or guessing: a half-typed `#12` is a
- * keystroke on the way somewhere, not an instruction to repaint the prop.
- */
-export function normalizeObjectColor(value) {
-	if (typeof value !== "string") return null;
-	const text = value.trim();
-	const short = HEX_SHORT.exec(text);
-	if (short) return `#${short[1].toLowerCase().replace(/./g, (digit) => digit + digit)}`;
-	const long = HEX_LONG.exec(text);
-	return long ? `#${long[1].toLowerCase()}` : null;
-}
-
-/**
- * The recent-colours list after mixing `hex`: newest first, no duplicates,
- * capped, presets excluded.
- *
- * Pure so the list can be proved without a browser, and so a corrupt stored
- * list is repaired on the way through instead of painting a swatch with junk.
- * Presets are skipped because they are already one row up — remembering them
- * would push the author's own colours off the end with colours they never
- * mixed. Returns the SAME array when nothing changes, so a re-pick of an
- * unchanged colour cannot trigger a storage write or a re-render.
- */
-export function rememberObjectColor(list, hex) {
-	const clean = Array.isArray(list)
-		? list.map(normalizeObjectColor).filter((color, index, all) => color && all.indexOf(color) === index && !OBJECT_COLORS.includes(color))
-		: [];
-	const color = normalizeObjectColor(hex);
-	const next = color && !OBJECT_COLORS.includes(color) ? [color, ...clean.filter((entry) => entry !== color)] : clean;
-	const capped = next.slice(0, RECENT_OBJECT_COLORS_MAX);
-	const unchanged = Array.isArray(list) && capped.length === list.length && capped.every((entry, index) => entry === list[index]);
-	return unchanged ? list : capped;
-}
-
-/** Recent colours as last left by this browser; storage can be unavailable
- * (private mode), and a corrupt body must not take the inspector down with
- * it — either way the palette simply starts without a memory. */
-export function readStoredObjectColors(storage) {
-	try {
-		const parsed = JSON.parse(storage?.getItem(RECENT_OBJECT_COLORS_KEY) ?? "[]");
-		return rememberObjectColor(Array.isArray(parsed) ? parsed : [], null);
-	} catch {
-		return [];
-	}
-}
-
-export function writeStoredObjectColors(storage, list) {
-	try {
-		storage?.setItem(RECENT_OBJECT_COLORS_KEY, JSON.stringify(list));
-	} catch {
-		// Storage can be unavailable (private mode); the colours simply stop persisting.
-	}
-}
 
 /**
  * A cutout is a standee: an imported image standing on a card. Its size is NOT
@@ -253,14 +169,16 @@ const EMPTY_ENTRY = {
 	color: "#ffffff",
 };
 
-/** True for a record that is only a node: no mesh, no collision, no surface. */
+/** True for a record that is only a node: no mesh, no collision, no surface.
+ * A practical light (object-look.js) is one too: it lights, it does not stand. */
 export function isEmptyObject(object) {
-	return object?.renderer === EMPTY_KIND;
+	return object?.renderer === EMPTY_KIND || object?.renderer === LIGHT_KIND;
 }
 
-/** The catalogue grouped for the create menu: the library plus the empty,
- * which is creatable but has no footprint to satisfy the library's contract. */
-export const OBJECT_MENU_ENTRIES = Object.freeze([EMPTY_ENTRY, ...OBJECT_LIBRARY]);
+/** The catalogue grouped for the create menu: the library plus the empty, the
+ * two practical lights and the effect emitter, which are creatable but have no
+ * footprint to satisfy the library's contract. */
+export const OBJECT_MENU_ENTRIES = Object.freeze([EMPTY_ENTRY, ...OBJECT_LIBRARY, ...LIGHT_MENU_ENTRIES, EFFECT_ENTRY]);
 
 /** Every kind that can exist in a scene: the catalogue you can create from,
  * plus the kinds that arrive by import and so are deliberately absent from the
@@ -271,7 +189,8 @@ function objectLibraryEntry(kind) {
 	if (kind === MESH_KIND) return MESH_ENTRY;
 	if (kind === SCULPT_KIND) return SCULPT_ENTRY;
 	if (kind === EMPTY_KIND) return EMPTY_ENTRY;
-	return OBJECT_LIBRARY.find((entry) => entry.kind === kind) ?? null;
+	if (kind === EFFECT_ENTRY.kind) return EFFECT_ENTRY;
+	return OBJECT_LIBRARY.find((entry) => entry.kind === kind) ?? lightLibraryEntry(kind);
 }
 
 /** Return the authored walkable surface for mocap contact staging. */
@@ -397,9 +316,10 @@ export function createSceneObject(kind, existing = [], placement = {}) {
 	return {
 		id,
 		name,
-		renderer: kind,
+		// A light kind (point-light, spot-light) is a preset of the one light renderer.
+		renderer: entry.renderer ?? kind,
 		x: TRANSFORM_LIMITS.x(Number(placement.x) || 0),
-		y: 0,
+		y: entry.placeY ?? 0,
 		z: TRANSFORM_LIMITS.z(Number(placement.z) || 0),
 		rot: TRANSFORM_LIMITS.rot(Number(placement.rot) || 0),
 		rotX: 0,
@@ -420,6 +340,8 @@ export function createSceneObject(kind, existing = [], placement = {}) {
 		footprint: { ...entry.footprint },
 		height: entry.height,
 		supportY: Number.isFinite(entry.supportY) ? entry.supportY : entry.height,
+		...objectLookFields({}, entry),
+		...effectFields({ renderer: kind }),
 	};
 }
 
@@ -625,7 +547,8 @@ const TRANSFORM_LIMITS = {
 /** The patch keys updateSceneObject reads for this object; any other key is
  * silently ignored there, so callers that must not be silent check against this. */
 export function objectPatchFields(object) {
-	const fields = [...Object.keys(TRANSFORM_LIMITS), "name", "color", "hidden", "opacity", "path"];
+	const fields = [...Object.keys(TRANSFORM_LIMITS), "name", "color", "hidden", "opacity", "path", "glow"];
+	if (object?.renderer === LIGHT_KIND) fields.push("light");
 	if (object?.renderer === CUTOUT_KIND) fields.push("assetId", "sourceAssetId", "matteAssetId", "matteScale", "height", "aspect", "width", "stretch");
 	if (object?.renderer === MESH_KIND) fields.push("clay", "assetId", "height");
 	if (object?.renderer === SCULPT_KIND) fields.push("recipe");
@@ -651,36 +574,6 @@ export function descendantsOf(objects, id) {
 		frontier = next;
 	}
 	return out;
-}
-
-/** True when this record, a parent above it, or a character carrying any of
- *  those records is hidden. A cycle in parent links ends the walk. When the
- *  id is in `objects`, that stored record is what the walk reads, so a display
- *  copy cannot disagree with the authored flag. Nothing in the lists is changed. */
-export function isEffectivelyHidden(entity, objects = [], characters = []) {
-	if (!entity || typeof entity !== "object") return false;
-	const byId = new Map();
-	for (const object of objects) {
-		if (object && typeof object.id === "string") byId.set(object.id, object);
-	}
-	const characterHidden = (id) => characters.some((item) => item && typeof item === "object" && item.id === id && item.hidden === true);
-	const seen = new Set();
-	let current = entity;
-	while (current && typeof current === "object") {
-		const id = typeof current.id === "string" ? current.id : null;
-		if (id) {
-			if (seen.has(id)) break;
-			seen.add(id);
-			if (byId.has(id)) current = byId.get(id);
-		}
-		if (current.hidden === true) return true;
-		const characterId = current.attach && typeof current.attach.characterId === "string" ? current.attach.characterId : null;
-		if (characterId && characterHidden(characterId)) return true;
-		const parentId = typeof current.parent === "string" ? current.parent : null;
-		if (!parentId) break;
-		current = byId.get(parentId) ?? null;
-	}
-	return false;
 }
 
 /** Float dust (6e-17 where 0 belongs) is snapped away, and everything else is
@@ -963,6 +856,8 @@ export function updateSceneObject(objects, id, patch) {
 				Object.assign(update, sculptStandingBox(normalized.recipe));
 			}
 		}
+		// Light and glow merge over the record's own and are repaired (object-look.js).
+		Object.assign(update, objectLookPatch(object, patch));
 		if (!Object.keys(update).length) return object;
 		changed = true;
 		return { ...object, ...update };
@@ -1126,7 +1021,7 @@ export function normalizeSceneObject(record) {
 	return {
 		id: record.id,
 		name: typeof record.name === "string" && record.name ? record.name : entry.label,
-		renderer: entry.kind,
+		renderer: entry.renderer ?? entry.kind,
 		x: TRANSFORM_LIMITS.x(pick(record.x, 0)),
 		y: TRANSFORM_LIMITS.y(pick(record.y, 0)),
 		z: TRANSFORM_LIMITS.z(pick(record.z, 0)),
@@ -1191,6 +1086,10 @@ export function normalizeSceneObject(record) {
 						height: Math.max(MESH_HEIGHT_MIN, pick(record.height, entry.height)),
 					}
 				: { footprint: { ...entry.footprint }, height: entry.height, supportY: Number.isFinite(entry.supportY) ? entry.supportY : entry.height }),
+		// A light's light, and a glow on any record (object-look.js).
+		...objectLookFields(record, entry),
+		// An effect record's emitter (src/effects/effect-record.js).
+		...effectFields(record),
 	};
 }
 
@@ -1315,14 +1214,7 @@ export function screenRotatePatch(start, viewAxis, deltaDeg, snap = ROTATE_SNAP)
 	};
 }
 
-/** The object's world size along each axis, for the gizmo and the plan board. */
-export function objectSize(object) {
-	return {
-		width: (object.footprint?.width ?? 1) * (object.scaleX ?? 1),
-		height: (object.height ?? 1) * (object.scaleY ?? 1),
-		depth: (object.footprint?.depth ?? 1) * (object.scaleZ ?? 1),
-	};
-}
+export { objectSize };
 /** The tolerance that keeps an edge-abutting footprint from counting as
  * overlap: a strict `<` against `max - EPS` makes a 0.5 - 0.5 touch false. */
 const OVERLAP_EPS = 1e-4;

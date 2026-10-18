@@ -86,7 +86,7 @@ function studioContext(sceneRevision = 41) {
 		assets: [],
 		recentReceipts: [],
 		jobs: [],
-		capabilities: { profile: "studio-slice-1", tools: ["inspect_studio", "operate_studio", "arrange_objects", "arrange_characters", "frame_shot", "generate_motion", "verify_result", "undo_edit"] },
+		capabilities: { profile: "studio-slice-1", tools: ["inspect_studio", "operate_studio", "arrange_objects", "arrange_characters", "frame_shot", "verify_result", "undo_edit"] },
 	};
 }
 

@@ -5,27 +5,26 @@ import assert from "node:assert/strict";
 import { STUDIO_ACTIONS, STUDIO_ACTION_IDS, STUDIO_ACTION_KINDS, studioActionDeclaration, createStudioActionRegistry } from "../src/studio-actions.js";
 import { validateStudioCommand, validateStudioSchema } from "../src/studio-agent-protocol.js";
 import * as studioActions from "../src/studio-actions.js";
-import { FK_TRACKS, IK_TRACKS } from "../src/ardy/ik.js";
+import { FK_TRACKS, IK_TRACKS } from "../src/motion/ik.js";
 import { SCENE_ATTACH_BONES } from "../src/scene-objects.js";
 import { GUIDE_MODES } from "../src/shot-guides.js";
 import { IMAGE_MODELS } from "../src/shot.js";
-import { buildH3MotionPrompt } from "../src/i2v-motion-client.js";
 
 const code = expected => error => error?.code === expected;
 
 /* The first batch is declared once, as data. */
-const firstBatch = ["shot.create", "shot.createStill", "shot.setCaption", "shot.setCastOverride", "shot.setHold", "shot.split", "shot.duplicate", "shot.remove", "shot.setRange", "shot.reorder", "motion.generateAllBlocks", "object.duplicate"];
+const firstBatch = ["shot.create", "shot.createStill", "shot.setCaption", "shot.setCastOverride", "shot.setHold", "shot.split", "shot.duplicate", "shot.remove", "shot.setRange", "shot.reorder", "object.duplicate"];
 const castActions = ["character.move"];
 const waypointActions = ["character.addWaypoint", "character.moveWaypoint", "character.removeWaypoint", "character.clearWaypoints"];
 const ikKeyActions = ["character.setIkKey", "character.removeIkKey", "character.clearIkKeys"];
 const attachActions = ["object.attach", "object.detach"];
 const railActions = ["shot.setCameraRail", "shot.clearCameraRail"];
-const viewActions = ["view.setPartColours", "view.setGuideMode", "view.setInset"];
+const viewActions = ["view.setPartColours", "view.setGuideMode", "view.setInset", "view.setGhosts"];
 const exportActions = ["export.shotVideo"];
 const sceneActions = ["scene.create", "scene.duplicate", "scene.rename", "scene.delete", "scene.switch"];
 const projectActions = ["project.save", "project.exportAsAnimation"];
 const assetActions = ["asset.import"];
-const aiActions = ["ai.prepareShot", "motion.generateFromVideo"];
+const aiActions = ["ai.prepareShot"];
 assert.deepEqual([...STUDIO_ACTION_IDS].sort(), [...firstBatch, ...castActions, ...waypointActions, ...ikKeyActions, ...attachActions, ...railActions, ...viewActions, ...exportActions, ...sceneActions, ...projectActions, ...assetActions, ...aiActions].sort());
 assert.deepEqual([...STUDIO_ACTION_KINDS], ["mutation", "transient", "job", "document"]);
 assert.ok(Object.isFrozen(STUDIO_ACTIONS));
@@ -47,7 +46,7 @@ for (const action of STUDIO_ACTIONS) {
 }
 assert.equal(studioActionDeclaration("shot.create").kind, "mutation");
 assert.equal(studioActionDeclaration("object.duplicate").undoDomain, "objects");
-assert.equal(studioActionDeclaration("motion.generateAllBlocks").kind, "job");
+assert.equal(studioActionDeclaration("export.shotVideo").kind, "job");
 assert.throws(() => studioActionDeclaration("shot.teleport"), code("INVALID_ARGUMENT"));
 // Root waypoints: every action names its character explicitly and addresses a
 // waypoint by its frame (unique on a path), the key inspect_studio "motion" shows.
@@ -160,20 +159,6 @@ assert.deepEqual([...prepareShot.input.properties.model.enum], IMAGE_MODELS.map(
 assert.deepEqual(validateStudioSchema(prepareShot.input, { mode: "image", model: "flux_2" }), { mode: "image", model: "flux_2" });
 assert.throws(() => validateStudioSchema(prepareShot.input, { model: "midjourney" }), code("INVALID_ARGUMENT"));
 assert.throws(() => validateStudioSchema(prepareShot.input, { mode: "storyboard" }), code("INVALID_ARGUMENT"));
-// AI-video motion is a motion generation (the message's one) that waits for
-// the hosted model's clip within the hub's ceiling. Its instruction fits the
-// motion API's 4000-character prompt with the H3 camera-lock text appended.
-const fromVideo = studioActionDeclaration("motion.generateFromVideo");
-assert.equal(fromVideo.kind, "job");
-assert.equal(fromVideo.generation, "motion");
-assert.equal(fromVideo.undoDomain, undefined);
-assert.equal(fromVideo.timeoutMs, 300_000);
-assert.deepEqual(fromVideo.input.required, ["instruction"]);
-assert.deepEqual(Object.keys(fromVideo.input.properties), ["instruction"]);
-const instructionBound = fromVideo.input.properties.instruction.maxLength;
-assert.ok(Number.isSafeInteger(instructionBound) && instructionBound + buildH3MotionPrompt("").length <= 4000, `instruction maxLength ${instructionBound}`);
-assert.deepEqual(validateStudioSchema(fromVideo.input, { instruction: "wave both hands" }), { instruction: "wave both hands" });
-for (const instruction of ["", "x".repeat(instructionBound + 1)]) assert.throws(() => validateStudioSchema(fromVideo.input, { instruction }), code("INVALID_ARGUMENT"), `instruction of ${instruction.length}`);
 // Frame ranges are half-open, like every other Studio range.
 assert.deepEqual(Object.keys(studioActionDeclaration("shot.setRange").input.properties).sort(), ["range", "shotId"]);
 assert.throws(() => validateStudioSchema(studioActionDeclaration("shot.setRange").input, { shotId: "shot-1", range: { startFrame: 10, endFrameExclusive: 10 } }), code("INVALID_ARGUMENT"));

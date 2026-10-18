@@ -38,7 +38,7 @@ const castOverride = {
 /** A world floor point in metres; y is the floor. */
 const floorPoint = input({ x: { type: "number" }, z: { type: "number" } });
 const waypointFrame = { ...frame, minimum: 1 };
-/** The tracks an IK key stores (src/ardy/ik.js IK_TRACKS and FK_TRACKS). A
+/** The tracks an IK key stores (src/motion/ik.js IK_TRACKS and FK_TRACKS). A
  * chain track keys its three bones (upper, lower, end); a joint track one. */
 export const STUDIO_IK_CHAIN_TRACKS = freezeStudioData(["leftHand", "rightHand", "leftFoot", "rightFoot"]);
 export const STUDIO_IK_JOINT_TRACKS = freezeStudioData(["hips", "spine", "chest", "neck", "head", "leftShoulder", "rightShoulder"]);
@@ -47,9 +47,9 @@ const perBone = items => ({ type: "array", items, minItems: 1, maxItems: 3 });
 const quaternion = input({ x: num, y: num, z: num, w: num });
 /** One track's key: the IK state's { q, p, baseQ, basePos, chainP,
  * keepTranslations, blend, pin, correctionRange } with quaternions as {x,y,z,w} and positions
- * as {x,y,z}; blend is the key's own correction range in frames (src/ardy/ik.js
+ * as {x,y,z}; blend is the key's own correction range in frames (src/motion/ik.js
  * correctionWeight), absent for the editor's default range; pin is the id of
- * the range pin that baked the key (src/ardy/range-pin.js). correctionRange
+ * the range pin that baked the key (src/motion/range-pin.js). correctionRange
  * pairs the boundary keys of an explicitly selected interval. */
 const ikTrackKey = input({}, { q: perBone(quaternion), p: StudioSchemas.Vec3, baseQ: perBone(quaternion), basePos: StudioSchemas.Vec3,
 	chainP: perBone(StudioSchemas.Vec3), keepTranslations: { type: "boolean" }, blend: { type: "integer", minimum: 1, maximum: 240 },
@@ -87,12 +87,10 @@ export const STUDIO_ACTIONS = freezeStudioData([
 	{ id: "shot.remove", label: "Delete shot", kind: "mutation", undoDomain: "shot", input: input(shotId),
 		description: "Delete a shot and leave its frames as free-camera time." },
 	{ id: "shot.setRange", label: "Set shot range", kind: "mutation", undoDomain: "shot", input: input({ ...shotId, range: StudioSchemas.FrameRange }),
-		description: "Move a shot's start and end to a half-open frame range. Edges are clamped to the timeline and refused where they would overlap another shot; the receipt's delta shows the range that landed." },
+		description: "Move a shot's start and end to a half-open frame range, e.g. { shotId, range: { startFrame: 0, endFrameExclusive: 240 } } for frames 0-239. range: [0, 240] ([start, endExclusive]) and flat { shotId, startFrame: 0, endFrameExclusive: 240 } are taken as the same range. Edges are clamped to the timeline and refused where they would overlap another shot; the receipt's summary shows the range that landed (\"Set shot range: Shot 1 [0, 240).\")." },
 	{ id: "shot.reorder", label: "Move shot", kind: "mutation", undoDomain: "shot",
 		input: input(shotId, { startFrame: frame, index: stillIndex }),
 		description: "Move a shot; give exactly one of startFrame or index. With startFrame, a clip moves in time to start there, keeping its length and camera keys (a noop where it would overlap another shot), and a still moves to the place in the still order that frame falls in. With index (stills only), the still moves to that position among the stills (0 is first; past the end means last). Stills stay end to end from frame 0." },
-	{ id: "motion.generateAllBlocks", label: "Generate all blocks", kind: "job", generation: "motion", domain: "motion", background: true, input: input(),
-		description: "Generate the active character's motion from all of its prompt blocks, like the top-bar Generate Motion button when prompt blocks have text. It starts a job and returns status \"started\"; the take lands in the editor when the job finishes. Counts as the one motion generation of this message." },
 	{ id: "character.addWaypoint", label: "Add root waypoint", kind: "mutation", undoDomain: "cast", input: input({ ...characterId, position: floorPoint }, { frame: waypointFrame }),
 		description: `Pin a character's root path: at frame, the character's root stands at position (world x/z metres). Frame 0 is the character's own spot, so pins start at frame 1 and each frame holds one pin. Omit frame to pace the pin at a walk (1.4 m/s) from the previous one. ${WAYPOINT_RULES} Read paths with inspect_studio { scope: "motion" }.` },
 	{ id: "character.move", label: "Move character", kind: "mutation", undoDomain: "cast", input: input(characterId, { x: num, z: num, rot: num }),
@@ -110,8 +108,8 @@ export const STUDIO_ACTIONS = freezeStudioData([
 	{ id: "character.clearIkKeys", label: "Clear IK keys", kind: "mutation", undoDomain: "motion", input: input(characterId),
 		description: "Delete every IK key of the character, returning it to its take or pose without corrections." },
 	{ id: "shot.setCameraRail", label: "Set camera rail", kind: "mutation", undoDomain: "shot",
-		input: input({ ...shotId, points: { type: "array", items: floorPoint, minItems: 2, maxItems: 512 } }),
-		description: "Lay a shot's dolly rail through points (world floor x/z metres, in travel order) and put the shot's camera on it, like drawing the rail in the Top-View. It replaces any rail the shot had; an authored rail-follow range is kept, otherwise the camera travels the rail over the whole shot. Read rails with inspect_studio { scope: \"shot\" }." },
+		input: input({ ...shotId, points: { type: "array", items: floorPoint, minItems: 2, maxItems: 512 } }, { height: { oneOf: [{ type: "number", minimum: 0.1, maximum: 30 }, { type: "array", items: input({ t: { type: "number", minimum: 0, maximum: 1 }, height: { type: "number", minimum: 0.1, maximum: 30 } }), minItems: 2, maxItems: 8 }] }, aim: { oneOf: [{ type: "array", items: idSchema, minItems: 1, maxItems: 4 }, input({ x: num, y: num, z: num }), { type: "null" }] }, aimHeight: { type: "number", minimum: 0, maximum: 30 }, focalMm: { oneOf: [{ type: "number", minimum: 10, maximum: 300 }, { type: "null" }] } }),
+		description: "Lay a shot's dolly rail through points (world floor x/z metres, in travel order) and put the shot's camera on it, like drawing the rail in the Top-View: the camera runs the rail at an even speed over the whole shot (or its authored rail-follow range), so a push-in, pull-out, orbit, track or crane is one call with 2-6 points (a line, or an arc through a few points; the rail is a smooth curve through them). height is the lens height in metres, one number or crane marks [{ t: 0..1 along the rail, height }] (default the follow height, 1.6). aim is what the camera holds: up to 4 character or object ids (their middle, frame by frame: a character's chest, an object's middle) or a world point { x, y, z }; without an aim it follows the scene's first character. aimHeight puts a cast aim at that world height instead of the chest, e.g. 0.9 to hold a whole standing body, 1.6 for faces. focalMm is the shot's lens (default the scene lens). It replaces any rail the shot had and keeps any height, aim or lens you leave out (null clears aim and lens), and it removes the camera keys the rail covers. Answers the rail's length, speed, height, aim and lens; check the framing with verify_result { targets, checks: [\"framing\"], range: the shot's frames } and a contact sheet. Read rails with inspect_studio { scope: \"shot\" }." },
 	{ id: "shot.clearCameraRail", label: "Delete camera rail", kind: "mutation", undoDomain: "shot", input: input(shotId),
 		description: "Delete a shot's camera rail; the shot's camera goes back to following its subject at the current distance." },
 	{ id: "object.attach", label: "Attach to character", kind: "mutation", undoDomain: "objects",
@@ -125,6 +123,8 @@ export const STUDIO_ACTIONS = freezeStudioData([
 		description: "Show a composition guide over the shot frame: rule of thirds, golden ratio, center cross, safe areas, or off. Overlay only, never in exported pixels; a viewer setting that is never undone." },
 	{ id: "view.setInset", label: "Top-View inset", kind: "transient", input: input({ collapsed: { type: "boolean" } }),
 		description: "Fold (collapsed: true) or unfold the Top-View inset pane over the viewport. A viewer setting that is never undone." },
+	{ id: "view.setGhosts", label: "Ghosts", kind: "transient", input: input({ mode: { type: "string", enum: ["off", "step", "keys"] } }, { count: { type: "integer", minimum: 1, maximum: 6 }, step: { type: "integer", minimum: 1, maximum: 24 } }),
+		description: "Onion skin in the editor viewport, like the View menu's Ghosts: translucent poses of the active character's installed take, count (1-6, default 3) before the playhead in blue and as many after it in orange, fading with distance in time; props the take carries (a kit's bat) ghost with the body. mode step spaces them every step frames (1-24, default 4), keys puts them on the spec's key frames, off hides them; e.g. { mode: \"step\", count: 3, step: 4 }. An editor overlay: never in capture_frame, exports or contact sheets (verify_result ghosts: true draws them on a views sheet). A viewer setting: never saved or undone." },
 	{ id: "export.shotVideo", exposure: "confirm", confirmationReason: "Exporting writes a video file outside the Studio.", label: "Export video (mp4)", kind: "job", timeoutMs: 300_000, input: input({}, { ...shotId, scope: { type: "string", enum: ["timeline", "shot"], description: "timeline: the whole timeline, every shot back to back; shot: one shot (shotId, or the one under the playhead)." } }),
 		description: "Record a shot to an MP4 (camera move and character motion, no editor chrome), like the Export menu's Video (mp4), and ask the browser to download it. With shotId it records that shot's own range; without it, what the menu records: the whole take when there is motion, else the shot under the playhead (else the first shot), keyed from the current camera if it has no keys. Waits until the file is encoded (up to 5 minutes) and answers status \"completed\" with output.fileName and output.frameCount. One export at a time; not a motion generation." },
 	{ id: "scene.create", label: "New scene", kind: "document", input: input(),
@@ -151,9 +151,6 @@ export const STUDIO_ACTIONS = freezeStudioData([
 		description: "Prepare the Studio's Send-to-AI package for the shot under the playhead (else the current camera): the prompt for an external image or video model, written from the shot's camera, cast, poses, environment and style, plus reference frames rendered from the shot camera (its first and last camera key when it has keys). No AI service is called. mode \"image\" is a still, \"video\" a shot with its camera move; model is the image model the prompt is written for (image mode only). Each omitted choice keeps the Studio's current one; a given one becomes it. The Studio opens its result panel, where the user copies the prompt and downloads the frames; the frame images stay there and are not in the answer. Answers status \"completed\" with output.prompt, mode, modelLabel, shot (id, name, range), aspectRatio, cameraMode and referenceFrames (how many frames the panel shows). Changes nothing in the scene; not a motion generation." },
 	// The instruction leads the H3 prompt, which the motion API caps at 4000
 	// characters with its camera-lock text (about 225) appended.
-	{ id: "motion.generateFromVideo", exposure: "confirm", confirmationReason: "AI video motion uses a paid external generation.", label: "Generate motion (AI video)", kind: "job", generation: "motion", timeoutMs: 300_000,
-		input: input({ instruction: { type: "string", minLength: 1, maxLength: 3700 } }),
-		description: "Make the active character perform instruction through a hosted AI video model (Fal H3 Max Turbo, 480P), like the agent panel's Generate motion button. It sends the character's pose frame (pose A from the Fal card, else a fresh capture from the shot camera) with the instruction to the hosted model, and each run spends one of the account's daily AI video generations. Run it only when the user explicitly asked for AI-video motion; for ordinary motion use generate_motion or motion.generateAllBlocks. The capture needs the character's full body inside the shot frame and shaded part colours (view.setPartColours { mode: \"shaded\" }); a prompt the user hand-edited in the Fal card is sent instead of instruction. Waits for the clip (up to 5 minutes) and answers status \"completed\" with output.videoUrl, resolution, durationSeconds, ingested, frames, fps and dailyRemaining. The clip is ingested as Video capture footage and the timeline takes its length and frame rate; no take is installed until GVHMR extraction runs on it in the Video capture panel. Counts as the one motion generation of this message." },
 ]);
 export const STUDIO_ACTION_IDS = freezeStudioData(STUDIO_ACTIONS.map(action => action.id));
 
@@ -216,14 +213,15 @@ export function createStudioActionRegistry({ readState } = {}) {
 		list(state = readState?.()) {
 			return [...entries.values()].map(entry => {
 				const verdict = availability(entry, state);
-				const row = { id: entry.id, label: entry.label, kind: entry.kind, description: entry.description, exposure: entry.exposure, ...(entry.agentHidden ? { agentHidden: true } : {}),
+				const row = { id: entry.id, label: entry.label, kind: entry.kind, description: entry.description, exposure: entry.exposure, ...(entry.agentHidden ? { agentHidden: true } : {}), ...(entry.readOnly ? { readOnly: true } : {}),
 					...(entry.timeoutMs === undefined ? {} : { timeoutMs: entry.timeoutMs }), ...(entry.generation ? { generation: entry.generation } : {}) };
 				return verdict === true ? { ...row, available: true, input: entry.input } : { ...row, available: false, reason: verdict };
 			});
 		},
 		prepare(id, args = {}) {
-			const entry = registry.get(id);
-			const validated = validateStudioSchema(entry.input, args ?? {}, "INVALID_ARGUMENT", "$.args");
+			const entry = registry.get(id), given = args ?? {};
+			// normalizeArgs (optional) rewrites another spelling the action takes into its declared input first.
+			const validated = validateStudioSchema(entry.input, entry.normalizeArgs ? entry.normalizeArgs(given) : given, "INVALID_ARGUMENT", "$.args");
 			if (readState) {
 				const verdict = availability(entry, readState());
 				if (verdict !== true) fail("TARGET_NOT_READY", verdict);

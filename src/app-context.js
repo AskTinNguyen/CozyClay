@@ -98,6 +98,11 @@ export function createAppContext({
         closed = true; activeComposition = null;
         return remember(changed);
       },
+      // A savepoint inside the open composition (a script inside an agent turn): rollback(point)
+      // restores each owner to it, and an owner first touched after it to where it began. The
+      // composition stays open, so edits made before the savepoint still land with it.
+      savepoint() { check(); return new Map([...members].map(([handle, row]) => [handle, row.session.mark()])); },
+      rollback(point = new Map()) { check(); for (const [handle, row] of [...members].reverse()) row.session.rollback(point.get(handle)); },
       cancel(options) {
         if (closed) return false;
         closed = true; activeComposition = null;

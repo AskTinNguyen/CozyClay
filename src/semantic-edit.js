@@ -23,17 +23,14 @@ function equal(a, b) {
 	return keys.length === Object.keys(b).length && keys.every((key) => Object.hasOwn(b, key) && equal(a[key], b[key]));
 }
 const poseValue = (pose) => ({ bones: pose?.bones ?? {}, rootY: pose?.rootY ?? 0 });
-const blockValues = (blocks) => blocks.map(({ id, ...value }) => value);
+
 const keyValues = (keys = []) => keys.map(({ frame, framing }) => ({ frame, framing }));
 const shotValue = (shot) => ({ ...shot, camera: createCameraBlock(shot.camera), cameraKeys: keyValues(shot.cameraKeys) });
 
 export function semanticEditKind(domain, before, after) {
 	if (before === after) return null;
 	if (domain === "pose") return equal(before, after) ? null : "pose_edit";
-	if (domain === "promptClips") {
-		if (equal(blockValues(before), blockValues(after))) return null;
-		return after.length > before.length ? "prompt_block_add" : "prompt_block_edit";
-	}
+	
 	if (domain === "objects") {
 		const added = after.find((item) => !before.some((previous) => previous.id === item.id));
 		if (added) return added.renderer === "cutout" ? "cutout_insert" : "object_insert";

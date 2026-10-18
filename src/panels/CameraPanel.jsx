@@ -9,9 +9,9 @@ export default function CameraPanel({ isCameraSelection, shot, moveSequence, cam
 	return (
 <Foldout hidden={!isCameraSelection} title={ko("Camera", "카메라")}>
 						<div className="readout v2-details-readout">
-						<span title={ko("camera to subject", "카메라와 피사체 거리")}>{shot.distance.toFixed(2)} m</span>
-						<span title={ko("nearest prime on the cropped filmback", "크롭된 필름백 기준 가장 가까운 단렌즈")}>{shot.focalMm} mm</span>
-						<span title={ko("angle relative to the subject's eyes", "피사체 눈높이 기준 각도")}>{shot.elevationDeg.toFixed(0)}°</span>
+						<span title={ko("camera to subject", "카메라와 피사체 거리")}><small>{ko("Distance", "거리")}</small> {shot.distance.toFixed(2)} m</span>
+						<span title={ko("nearest prime on the cropped filmback", "크롭된 필름백 기준 가장 가까운 단렌즈")}><small>{ko("Lens", "렌즈")}</small> {shot.focalMm} mm</span>
+						<span title={ko("angle relative to the subject's eyes", "피사체 눈높이 기준 각도")}><small>{ko("Angle", "각도")}</small> {shot.elevationDeg.toFixed(0)}°</span>
 						</div>
 						<h3 className="move-head v2-details-subsection-title">{ko("Move keys", "움직임 키")}</h3>
 						{moveSequence ? (
@@ -19,11 +19,11 @@ export default function CameraPanel({ isCameraSelection, shot, moveSequence, cam
 								{moveSequence.displaySlate} · {moveSequence.spanS}{ko("s", "초")}
 							</div>
 						) : (
-							<div className="move-slate v2-details-value-box">
+							<p className="inspector-hint v2-details-hint">
 								{cameraKeys.length === 1
-									? (isKo ? `프레임 ${cameraKeys[0].frame}부터 고정 샷 — 샷 블록 아래 빈 줄을 클릭해 움직임을 추가하세요` : `locked-off hold from frame ${cameraKeys[0].frame} — click the empty lower strip in a Shot block to add a move`)
-									: ko("click a Shot block's lower strip to key the current framing at that frame", "샷 블록 아래 빈 줄을 클릭하면 해당 프레임에 현재 프레이밍을 저장합니다")}
-							</div>
+									? (isKo ? `프레임 ${cameraKeys[0].frame}부터 고정 샷이에요. 샷 블록 아래 빈 줄을 클릭해 움직임을 추가하세요.` : `Locked-off hold from frame ${cameraKeys[0].frame}. Click the empty lower strip of a Shot block to add a move.`)
+									: ko("Click a Shot block's lower strip to key the current framing at that frame.", "샷 블록 아래 빈 줄을 클릭하면 해당 프레임에 현재 프레이밍을 저장합니다.")}
+							</p>
 						)}
 
 						<h3 className="move-head v2-details-subsection-title">{ko("Follow cam", "팔로우 카메라")}</h3>

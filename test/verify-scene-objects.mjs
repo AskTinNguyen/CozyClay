@@ -44,9 +44,11 @@ import {
 
 let failures = 0;
 const propsSource = readFileSync(new URL("../src/props.jsx", import.meta.url), "utf8");
-const carSource = propsSource.slice(
-	propsSource.indexOf("export function Car"),
-	propsSource.indexOf("export function SmallPlane"),
+// The hand-built set pieces live in their own module (set-pieces.jsx).
+const setPiecesSource = readFileSync(new URL("../src/set-pieces.jsx", import.meta.url), "utf8");
+const carSource = setPiecesSource.slice(
+	setPiecesSource.indexOf("export function Car"),
+	setPiecesSource.indexOf("export function SmallPlane"),
 );
 function expect(name, condition, detail = "") {
 	console.log(`${condition ? "PASS" : "FAIL"} ${name}${condition ? "" : ` — ${detail}`}`);
@@ -69,7 +71,7 @@ const defaultIds = new Set(DEFAULT_SCENE_OBJECTS.map((object) => object.id));
 expect("default objects have unique IDs", defaultIds.size === DEFAULT_SCENE_OBJECTS.length);
 expect("default registry excludes the car", !DEFAULT_SCENE_OBJECTS.some((object) => object.renderer === "car"));
 expect("default registry excludes the chair", !DEFAULT_SCENE_OBJECTS.some((object) => object.renderer === "chair"));
-expect("only the chair renderer applies the 90 percent scale", propsSource.includes("export function Chair") && propsSource.includes('rotation={[0, rotY, 0]} scale={0.9}') && !carSource.includes("scale={0.9}"));
+expect("only the chair renderer applies the 90 percent scale", setPiecesSource.includes("export function Chair") && setPiecesSource.includes('rotation={[0, rotY, 0]} scale={0.9}') && !carSource.includes("scale={0.9}"));
 expect("default player scene excludes the small plane", !DEFAULT_SCENE_OBJECTS.some((object) => object.renderer === "small-plane"));
 expect("default player scene contains no props", DEFAULT_SCENE_OBJECTS.length === 0);
 const hierarchy = buildHierarchyNodes(objects);
@@ -142,7 +144,7 @@ expect("angles fold into [-180, 180)", wrapAngle(360) === 0 && wrapAngle(-190) =
 expect("an axis scale knob scales only its own axis", JSON.stringify(scalePatch({ scaleX: 1, scaleY: 1, scaleZ: 1 }, "x", 2)) === JSON.stringify({ scaleX: 2 }));
 expect("the centre knob scales all three axes", JSON.stringify(scalePatch({ scaleX: 1, scaleY: 2, scaleZ: 1 }, null, 1.5)) === JSON.stringify({ scaleX: 1.5, scaleY: 3, scaleZ: 1.5 }));
 expect("scale snaps to 5 percent steps", scalePatch({ scaleX: 1 }, "x", 1.234).scaleX === 1.25, JSON.stringify(scalePatch({ scaleX: 1 }, "x", 1.234)));
-expect("scale never collapses to nothing", scalePatch({ scaleX: 1 }, "x", 0.001).scaleX === 0.1);
+expect("scale never collapses to nothing", scalePatch({ scaleX: 1 }, "x", 0.001).scaleX === 0.01);
 expect("a degenerate scale drag writes nothing", scalePatch({ scaleX: 1 }, "x", 0) === null && scalePatch({ scaleX: 1 }, "w", 2) === null);
 expect("world size folds scale into the footprint", JSON.stringify(objectSize({ footprint: { width: 2, depth: 3 }, height: 4, scaleX: 0.5, scaleY: 2, scaleZ: 1 })) === JSON.stringify({ width: 1, height: 8, depth: 3 }));
 
@@ -161,7 +163,7 @@ expect("a degenerate screen spin writes nothing", screenRotatePatch(upright, nul
 
 const bounded = updateSceneObject([cube], cube.id, { x: 999, y: -3, z: -999, scaleX: 400, scaleY: 0 })[0];
 expect("transforms stay on the stage and above the floor", bounded.x === 240 && bounded.z === -240 && bounded.y === 0);
-expect("scale stays within a usable range", bounded.scaleX === 100 && bounded.scaleY === 0.1);
+expect("scale stays within a usable range", bounded.scaleX === 100 && bounded.scaleY === 0.01);
 const renamed = updateSceneObject([cube], cube.id, { name: "Crate", color: "#123456" })[0];
 expect("name and colour are editable", renamed.name === "Crate" && renamed.color === "#123456");
 expect("empty names are rejected", updateSceneObject([cube], cube.id, { name: "" })[0] === cube);

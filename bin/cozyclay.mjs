@@ -3,13 +3,9 @@
  * cozyclay - run the studio from a published package.
  *
  * `npx cozyclay` / `bunx cozyclay` should behave like `npm run dev` does in a
- * clone: the studio in a browser, with the optional motion sidecar wired up.
- * The difference is that nothing is built here. The package ships the built
- * `dist/`, so this launcher only has to
- *
- *   - serve those files over loopback,
- *   - forward /ardy to its dynamically selected sidecar port (the same job Vite's dev proxy does),
- *   - keep the sidecar's lifetime tied to this process.
+ * clone: the studio in a browser. The difference is that nothing is built
+ * here. The package ships the built `dist/`, so this launcher only has to
+ * serve those files over loopback (plus the OAuth and agent routes).
  *
  * The only runtime dependencies are the agent packages
  * `@earendil-works/pi-ai` and `@earendil-works/pi-agent-core` (MIT), and the
@@ -19,9 +15,8 @@
  * launcher that will break.
  */
 import { spawn } from "node:child_process";
-import { startBridge, terminateOwned } from "../tools/process-supervisor.mjs";
 import { createReadStream, existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
-import { createServer, request as httpRequest } from "node:http";
+import { createServer } from "node:http";
 import { homedir } from "node:os";
 import { extname, join, normalize, resolve } from "node:path";
 import { createInterface } from "node:readline";
@@ -54,7 +49,6 @@ try {
 	// An unreadable package is handled by the existing missing-build checks.
 }
 const DIST = join(PKG_ROOT, "dist");
-const BRIDGE = join(PKG_ROOT, "tools", "ardy", "bridge.mjs");
 const OFFICIAL_PACKAGE = (
 	packageMetadata.name === "cozyclay"
 	&& !SOURCE_CHECKOUT
@@ -64,12 +58,6 @@ const INSTALL_KIND = process.env.npm_config_global === "true"
 	|| (PKG_ROOT.includes("/node_modules/") && !PKG_ROOT.includes("/_npx/"))
 	? "global"
 	: "npx";
-// A bridge is optional. Keep the endpoint unset until this launcher owns a
-// sidecar; otherwise /ardy requests could accidentally reach an unrelated
-// process that happens to be listening on the bridge's historical default
-// port (5181).
-let bridge = null;
-let bridgePort = null;
 
 const TYPES = {
 	".html": "text/html; charset=utf-8",
@@ -80,7 +68,6 @@ const TYPES = {
 	".wasm": "application/wasm",
 	".woff2": "font/woff2",
 	".fbx": "application/octet-stream",
-	".npz": "application/octet-stream",
 	".png": "image/png",
 	".jpg": "image/jpeg",
 	".gif": "image/gif",
@@ -89,14 +76,15 @@ const TYPES = {
 };
 
 function parseArgs(argv) {
-	const opts = { port: 5180, host: "127.0.0.1", motion: true, open: true, star: true, updateCheck: true };
+	const opts = { port: 5180, host: "127.0.0.1", open: true, star: true, updateCheck: true };
 	for (let i = 0; i < argv.length; i += 1) {
 		const arg = argv[i];
 		if (arg === "--port" || arg === "-p") opts.port = Number(argv[++i]);
 		else if (arg.startsWith("--port=")) opts.port = Number(arg.slice(7));
 		else if (arg === "--host") opts.host = String(argv[++i]);
 		else if (arg.startsWith("--host=")) opts.host = arg.slice(7);
-		else if (arg === "--no-motion") opts.motion = false;
+		// Accepted for old scripts: there is no motion sidecar any more.
+		else if (arg === "--no-motion") continue;
 		else if (arg === "--no-open") opts.open = false;
 		else if (arg === "--scene") opts.scene = String(argv[++i] ?? "");
 		else if (arg.startsWith("--scene=")) opts.scene = arg.slice(8);
@@ -158,7 +146,6 @@ const HELP = `cozyclay - browser-based 3D staging studio
                             (cclay live --help lists every verb)
   cclay update              install the latest cozyclay globally (npm install -g)
   npx cozyclay --port 5200  serve on another port
-  npx cozyclay --no-motion  skip the optional motion-generation sidecar
   npx cozyclay --no-open    do not open a browser
   npx cozyclay --scene city-block
                             open the studio on a bundled starter scene
@@ -177,9 +164,8 @@ const HELP = `cozyclay - browser-based 3D staging studio
 
 cclay is the same command, shorter: a global install gives you both.
 
-Motion generation needs an SSH-reachable NVIDIA machine running Kimodo; point
-the sidecar at it with CCLAY_KIMODO_HOST. Everything else - staging, posing,
-paths, cameras, timeline, playback - runs locally with no extra setup.`;
+Everything - staging, posing, compiled motion, cameras, timeline, playback -
+runs locally with no extra setup.`;
 
 function serveFile(res, path) {
 	const type = TYPES[extname(path).toLowerCase()] ?? "application/octet-stream";
@@ -191,39 +177,6 @@ function serveFile(res, path) {
 		"cache-control": "no-cache",
 	});
 	createReadStream(path).pipe(res);
-}
-
-// Forward /ardy to the sidecar. Same contract as the Vite dev proxy, so the
-// browser code needs no build-time knowledge of how it was launched.
-function proxyToBridge(req, res, configured) {
-	if (!bridge || bridgePort === null || bridge.exitCode !== null || bridge.signalCode !== null) {
-		req.resume();
-		res.writeHead(503, { "content-type": "application/json; charset=utf-8" });
-		if (req.url.split("?")[0] === "/ardy/health") {
-			res.end(JSON.stringify({ ok: false, backend: configured ? "local_kimodo" : "none", host_configured: configured, reason: configured ? "unreachable" : "unconfigured", capabilities: { lineEdit: false }, error: "motion sidecar is not running" }));
-		} else {
-			res.end(JSON.stringify({ error: "motion sidecar is not running" }));
-		}
-		return;
-	}
-	const upstream = httpRequest(
-		{ host: "127.0.0.1", port: bridgePort, path: req.url, method: req.method, headers: req.headers },
-		(upstreamRes) => {
-			res.writeHead(upstreamRes.statusCode ?? 502, upstreamRes.headers);
-			upstreamRes.pipe(res);
-		},
-	);
-	upstream.on("error", () => {
-		// An absent sidecar is an expected state, not a crash: the app treats a
-		// failed probe as "generation unavailable" and carries on.
-		res.writeHead(503, { "content-type": "application/json; charset=utf-8" });
-		if (req.url.split("?")[0] === "/ardy/health") {
-			res.end(JSON.stringify({ ok: false, backend: configured ? "local_kimodo" : "none", host_configured: configured, reason: configured ? "unreachable" : "unconfigured", capabilities: { lineEdit: false }, error: "motion sidecar is not running" }));
-		} else {
-			res.end(JSON.stringify({ error: "motion sidecar is not running" }));
-		}
-	});
-	req.pipe(upstream);
 }
 
 function readState() {
@@ -383,17 +336,12 @@ if (!existsSync(join(DIST, "app", "index.html"))) {
 	process.exit(1);
 }
 
-// The sidecar exits immediately without a box to talk to, so starting it
-// unconditionally would greet a first-time `npx cozyclay` with an error it
-// cannot act on. An unset CCLAY_KIMODO_HOST is the normal case, not a fault.
-const kimodoHost = process.env.CCLAY_KIMODO_HOST?.trim();
 let server = null;
 const startedAt = Date.now();
 let shuttingDown = false;
 async function shutdown(exitCode = 0) {
 	if (shuttingDown) return;
 	shuttingDown = true;
-	if (bridge) await terminateOwned(bridge);
 	if (server?.listening) await new Promise((resolvePromise) => server.close(() => resolvePromise()));
 	try {
 		await maybeAskForStar(startedAt, opts);
@@ -405,49 +353,9 @@ async function shutdown(exitCode = 0) {
 process.on("SIGINT", () => shutdown(130));
 process.on("SIGTERM", () => shutdown(143));
 
-if (opts.motion && kimodoHost && existsSync(BRIDGE)) {
-	try {
-		// The package has no three (a devDependency); the bridge runs from the
-		// staged MCP runtime, which carries three, tools/ and src/.
-		const bridgeRoot = SOURCE_CHECKOUT ? PKG_ROOT : await ensureMcpRuntime();
-		({ child: bridge, port: bridgePort } = await startBridge({
-			command: process.execPath,
-			args: [join(bridgeRoot, "tools", "ardy", "bridge.mjs")],
-			cwd: bridgeRoot,
-			env: process.env,
-			mainPort: opts.port,
-			onSpawn: (child) => {
-				bridge = child;
-			},
-			onReady: (child) => {
-				child.once("exit", (code, signal) => {
-					if (shuttingDown) return;
-					console.error(`cozyclay: motion generation sidecar exited ${signal ? `from ${signal}` : `with code ${code ?? 0}`}.`);
-					void shutdown(1);
-				});
-				child.once("error", (err) => {
-					if (shuttingDown) return;
-					console.error(`cozyclay: motion generation sidecar failed: ${err.message}`);
-					void shutdown(1);
-				});
-			},
-		}));
-	} catch (err) {
-		console.error(`cozyclay: motion generation sidecar failed: ${err.message}`);
-		for (const line of err.lines ?? []) console.error(`cozyclay: ${line}`);
-		console.error("cozyclay: studio did not start; set COZYCLAY_BRIDGE_PORT to an available port or use --no-motion.");
-		if (bridge) await terminateOwned(bridge);
-		process.exit(1);
-	}
-}
-
-// Task 6 consumes this getter when constructing the Studio runtime. Never
-// substitute an environment/default port for a sidecar this launcher owns.
-const getBridgeOrigin = () => bridge && bridgePort !== null && bridge.exitCode === null && bridge.signalCode === null
-	? `http://127.0.0.1:${bridgePort}` : null;
 // A source checkout has mcp/node_modules; the package loads the Studio's live
 // tools from the staged MCP runtime that `cclay mcp` also uses (#576).
-const agentHandler = createAgentHandler({ port: () => opts.port, getBridgeOrigin, ...(SOURCE_CHECKOUT ? {} : { mcpRuntime: { ensure: ensureMcpRuntime } }) });
+const agentHandler = createAgentHandler({ port: () => opts.port, ...(SOURCE_CHECKOUT ? {} : { mcpRuntime: { ensure: ensureMcpRuntime } }) });
 server = createServer((req, res) => {
 	const url = new URL(req.url ?? "/", "http://127.0.0.1");
 	if (/^\/oauth\/(start|status|logout)$/.test(url.pathname)) {
@@ -506,13 +414,6 @@ server = createServer((req, res) => {
 		}
 		res.writeHead(405, { allow: "POST", "content-type": "application/json; charset=utf-8" });
 		res.end(JSON.stringify({ error: "method not allowed" }));
-		return;
-	}
-	// Only the routes the bridge actually owns: /ardy/ is ALSO a public asset
-	// directory (cskel27-rest.json), and those files live in dist/, not behind
-	// the sidecar. Same rule as the Vite dev proxy bypass.
-	if (/^\/ardy\/(health|bases|generate|footage|extract|motions)(\/|$)/.test(url.pathname)) {
-		proxyToBridge(req, res, opts.motion && Boolean(kimodoHost));
 		return;
 	}
 	let rel;
@@ -590,13 +491,6 @@ server.listen({ port: opts.port, host: "127.0.0.1", ipv6Only: false }, () => {
 	const url = `http://127.0.0.1:${opts.port}/app/${sceneParam}`;
 	console.log(`CozyClay is running at ${url}`);
 	console.log("Use a Chromium-based browser — Safari and Firefox are not supported.");
-	if (!opts.motion) console.log("Motion generation: off (--no-motion).");
-	else if (bridge) console.log(`Motion generation: sidecar running against ${kimodoHost}.`);
-	else
-		console.log(
-			"Motion generation: off. It runs on an SSH-reachable NVIDIA machine with Kimodo;\n" +
-				"set CCLAY_KIMODO_HOST=user@host to turn it on. Everything else works without it.",
-		);
 	if (opts.open) openBrowser(url);
 	void updatePending?.then((latest) => {
 		// `cclay` only exists after a global install, so name the command that

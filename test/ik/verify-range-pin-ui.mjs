@@ -1,4 +1,4 @@
-import { rangePinBandGeometry } from "../../src/ardy/timeline-coordinates.js";
+import { rangePinBandGeometry } from "../../src/motion/timeline-coordinates.js";
 
 let failures = 0;
 function check(name, condition, detail = "") {

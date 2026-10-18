@@ -16,14 +16,10 @@ function expect(name, condition, detail = "") {
 }
 
 const hex32 = (seed) => seed.repeat(32).slice(0, 32);
-const hex64 = (seed) => seed.repeat(64).slice(0, 64);
 const RENDER_ID = `img-${hex32("a")}`;
 const SOURCE_ID = `img-${hex32("b")}`;
 const MATTE_ID = `img-${hex32("c")}`;
 const STORED_ONLY_ID = `img-${hex32("d")}`;
-const EMBEDDED_MOTION = hex64("1");
-const MISSING_MOTION = hex64("2");
-const RECOVERABLE_MOTION = hex64("3");
 
 function asset(id, size) {
 	return { id, type: "image/png", width: 4, height: 4, name: `${id}.png`, bytes: new ArrayBuffer(size) };
@@ -105,66 +101,6 @@ expect(
 	JSON.stringify(meshManifest.items),
 );
 
-/* --------------------------------------------------------- motions ---- */
-
-const motionStage = createSceneStage({
-	characters: [
-		{ id: "char-a", motionRef: { url: "https://bridge/take-1.npz", prompt: "walk" } },
-		{ id: "char-b", motionRef: { url: "https://bridge/take-2.npz", prompt: "run" } },
-		{ id: "char-c", motionRef: { url: "https://bridge/take-3.npz", prompt: "jump" } },
-		{ id: "char-d", motionRef: { url: "https://bridge/take-4.npz", prompt: "sit" } },
-	],
-});
-// scenes.js does not carry motionId yet (that is another track); the manifest
-// reads the field straight off the character, so set it after normalisation.
-motionStage.characters[0].motionRef = { motionId: EMBEDDED_MOTION, prompt: "walk", rotationDeg: 0, anchorX: 0, anchorZ: 0 };
-motionStage.characters[2].motionRef = { motionId: MISSING_MOTION, prompt: "jump", rotationDeg: 0, anchorX: 0, anchorZ: 0 };
-motionStage.characters[3].motionRef = { motionId: RECOVERABLE_MOTION, url: "https://bridge/take-4.npz", prompt: "sit", rotationDeg: 0, anchorX: 0, anchorZ: 0 };
-const motionDocument = createSceneDocument();
-motionDocument.scenes[0].stage = motionStage;
-const motionRecord = { motionId: EMBEDDED_MOTION, encoding: "base64", data: "AAAA", bytes: 3, frames: 1, fps: 30 };
-
-const motions = resourceManifest({ scenesDocument: motionDocument, motions: [motionRecord] });
-const embeddedMotion = itemOf(motions, "motion", EMBEDDED_MOTION);
-const externalMotion = itemOf(motions, "motion", "https://bridge/take-2.npz");
-const missingMotion = itemOf(motions, "motion", MISSING_MOTION);
-const recoverableMotion = itemOf(motions, "motion", RECOVERABLE_MOTION);
-expect("a motionId found in motions is embedded", embeddedMotion?.status === "embedded" && embeddedMotion.bytes === 3, JSON.stringify(embeddedMotion));
-expect("a url-only motionRef is external and keeps the url", externalMotion?.status === "external" && externalMotion.url === "https://bridge/take-2.npz", JSON.stringify(externalMotion));
-expect(
-	"a motionId with no record and no url is missing",
-	missingMotion?.status === "missing",
-	JSON.stringify(missingMotion),
-);
-expect(
-	"a motionId with no record falls back to its url as external",
-	recoverableMotion?.status === "external" && recoverableMotion.url === "https://bridge/take-4.npz",
-	JSON.stringify(recoverableMotion),
-);
-expect(
-	"motion refs name the scene and the character",
-	embeddedMotion?.refs.length === 1 && embeddedMotion.refs[0].sceneId === motionDocument.scenes[0].id && embeddedMotion.refs[0].characterId === "char-a" && embeddedMotion.refs[0].field === "motionRef"
-		&& missingMotion?.refs.map((ref) => ref.characterId).join() === "char-c",
-	JSON.stringify([embeddedMotion?.refs, missingMotion?.refs]),
-);
-const upgraded = itemOf(resourceManifest({ scenesDocument: { scenes: [{ id: "s", objects: [], stage: { characters: [
-	{ id: "first", motionRef: { motionId: RECOVERABLE_MOTION } },
-	{ id: "second", motionRef: { motionId: RECOVERABLE_MOTION, url: "https://bridge/take-4.npz" } },
-] } }] } }), "motion", RECOVERABLE_MOTION);
-expect(
-	"a later sighting that carries a url upgrades the item, so order does not decide status",
-	upgraded?.status === "external" && upgraded.url === "https://bridge/take-4.npz" && upgraded.refs.map((ref) => ref.characterId).join() === "first,second",
-	JSON.stringify(upgraded),
-);
-expect(
-	"motions given as a Map keyed by motionId resolve too",
-	itemOf(resourceManifest({ scenesDocument: motionDocument, motions: new Map([[EMBEDDED_MOTION, motionRecord]]) }), "motion", EMBEDDED_MOTION)?.status === "embedded",
-);
-expect(
-	"a character without a motionRef contributes nothing",
-	resourceManifest({ scenesDocument: { scenes: [{ id: "s", objects: [], stage: { characters: [{ id: "a", motionRef: null }, { id: "b", motionRef: {} }, { id: "c" }] } }] } }).items.length === 0,
-);
-
 /* ----------------------------------------------------------- poses ---- */
 
 const wave = { id: "custom_1", label: "Wave", prompt: "waving", bones: { lArm: [1, 0, 0], lForeArm: [0, 0.5, 0] }, custom: true };
@@ -230,11 +166,10 @@ expect("a walker returning garbage contributes nothing", resourceManifest({ scen
 /* ---------------------------------------------------------- totals ---- */
 
 const everything = resourceManifest({
-	scenesDocument: { version: 4, activeSceneId: "s1", scenes: [{ ...scene, stage: { ...motionStage, characters: [...motionStage.characters, ...poseStage.characters] } }] },
+	scenesDocument: { version: 4, activeSceneId: "s1", scenes: [{ ...scene, stage: poseStage }] },
 	workflow,
 	poseLibrary: [wave, crouch],
 	assets: [asset(RENDER_ID, 100), asset(SOURCE_ID, 250)],
-	motions: [motionRecord],
 	storedAssetIds: [STORED_ONLY_ID],
 	workflowOutputRefs,
 });
@@ -249,20 +184,20 @@ expect(
 	JSON.stringify([everything.totals, counted]),
 );
 expect(
-	"the expected split: 2 images + 1 motion + 2 poses + 2 outputs embedded, 2 motions + 1 output external, 2 images + 1 motion + 2 outputs missing",
-	everything.totals.embedded === 7 && everything.totals.external === 3 && everything.totals.missing === 5,
+	"the expected split: 2 images + 2 poses + 2 outputs embedded, 1 output external, 2 images + 2 outputs missing",
+	everything.totals.embedded === 6 && everything.totals.external === 1 && everything.totals.missing === 4,
 	JSON.stringify(everything.totals),
 );
-expect("bytes sum the embedded payloads", everything.totals.bytes === 100 + 250 + 3 + 3, String(everything.totals.bytes));
+expect("bytes sum the embedded payloads", everything.totals.bytes === 100 + 250 + 3, String(everything.totals.bytes));
 expect(
 	"missing is the items whose status is missing, in item order",
-	everything.missing.length === 5 && everything.missing.every((item) => item.status === "missing")
-		&& everything.missing.map((item) => item.id).join() === `${MATTE_ID},${STORED_ONLY_ID},${MISSING_MOTION},n2:data.fileUrl,n3:data.outputs[0].value`,
+	everything.missing.length === 4 && everything.missing.every((item) => item.status === "missing")
+		&& everything.missing.map((item) => item.id).join() === `${MATTE_ID},${STORED_ONLY_ID},n2:data.fileUrl,n3:data.outputs[0].value`,
 	JSON.stringify(everything.missing.map((item) => item.id)),
 );
 expect(
-	"items are grouped image, motion, pose, workflow-output",
-	everything.items.map((item) => item.kind).join() === "image,image,image,image,motion,motion,motion,motion,pose,pose,workflow-output,workflow-output,workflow-output,workflow-output,workflow-output",
+	"items are grouped image, pose, workflow-output",
+	everything.items.map((item) => item.kind).join() === "image,image,image,image,pose,pose,workflow-output,workflow-output,workflow-output,workflow-output,workflow-output",
 	everything.items.map((item) => item.kind).join(),
 );
 expect("every item has a unique (kind, id)", new Set(everything.items.map((item) => `${item.kind}\u0000${item.id}`)).size === everything.items.length);

@@ -97,24 +97,34 @@ export function elementPatchArgs(kind, args) {
   });
   return collection ? ops.length === 1 ? ops[0] : { ops } : ops.reduce((patch, op) => mergeElementSet(patch, op.set), {});
 }
+// Unasked, an optional structured value (a glow, a light) is listed only where
+// the item has one, so every plain object's receipt stays as short as before.
+const listed = (element, item, paths) => paths ? paths.includes(element.path) : element.type !== 'object' || readElement(item, element.path) != null;
 export function elementReadback(kind, item, paths, document) {
-  return patchElements(projectionKind(kind)).filter(element => !paths || paths.includes(element.path)).map(element => {
+  return patchElements(projectionKind(kind)).filter(element => listed(element, item, paths)).map(element => {
     const path = element.path;
     if (element.readback) return { path, ...element.readback(item, document) };
     const value = readElement(item, path);
     if (value === null || value === undefined || value === '') return { path, text: null };
     if (element.type === 'image') return { path, bytes: utf8ByteLength(value) };
+    // A small structured value (a light, a glow) reads back whole, as compact JSON.
+    if (element.type === 'object') return { path, text: JSON.stringify(value).slice(0, 512) };
     if (element.type === 'vec3') return { path, vec: value };
     if (element.type === 'array') return { path, count: Array.isArray(value) ? value.length : value.points?.length ?? 0 };
     return { path, [typeof value === 'number' ? 'number' : typeof value === 'boolean' ? 'flag' : 'text']: value };
   });
 }
 // Normalizer-added defaults are allowed; changed/clamped requested members
-// are reported as dropped, just like the native patch planners.
-function survives(requested, actual) {
+// are reported as dropped, just like the native patch planners. A number that
+// landed within float noise (a wrap leaves -17.529999999999973 for -17.53),
+// or an angle that landed one or more whole turns away (190 kept as -170), survives.
+const turn = (delta, angle) => angle ? delta - 360 * Math.round(delta / 360) : delta;
+function survives(requested, actual, angle = false) {
+  if (typeof requested === 'number' && typeof actual === 'number') return requested === actual
+    || Math.abs(turn(requested - actual, angle)) <= 1e-9 * Math.max(1, Math.abs(requested), Math.abs(actual));
   if (requested === null || typeof requested !== 'object') return requested === actual;
-  if (Array.isArray(requested)) return Array.isArray(actual) && requested.length === actual.length && requested.every((value, index) => survives(value, actual[index]));
-  return actual !== null && typeof actual === 'object' && !Array.isArray(actual) && Object.entries(requested).every(([key, value]) => survives(value, actual[key]));
+  if (Array.isArray(requested)) return Array.isArray(actual) && requested.length === actual.length && requested.every((value, index) => survives(value, actual[index], angle));
+  return actual !== null && typeof actual === 'object' && !Array.isArray(actual) && Object.entries(requested).every(([key, value]) => survives(value, actual[key], angle));
 }
 export function elementPatchReceipt(receipt, request, projection) {
   const kind = request?.args.ops[0].target.kind;
@@ -124,32 +134,46 @@ export function elementPatchReceipt(receipt, request, projection) {
     const item = elementTarget(kind, value, target.id, receipt.host.sceneId);
     const droppedPaths = Object.entries(set).filter(([key, requested]) => {
       const element = patchElements(kind).find(element => element.path === `${kind}.${key}`);
-      return !element.readback && !survives(requested, readElement(item, element.path));
+      return !element.readback && !survives(requested, readElement(item, element.path), element.angle === true);
     }).map(([key]) => `${kind}.${key}`);
     return { index, status: droppedPaths.length ? 'partial' : receipt.authored ? 'applied' : 'noop', ...(droppedPaths.length ? { droppedPaths } : {}) };
   });
-  const partial = receipt.authored && ops.some(op => op.status === 'partial');
-  // The protocol's partial variant is a patch receipt, not an action receipt.
-  const { action, summary, ...base } = receipt;
+  // A dropped path makes the receipt "partial" whenever it published one revision: an applied
+  // patch, or one inside an agent turn (which the bus answers "completed"). A composite that moved
+  // the revision further stays "completed", and its ops name the dropped paths.
+  const partial = receipt.authored && ops.some(op => op.status === 'partial') && receipt.revision.after === receipt.revision.before + 1 && !receipt.nextHost;
+  // The protocol's partial variant is a patch receipt, not an action or composite receipt.
+  const { action, summary, kind: composite, ...base } = receipt;
+  // A row the edit carried along (a moved group's part) reads back where it went: its vec3 transform paths.
+  const targets = new Set(request.args.ops.map(({ target }) => target.id));
+  const moved = patchElements(kind).filter(element => element.type === 'vec3').map(element => element.path);
+  const carried = receipt.affectedIds.filter(id => !targets.has(id) && elementTarget(kind, value, id, receipt.host.sceneId)).map(id => ({ id, paths: moved }));
   return { ...(partial ? base : receipt), ops, status: partial ? 'partial' : receipt.status,
-    delta: !receipt.authored ? [] : request.args.ops.slice(0, 8).map(({ target, set }) => ({ id: target.id, after: {
-      patched: elementReadback(kind, elementTarget(kind, value, target.id, receipt.host.sceneId), Object.keys(set).map(key => `${kind}.${key}`), value),
-    } })) };
+    delta: !receipt.authored ? [] : [...request.args.ops.map(({ target, set }) => ({ id: target.id, paths: Object.keys(set).map(key => `${kind}.${key}`) })), ...carried]
+      .slice(0, 8).map(({ id, paths }) => ({ id, after: { patched: elementReadback(kind, elementTarget(kind, value, id, receipt.host.sceneId), paths, value) } })) };
 }
 export function registerElementSet(registry, ports, declaration) {
   const kind = declaration.id.slice(0, declaration.id.indexOf('.'));
-  const { normalize, collection } = kinds.get(kind);
+  const { normalize, collection, carry, warn } = kinds.get(kind);
   registry.register({ ...declaration, available: () => true, run(args) {
     const domain = ports.storeDomain(declaration.undoDomain ?? kind);
     let next = domain.read();
     const ops = collection ? args.ops ?? [args] : [{ id: ports.state().activeSceneId, set: args }];
+    const carried = new Set(), warnings = [];
     for (const { id, set } of ops) {
       const before = collection ? next.find(row => row.id === id) : next;
       if (!before) throw new StudioProtocolError('TARGET_NOT_READY', `Unknown ${kind} id: ${id}`);
       const after = normalize(mergeElementSet(before, storedElementSet(kind, set)));
+      if (warn) warnings.push(...warn({ ...after, id }, set));
+      // A kind whose rows hang off each other (a group's parts) moves the rows its target carries.
+      if (collection && carry) {
+        const rows = carry(next, id, after);
+        rows.forEach((row, index) => { if (row !== next[index] && row.id !== id) carried.add(row.id); });
+        next = rows;
+      }
       next = collection ? next.map(row => row.id === id ? { ...after, id } : row) : after;
     }
     if (JSON.stringify(next) !== JSON.stringify(domain.read())) domain.write(next);
-    return { affectedIds: [...new Set(ops.map(op => op.id))], summary: `Updated ${kind}.` };
+    return { affectedIds: [...new Set([...ops.map(op => op.id), ...carried])], summary: `Updated ${kind}.`, ...(warnings.length ? { warnings } : {}) };
   } });
 }

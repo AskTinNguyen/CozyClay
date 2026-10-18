@@ -110,8 +110,8 @@ await evaluate("document.querySelector('[data-testid=start-create]').click()");
 expect("creating from the preview opens the editor", await waitFor("!document.querySelector('.project-browser') && !!document.querySelector('.timeline')"));
 expect("guidance starts after project creation", await waitFor("!!document.querySelector('.first-success-guide')"));
 const guideText = await evaluate("document.querySelector('.first-success-guide')?.textContent || ''");
-const animationPattern = LOCALE === "ko" ? /아웃라이너에서 캐릭터를 선택.*장면 보기에서 캐릭터를 움직.*K를 눌러.*타임라인을 문지르거나 Space/s : /Select a character.*Move it.*Press K.*Scrub the timeline.*Space/s;
-expect("guidance names selection, movement, key, and playback", animationPattern.test(guideText), guideText);
+const animationPattern = LOCALE === "ko" ? /아웃라이너에서 캐릭터를 선택.*장면 보기에서 캐릭터를 움직.*에이전트에게 동작을 요청.*타임라인을 문지르거나 Space/s : /Select a character.*Move it.*Ask the Agent for a motion.*Scrub the timeline.*Space/s;
+expect("guidance names selection, movement, the agent ask, and playback", animationPattern.test(guideText), guideText);
 expect("an animation project shows none of the storyboard steps", !guideText.includes("Agent panel") && !guideText.includes("에이전트 패널을 여세요"), guideText);
 
 for (let index = 0; index < 4; index += 1) {
@@ -142,7 +142,7 @@ expect("the guide opens on blank-project creation in storyboard", await waitFor(
 const items = await evaluate("[...document.querySelectorAll('.first-success-guide-steps li > div > strong')].map((node) => node.textContent)");
 expect("the guide lists exactly the four storyboard steps in order", JSON.stringify(items) === JSON.stringify(STORYBOARD), JSON.stringify(items));
 const sbText = await evaluate("document.querySelector('.first-success-guide')?.textContent || ''");
-expect("no animation step leaks into the storyboard guide", !/Press K|Scrub the timeline|K를 눌러|타임라인을 문지르/.test(sbText), sbText);
+expect("no animation step leaks into the storyboard guide", !/Ask the Agent for a motion|Scrub the timeline|에이전트에게 동작을 요청|타임라인을 문지르/.test(sbText), sbText);
 if (process.env.QA_SHOTS_DIR) {
 	const shot = await send("Page.captureScreenshot", { format: "png" });
 	const { writeFileSync, mkdirSync } = await import("node:fs");

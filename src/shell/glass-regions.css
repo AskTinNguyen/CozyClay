@@ -431,9 +431,9 @@
 	--tl-ruler-height: 24px;
 	--tl-track-row-height: 22px;
 	--tl-track-group-height: 66px;
-	/* The surface is exactly its rows (ruler + 2 lanes + 2 lane groups), so it
+	/* The surface is exactly its rows (ruler + 1 lane + 2 lane groups), so it
 	   never asks the body for more height than the dock gives it. */
-	--tl-surface-height: calc(var(--tl-ruler-height) + var(--tl-track-row-height) * 2 + var(--tl-track-group-height) * 2);
+	--tl-surface-height: calc(var(--tl-ruler-height) + var(--tl-track-row-height) + var(--tl-track-group-height) * 2);
 	--tl-camera-bar-height: 28px;
 	--tl-track-tree-width: 170px;
 	--tl-clip-inset: 4px;
@@ -446,7 +446,8 @@
 	height: auto;
 	min-height: 48px;
 	gap: 12px;
-	padding: 0 16px;
+	/* The right inset keeps the pinned collapse toggle clear of the controls. */
+	padding: 0 52px 0 16px;
 	border: 0;
 	background: none;
 }
@@ -500,6 +501,31 @@
 .app[data-shell="glass"]:not([data-embed-mode]) .v2-sequencer .tl-seq-action:hover:not(:disabled),
 .app[data-shell="glass"]:not([data-embed-mode]) .v2-sequencer .tl-head-group .tl-btn:hover:not(:disabled) { background: var(--chip-fill); color: var(--text-1); }
 .app[data-shell="glass"]:not([data-embed-mode]) .v2-sequencer .tl-seq-action:disabled { opacity: .4; }
+/* The take's segment speed sits in the same quiet chip grammar as its neighbours. */
+.app[data-shell="glass"]:not([data-embed-mode]) .v2-sequencer .tl-motion-speed-editor {
+	min-width: 0;
+	height: 26px;
+	gap: 6px;
+	padding: 0 8px;
+	border: 0;
+	border-radius: 13px;
+	background: none;
+	color: var(--label);
+	font: 500 12px var(--sans);
+}
+.app[data-shell="glass"]:not([data-embed-mode]) .v2-sequencer .tl-motion-speed-editor > span { font-weight: 500; }
+.app[data-shell="glass"]:not([data-embed-mode]) .v2-sequencer .tl-motion-speed-editor input[type="range"] { width: 72px; accent-color: var(--primary-fill, var(--select)); }
+.app[data-shell="glass"]:not([data-embed-mode]) .v2-sequencer .tl-motion-speed-editor input[type="number"] {
+	width: 40px;
+	height: 22px;
+	padding: 0 4px;
+	border: 0;
+	border-radius: 6px;
+	background: var(--chip-fill);
+	color: var(--text-1);
+	font: 500 12px var(--sans);
+}
+.app[data-shell="glass"]:not([data-embed-mode]) .v2-sequencer .tl-motion-speed-editor small { color: var(--label); }
 .app[data-shell="glass"]:not([data-embed-mode]) .v2-sequencer .tl-btn.wp.on { background: var(--seg-on); box-shadow: var(--seg-on-shadow); color: var(--seg-on-text); }
 .app[data-shell="glass"]:not([data-embed-mode]) .v2-sequencer .tl-badge {
 	height: 22px;

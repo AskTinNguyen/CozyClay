@@ -75,12 +75,6 @@ try {
   };
   await undo(`document.querySelectorAll('.subject-box').length === ${initial}`);
   console.log('PASS browser cast UI: keyboard undo restores the subject list');
-  await transition(`[...document.querySelectorAll('[data-generate-action=block]')].some(b => b.textContent.includes('Add block at frame'))`,
-    `document.querySelector('[data-testid=topbar-generate-menu]').click()`);
-  await transition(`document.querySelectorAll('.tl-chip-input').length === 1`, `document.querySelector('[data-generate-action=block]').click()`);
-  console.log('PASS browser cast UI: prompt-block creation reaches the timeline');
-  await undo(`document.querySelectorAll('.tl-chip-input').length === 0`);
-  console.log('PASS browser cast UI: prompt-block creation undoes');
   const screenshot = await send('Page.captureScreenshot', { format: 'png' });
   writeFileSync('/tmp/442-cast-browser.png', Buffer.from(screenshot.data, 'base64'));
   assert.deepEqual(pageErrors, []);

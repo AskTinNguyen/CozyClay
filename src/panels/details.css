@@ -135,6 +135,20 @@
 	line-height: var(--details-hint-line-height, 1.4);
 }
 
+/* The follow-cam pointer is a plain hint here, not the dark theme's tinted box. */
+.v2-details-section.v2-details-section .camera-editor-pointer {
+	padding: 0;
+	border: 0;
+	background: none;
+}
+
+/* Each camera readout number carries its name. */
+.v2-details-section.v2-details-section .v2-details-readout small {
+	color: var(--text-3, #636369);
+	font-family: var(--sans);
+	font-size: 10px;
+}
+
 .v2-details-section.v2-details-section .inspector-hint + .inspector-hint,
 .v2-details-section.v2-details-section .hint + .hint {
 	margin-top: var(--details-gap, 4px);

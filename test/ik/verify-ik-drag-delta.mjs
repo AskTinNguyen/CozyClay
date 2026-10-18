@@ -9,8 +9,8 @@ import {
 	solveHipsTranslate,
 	solveSwingAngle,
 	applyBodyContact,
-} from "../../src/ardy/ik.js";
-import { bakeIkDragKey, bakeIkDragRange, chainsChangedBy, ikDragRecord, ikDragTouch } from "../../src/ardy/ik-drag.js";
+} from "../../src/motion/ik.js";
+import { bakeIkDragKey, bakeIkDragRange, chainsChangedBy, ikDragRecord, ikDragTouch } from "../../src/motion/ik-drag.js";
 
 /* A manual IK drag over a loaded motion must key ONLY the parts it moved, as
  * deltas over the raw clip. Keying every tracked part put an absolute key on a

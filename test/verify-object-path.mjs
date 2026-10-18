@@ -275,7 +275,7 @@ ok("a stroke is not capped at the old five points", STROKE_MAX_POINTS === MAX_PA
 
 /* --- the strip loads the selected subject -------------------------------- */
 
-const timelineSource = readFileSync(new URL("../src/ardy/timeline.jsx", import.meta.url), "utf8");
+const timelineSource = readFileSync(new URL("../src/motion/timeline.jsx", import.meta.url), "utf8");
 // The studio source spans App.jsx and app-stage.jsx (module-level extraction); pin against both.
 const appSource = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8")
 	+ readFileSync(new URL("../src/app-stage.jsx", import.meta.url), "utf8")
@@ -316,6 +316,16 @@ ok("a mark cannot be dropped on top of another", handlesSource.includes("PATH_MA
 ok("the route refuses to grow past the camera rail's mark ceiling", handlesSource.includes("fractions.length >= MAX_PATH_MARKS"));
 ok("dragging a mark bends the route with the camera rail's own preparation", handlesSource.includes("prepareRailBend(s.path.points"));
 ok("Shift slides a mark along the route, as a crane mark slides", handlesSource.includes("event.shiftKey"));
+// The camera rail's dots in the 3D view: a free drag used to ride a camera-facing vertical plane, so it changed
+// only the dot's height and the rail never moved. It now moves the dot over the floor, bending the rail under it.
+const craneSource = appSource.slice(appSource.indexOf("function CraneHandles("), appSource.indexOf("function ShotPathPreview("));
+const railDotDrag = readFileSync(new URL("../src/rail-dot-drag.js", import.meta.url), "utf8");
+ok(
+	"a free drag on a camera-rail dot moves it over the floor, bending the rail under it",
+	craneSource.includes("floorDragStart(s, index, raycaster.ray, event.shiftKey)")
+		&& craneSource.includes('drag.axis === "floor" ? world.x') && craneSource.includes('drag.axis === "floor" ? world.z')
+		&& railDotDrag.includes("prepareRailBend(s.controlPoints") && railDotDrag.includes("new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)"),
+);
 ok("a press on the route is claimed, so the object stays selected for the double-click", handlesSource.includes("userData.pathLine") && claimsPress([{ object: { userData: { pathLine: true }, parent: null } }]));
 ok("only an interior mark can be deleted", handlesSource.includes("s.selectedIndex <= 0 || s.selectedIndex >= fractions.length - 1"));
 ok(
@@ -339,7 +349,7 @@ ok(
 ok(
 	"the gestures are taught once (the first-selection toast) and by tooltip, not as a running caption",
 	!travelTrackSource.includes("선을 더블클릭하면 점 추가 · 끌면 휨") &&
-	readFileSync(new URL("../src/ardy/timeline.jsx", import.meta.url), "utf8").includes('title={ko("Drag the curve') &&
+	readFileSync(new URL("../src/motion/timeline.jsx", import.meta.url), "utf8").includes('title={ko("Drag the curve') &&
 	readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8").includes("선을 더블클릭하면 점이 추가돼요"),
 );
 

@@ -2,6 +2,9 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import * as defaultAuth from "../codex-auth.mjs";
 import * as defaultKeys from "./provider-keys.mjs";
 import { createCredentialStore } from "./credential-store.mjs";
+import { readCredentials } from "./provider-keys.mjs";
+import { cliproxyBase, cliproxyProvider, extendCliproxyProvider, registryLiveCliproxy } from "./cliproxy-provider.mjs";
+export { cliproxyLiveModel } from "./cliproxy-provider.mjs";
 
 // #379 (F2 pass 5 finding 4): pi never forwards a per-request `fetch` to the
 // codex API module — `pi-agent-core`'s `createRequestOptions` (the options
@@ -69,37 +72,6 @@ const factories = {
 	openrouter: "openrouterProvider",
 };
 
-async function cliproxyProvider({ baseUrl, env = process.env } = {}) {
-	const base = (baseUrl ?? env.CLIPROXY_BASE_URL ?? "http://127.0.0.1:8317").replace(/\/$/, "");
-	const [{ createProvider, envApiKeyAuth }, { openaiProvider }, { anthropicProvider }, openaiResponsesApi, anthropicMessagesApi] = await Promise.all([
-		import("@earendil-works/pi-ai"),
-		import("@earendil-works/pi-ai/providers/openai"),
-		import("@earendil-works/pi-ai/providers/anthropic"),
-		import("@earendil-works/pi-ai/api/openai-responses"),
-		import("@earendil-works/pi-ai/api/anthropic-messages"),
-	]);
-	const ids = new Set();
-	const models = [
-		...openaiProvider().getModels().map((model) => ({ ...model, provider: "cliproxy", baseUrl: `${base}/v1` })),
-		...anthropicProvider().getModels().map((model) => ({
-			...model,
-			provider: "cliproxy",
-			baseUrl: base,
-			// CLIProxyAPI's /v1/messages rejects messages[].output_config and thinking.block_binding, so keep
-			// adaptive thinking (forceAdaptiveThinking) but drop the mid-conversation output_config shape.
-			compat: { ...model.compat, supportsMidConvoEffort: false },
-		})),
-	].filter((model) => !ids.has(model.id) && ids.add(model.id));
-	return createProvider({
-		id: "cliproxy",
-		name: "CLIProxyAPI",
-		baseUrl: base,
-		auth: { apiKey: envApiKeyAuth("CLIProxyAPI key", ["CLIPROXY_API_KEY"]) },
-		models,
-		api: { "openai-responses": openaiResponsesApi, "anthropic-messages": anthropicMessagesApi },
-	});
-}
-
 const providerConfig = (id) => PROVIDERS.find((provider) => provider.id === id);
 
 export async function loadProvider(id, options = {}) {
@@ -159,7 +131,7 @@ async function registryLiveCatalogue(models, codex) {
 		state.fetch = Promise.resolve().then(() => codex.listModels()).then((result) => {
 			state.models = liveModelsCodex(result);
 			return state.models;
-		}).catch(() => []);
+		}).catch(() => { state.fetch = null; return []; });
 	}
 	return state.fetch;
 }
@@ -176,75 +148,17 @@ async function registerLiveCodexModels(models, codex) {
 	return live;
 }
 
-async function registryLiveCliproxy(models, apiKey) {
-	const state = catalogueState(models);
-	if (!state.cliproxyFetch) {
-		state.cliproxyFetch = Promise.resolve().then(async () => {
-			const provider = models?.getProvider?.("cliproxy");
-			const model = provider?.getModels?.().find((entry) => entry.api === "openai-responses");
-			if (!model?.baseUrl || !apiKey) throw new Error("CLIProxyAPI is not configured");
-			const response = await fetch(`${model.baseUrl}/models`, {
-				headers: { Authorization: `Bearer ${apiKey}` },
-				signal: AbortSignal.timeout(5000),
-			});
-			if (!response.ok) throw new Error(`CLIProxyAPI models request failed: ${response.status}`);
-			const body = await response.json();
-			// id -> owned_by: the owner is how CLIProxyAPI routes a model (openai, anthropic, or an
-			// openai-compatibility upstream name), so it picks the wire format for models pi does not know.
-			return new Map((Array.isArray(body?.data) ? body.data : [])
-				.map((entry) => typeof entry === "string" ? [entry, undefined] : [entry?.id, typeof entry?.owned_by === "string" ? entry.owned_by : undefined])
-				.filter(([id]) => id));
-		}).catch(() => null);
-	}
-	return state.cliproxyFetch;
-}
-
-const CLIPROXY_NON_CHAT = /^gpt-image-|-auto-review$/;
-
-/** A live CLIProxyAPI model pi's catalogue does not know yet (#400 follow-up), built on the newest
- * catalogue model of the same family and wire format: `owned_by: openai` rides openai-responses,
- * `owned_by: anthropic` rides anthropic-messages. Other owners (openai-compatibility upstreams such as
- * opencode-go) are left out: they need upstream-specific headers the proxy does not pass through. */
-export function cliproxyLiveModel(id, owner, knownModels) {
-	if (CLIPROXY_NON_CHAT.test(id)) return null;
-	const api = owner === "openai" ? "openai-responses" : owner === "anthropic" ? "anthropic-messages" : null;
-	if (!api) return null;
-	const candidates = knownModels.filter((model) => model.api === api);
-	const family = owner === "anthropic" ? id.match(/^claude-[a-z]+/)?.[0] : id.match(/^gpt-\d+/)?.[0];
-	const sameFamily = family ? candidates.filter((model) => model.id.startsWith(family)) : [];
-	const template = [...(sameFamily.length ? sameFamily : candidates)].sort((a, b) => b.id.localeCompare(a.id, undefined, { numeric: true }))[0];
-	if (!template) return null;
-	// The 5-5 claude generation rejects thinking {type:"disabled"}; a null "off" makes pi-ai send no thinking block (#723).
-	const generation = owner === "anthropic" ? id.match(/-(\d+)-(\d+)$/) : null;
-	if (generation && Number(generation[1]) >= 5) return { ...template, id, name: id, thinkingLevelMap: { ...template.thinkingLevelMap, off: null } };
-	return { ...template, id, name: id };
-}
-
-function extendCliproxyProvider(provider, live, state) {
-	if (state.extendedProviders.has(provider)) return false;
-	const getModels = provider.getModels.bind(provider);
-	const knownModels = getModels();
-	const known = new Set(knownModels.map((model) => model.id));
-	const additions = [...live]
-		.filter(([id]) => !known.has(id))
-		.map(([id, owner]) => cliproxyLiveModel(id, owner, knownModels))
-		.filter(Boolean)
-		.sort((a, b) => b.id.localeCompare(a.id, undefined, { numeric: true }));
-	if (!additions.length) return false;
-	provider.getModels = () => [...getModels(), ...additions];
-	state.extendedProviders.add(provider);
-	return true;
-}
-
 export async function createModels({ credentials, auth = defaultAuth, keys = defaultKeys, env = process.env, codexBaseUrl, cliproxyBaseUrl } = {}) {
 	const { createModels: createPiModels } = await import("@earendil-works/pi-ai");
 	const store = credentials ?? createCredentialStore({ auth, keys, env });
 	const models = createPiModels({ credentials: store });
 	for (const provider of PROVIDERS) {
-		const baseUrl = provider.id === "openai-codex" ? codexBaseUrl : provider.id === "cliproxy" ? cliproxyBaseUrl : undefined;
-		const loaded = await loadProvider(provider.id, { baseUrl, env });
-		models.setProvider(loaded);
+		const baseUrl = provider.id === "openai-codex" ? codexBaseUrl : provider.id === "cliproxy" ? cliproxyBaseUrl ?? cliproxyBase({ env, credential: await store.read("cliproxy").catch(() => undefined) }) : undefined;
+		models.setProvider(await loadProvider(provider.id, { baseUrl, env }));
 	}
+	// every other provider pi ships, so each of pi's logins (subscriptions and api keys) has a provider to land on (#pi-login)
+	const { builtinProviders } = await import("@earendil-works/pi-ai/providers/all");
+	for (const provider of builtinProviders()) if (!models.getProvider(provider.id)) models.setProvider(provider);
 	return models;
 }
 
@@ -254,8 +168,9 @@ export async function resolveModel(requested, options = {}) {
 	const slash = value.indexOf("/");
 	const provider = slash === -1 ? "openai-codex" : value.slice(0, slash);
 	const modelId = slash === -1 ? value : value.slice(slash + 1);
-	if (!providerConfig(provider) || !modelId) throw unknownModel(requested);
+	if (!modelId) throw unknownModel(requested);
 	const models = options.models ?? await createModels(options);
+	if (!providerConfig(provider) && !models.getProvider?.(provider)) throw unknownModel(requested);
 	const model = models.getModel(provider, modelId);
 	if (!model) throw unknownModel(requested);
 	return { provider, modelId, model };
@@ -483,7 +398,7 @@ export async function listAgentModels({ models, codex, auth = defaultAuth, keys 
 			list = [...list].sort(astraFirst);
 		} else if (provider.id === "cliproxy") {
 			if (signedIn) {
-				const live = await registryLiveCliproxy(resolvedModels, authResult?.auth?.apiKey);
+				const live = await registryLiveCliproxy(resolvedModels, authResult?.auth?.apiKey, catalogueState(resolvedModels));
 				if (live) {
 					// The proxy's own /v1/models is the lineup: register what pi's catalogue has not caught up
 					// with on the shared registry, so the turn route resolves the same ids the dropdown shows.
@@ -495,6 +410,13 @@ export async function listAgentModels({ models, codex, auth = defaultAuth, keys 
 			list = [...list].sort(cliproxyFirst);
 		}
 		providers.push({ id: provider.id, label: provider.label, signedIn, authSource, models: list });
+	}
+	// a provider outside the curated list joins the picker once a pi login stored its credential here (#pi-login); ambient
+	// credentials (an AWS profile, cloud ADC files) alone do not list it, so the picker shows what the author connected
+	const stored = new Set([...Object.keys(readCredentials()), ...Object.keys(saved)]);
+	for (const provider of resolvedModels.getProviders?.() ?? []) {
+		const check = providerConfig(provider.id) || !stored.has(provider.id) ? undefined : await resolvedModels.checkAuth?.(provider.id).catch(() => undefined);
+		if (check) providers.push({ id: provider.id, label: provider.name ?? provider.id, signedIn: true, authSource: check.type === "oauth" || /stored/i.test(check.source ?? "") ? "file" : "env", models: catalogModels(resolvedModels, provider.id, getSupportedThinkingLevels) });
 	}
 	// The flat union is what the panel's dropdown reads today (`models[].id`);
 	// with six providers in play the id has to be the provider/id key so two

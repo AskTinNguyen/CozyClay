@@ -4,7 +4,7 @@ import { Html, Line } from "@react-three/drei";
 import * as THREE from "three";
 import { POSE_BONES, normalizeBoneName, primeBindPose } from "./poses.js";
 import { poseThumbnail, warmThumbnailModels } from "./pose-thumbs.js";
-import { IK_TRACKS, MID_TRACKS, ikControlIsExposed } from "./ardy/ik.js";
+import { IK_TRACKS, MID_TRACKS, ikControlIsExposed } from "./motion/ik.js";
 import { shouldRefreshIkExposure } from "./use-render-activity.js";
 import { POSER_LAYER } from "./dualview.jsx";
 import { ko, isKo } from "./locale.js";
@@ -1250,7 +1250,7 @@ export function warmPoseThumbnails() {
 	warmThumbnailModels(["y-bot-tpose", "x-bot-tpose"]);
 }
 
-export function PoseStudioPanel({ subject, model, poses, selectedId, onSelect, onApply, onReset, onSave, onDelete, onClose, closing, motionActive = false, ikCorrection = false, docked = false, onPhoto, photoState = "idle", photoError = "" }) {
+export function PoseStudioPanel({ subject, model, poses, selectedId, onSelect, onApply, onReset, onSave, onDelete, onClose, closing, motionActive = false, ikCorrection = false, docked = false }) {
 	const poseLabelsKo = {
 		"T-pose": ko("T-pose", "T 포즈"),
 		Relaxed: ko("Relaxed", "편안한 자세"),
@@ -1333,8 +1333,8 @@ export function PoseStudioPanel({ subject, model, poses, selectedId, onSelect, o
 			{poses.length === 0 && (
 				<p className="studio-hint" data-pose-empty role="status">
 					{ko(
-						"Your pose library is empty. Read a pose out of a photograph, or pose the character and save it — both stay here for every project.",
-						"포즈 라이브러리가 비어 있어요. 사진에서 자세를 읽어오거나 캐릭터 자세를 잡아 저장하면, 모든 프로젝트에서 계속 쓸 수 있어요.",
+						"Your pose library is empty. Pose the character and save it — it stays here for every project.",
+						"포즈 라이브러리가 비어 있어요. 캐릭터 자세를 잡아 저장하면, 모든 프로젝트에서 계속 쓸 수 있어요.",
 					)}
 				</p>
 			)}
@@ -1345,14 +1345,9 @@ export function PoseStudioPanel({ subject, model, poses, selectedId, onSelect, o
 				onSelect={selectPose}
 				onDelete={onDelete}
 				onSave={onSave}
-				onPhoto={onPhoto}
-				photoState={photoState}
 				categoryOf={poseCategory}
 				labelOf={displayPoseLabel}
 			/>
-			{photoError && (
-				<p className="studio-hint error" data-pose-photo-error role="status">{photoError}</p>
-			)}
 		</div>
 	);
 }
@@ -1372,8 +1367,6 @@ export function PoseTileGrid({
 	onSelect,
 	onDelete,
 	onSave,
-	onPhoto,
-	photoState = "idle",
 	categoryOf = () => "custom",
 	labelOf = (pose) => pose.label,
 }) {
@@ -1410,22 +1403,6 @@ export function PoseTileGrid({
 					<span className="add-plus">＋</span>
 					<span className="add-text">{ko("Save pose", "포즈 저장")}</span>
 				</button>
-				)}
-				{onPhoto && (
-					<button
-						type="button"
-						className={"pose-tile add photo" + (photoState === "running" ? " busy" : "")}
-						data-pose-id="photo-pose"
-						data-photo-state={photoState}
-						disabled={photoState === "running"}
-						title={ko("Read the pose out of a reference photograph", "참조 사진에서 자세 읽어오기")}
-						onClick={onPhoto}
-					>
-						<span className="add-plus">{photoState === "running" ? "◌" : "◳"}</span>
-						<span className="add-text">
-							{photoState === "running" ? ko("Reading…", "읽는 중…") : ko("From photo", "사진에서")}
-						</span>
-					</button>
 				)}
 			</div>
 	);

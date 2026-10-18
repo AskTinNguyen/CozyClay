@@ -4,7 +4,7 @@ import * as THREE from "three";
 // Override only the module under test to measure origin/main without writing
 // to that checkout. The same fixture and thresholds run on both revisions.
 const { createIkState, ikBakeKeyframe, ikEvaluate, solveIk, solveMidJoint } = await import(
-	process.env.IK_TRANSLATION_TEST_MODULE ?? "../../src/ardy/ik.js"
+	process.env.IK_TRANSLATION_TEST_MODULE ?? "../../src/motion/ik.js"
 );
 const KEY_FRAME = 20;
 const BLEND = 6;

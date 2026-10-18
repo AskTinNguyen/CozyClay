@@ -9,11 +9,11 @@ import { computePackageDigest, verifyPackageMarker } from "../bin/package-signat
 
 const directory = mkdtempSync(join(tmpdir(), "cozyclay-package-signature-"));
 mkdirSync(join(directory, "dist"));
-mkdirSync(join(directory, "dist", "demo"));
-mkdirSync(join(directory, "dist", "d"));
+mkdirSync(join(directory, "dist", "media"));
+mkdirSync(join(directory, "tools"));
 writeFileSync(join(directory, "README.md"), "signed package\n");
-writeFileSync(join(directory, "dist", "demo", "index.html"), "demo build\n");
-writeFileSync(join(directory, "dist", "d", "index.html"), "d build\n");
+writeFileSync(join(directory, "dist", "media", "demo.mp4"), "demo video\n");
+writeFileSync(join(directory, "tools", "qa-check.mjs"), "qa script\n");
 const marker = join(directory, "dist", "cozyclay-package.json");
 const metadata = { version: "1.5.0" };
 const { privateKey, publicKey } = generateKeyPairSync("ed25519");
@@ -33,8 +33,8 @@ try {
 	}));
 	assert.equal(verifyPackageMarker(marker, directory, metadata, publicDer), true);
 
-	writeFileSync(join(directory, "dist", "demo", "index.html"), "rebuilt demo\n");
-	writeFileSync(join(directory, "dist", "d", "index.html"), "rebuilt d\n");
+	writeFileSync(join(directory, "dist", "media", "demo.mp4"), "re-encoded demo video\n");
+	writeFileSync(join(directory, "tools", "qa-check.mjs"), "edited qa script\n");
 	assert.equal(
 		verifyPackageMarker(marker, directory, metadata, publicDer),
 		true,

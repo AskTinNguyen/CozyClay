@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createPlaybackClock } from "../../src/ardy/playback-clock.js";
+import { createPlaybackClock } from "../../src/motion/playback-clock.js";
 
 for (const fps of [24, 29.97, 30, 60]) for (const speed of [.5, 1, 2]) {
 	for (const callbacks of [[41, 84, 125, 166, 1000, 4200], [260, 530, 970, 1886, 4200], [4200]]) {

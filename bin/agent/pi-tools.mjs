@@ -1,6 +1,7 @@
 import { Value } from "typebox/value";
 import { STUDIO_TOOL_LABELS } from "../../src/studio-agent-protocol.js";
 import { toTypeBox } from "./schema-to-typebox.mjs";
+import { toolArgumentPreparer } from "./tool-arguments.mjs";
 
 
 function dataUrlImage(dataUrl) {
@@ -28,12 +29,14 @@ function formatToolError(error) {
 /** Convert CozyClay's handler catalogue into pi AgentTools. */
 export function toAgentTools(tools, { emit, signal, labels = STUDIO_TOOL_LABELS } = {}) {
 	return (Array.isArray(tools) ? tools : []).map((tool) => {
-		const parameters = toTypeBox(tool.parameters || { type: "object", properties: {}, additionalProperties: false });
+		const schema = tool.parameters || { type: "object", properties: {}, additionalProperties: false }, parameters = toTypeBox(schema);
 		return {
 			name: tool.name,
 			label: labels?.[tool.name] ?? tool.label ?? tool.name.replaceAll("_", " "),
 			description: tool.description || tool.name,
 			parameters,
+			// Before pi's own check: array texts parsed, unknown fields named (tool-arguments.mjs).
+			prepareArguments: toolArgumentPreparer(tool.name, schema),
 			// pi's low-level `Agent` calls `execute(id, params, signal, onUpdate)`;
 			// pi's `AgentHarness` calls `execute(id, params, onUpdate, toolContext,
 			// invocation, context)` where `context.abortSignal` is the REAL abort

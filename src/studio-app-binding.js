@@ -3,16 +3,18 @@
 // history, the action registry); this module owns no React or renderer state.
 import { createCommandBus } from "./command-bus.js";
 import { readElementDocument, elementReadback, elementPatchArgs, elementTarget, elementPatchReceipt } from "./commands/elements.js";
-import { physicsKeyStamp } from "./ardy/physics-review.js";
+import { physicsKeyStamp } from "./motion/physics-review.js";
 import { shotAtFrame } from "./cuts.js";
 import { isProxyFigure } from "./scenes.js";
-import { CUTOUT_KIND, MESH_KIND, OBJECT_LIBRARY, supportHeightForObject } from "./scene-objects.js";
+import { supportHeightForObject } from "./scene-objects.js";
+import { studioAssetList } from "./studio-asset-list.js";
 import { buildStudioContext, physicsFingerprintInput, studioEntityCursor, validateStudioCursor } from "./studio-agent-context.js";
-import { createStudioCommandJournal, entityWorldBounds, framingChecks, localTransformReadback, placementChecks, sampledFramingResult, studioObjectCatalogue } from "./studio-agent-commands.js";
-import { verifyInstalledTake } from "./studio-agent-motion.js";
-import { shotGeometryFacts } from "./studio-geometry-facts.js";
+import { createStudioCommandJournal, framingChecks, localTransformReadback, placementChecks, sampledFramingResult, studioObjectCatalogue } from "./studio-agent-commands.js";
+import { verifyInstalledTake } from "./studio-agent-motion.js"; import { objectRowBounds } from "./studio-entity-bounds.js"; import { exportFramingInto } from "./studio-export-framing.js";
+import { shotGeometryFacts } from "./studio-geometry-facts.js"; import { KIT_CATALOGUE } from "./kits/index.js";
 import { STUDIO_TOOL_FAMILIES, StudioProtocolError, validateReceipt, validateStudioCommand, validateStudioIdentity } from "./studio-agent-protocol.js";
-import { CONTACT_SHEET_LAYOUT, buildContactSheet, sampleContactSheetFrames } from "./studio-contact-sheet.js";
+import { studioVisual, verifyLighting } from "./studio-motion-visual.js";
+import { withEffectState } from "./effects/state.js"; import { hdrEnvironmentCatalogue } from "./stage-hdr-library.js";
 
 // App-owned adapter: the shared command modules remain the only
 // planners and validators. Ports below publish through the native editor stores.
@@ -34,8 +36,7 @@ export function createStudioAppBinding(ports) {
 	const motionContentKey = value => {
 		if (!value || typeof value !== "object") return null;
 		if (typeof value.studioTakeId === "string" && value.studioTakeId) return value.studioTakeId;
-		if (typeof value.motionRef?.motionId === "string" && value.motionRef.motionId) return value.motionRef.motionId;
-		return `${value.frames ?? 0}:${value.fps ?? 0}:${value.rotMats?.length ?? 0}:${value.rootPos?.length ?? 0}:${value.posedJoints?.length ?? 0}`;
+				return `${value.frames ?? 0}:${value.fps ?? 0}`;
 	};
 	const calibrationContentKey = value => value && typeof value === "object" ? JSON.stringify(value) : null;
 	const tokens = new Map(), receipts = new Map(), images = new Map();
@@ -121,30 +122,18 @@ export function createStudioAppBinding(ports) {
 			return { id: c.id, kind: "character", token: tokens.get(c.id).token, name: c.subject || c.id,
 				position: { x: c.x, y: c.y ?? 0, z: c.z }, yawDeg: c.rot ?? 0, scale: c.scale ?? 1, tint: c.tint ?? null, modelId: c.model ?? null,
 				motion: { takeId: t?.motion?.studioTakeId ?? null, frames: t?.motion?.frames ?? 0,
-					ikKeyCount: t?.ikState?.keys.size ?? 0, promptBlockCount: c.layer?.promptClips?.length ?? 0 },
+					ikKeyCount: t?.ikState?.keys.size ?? 0 },
 				capabilities: { rigReady: Boolean(t?.rig), ik: Boolean(t?.rig?.userData?.poseBind), measuredFeet: false },
 				characterKind: isProxyFigure(c) ? "proxy" : "rig", ...(isProxyFigure(c) ? { posture: c.posture ?? "stand" } : {}) };
 		}), ...s.objects.map(o => { const local = localTransformReadback(o, s.objects); return { id: o.id, kind: "object", token: tokens.get(o.id).token, name: o.name || o.id,
 			position: { x: o.x, y: o.y ?? 0, z: o.z }, yawDeg: o.rot ?? 0,
 			rotationDeg: { x: o.rotX ?? 0, y: o.rot ?? 0, z: o.rotZ ?? 0 }, scale: { x: o.scaleX, y: o.scaleY, z: o.scaleZ },
-			renderer: o.renderer, color: o.color ?? null, ...(o.assetId ? { assetId: o.assetId } : {}),
+			renderer: o.renderer, color: o.color ?? null, bounds: objectRowBounds(o, s, ports), ...(o.assetId ? { assetId: o.assetId } : {}),
 			parentId: o.parent ?? null, attachment: o.attach ?? null, pathPointCount: o.path?.points.length ?? 0,
 			// the dots on the route, with the lean (degrees) a mark carries
 			...(o.path?.marks?.length ? { pathMarks: o.path.marks.map(mark => typeof mark === "number" ? mark : { t: mark.t, ...(mark.bank !== undefined ? { bank: mark.bank } : {}), ...(mark.pitch !== undefined ? { pitch: mark.pitch } : {}) }) } : {}), ...(local ? { local } : {}) }; })];
 	}
 	const frameRange = row => ({ startFrame: row.startFrame, endFrameExclusive: row.endFrame + 1 });
-	function assetList(s) {
-		const catalogue = studioObjectCatalogue().objects.map(({ kind }) => {
-			const entry = OBJECT_LIBRARY.find(row => row.kind === kind);
-			return { kind, name: entry?.label ?? kind, type: entry?.group === "Primitives" ? "primitive" : "set-piece" };
-		});
-		const imported = new Map();
-		for (const o of s.objects) {
-			const assetId = o.renderer === CUTOUT_KIND ? o.sourceAssetId || o.assetId : o.renderer === MESH_KIND ? o.assetId : null;
-			if (assetId && !imported.has(assetId)) imported.set(assetId, { id: assetId, name: o.name || assetId, type: o.renderer === CUTOUT_KIND ? "image" : "mesh" });
-		}
-		return [...catalogue, ...imported.values()];
-	}
 	function context() {
 		const s = refresh(), entities = entityProjection(s), registry = ports.actions?.();
 		const shot = s.shots.find(row => row.id === s.selectedShotId) ?? shotAtFrame(s.shots, s.view.frame);
@@ -158,7 +147,7 @@ export function createStudioAppBinding(ports) {
 			// buildStudioContext selects the detailed rows and writes the real page.
 			entities, entityPage: { returned: 0, total: 0, truncated: false, nextCursor: null },
 			shots: s.shots.map(row => ({ id: row.id, name: row.name, range: range(row), keyCount: row.cameraKeys.length })), shotsTruncated: false,
-			assets: assetList(s), recentReceipts: [...receipts.values()].filter(r => r.ok).reverse().slice(0, 3).map(r => ({ id: r.receiptId, summary: r.status, canUndoDirect: ports.canUndo(r) })),
+			assets: studioAssetList(s.objects), recentReceipts: [...receipts.values()].filter(r => r.ok).reverse().slice(0, 3).map(r => ({ id: r.receiptId, summary: r.status, canUndoDirect: ports.canUndo(r) })),
 			jobs: [], capabilities: { profile: "studio-slice-1", tools: STUDIO_TOOL_FAMILIES,
 				rigReady: Boolean(s.targets.get(s.activeCharacterId)?.rig), cameraReady: Boolean(s.camera), bridgeReady: s.bridgeReady,
 				...(s.previsMode ? { storyboard: s.previsMode === "storyboard" } : {}) },
@@ -196,13 +185,13 @@ export function createStudioAppBinding(ports) {
 		if (id === s.host.sceneId) return { selection: s.selection, activeCharacterId: s.activeCharacterId, shotId: s.selectedShotId, view: s.view,
 			...(patched.length ? { patched } : {}) };
 		const object = s.objects.find(row => row.id === id), entity = object ?? s.characters.find(row => row.id === id);
-		// Beyond the transform an object's patched paths already carry: the world box it occupies and, for a
-		// group, who hangs off it. `compact` (a receipt near its size limit) drops back to the paths alone.
-		// A character's box means cloning and posing its rig, too dear for every receipt: inspect or verify has it.
+		// Beyond the transform an object's patched paths already carry: the world box it occupies (an empty: its
+		// parts', as inspect's rows) and, for a group, who hangs off it. `compact` (a receipt near its size limit) drops back to the paths alone.
+		// A character's box means cloning and posing its rig, too dear for every receipt or inspect row: verify has it.
 		const extras = () => {
 			if (!object || compact) return {};
 			const childIds = s.objects.filter(row => row.parent === id).map(row => row.id);
-			return { bounds: entityWorldBounds(object, { ...s, frame: s.view.frame }, { bounds: ports.bounds }),
+			return { bounds: objectRowBounds(object, s, ports),
 				...(childIds.length ? { childIds: childIds.slice(0, 12), ...(childIds.length > 12 ? { childCount: childIds.length } : {}) } : {}) };
 		};
 		if (patched.length) return { patched, ...extras() };
@@ -286,11 +275,12 @@ export function createStudioAppBinding(ports) {
 				// A framing check also carries the cut's geometry, read from the scene: side of the action line
 				// and sight lines per shot, the receipt's or targets' shots first (8 at most).
 				const result = { receiptId: receipt?.receiptId ?? null, revision: s.revision, evidenceRevision, stale: evidenceRevision !== s.revision, checks: measured ? { coverage: "current-scene-targets" } : receipt.checks,
-					verification: receipt?.verification ?? null, semanticStatus: "unavailable", visualRefs: [], unsupportedChecks: [], unsupportedReasons: {}, ...(args.checks.includes("framing") ? { geometry: shotGeometryFacts(scene, { first: receipt ? receipt.affectedIds : args.targets, ports: { bounds: ports.bounds } }) } : {}) };
-				const reasons = result.unsupportedReasons, verified = [], skipped = [], pending = [];
-				for (const check of args.checks.filter(check => check !== "motion" && measured)) {
+					verification: receipt?.verification ?? null, semanticStatus: "unavailable", visualRefs: [], unsupportedChecks: [], unsupportedReasons: {}, ...(args.checks.includes("framing") ? { geometry: shotGeometryFacts(scene, { first: receipt ? receipt.affectedIds : args.targets, ports: { bounds: ports.bounds } }) } : {}) }, reasons = result.unsupportedReasons, verified = [], skipped = [], pending = [];
+				// Lighting is measured from the rendered shot frame (studio-lighting-check.js), never from a receipt.
+				if (args.checks.includes("lighting")) verifyLighting(result, args.targets ?? receipt.affectedIds, scene, ports);
+				for (const check of args.checks.filter(check => !["motion", "lighting"].includes(check) && measured)) {
 					if (!measured.length) { reasons[check] = "No target is an object or character in the current scene."; continue; }
-					try { result.checks[check] = check === "placement" ? placementChecks(measured, scene, { bounds: ports.bounds }) : framingChecks(measured, scene, { bounds: ports.bounds }); }
+					try { result.checks[check] = check === "placement" ? placementChecks(measured, scene, { bounds: ports.bounds, takes: s.targets }) : framingChecks(measured, scene, { bounds: ports.bounds }); }
 					catch (error) { if (!(error instanceof StudioProtocolError)) throw error; reasons[check] = error.message; }
 				}
 				if (args.checks.includes("framing") && args.range !== undefined && !args.rangeWasDefaulted) {
@@ -309,17 +299,7 @@ export function createStudioAppBinding(ports) {
 							.then(verification => { verified[index] = verification; }, error => { if (!(error instanceof StudioProtocolError)) throw error; skipped.push(`${name}: ${error.message}`); }));
 					});
 				}
-				// A frame is the shot camera's view; a plan is the Top View, the set from above
-				// with names and the shot camera's wedge.
-				if (args.visual !== "none") {
-					if (args.visual === "contact_sheet") {
-						// One image of frames across the range, each rendered through the export
-						// path, which puts the playhead pose, shot camera and props back.
-						const frames = sampleContactSheetFrames(args.range, s.frameCount), sheet = buildContactSheet(frames, ports.renderFrameBuffer), imageId = crypto.randomUUID();
-						images.set(imageId, { dataUrl: ports.encodePng(sheet.data, sheet), width: sheet.width, height: sheet.height, frames, layout: CONTACT_SHEET_LAYOUT, revision: s.revision, receiptId: result.receiptId });
-						result.visualRefs.push({ imageId, frames, layout: CONTACT_SHEET_LAYOUT });
-					} else { const capture = args.visual === "plan" ? (ports.capturePlan ?? (() => fail("CAPABILITY_MISSING", "This editor cannot render the top view.")))() : ports.capture(); const imageId = crypto.randomUUID(); images.set(imageId, { ...capture, revision: s.revision, receiptId: result.receiptId }); result.visualRefs.push({ imageId, ...(args.visual === "plan" ? { kind: "plan" } : {}) }); }
-				}
+				if (args.checks.includes("motion")) exportFramingInto(result, { args, s, receipt, scene, ports }); if (args.visual !== "none") studioVisual(args, { s, receipt, result, images, ports });
 				const finish = () => {
 					const computed = verified.filter(Boolean);
 					if (computed.length) result.verification = computed.length === 1 ? computed[0] : computed;
@@ -347,7 +327,7 @@ export function createStudioAppBinding(ports) {
 			// the model pays for): the revision is what the agent's next command is
 			// admitted at, so a scope without it leaves that admission stale.
 			const head = { revision: c.revision, host: (({ workspaceId, documentEpoch, sceneId, sceneEpoch }) => ({ workspaceId, documentEpoch, sceneId, sceneEpoch }))(c.host) };
-			if (command.args.scope === "catalogue") return { ...head, ...studioObjectCatalogue() };
+			if (command.args.scope === "catalogue") return { ...head, ...studioObjectCatalogue(), kits: KIT_CATALOGUE, environments: hdrEnvironmentCatalogue() };
 			if (command.args.scope === "document") return { ...head, scope: "document",
 				...readElementDocument(refresh().document, command.args, c.host.sceneId) };
 			// Discovery for run_action: every registered action with its label, kind,
@@ -370,7 +350,8 @@ export function createStudioAppBinding(ports) {
 			// Stable id order, so an offset cursor survives unrelated edits.
 			const filtered = entityProjection(s).filter(wanted).sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 			const offset = args.cursor ? validateStudioCursor(args.cursor, c) : 0, limit = command.args.limit;
-			return { ...head, entities: filtered.slice(offset, offset + limit), total: filtered.length,
+			// An effect row also carries its particles at the playhead (src/effects/state.js).
+			return { ...head, entities: filtered.slice(offset, offset + limit).map(row => withEffectState(row, s.view.frame, s.objects)), total: filtered.length,
 				nextCursor: offset + limit < filtered.length ? studioEntityCursor(c, offset + limit) : null };
 		},
 		operate_studio: request => execute({ ...request, name: "operate_studio" }),
@@ -378,7 +359,6 @@ export function createStudioAppBinding(ports) {
 		arrange_characters: request => execute({ ...request, name: "arrange_characters" }),
 		patch_elements: request => execute({ ...request, name: "patch_elements" }),
 		frame_shot: request => execute({ ...request, name: "frame_shot" }),
-		generate_motion: request => execute({ ...request, name: "generate_motion" }),
 		verify_result: request => execute({ ...request, name: "verify_result" }),
 		undo_edit: request => runAction(request, { action: "edit.undo", args: request.args }),
 		run_action: request => execute({ ...request, name: "run_action" }),

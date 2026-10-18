@@ -253,11 +253,8 @@ jobs:
           node-version: 22.19
           cache: npm
       - run: npm ci
-      # Vite only. `npm run dev` also starts the motion bridge, which since the
-      # Kimodo backend landed exits 2 without CCLAY_KIMODO_HOST — a GPU box CI
-      # does not have, so the whole job died before a single suite ran. The
-      # suites drive the studio at /app/ and load their motion from static
-      # /demo/*.npz fixtures, so they need no motion backend.
+      # Vite only: the suites drive the studio at /app/ and need neither the
+      # OAuth nor the agent sidecar that `npm run dev` adds.
       - name: Start dev server (vite)
         run: |
           npm run dev:ui -- --host 127.0.0.1 --port 5180 --strictPort &

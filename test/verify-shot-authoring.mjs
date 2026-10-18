@@ -204,7 +204,7 @@ assert.deepEqual(repaired.shots[0].camera, {
 		response: 0.7,
 		lead: 0,
 		railStartMode: "head",
-		maxDollySpeed: 8,
+		maxDollySpeed: 40,
 		pitchOffsetDeg: -170,
 		orbitOffsetDeg: 0,
 	},

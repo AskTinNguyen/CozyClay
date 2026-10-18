@@ -74,7 +74,7 @@ function useFirstItemFocus(ref, box, autoFocus, onAutoFocused) {
 /** One portaled menu. Outside presses, Escape and window resizes dismiss it;
  * arrow keys walk its items. `keepOpen` reports a nested flyout that owns
  * Escape first (App closes the Export flyout on the same key). */
-export function MenuPopover({ anchorRef, ignoreRef, onClose, align = "start", label, className = "", keepOpen, onKeyDown, autoFocus, onAutoFocused, children, menuRef: externalRef, ...props }) {
+function MenuPopover({ anchorRef, ignoreRef, onClose, align = "start", label, className = "", keepOpen, onKeyDown, autoFocus, onAutoFocused, children, menuRef: externalRef, ...props }) {
 	const ownRef = useRef(null);
 	const menuRef = externalRef ?? ownRef;
 	const box = usePlacement(anchorRef, menuRef, "below", align, true);
@@ -316,8 +316,8 @@ export default function MenuBar({ preferences }) {
 				ko("Every panel held for its hold, as one MP4", "모든 패널을 홀드만큼 이어 MP4 하나로"), () => void exportAnimatic())}
 			{panelItem("export-otio", ko("Cut list (OTIO)", "컷 목록 (OTIO)"),
 				ko("Download the OTIO cut list; each panel is a clip as long as its hold", "OTIO 컷 목록 다운로드 — 패널마다 홀드 길이의 클립"), () => downloadOtioCutList())}
-			{panelItem("export-render-passes", ko("Depth + normal (PNG)", "뎄스 + 노멀 (PNG)"),
-				ko("Depth and normal conditioning plates of the current framing", "현재 프레이밍의 뎄스·노멀 컨디션 플레이트"), () => exportRenderPasses())}
+			{panelItem("export-render-passes", ko("Depth + normal (PNG)", "뎁스 + 노멀 (PNG)"),
+				ko("Depth and normal conditioning plates of the current framing", "현재 프레이밍의 뎁스·노멀 컨디션 플레이트"), () => exportRenderPasses())}
 		</>
 	);
 

@@ -2,7 +2,7 @@ import { useContext, useEffect, useRef, useState } from 'react';
 import { AppContext } from '../app-context.js';
 import { createSceneStageStore } from '../store/scene-stage.js';
 import { useDocumentDomain } from '../store/use-document-store.js';
-import { createKeyLight } from '../scenes.js';
+import { createKeyLight } from '../stage-lighting.js';
 import { shotAspectRatio } from '../shot.js';
 import { normalizeStage } from '../commands/stage.js';
 
@@ -70,7 +70,9 @@ export function useStageTransaction() {
 }
 
 export function useStage(appContext) {
-  const [domain] = useState(() => createStageDomain(appContext));
+  // One stage owner: StrictMode runs this initializer twice, and a second domain would leave App
+  // rendering (and mirroring into the saved scene) a stage no command writes.
+  const [domain] = useState(() => appContext.storeDomain('stage') ?? createStageDomain(appContext));
   const stage = useDocumentDomain(domain.documentStore, 'stage');
   const [preset, setPreset] = useState('medium');
   const gesture = useRef(null);

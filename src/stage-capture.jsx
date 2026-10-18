@@ -25,7 +25,9 @@ export function CaptureRig({ apiRef, camRef, width = CAPTURE_W, height = CAPTURE
 	useEffect(() => {
 		// Each attempt owns its target independently of the live output size.
 		// Resizing the editor cannot dispose an in-flight export's resources.
-		function createExportCapture({ width, height }) {
+		// `camera` makes the camera of each render: a clone of the shot camera unless a caller
+		// (renderView) brings its own; the shot camera itself is never moved.
+		function createExportCapture({ width, height }, camera = () => camRef.current?.clone()) {
 			const target = new THREE.WebGLRenderTarget(width, height, {
 				colorSpace: THREE.SRGBColorSpace,
 				samples: 4,
@@ -35,9 +37,8 @@ export function CaptureRig({ apiRef, camRef, width = CAPTURE_W, height = CAPTURE
 				scene,
 				dispose: () => target.dispose(),
 				render() {
-					const source = camRef.current;
-					if (!source) return null;
-					const cam = source.clone();
+					const cam = camera();
+					if (!cam) return null;
 					// the transform gizmo is UI: it never reaches an exported frame
 					cam.layers.disable(GIZMO_LAYER);
 					// QA hook: the layer mask the export camera actually renders
@@ -53,13 +54,27 @@ export function CaptureRig({ apiRef, camRef, width = CAPTURE_W, height = CAPTURE
 					// exported frame wants the opposite: the horizon IS the vanishing
 					// point, and without it the floor has no far edge to read depth
 					// against. Push the falloff back for this draw only, then restore
-					// it so the viewport is untouched.
+					// it so the viewport is untouched. Haze (stage.lighting.fog, set by
+					// StageAtmosphere) is part of the look, so it brings its own range.
 					const fog = scene.fog;
 					const fogNear = fog?.near;
 					const fogFar = fog?.far;
+					const look = scene.userData.stageCapture;
 					if (fog) {
-						fog.near = CAPTURE_FOG_NEAR;
-						fog.far = CAPTURE_FOG_FAR;
+						fog.near = look?.fog?.near ?? CAPTURE_FOG_NEAR;
+						fog.far = look?.fog?.far ?? CAPTURE_FOG_FAR;
+					}
+					// three tone-maps only the canvas, never a render target, so the
+					// viewport's exposure reaches an export as light: every light, and
+					// the environment light, is scaled by it for this draw and put back after.
+					const scaled = [], environmentIntensity = scene.environmentIntensity, backgroundIntensity = scene.backgroundIntensity, fogColor = fog?.color.clone();
+					if (look && look.exposure !== 1) scene.traverse((node) => { if (node.isLight) scaled.push([node, node.intensity]); });
+					for (const [light, intensity] of scaled) light.intensity = intensity * look.exposure;
+					if (look && look.exposure !== 1) scene.environmentIntensity = environmentIntensity * look.exposure;
+					// An HDR backdrop (stage.lighting.hdrBackground) is light too, and so is the horizon the deck fades into.
+					if (look?.backdrop && look.exposure !== 1) {
+						scene.backgroundIntensity = backgroundIntensity * look.exposure;
+						fog?.color.multiplyScalar(look.exposure);
 					}
 					try {
 						gl.setRenderTarget(target);
@@ -71,12 +86,31 @@ export function CaptureRig({ apiRef, camRef, width = CAPTURE_W, height = CAPTURE
 							fog.near = fogNear;
 							fog.far = fogFar;
 						}
+						for (const [light, intensity] of scaled) light.intensity = intensity;
+						scene.environmentIntensity = environmentIntensity;
+						scene.backgroundIntensity = backgroundIntensity;
+						if (fogColor) fog.color.copy(fogColor);
 					}
 					return buffer;
 				},
 			};
 		}
-		const api = { ...createExportCapture({ width, height }), createExportCapture };
+		// verify_result's own views (src/motion3/views.js): one read-back, rows bottom-up, from a
+		// camera at eye with quaternion [x, y, z, w] and a vertical fov, on a target of its own size.
+		function renderView({ eye, quaternion, fovDeg, output }) {
+			const own = createExportCapture(output, () => {
+				const source = camRef.current;
+				if (!source) return null;
+				const cam = source.clone();
+				cam.clearViewOffset();
+				cam.position.set(...eye);
+				cam.quaternion.set(...quaternion);
+				cam.fov = fovDeg;
+				return cam;
+			});
+			try { return own.render(); } finally { own.dispose(); }
+		}
+		const api = { ...createExportCapture({ width, height }), createExportCapture, renderView };
 		apiRef.current = api;
 		if (width === MCP_CAPTURE_W && height === MCP_CAPTURE_H) {
 			window.__cozyclayMcpCaptureReady = true;

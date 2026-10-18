@@ -136,11 +136,6 @@ expect(
 );
 expect("picking a tile clears a running take first", appSource.includes("const hadMotion = Boolean(motion);"));
 expect(
-	"a photo read from the Inspector poses the selected character",
-	appSource.includes("const rig = posedRig() ?? activeRig;") &&
-	appSource.includes("const poseTargetIndex = posingIndex >= 0 ? posingIndex : activeCharIndex;"),
-);
-expect(
 	"both shipped rigs are selectable per character",
 	appSource.includes("CHARACTER_MODEL_IDS.map((id) => (") &&
 	appSource.includes("run('character.update', { characterId: activeChar.id, patch: { model: id } })") &&
@@ -151,7 +146,7 @@ expect("the rig picker is styled as a radio group", appSource.includes('role="ra
 
 expect("Pose Studio exposes stable pose id hook", studioSource.includes("data-pose-id={pose.id}"));
 expect("Pose Studio exposes save custom hook", studioSource.includes('data-pose-id="save-custom"'));
-expect("Pose Studio exposes the photo source", studioSource.includes('data-pose-id="photo-pose"'));
+expect("Pose Studio no longer offers a photo source", !studioSource.includes('data-pose-id="photo-pose"'));
 expect("Pose Studio keeps custom pose labels", studioSource.includes("pose.custom ? pose.label"));
 expect("Pose Studio explains an empty library", studioSource.includes("data-pose-empty"));
 expect("Pose Studio applies its synchronous draft selection", studioSource.includes("onApply(selectedIdRef.current)"));

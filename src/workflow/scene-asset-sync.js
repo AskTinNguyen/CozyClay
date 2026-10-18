@@ -15,6 +15,7 @@ import {
 	isImageAssetId,
 } from "../scene-assets.js";
 import { rememberAsset } from "../scene-asset-cache.js";
+import { motionScene } from "../motion3/scene.js";
 import { CUTOUT_DEFAULT_HEIGHT, createCutoutObject } from "../scene-objects.js";
 import {
 	SCENES_STORAGE_KEY,
@@ -72,9 +73,8 @@ export function appendAssetCutout(document, asset, {
 	};
 }
 
-/** Attach a Motion Input URL to one cast member while preserving its layer and
- * every unrelated scene field. The URL is intentionally the same-origin or
- * project-owned reference supplied by the workflow node. */
+/** Give one cast member a Motion Input's spec as its saved take source (what motion.compile
+ * installs and the Studio compiles again on load), keeping every unrelated scene field. */
 export function applyMotionToCharacter(document, characterId, motion = {}) {
 	if (typeof characterId !== "string" || !characterId.trim() || !motion || typeof motion !== "object") return { document, changed: false, reason: "invalid-motion" };
 	const source = document && typeof document === "object" ? document : createSceneDocument();
@@ -86,12 +86,12 @@ export function applyMotionToCharacter(document, characterId, motion = {}) {
 	const characters = Array.isArray(stage.characters) ? stage.characters : [];
 	const target = characters.find((entry) => entry?.id === characterId);
 	if (!target) return { document: source, changed: false, reason: "character-not-found" };
-	const url = typeof motion.url === "string" && motion.url ? motion.url : typeof motion.objectUrl === "string" && motion.objectUrl ? motion.objectUrl : null;
-	if (!url) return { document: source, changed: false, reason: "motion-url-missing" };
-	const motionRef = { ...(target.motionRef && typeof target.motionRef === "object" ? target.motionRef : {}), ...(motion.motionRef && typeof motion.motionRef === "object" ? motion.motionRef : {}), url };
-	const nextCharacters = characters.map((entry) => entry?.id === characterId ? { ...entry, motionRef } : entry);
+	if (motion.spec?.schema !== "cozyclay.motion-spec.v1") return { document: source, changed: false, reason: "motion-spec-missing" };
+	const motionTake = { schema: "cozyclay.take.v3", rig: target.model || "x-bot-tpose", spec: motion.spec,
+		placement: { position: [target.x ?? 0, target.y ?? 0, target.z ?? 0], yaw: target.rot ?? 0 }, scene: motionScene(Array.isArray(scene.objects) ? scene.objects : []) };
+	const nextCharacters = characters.map((entry) => entry?.id === characterId ? { ...entry, motionTake } : entry);
 	const nextScene = { ...scene, stage: { ...stage, characters: nextCharacters } };
-	return { document: { ...source, scenes: scenes.map((entry, sceneIndex) => sceneIndex === index ? nextScene : entry) }, changed: true, reason: "updated", characterId, motionRef };
+	return { document: { ...source, scenes: scenes.map((entry, sceneIndex) => sceneIndex === index ? nextScene : entry) }, changed: true, reason: "updated", characterId, motionTake };
 }
 
 /** Persist a Motion Input assignment and notify Studio listeners. */

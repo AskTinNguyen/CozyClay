@@ -70,7 +70,7 @@ try {
 		};
 	})()`);
 	assert.ok(await b.evaluate("!!window.__proxyRoot()"), "proxy pick root exists");
-	assert.equal(await b.evaluate(`(() => { let meshes = 0; window.__proxyRoot().traverse(n => { if (n.isMesh) meshes++; }); return meshes; })()`), 3, "body, head, and facing wedge render");
+	assert.equal(await b.evaluate(`(() => { let meshes = 0; window.__proxyRoot().traverse(n => { if (n.isMesh) meshes++; }); return meshes; })()`), 2, "body and head render");
 	await b.evaluate(`window.__proxyBus.bus.run('character.update', { characterId: 'char-a', patch: { hidden: true } })`);
 	await b.click('[data-node-id="camera"]');
 	await b.evaluate("window.__cozyclay.frameEditorCam({x: 2.2, y: 1.8, z: 3}, {x: 0, y: 0.8, z: 0})");
@@ -252,14 +252,6 @@ try {
 	await b.change(`${workflowMode} === 'pose'`, pressTwo);
 	console.log("PASS rig active + 2 -> Pose mode opens");
 	await capture("task-7-rig-pose-open");
-	// Failure path: with only the capsule figure left, Generate Motion is refused in place.
-	await b.change("window.__proxyBus.characters.length === 1 && /Capsule/.test(document.querySelector('[data-testid=\"topbar-generate\"]')?.dataset.disabledReason ?? '')",
-		() => b.evaluate("window.__proxyBus.bus.run('character.remove', { characterId: 'char-a' })"));
-	const generate = await b.evaluate("(() => { const el = document.querySelector('[data-testid=\"topbar-generate\"]'); return { reason: el.dataset.disabledReason, ariaDisabled: el.getAttribute('aria-disabled') }; })()");
-	assert.equal(generate.ariaDisabled, "true");
-	assert.match(generate.reason, /Capsule/);
-	console.log(`PASS only capsule figure -> Generate Motion aria-disabled=${generate.ariaDisabled} data-disabled-reason="${generate.reason}"`);
-	await capture("task-7-generate-disabled");
 	assert.equal(errors.length, 0, errors.join("\n"));
 } finally {
 	observer.close();

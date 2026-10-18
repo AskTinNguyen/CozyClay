@@ -241,7 +241,7 @@ ok("free follow emits one sample per subject frame", free.length === walk.length
 	// pursuit target changes; no frame may outrun the configured cap.
 	const subject = Array.from({ length: 80 }, (_, f) => ({ x: 0, z: f % 2 ? 20 : 0 }));
 	const rail = buildRail([{ x: -2, z: 0 }, { x: -2, z: 20 }]);
-	for (const cap of [0.5, 2, 6]) {
+	for (const cap of [0.5, 2, 6, 40]) {
 		const track = buildRailFollowTrack(subject, FPS, rail, { maxDollySpeed: cap });
 		const maxStep = Math.max(...track.slice(1).map((sample, i) => Math.abs(sample.s - track[i].s)));
 		ok(
@@ -259,6 +259,19 @@ ok("free follow emits one sample per subject frame", free.length === walk.length
 		"capped rail tracks remain deterministic",
 		JSON.stringify(slow) === JSON.stringify(buildRailFollowTrack(steadySubject, FPS, rail, { maxDollySpeed: 0.5 })),
 	);
+}
+
+{
+	// A car at 15 m/s beside a 120 m rail: the old 8 m/s ceiling (shot-authoring FOLLOW_BOUNDS) could
+	// not keep pace with it; the dolly now goes up to 40 m/s.
+	const rail = buildRail([{ x: -3, z: 0 }, { x: -3, z: 120 }]);
+	const car = Array.from({ length: 6 * FPS }, (_, f) => ({ x: 0, z: (15 * f) / FPS }));
+	const top = cap => {
+		const track = buildRailFollowTrack(car, FPS, rail, { maxDollySpeed: cap });
+		return Math.max(...track.slice(1).map((sample, i) => Math.abs(sample.s - track[i].s))) * FPS;
+	};
+	ok("a 15 m/s car holds the dolly at the old 8 m/s ceiling", Math.abs(top(8) - 8) < 1e-6, `${top(8).toFixed(3)} m/s`);
+	ok("with a 20 m/s cap the dolly runs past 8 m/s and stays within its cap", top(20) > 8 && top(20) <= 20 + EPS, `${top(20).toFixed(3)} m/s`);
 }
 
 {

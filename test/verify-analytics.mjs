@@ -82,17 +82,7 @@ const appFunction = (name) => {
 	assert.notEqual(start, -1, `${name} exists`);
 	return appSource.slice(start, appSource.indexOf("\n\t}\n", start) + 3);
 };
-for (const name of ["addPromptClip", "changePromptClip", "runLinePreview"]) {
-	assert.doesNotMatch(appFunction(name), /trackGenerateBlocked|startMotionRequest|requestMotionGeneration|motion:generate_/, `${name} authors without explicit demand`);
-}
 assert.doesNotMatch(appSource, /trackGenerateBlocked|motion:generate_blocked/);
-for (const name of ["generateMotion", "runLineEdit", "runTrailRegeneration"]) {
-	assert.match(appFunction(name), /requestMotionGeneration\(/, `${name} owns explicit intent for all callers`);
-}
-assert.match(appFunction("executeMotionJob"), /request\.start\(\)/);
-assert.match(appFunction("executeMotionJob"), /request\.succeed\(\)/);
-assert.match(appFunction("executeMotionJob"), /await deliverMotion[\s\S]*?request\.apply\(\)/);
-assert.match(appFunction("executeMotionJob"), /request\.fail\(/);
 
 const motionId = "0123456789abcdef0123456789abcdef";
 assert.deepEqual(sanitizeProps("motion:generate_requested", {
@@ -178,101 +168,7 @@ try {
 	Object.defineProperty(globalThis, "crypto", motionCryptoDescriptor);
 }
 assert.doesNotMatch(appSource, /latency_bucket/);
-// Run the real queue boundary, not only the telemetry state machine: a blocked
-// request must not reach generation while being absent from job counts.
-for (const [health, body] of [
-	[{ ok: false, reason: "unconfigured" }, {}],
-	[{ ok: false }, {}],
-	[localHealth, { posePin: true }],
-	[remoteHealth, {}],
-]) {
-	const queued = [];
-	const request = startMotionRequest({ surface: "timeline", input_mode: "prompt" }, { capture() {} });
-	const context = {
-		bridge: health, lineEditBackend: false, motionPreflightReason,
-		genJobSeq: { current: 0 },
-		setGenQueue(update) { queued.push(...update([])); },
-		setToast() {}, isKo: false,
-	};
-	context.appContext = createAppContext({ notify: (...args) => context.setToast(...args) }).forRender(context);
-	const enqueue = new Function(...Object.keys(context), `return ${appFunction("enqueueMotionJob")};`)(...Object.values(context));
-	enqueue({ request, body, charIndex: 0 });
-	assert.equal(queued.length, health === remoteHealth ? 1 : 0, "preflight refusal does not enqueue an unmeasured job");
-}
-// Execute the actual App job function: transport and decoded-motion delivery
-// are boundaries, while its real cancellation, callback and lifecycle wiring runs.
-async function boundedMotionSignal(promise) {
-	let timer;
-	try {
-		return await Promise.race([promise, new Promise((_resolve, reject) => {
-			timer = setTimeout(() => reject(new Error("motion fixture did not settle")), 1000);
-		})]);
-	} finally {
-		clearTimeout(timer);
-	}
-}
-function motionJobFixture({ generate, deliver = async () => {}, capture } = {}) {
-	const events = [];
-	const request = startMotionRequest({ surface: "timeline", input_mode: "prompt" }, {
-		capture: capture ?? ((event, props) => events.push({ event, props })), now: () => 0,
-	});
-	request.preflight(remoteHealth);
-	const ardyAbortRef = { current: null };
-	const charactersRef = { current: [{ id: "requesting-character" }] };
-	const context = {
-		ardyAbortRef, appContext: createAppContext({ characters: charactersRef, notify: (...args) => context.setToast(...args) }), setArdyRunning() {}, reportArdyStatus() {}, setArdyReport() {}, setArdyOutcome() {}, setReplayNotices() {},
-		ko: (en) => en, isKo: false, setToast() {}, trackActivation() {}, isLineEditUnsupported: () => false,
-		ardyGenerate: generate ?? (async (_body, onEvent) => {
-			onEvent({ event: "done" }); onEvent({ event: "done" });
-			return { motionUrl: "/ardy/motions/fixture" };
-		}),
-		deliverMotion: deliver, commitTakeRecipe() {},
-	};
-	context.appContext = context.appContext.forRender(context);
-	const execute = new Function(...Object.keys(context), `return async ${appFunction("executeMotionJob")};`)(...Object.values(context));
-	return { events, ardyAbortRef, charactersRef, run: () => boundedMotionSignal(execute({ request, body: {}, hasBlockEdits: false, charIndex: 0, charId: "requesting-character" })) };
-}
-const deliveredJob = motionJobFixture();
-await deliveredJob.run();
-assert.deepEqual(deliveredJob.events.map(({ event }) => event), ["motion:generate_requested", "motion:preflight_passed", "motion:job_started", "motion:job_succeeded", "motion:result_applied"]);
-assert.equal(new Set(deliveredJob.events.map(({ props }) => props.request_id)).size, 1);
-assert.equal(deliveredJob.ardyAbortRef.current, null);
-const failedJob = motionJobFixture({ generate: async () => { throw new Error("private generation failure"); } });
-await assert.rejects(failedJob.run(), /private generation failure/);
-assert.equal(failedJob.events.at(-1).props.error_code, "generation_failed");
-assert.equal(failedJob.events.filter(({ event }) => event === "motion:job_failed").length, 1);
-const decodeFailedJob = motionJobFixture({ deliver: async () => { throw new Error("private decode failure"); } });
-await assert.rejects(decodeFailedJob.run(), /private decode failure/);
-assert.equal(decodeFailedJob.events.at(-1).event, "motion:job_succeeded");
-const removedTarget = motionJobFixture();
-removedTarget.charactersRef.current = [];
-await removedTarget.run();
-assert.equal(removedTarget.events.at(-1).event, "motion:job_succeeded", "delivery to a removed character is not an application");
-const cancelledJob = motionJobFixture({ generate: (_body, _onEvent, { signal }) => new Promise((_resolve, reject) => {
-	// Subscribed before cancellation; no sleeps or polling can make this pass.
-	signal.addEventListener("abort", () => reject(signal.reason), { once: true });
-}) });
-const cancelledRun = cancelledJob.run();
-const cancellation = assert.rejects(cancelledRun, { name: "AbortError" });
-cancelledJob.ardyAbortRef.current.abort();
-await cancellation;
-assert.deepEqual(cancelledJob.events.map(({ event }) => event), ["motion:generate_requested", "motion:preflight_passed", "motion:job_started", "motion:job_failed"]);
-assert.equal(cancelledJob.events.at(-1).props.error_code, "aborted");
-// A cancellation after job success cannot manufacture a second job terminal
-// or claim application when the asynchronous delivery finishes later.
-const deliveryEntered = Promise.withResolvers();
-const releaseDelivery = Promise.withResolvers();
-const cancelledDelivery = motionJobFixture({ deliver: async () => { deliveryEntered.resolve(); await releaseDelivery.promise; } });
-const deliveringRun = cancelledDelivery.run();
-await boundedMotionSignal(deliveryEntered.promise);
-cancelledDelivery.ardyAbortRef.current.abort();
-releaseDelivery.resolve();
-await deliveringRun;
-assert.equal(cancelledDelivery.events.at(-1).event, "motion:job_succeeded");
-for (const capture of [() => { throw new Error("transport"); }, () => Promise.reject(new Error("transport"))]) {
-	await motionJobFixture({ capture }).run();
-}
-console.log("PASS motion request/preflight/job/application, actual App success/failure/cancel wiring and authoring exclusion");
+console.log("PASS motion request/preflight/job/application telemetry state machine");
 assert.deepEqual(sanitizeProps("feature:used", { name: "pose_edit", prompt: "secret" }), { name: "pose_edit" });
 assert.deepEqual(sanitizeProps("feature:used", { name: "private-feature" }), {});
 assert.deepEqual(sanitizeProps("install:first_launch", { heard_from: "github" }), { heard_from: "github" });
@@ -701,12 +597,11 @@ const { createSceneHistoryStore } = await import("../src/document-store.js");
 const { createCameraBlock, updateCameraBlock } = await import("../src/camera-block.js");
 const { dispatchLiveFrame } = await import("../src/live-control.js");
 const { addShotAtFrame, resizeShot, renameShot, moveCameraKey } = await import("../src/cuts.js");
-const { createIkState, ikBakeKeyframe, ikTouch } = await import("../src/ardy/ik.js");
-const { copyPhysicsKeys } = await import("../src/ardy/physics-review.js");
+const { createIkState, ikBakeKeyframe, ikTouch } = await import("../src/motion/ik.js");
+const { copyPhysicsKeys } = await import("../src/motion/physics-review.js");
 const { Bone } = await import("three");
 const framing = { pos: { x: 0, y: 2, z: 3 }, yaw: 0, pitch: 0, fovDeg: 40 };
 const shot = { id: "shot-1", name: "private shot", startFrame: 0, endFrame: 95, camera: createCameraBlock(), cameraKeys: [] };
-const block = { id: "block-1", startFrame: 0, endFrame: 48, text: "private prompt" };
 const actor = { id: "actor-1", x: 0, pose: { bones: { Head: [0, 0, 0] }, rootY: 0 } };
 const object = createSceneObject("chair", []);
 assert.ok(object);
@@ -719,8 +614,6 @@ const matrix = [
 	["shot_edit", "shots", [shot], (items) => resizeShot(items, shot.id, "end", 80, 96)],
 	["camera_key_record", "shots", [shot], (items) => items.map((entry) => ({ ...entry, cameraKeys: [{ id: "key-1", frame: 0, framing }] }))],
 	["rail_edit", "shots", [shot], (items) => items.map((entry) => ({ ...entry, camera: updateCameraBlock(entry.camera, { cameraRail: [{ x: 0, z: 0 }, { x: 2, z: 3 }], mode: "rail" }) }))],
-	["prompt_block_add", "promptClips", [], () => [block]],
-	["prompt_block_edit", "promptClips", [block], (items) => items.map((entry) => ({ ...entry, text: "changed private prompt" }))],
 ];
 for (const surface of ["craft", "playground"]) {
 	for (const [kind, domain, before, mutate] of matrix) {
@@ -783,9 +676,8 @@ for (const commit of [false, true]) {
 {
 	const events = [];
 	const observe = createFirstEditTracker((...event) => events.push(event));
-	// UUID churn does not turn an identical camera key or prompt into an edit.
+	// UUID churn does not turn an identical camera key into an edit.
 	observe("craft", "shots", [{ ...shot, cameraKeys: [{ id: "old", frame: 0, framing }] }], [{ ...shot, cameraKeys: [{ id: "new", frame: 0, framing }] }]);
-	observe("craft", "promptClips", [block], [{ ...block, id: "new-id" }]);
 	observe("craft", "characters", [actor], [{ ...actor, pose: { ...actor.pose, id: "new-library-id", label: "private" } }]);
 	observe("craft", "pose", { Head: [0, 0, 0] }, { Head: [0, 0, 0] });
 	assert.equal(events.length, 0);

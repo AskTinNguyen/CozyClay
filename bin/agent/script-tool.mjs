@@ -25,23 +25,33 @@ function description(names) {
 		"Compute coordinates in code: metres, +Y up, yaw in degrees, floor at y=0 (Math works; there are no timers, fetch or modules).",
 		"You see only what the script passes to text(value) or returns, plus a calls summary (name, ok, receiptId, status, revision, affectedIds, code, message per call). Nested results are not shown to you, so return what you need.",
 		"Images never come back from a script: call verify_result OUTSIDE the script when you need to see the frame.",
-		"If the script fails after editing, the turn's edits are rolled back and the result says so; fix the script and run it again.",
+		"If the script fails after editing, the script's own edits are rolled back (edits made before the script stay) and the result says so; fix the script and run it again.",
 	].join("\n");
 }
 
+/** What the panel shows of one nested call while the script runs: a tool.progress frame (no results, no ids). */
+function progressFrame(callId, index, name, args, status, result, error) {
+	const summary = error ? `${error.code ? `${error.code}: ` : ""}${error.message ?? ""}` : result?.summary;
+	return { type: "tool.progress", callId, index, name, ...(name === "run_action" && typeof args?.action === "string" ? { action: args.action } : {}), status,
+		...(typeof summary === "string" && summary ? { summary: summary.slice(0, 160) } : {}) };
+}
+
 /** One model-facing tool in the shape bin/agent/pi-tools.mjs toAgentTools consumes. */
-export function createScriptTool({ tools = [], signal } = {}) {
+export function createScriptTool({ tools = [], signal, emit: createdEmit } = {}) {
 	return {
 		name: "script",
 		label: "Run a script",
 		description: description(tools.map(tool => tool.name)),
 		parameters: { type: "object", properties: { code: { type: "string" } }, required: ["code"], additionalProperties: false },
-		handler: async ({ code }, { signal: callSignal } = {}) => {
+		handler: async ({ code }, { signal: callSignal, toolCallId, emit = createdEmit } = {}) => {
 			// Lazy like pi itself: package-isolation checks start the launcher
 			// without node_modules.
 			const { CodemodeSandbox } = await import("@earendil-works/pi-codemode");
 			const runSignal = callSignal ?? signal;
 			const calls = [];
+			let started = 0;
+			// Each nested call is told to the panel as it starts and ends; a failing view never fails the script.
+			const report = (...frame) => { if (toolCallId && typeof emit === "function") try { emit(progressFrame(toolCallId, ...frame)); } catch { /* advisory */ } };
 			const sandbox = new CodemodeSandbox({
 				timeoutMs: TIMEOUT_MS,
 				memoryLimitBytes: MEMORY_LIMIT_BYTES,
@@ -49,14 +59,17 @@ export function createScriptTool({ tools = [], signal } = {}) {
 					name: tool.name,
 					description: tool.description,
 					execute: async (args, { signal: nestedSignal }) => {
-						const signals = [nestedSignal, runSignal].filter(Boolean);
+						const signals = [nestedSignal, runSignal].filter(Boolean), index = ++started;
 						let result;
+						report(index, tool.name, args, "running");
 						try { result = await tool.handler(args ?? {}, { signal: signals.length > 1 ? AbortSignal.any(signals) : signals[0] }); }
 						catch (error) {
 							calls.push(callSummary(tool.name, null, error));
+							report(index, tool.name, args, "failed", null, error);
 							throw new Error(error?.code ? `${error.code}: ${error.message}` : (error?.message ?? String(error)));
 						}
 						calls.push(callSummary(tool.name, result));
+						report(index, tool.name, args, result?.ok === false ? "failed" : "done", result);
 						return publicData(result);
 					},
 				})),

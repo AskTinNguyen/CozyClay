@@ -15,21 +15,12 @@ TURNSTILE_SITE_KEY = "0x4AAAAAAEbNDDTxohyi9XFd"
 # CC_WORKER_SECRET
 # SESSION_SIGNING_KEY
 # TURNSTILE_SECRET_KEY
-# Motion generation is deliberately disabled until the owner finishes production QA.
-# Enable explicitly with `MOTION_GENERATION_ENABLED = "true"`.
-MOTION_GENERATION_ENABLED = "false"
-FAL_CLIP_COST_USD = "0.0625"
 
 [[d1_databases]]
 binding = "DB"
 database_name = "cozyclay-demo"
 database_id = "8319244c-ea60-4de2-92b3-bedb4ef369c3"
 migrations_dir = "migrations"
-
-[[r2_buckets]]
-binding = "RESULTS"
-bucket_name = "cozyclay-demo-results"
-# No public bucket domain: results are served only through /r/:token.npz.
 
 [triggers]
 crons = ["*/5 * * * *"]
@@ -42,7 +33,6 @@ SITE_ORIGIN = "http://127.0.0.1:5180"
 API_ORIGIN = "http://127.0.0.1:8787"
 GOOGLE_CLIENT_ID = "replace-with-development-google-client-id"
 TURNSTILE_SITE_KEY = "1x00000000000000000000AA"
-MOTION_GENERATION_ENABLED = "false"
 
 [[env.development.d1_databases]]
 binding = "DB"
@@ -50,6 +40,3 @@ database_name = "cozyclay-demo"
 database_id = "8319244c-ea60-4de2-92b3-bedb4ef369c3"
 migrations_dir = "migrations"
 
-[[env.development.r2_buckets]]
-binding = "RESULTS"
-bucket_name = "cozyclay-demo-results"

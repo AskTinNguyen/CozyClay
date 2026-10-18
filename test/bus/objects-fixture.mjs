@@ -14,7 +14,6 @@ const server = await createServer({ configFile: false, server: { middlewareMode:
       export const openAssetDb = async () => db;`;
     if (id.endsWith('/src/app-stage.jsx')) return `import * as THREE from 'three';
       import { SCENE_ATTACH_BONES } from './scene-objects.js';
-      import { TRAIL_EFFECTOR_JOINTS } from './motion-trail.js';
       import { normalizeBoneName } from './poses.js';
       ${carried}
       export const HIERARCHY_INSPECTOR_TITLES = {};

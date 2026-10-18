@@ -3,7 +3,7 @@ import { ko } from "./locale.js";
 import { CHARACTER_MODEL_IDS, PROXY_FIGURE_MODEL } from "./scenes.js";
 import { OBJECT_LIBRARY } from "./scene-objects.js";
 import { displayObjectLabel } from "./object-catalog.jsx";
-import { assetAspect, isMeshAssetId, isSupportedMeshType } from "./scene-assets.js";
+import { assetAspect, isImageAssetId, isMeshAssetId, isSupportedMeshType } from "./scene-assets.js";
 import { assetKind, formatAssetBytes } from "./asset-shelf.js";
 import { assetRecord } from "./scene-asset-cache.js";
 import ResourceStatus from "./resource-status.jsx";
@@ -99,14 +99,15 @@ function loadThumb(id) {
 			// card hides. A present record whose bytes fail below resolves null
 			// instead, and the card stays visible so it can be deleted.
 			if (!record) return undefined;
-			if (isMeshAssetId(record.id) || isSupportedMeshType(record.type)) {
+			// An HDR environment file (hdr- id) is no picture either: it gets the same generic card.
+			if (!isImageAssetId(record.id) || isSupportedMeshType(record.type)) {
 				// A GLB is not a picture. Decoding it as one would mark every
 				// model "unreadable" in Manage storage — show a generic cube
 				// instead, using the same card preview the catalogue already has.
 				return {
 					name: record.name,
 					bytesLabel: formatAssetBytes(record.bytes.byteLength),
-					kind: "mesh",
+					kind: isMeshAssetId(record.id) || isSupportedMeshType(record.type) ? "mesh" : "environment",
 					mesh: true,
 				};
 			}
@@ -167,7 +168,7 @@ function StorageAssetRow({ id, onDelete, deleting, usageCount = 0, graphSignatur
 	const usageLabel = ko(`Used by ${usageCount} scene object${usageCount === 1 ? "" : "s"}`, `${usageCount}개 씬 오브젝트에서 사용 중`);
 	const deleteLabel = ko(`Delete ${name} from storage`, `${name}을(를) 저장소에서 삭제`);
 	const confirmationId = `asset-storage-warning-${id}`;
-	const kindLabel = thumb?.kind === "mesh" ? ko("Model", "모델") : thumb?.kind === "matte" ? ko("Matte", "매트") : ko("Image", "이미지");
+	const kindLabel = thumb?.kind === "mesh" ? ko("Model", "모델") : thumb?.kind === "environment" ? ko("HDR environment", "HDR 환경") : thumb?.kind === "matte" ? ko("Matte", "매트") : ko("Image", "이미지");
 	return (
 		<li className="asset-storage-row">
 			{mesh ? (
@@ -486,7 +487,7 @@ export function FolderGrid({ folder, query, ...props }) {
 					/>
 				);
 			});
-		if (!takeVersions.length) empty = ko("No takes for this character yet. Generate Motion creates one.", "이 인물의 테이크가 아직 없어요. Generate Motion으로 만들 수 있어요.");
+		if (!takeVersions.length) empty = ko("No takes for this character yet. Ask the agent to compile one.", "이 인물의 테이크가 아직 없어요. 에이전트에게 모션 컴파일을 요청하세요.");
 	} else if (folder === "poses") {
 		tiles = poses.map((pose, index) => ({ pose, index, label: pose?.name || pose?.label || ko(`Pose ${index + 1}`, `포즈 ${index + 1}`) }))
 			.filter(({ label }) => matchesQuery(label, query))

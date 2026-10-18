@@ -15,7 +15,7 @@ import { loadWorkflowGraph, normalizeWorkflowGraph, storeWorkflowGraph, WORKFLOW
 import AgentPanel from "./AgentPanel.jsx";
 import CozySceneNode from "./CozySceneNode.jsx";
 import { applyCozyScenePatch, normalizeCozySceneData, sceneConnectionAllowed } from "./cozy-scene-node.js";
-import { activeSceneCharacters, characterHandleId, characterIdFromHandle, normalizeMotionInputData, motionInputOutput } from "./motion-input.js";
+import { activeSceneCharacters, characterHandleId, characterIdFromHandle, normalizeMotionInputData, motionInputOutput, parseMotionSpec } from "./motion-input.js";
 import { DEFAULT_NODE_SCHEMAS, defaultFormValues, schemaCategoryForType, schemaModelEntries, schemaProperties } from "./node-schema.js";
 import { executeLocalWorkflowGraph } from "./local-workflow.js";
 import { createLiveControl } from "../live-control.js";
@@ -24,7 +24,6 @@ import { startWorkflowExecution } from "../execution-telemetry.js";
 import { createCanvasCommands } from "./canvas-commands.js";
 import { applyMotionToActiveScene, importImageIntoActiveScene, readStoredSceneDocument } from "./scene-asset-sync.js";
 import { createHttpTransport } from "./agent-client.js";
-import { fetchVideoOutputBlob, requestBridgeExtract } from "../multimodel-ingest.js";
 import { canvasTakesPaste, fileToDataUrl, imageFileFromTransfer, pastedImageNodeData } from "./clipboard-image.js";
 import { appendVersion, compareIndex, pinnedInputs, selectVersion, versionLabel, versionState } from "./image-versions.js";
 import { normalizeVideoForm, videoFormContract } from "./video-contract.js";
@@ -214,10 +213,8 @@ function VideoNode({ id, data }) {
 			<label>Motion prompt</label><textarea className="workflow-textarea" value={form.prompt ?? data.prompt ?? ""} onChange={(event) => update("prompt", event.target.value)} placeholder="Motion prompt" />
 			<label>Duration (seconds)</label><input type="number" min={contract.minDuration} max={contract.maxDuration} value={form.duration_seconds} onChange={(event) => update("duration_seconds", Number(event.target.value))} />
 			<label>Aspect</label>{contract.aspectFromImage ? <><div className="workflow-hint" data-testid="video-source-aspect">Matches input image · frame the full body in the source image</div><div className="workflow-warning" role="status" data-testid="mocap-framing-warning">Before generating: confirm the captured frame shows the head, hands, feet, and any needed objects. Cropped parts can break mocap alignment.</div></> : <select value={form.aspect} onChange={(event) => update("aspect", event.target.value)}>{contract.aspects.map((aspect) => <option key={aspect}>{aspect}</option>)}</select>}
-			<label className="workflow-schema-check"><input type="checkbox" checked={Boolean(form.extract_mocap)} onChange={(event) => update("extract_mocap", event.target.checked)} />Extract GVHMR motion into connected Motion Input</label>
 		</>}
 		{data.videoUrl && <video controls className="workflow-video-preview" src={data.videoUrl} />}
-		{generated && data.motionExtraction?.motionUrl && <div className="workflow-hint" data-testid="mocap-extraction-receipt">✓ GVHMR motion extracted{Number.isFinite(data.motionExtraction.frames) ? ` · ${data.motionExtraction.frames} frames` : ""}</div>}
 		{generated && data.preservation?.pass && <div className="workflow-hint workflow-preservation-ok" data-testid="h3-preservation-receipt">✓ H3 scene/camera lock verified{h3VerificationMetrics(data.preservation)}</div>}
 		{generated && data.preservation && !data.preservation.pass && <div className="workflow-error workflow-preservation-failed" data-testid="h3-preservation-failed">✕ H3 output rejected: background/camera drift{h3VerificationMetrics(data.preservation)}</div>}
 		{generated && data.isLoading && <div className="workflow-hint">Generating video…</div>}{generated && data.errorMsg && <div className="workflow-error">{data.errorMsg}</div>}
@@ -246,9 +243,8 @@ function MotionInputNode({ id, data }) {
 			{options.map((character) => <option key={character.id} value={character.id}>{character.name || character.subject || character.id}</option>)}
 		</select>
 		<input aria-label="Character id" value={normalized.characterId} onChange={(event) => update({ characterId: event.target.value.trim() })} placeholder="character id (e.g. char-a)" />
-		<label>Same-origin motion URL</label>
-		<input aria-label="Motion URL" value={normalized.objectUrl ? "" : normalized.url} onChange={(event) => update({ url: event.target.value, objectUrl: null, status: event.target.value ? "ready" : "idle" })} placeholder="/ardy/motions/take.npz" />
-		<label className="workflow-upload workflow-motion-upload"><FiUpload size={18} /><span>{normalized.fileName || "Choose local .npz motion"}</span><input type="file" accept=".npz,application/octet-stream,.json" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; const objectUrl = URL.createObjectURL(file); update({ objectUrl, url: objectUrl, fileName: file.name, mimeType: file.type || "application/octet-stream", status: "ready" }); }} /></label>
+		<label>Motion spec (cozyclay.motion-spec.v1)</label>
+		<label className="workflow-upload workflow-motion-upload"><FiUpload size={18} /><span>{normalized.fileName || "Choose a motion spec .json"}</span><input type="file" accept=".json,application/json" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; file.text().then((body) => { const spec = parseMotionSpec(body); if (!spec) toast.error("Not a cozyclay.motion-spec.v1 file"); update(spec ? { spec, fileName: file.name, status: "ready" } : { spec: null, fileName: file.name, status: "error" }); }); }} /></label>
 		<div className="workflow-node-foot"><span>{normalized.status === "ready" ? `${handleId} ready` : "Connect to a character handle"}</span><span>{motionInputOutput(normalized).frames ? `${motionInputOutput(normalized).frames}f` : ""}</span></div>
 	</NodeShell>;
 }
@@ -539,20 +535,8 @@ export default function WorkflowBuilder() {
 						const videoForm = normalizeVideoForm(provider, { ...form, duration_seconds: form.duration_seconds ?? current.data.duration_seconds, aspect: form.aspect || current.data.aspect }, falModel);
 						const output = await createHttpTransport().video({ provider, prompt: motionPrompt, imageDataUrl: frame, ...(lastFrameDataUrl ? { lastFrameDataUrl } : {}), durationSeconds: videoForm.duration_seconds, aspect: videoForm.aspect });
 						const videoUrl = output.dataUrl || output.url;
-						let motionExtraction = null;
-						const motionTargets = graph.edges.filter((edge) => edge.source === id).map((edge) => result.nodes.find((node) => node.id === edge.target)).filter((node) => node?.type === "motion-input");
-						if (videoForm.extract_mocap && motionTargets.length) {
-							const done = await requestBridgeExtract(await fetchVideoOutputBlob(videoUrl));
-							motionExtraction = done;
-							for (const target of motionTargets) {
-								const motionData = normalizeMotionInputData({ ...target.data, url: done.motionUrl, objectUrl: null, status: "ready", frames: done.frames, fps: done.fps, motionRef: done.motionRef || null });
-								const motionOutput = motionInputOutput(motionData);
-								values.set(target.id, motionOutput);
-								patchNode(target.id, { ...motionData, outputs: [{ value: motionOutput }] });
-							}
-						}
 						values.set(id, videoUrl);
-						patchNode(id, { isLoading: false, status: "complete", videoUrl, resultUrl: videoUrl, outputs: [{ value: videoUrl }], preservation: output.preservation || null, motionExtraction, errorMsg: null });
+						patchNode(id, { isLoading: false, status: "complete", videoUrl, resultUrl: videoUrl, outputs: [{ value: videoUrl }], preservation: output.preservation || null, errorMsg: null });
 						if (videoUrl) execution.apply();
 					}
 					catch (error) {
@@ -592,7 +576,7 @@ export default function WorkflowBuilder() {
 					const source = resultById.get(assignment.source);
 					if (source?.type !== "motion-input" || !assignment.characterId) continue;
 					const motion = motionInputOutput({ ...source.data, ...(patches.get(source.id) || {}) });
-					if (motion.url) applyMotionToActiveScene(assignment.characterId, motion);
+					if (motion.spec) applyMotionToActiveScene(assignment.characterId, motion);
 				}
 			}
 			setRunState("complete");
@@ -672,8 +656,8 @@ export default function WorkflowBuilder() {
 	const onConnect = useCallback((params) => {
 		const target = nodes.find((node) => node.id === params.target);
 		const source = nodes.find((node) => node.id === params.source);
-		if (target?.type === "motion-input" && source?.type !== "video") {
-			toast.error("Motion Input accepts generated Video nodes only");
+		if (target?.type === "motion-input") {
+			toast.error("Motion Input takes a motion spec file, not a node");
 			return;
 		}
 		if (target?.type === "scene" && !sceneConnectionAllowed(source, params.targetHandle, source?.data)) {

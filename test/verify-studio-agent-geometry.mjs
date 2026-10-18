@@ -94,8 +94,28 @@ test('geometry: measured overlaps, bounded avoidance, and hidden-parent exclusio
   }
   const h = fixture(); seed(h, { x: -0.685, scaleX: 0.37, scaleZ: 0.4 }); const placed = h.apply('arrange_objects', { ops: [chair('shot_camera')] });
   const { coverage, overlapIds, maximumFootprintOverlapM } = placed.checks;
-  assert.deepEqual(placementChecks(['chair'], h.state, h.ports), { coverage, overlapIds, maximumFootprintOverlapM });
-  assert.deepEqual(placementChecks(['alex'], h.state, h.ports).overlapIds, []);
+  assert.deepEqual(placementChecks(['chair'], h.state, h.ports), { coverage, overlapIds, maximumFootprintOverlapM, supportGapM: { chair: 0 }, unsupportedIds: [] });
+  assert.deepEqual(placementChecks(['alex'], h.state, h.ports), { coverage, overlapIds: [], maximumFootprintOverlapM: 0, supportGapM: {}, unsupportedIds: [] }, 'a character has no support gap');
+});
+test('geometry: placement reports how far each object, a group as one unit, stands off its support', () => {
+  const f = fixture(), part = (id, parent, patch) => seed(f, { id, parent, ...patch }), small = s => ({ scaleX: s, scaleY: s, scaleZ: s });
+  seed(f, { id: 'crate', x: 3 }); seed(f, { id: 'onCrate', x: 3, y: 1, ...small(0.3) });
+  seed(f, { id: 'onFloor', x: 0, z: 3 }); seed(f, { id: 'hover', x: 6, y: 0.05, ...small(0.3) });
+  f.state.objects.push({ ...createSceneObject('empty'), id: 'rifle', x: 9, y: 0.5 });
+  part('stock', 'rifle', { x: 9, y: 0.3, ...small(0.2) }); part('mag', 'rifle', { x: 9.05, y: 0.016, ...small(0.1) });
+  f.state.objects.push({ ...createSceneObject('light'), id: 'lamp', x: 0, y: 2, z: -3 });
+  seed(f, { id: 'held', x: 12, y: 1, attach: { characterId: 'alex', bone: 'RightHand' } });
+  seed(f, { id: 'inHand', x: 15, y: 1.32, ...small(0.2) }); seed(f, { id: 'later', x: 18, y: 0.5, ...small(0.2) });
+  seed(f, { id: 'door', x: 21, y: 0.4, ...small(0.2) });
+  f.state.objects.push({ ...createSceneObject('empty'), id: 'kit', x: 24, y: 1 }); part('kitPart', 'kit', { x: 24, y: 1, ...small(0.1) });
+  const spec = { objects: { inHand: { prop: 'grip' }, later: { prop: 'grip', grab: 30 }, door: { pivot: [0, 0, 0], axis: [0, 1, 0], channel: 'door' }, kit: { follow: 'joint:Hips' } } };
+  const takes = new Map([['alex', { motion: { schema: 'cozyclay.take.v3', spec } }]]);
+  const ids = ['crate', 'onCrate', 'onFloor', 'hover', 'stock', 'mag', 'rifle', 'lamp', 'held', 'inHand', 'later', 'door', 'kitPart', 'alex'];
+  const { supportGapM, unsupportedIds } = placementChecks(ids, f.state, { ...f.ports, takes });
+  assert.deepEqual(supportGapM, { crate: 0, onCrate: 0, onFloor: 0, hover: 0.05, rifle: 0.016, later: 0.5 },
+    'resting on the floor or a top reads 0; a group is judged once by its lowest part; lights, attached records and what a take moves are left out, a carry grabbed later is measured at its scene pose');
+  assert.deepEqual(unsupportedIds, ['hover', 'rifle', 'later']);
+  assert.deepEqual(placementChecks(['inHand'], f.state, f.ports).supportGapM, { inHand: 1.32 }, 'without the takes every object is measured at its scene pose');
 });
 test('geometry: one batch builds a grouped assembly by parent name and moves as one body', () => {
   const f = fixture(), at = x => ({ world: { x, y: 0, z: 2 } });

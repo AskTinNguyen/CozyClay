@@ -338,7 +338,7 @@
 	flex-direction: column;
 	gap: var(--agent-space-3);
 	flex: none;
-	max-height: 46%;
+	max-height: 70%;
 	overflow-y: auto;
 	padding: var(--agent-space-4);
 	border-bottom: 1px solid var(--agent-border);
@@ -445,6 +445,59 @@
 	font-size: var(--agent-font-sm);
 }
 
+/* A quiet line under a row or a flow: progress, instructions, a result. */
+.agent-key-note {
+	margin: 0;
+	color: var(--agent-text-dim);
+	font-size: var(--agent-font-sm);
+}
+
+/* Connect a model (pi's login list): group labels, a running flow, what pi asks and tells. */
+.agent-login-group,
+.agent-login-flow,
+.agent-login-form,
+.agent-login-choices {
+	display: flex;
+	flex-direction: column;
+	gap: var(--agent-space-2);
+}
+
+.agent-login-ask {
+	color: var(--agent-text);
+	font-size: var(--agent-font-sm);
+}
+
+.agent-login-log {
+	display: flex;
+	flex-direction: column;
+	gap: var(--agent-space-2);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.agent-login-log li {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: var(--agent-space-1);
+}
+
+.agent-login-code {
+	display: block;
+	margin-top: var(--agent-space-1);
+	font-size: var(--agent-font-xl);
+	letter-spacing: 0.12em;
+}
+
+.agent-login-open { display: inline-block; text-decoration: none; }
+
+.agent-key-endpoint-label {
+	color: var(--agent-text-dim);
+	font-size: var(--agent-font-xs);
+	letter-spacing: 0.04em;
+}
+
 /* --- transcript -------------------------------------------------------- */
 
 .agent-transcript {
@@ -480,6 +533,20 @@
 	white-space: pre-wrap;
 	word-break: break-word;
 }
+
+/* The reply's Markdown, rendered (AgentReplyText.jsx): tight blocks, lists indented, code and tables tinted from the text colour. */
+.agent-assistant-text > * { margin: 0; }
+.agent-assistant-text > * + * { margin-top: 6px; }
+.agent-assistant-text ul, .agent-assistant-text ol { padding-left: 18px; white-space: normal; }
+.agent-assistant-text li + li { margin-top: 2px; }
+.agent-assistant-text .agent-reply-heading { font-weight: 600; }
+.agent-assistant-text code { padding: 0 3px; border-radius: 3px; background: color-mix(in srgb, currentColor 10%, transparent); font: 0.92em ui-monospace, monospace; }
+.agent-assistant-text pre { padding: 6px 8px; border-radius: var(--agent-radius-sm); background: color-mix(in srgb, currentColor 8%, transparent); overflow-x: auto; white-space: pre; }
+.agent-assistant-text pre code { padding: 0; background: none; }
+.agent-reply-table { overflow-x: auto; white-space: normal; }
+.agent-reply-table table { border-collapse: collapse; font-size: 0.92em; font-variant-numeric: tabular-nums; }
+.agent-reply-table th, .agent-reply-table td { padding: 2px 10px 2px 0; border-bottom: 1px solid color-mix(in srgb, currentColor 16%, transparent); text-align: left; vertical-align: top; }
+.agent-reply-table th { font-weight: 600; }
 
 .agent-caret {
 	display: inline-block;
@@ -798,6 +865,9 @@
 	font-size: var(--agent-font-md);
 	line-height: 1.55;
 }
+
+/* The second way in on the signed-out card: a key or a server of one's own. */
+.agent-state-card .agent-use-key { align-self: center; }
 
 .agent-primary-button {
 	align-self: center;

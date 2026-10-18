@@ -37,7 +37,8 @@ expect(
 	`clone=${Boolean(skinnedClone.children[0]?.skeleton)} source=${Boolean(skin.skeleton)}`,
 );
 
-const propsSource = readFileSync(new URL("../src/props.jsx", import.meta.url), "utf8");
+// instantiateMesh lives with the ImportedMesh renderer, split out of props.jsx.
+const propsSource = readFileSync(new URL("../src/imported-mesh.jsx", import.meta.url), "utf8");
 expect(
 	"instantiateMesh clones through cloneMeshGraph, not a raw source.clone(true)",
 	propsSource.includes("cloneMeshGraph(source)") && !/source\.clone\(true\)/.test(propsSource),

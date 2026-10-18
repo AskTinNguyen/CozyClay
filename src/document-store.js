@@ -38,6 +38,10 @@ export function createDocumentStore({ owned = {}, dev = import.meta.env?.DEV ?? 
       run(fn) { check(); running++; try { return fn(); } finally { running--; } },
       touch(domain) { check(); requireOwner(domain); },
       update(domain, update) { return session.run(() => write(domain, update)); },
+      // A point inside the open transaction (a script's start in an agent turn): rollback(mark)
+      // restores it and the transaction stays open; rollback() restores where it began.
+      mark() { check(); return slices; },
+      rollback(mark = before) { check(); publish(mark); },
       cancel({ restore = true } = {}) {
         if (active !== session) return false;
         active = null;

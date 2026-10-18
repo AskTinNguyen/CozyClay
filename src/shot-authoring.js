@@ -6,6 +6,7 @@
 
 import { createTiming, timingIsFlat } from "./speed-envelope.js";
 import { createShot } from "./cuts.js";
+import { railShotFields } from "./camera-block.js";
 import { normalizeStableItems } from "./stable-items.js";
 import { VIDEO_MODEL_PRESETS } from "./model-presets.js";
 import { elementByPath } from "./studio-elements.js";
@@ -110,7 +111,7 @@ const FOLLOW_BOUNDS = {
 	height: [0.2, Number.POSITIVE_INFINITY],
 	response: [0.1, 3],
 	lead: [0, 1],
-	maxDollySpeed: [0.2, 8],
+	maxDollySpeed: [0.2, 40],
 	pitchOffsetDeg: [-170, 170],
 	orbitOffsetDeg: [-180, 180],
 };
@@ -299,6 +300,7 @@ function repairCamera(value) {
 		// The dolly's speed curve rides the rail the same way; the envelope
 		// module owns its repair (parse-don't-validate, flat heals to null).
 		dollyTiming: cameraRail ? repairDollyTiming(source.dollyTiming) : null,
+		...railShotFields(source, cameraRail),
 	};
 }
 
@@ -310,12 +312,7 @@ function repairDollyTiming(value) {
 function migratedCamera(followCam, cameraRail, railFollow = null) {
 	const rail = repairRail(cameraRail);
 	const enabled = followCam?.enabled === true;
-	return repairCamera({
-		mode: enabled ? (rail ? "rail" : "follow") : "keys",
-		followCam,
-		cameraRail: rail,
-		railFollow,
-	});
+	return repairCamera({ mode: enabled ? (rail ? "rail" : "follow") : "keys", followCam, cameraRail: rail, railFollow });
 }
 
 function repairShared(parsed, frameCount, ids) {

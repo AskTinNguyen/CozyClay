@@ -6,7 +6,7 @@ import { createServer } from 'vite';
 // Load the shipped hook without mounting renderer hardware. Constants and aim
 // math remain the shipped source; no shot editing or history is substituted.
 const stage = readFileSync(new URL('../../src/app-stage.jsx', import.meta.url), 'utf8');
-const ardyContract = readFileSync(new URL('../../src/ardy-bridge-contract.js', import.meta.url), 'utf8');
+const ardyContract = readFileSync(new URL('../../src/timeline-defaults.js', import.meta.url), 'utf8');
 const startupDefaults = readFileSync(new URL('../../src/stage-startup-defaults.js', import.meta.url), 'utf8');
 const controls = readFileSync(new URL('../../src/controls.jsx', import.meta.url), 'utf8');
 const constants = ['DEFAULT_ENVIRONMENT', 'DEFAULT_DURATION_S', 'TIMELINE_FPS'].map(name => (stage + ardyContract + startupDefaults).match(new RegExp(`export const ${name} = [^;]+;`))[0]).join('\n');

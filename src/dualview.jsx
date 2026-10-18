@@ -100,7 +100,7 @@ const EDGE_FRAGMENT = `
 		float depthLine = smoothstep(0.055, 0.16, depthEdge);
 		float normalLine = smoothstep(0.7, 1.7, normalEdge);
 		float edge = max(depthLine * foregroundOwner, normalLine * 0.68);
-		gl_FragColor = vec4(edgeColor, edge * 0.76 * distanceFade);
+		gl_FragColor = vec4(edgeColor, edge * 0.38 * distanceFade);
 	}
 `;
 
@@ -349,10 +349,11 @@ export function DualRender({ stageRef, mainRef, insetRef, shotPreviewRef, shotCa
 				// grazing angle its depth runs away fast enough that the depth
 				// kernel inked the whole far floor as a dark band under the
 				// horizon. Without it in the prepass, figures still outline
-				// against the cleared depth behind them.
+				// against the cleared depth behind them. A glow halo (beautyOnly)
+				// is light, not a surface: it takes no ink either.
 				const cutouts = [];
 				scene.traverse((node) => {
-					if ((node.userData?.cutoutTexture !== undefined || node.userData?.noInk) && node.visible) {
+					if ((node.userData?.cutoutTexture !== undefined || node.userData?.noInk || node.userData?.beautyOnly) && node.visible) {
 						cutouts.push(node);
 						node.visible = false;
 					}

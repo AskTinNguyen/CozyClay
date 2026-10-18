@@ -11,6 +11,8 @@ import { createAgentHandler } from "../bin/agent/agent-routes.mjs";
 import { PREVIS_MODES } from "../src/project.js";
 import { POSTURES } from "../src/scenes.js";
 import { createFakeModel } from "./fixtures/fake-model.mjs";
+import { validateToolArguments } from "@earendil-works/pi-ai";
+import { toAgentTools } from "../bin/agent/pi-tools.mjs";
 
 export const uuid = "00000000-0000-4000-8000-000000000001";
 export function contextFixture() {
@@ -160,15 +162,12 @@ function registerTests() {
 			{ name: "arrange_objects", args: { ops: [{ op: "update", id: "a", facing: { yawDeg: 1 }, rotationDeg: point() }] } },
 			{ name: "arrange_characters", args: { ops: [{ op: "update", characterId: "a", modelId: "new-model" }] } },
 			{ name: "frame_shot", args: { subjectIds: ["a", "b"], framing: { exact: { position: point(), lookAt: point(), focalMm: 35 } } } },
-			{ name: "generate_motion", args: { characterId: "a", source: { kind: "generate", beats: [{ text: "walk", seconds: 3 }], durationSeconds: 3 } } },
-			{ name: "generate_motion", args: { characterId: "a", source: { kind: "generate", beats: [{ text: "walk" }] } } },
-			{ name: "generate_motion", args: { characterId: "a", source: { kind: "reuse", artifactId: "https://evil.test/take" } } },
 			{ name: "verify_result", args: { receiptId: "r", targets: ["a"], checks: ["placement"] } },
 			{ name: "undo_edit", args: {} },
 		];
 		for (const command of invalid) rejects(() => protocol.validateStudioCommand(command));
 	});
-	test("D3 all ten families have executable happy paths and stable defaults", () => {
+	test("D3 all nine families have executable happy paths and stable defaults", () => {
 		const commands = [
 			{ name: "inspect_studio", args: { scope: "entities" } },
 			{ name: "operate_studio", args: { selection: null, frame: 0, playing: false, view: { grid: true } } },
@@ -176,27 +175,15 @@ function registerTests() {
 			{ name: "arrange_characters", args: { ops: [{ op: "create", name: "Alex", position: { world: point() } }] } },
 			{ name: "patch_elements", args: { ops: [{ target: { kind: "character", id: "char-alex" }, set: { tint: "#a1b2c3" } }] } },
 			{ name: "frame_shot", args: { subjectIds: ["char-alex"], framing: { intent: { size: "medium shot", view: "front three-quarter", level: "eye", side: "left" } } } },
-			{ name: "generate_motion", args: { characterId: "char-alex", source: { kind: "generate", beats: [{ text: "walk" }, { text: "wave" }], durationSeconds: 6 } } },
 			{ name: "verify_result", args: { targets: ["char-alex"], checks: ["motion"] } },
 			{ name: "undo_edit", args: { receiptId: "r-1" } },
 			{ name: "run_action", args: { action: "shot.create" } },
 		];
 		assert.deepEqual(commands.map(command => command.name).sort(), [...protocol.STUDIO_TOOLS].sort());
 		const normalized = commands.map(command => protocol.validateStudioCommand(command));
-		assert.equal(normalized[0].args.limit, 12); assert.equal(normalized[2].args.collisionPolicy, "report"); assert.equal(normalized[6].args.repair, "bounded"); assert.equal(normalized[7].args.visual, "none"); assert.equal(normalized[7].args.range, "whole_clip");
+		assert.equal(normalized[0].args.limit, 12); assert.equal(normalized[2].args.collisionPolicy, "report"); assert.equal(normalized[6].args.visual, "none"); assert.equal(normalized[6].args.range, "whole_clip");
 		assert.equal(commands[0].args.limit, undefined, "normalization does not edit caller input");
 		rejects(() => protocol.validateStudioCommand({ name: "arrange_objects", args: { ops: [createOp("Same"), createOp("Same")] } }), "DUPLICATE_NAME");
-	});
-	test("D3 generate_motion beat text is capped and the refusal says how to write one", async () => {
-		const beat = text => ({ name: "generate_motion", args: { characterId: "a", source: { kind: "generate", beats: [{ text }], durationSeconds: 4 } } });
-		assert.equal(protocol.validateStudioCommand(beat("A person walks forward and waves with the right hand.")).args.source.beats[0].text, "A person walks forward and waves with the right hand.");
-		assert.doesNotThrow(() => protocol.validateStudioCommand(beat("A".repeat(protocol.BEAT_TEXT_MAX))));
-		assert.throws(() => protocol.validateStudioCommand(beat("A".repeat(protocol.BEAT_TEXT_MAX + 1))), e => e.code === "INVALID_ARGUMENT" && e.details?.path === "$.args.source.beats[0].text" && /Over 500 characters\..*starting with "A person"/.test(e.message));
-		assert.equal(protocol.STUDIO_TOOL_SCHEMAS.generate_motion.properties.source.oneOf[0].properties.beats.items.properties.text.maxLength, protocol.BEAT_TEXT_MAX);
-	});
-	test("D3 the Studio prompt teaches Kimodo beat writing", async () => {
-		const { STUDIO_SYSTEM_PROMPT } = await import("../bin/agent/studio-prompt.mjs");
-		for (const rule of [/motion\.generate or character\.setPromptBlocks/, /in English/, /starts with "A person"/, /not "Then the person stops"/, /Keep one whole movement inside one beat/, /leave out camera, scenery and story/]) assert.match(STUDIO_SYSTEM_PROMPT, rule);
 	});
 	test("D3 storyboard framing accepts a still shot id and optional caption", () => {
 		const command = protocol.validateStudioCommand({ name: "frame_shot", args: {
@@ -209,7 +196,7 @@ function registerTests() {
 	test("the Studio prompt states the scene-geometry facts and prefers object.set over object.update", async () => {
 		const { STUDIO_SYSTEM_PROMPT: prompt } = await import("../bin/agent/studio-prompt.mjs");
 		for (const rule of [/Euler order XYZ for rotX\/rot\/rotZ/, /yaw zero \+Z/, /base pivot: y is the bottom/, /x\/z are the footprint centre/, /unit cube at scale 1 is 1 m/,
-			/world space unless the tool says otherwise/, /not parent-relative/, /at least 0\.1 m; smaller requests are clamped/, /Prefer object\.set or arrange_objects to the legacy object\.update/,
+			/world space unless the tool says otherwise/, /not parent-relative/, /at least 0\.01 m; smaller requests are clamped/, /Prefer object\.set or arrange_objects to the legacy object\.update/,
 			/use an empty \(kind "empty", no geometry\) as the root/, /never use a tiny cube as a folder/, /rotating it rotates them about the parent's pivot; scale is not carried/,
 			/coplanar overlapping faces: offset them by at least 3 mm or put one fully inside/]) assert.match(prompt, rule);
 		assert.doesNotMatch(prompt, /Grouping carries position only/);
@@ -270,7 +257,7 @@ function registerTests() {
 	});
 	test("L2 vec3 elements carry per-axis minimum/maximum, catalogue exposes matching range descriptors, and an out-of-range patch is rejected", () => {
 		const scale = protocol.STUDIO_PATCH_SET_SCHEMAS.object.properties.scale;
-		for (const axis of ["x", "y", "z"]) { assert.equal(scale.properties[axis].minimum, 0.1); assert.equal(scale.properties[axis].maximum, 100); }
+		for (const axis of ["x", "y", "z"]) { assert.equal(scale.properties[axis].minimum, 0.01); assert.equal(scale.properties[axis].maximum, 100); }
 		const objectPosition = protocol.STUDIO_PATCH_SET_SCHEMAS.object.properties.position;
 		assert.deepEqual({ min: objectPosition.properties.x.minimum, max: objectPosition.properties.x.maximum }, { min: -240, max: 240 });
 		assert.deepEqual({ min: objectPosition.properties.y.minimum, max: objectPosition.properties.y.maximum }, { min: 0, max: 240 });
@@ -280,7 +267,7 @@ function registerTests() {
 		// The catalogue's patchable vocabulary carries the same declared ranges, not
 		// just the bare path list.
 		const objectDescriptor = protocol.STUDIO_PATCH_DESCRIPTORS.find(d => d.path === "object.scale");
-		assert.deepEqual(objectDescriptor, { path: "object.scale", type: "vec3", min: { x: 0.1, y: 0.1, z: 0.1 }, max: { x: 100, y: 100, z: 100 } });
+		assert.deepEqual(objectDescriptor, { path: "object.scale", type: "vec3", min: { x: 0.01, y: 0.01, z: 0.01 }, max: { x: 100, y: 100, z: 100 } });
 		const charPositionDescriptor = protocol.STUDIO_PATCH_DESCRIPTORS.find(d => d.path === "character.position");
 		assert.deepEqual(charPositionDescriptor.min, { x: -4, y: 0, z: -4 });
 		assert.deepEqual(charPositionDescriptor.max, { x: 4, y: 240, z: 4 });
@@ -296,11 +283,11 @@ function registerTests() {
 		// range instead of the generic union rejection: every patchOp variant
 		// fails on a bad number, and the caller needs to know which path and
 		// which bound, not just that no variant matched.
-		try { protocol.validateStudioCommand({ name: "patch_elements", args: { ops: [{ target: { kind: "object", id: "cube-24" }, set: { scale: { x: 1, y: 0.06, z: 1 } } }] } }); assert.fail("out-of-range scale must be refused"); }
+		try { protocol.validateStudioCommand({ name: "patch_elements", args: { ops: [{ target: { kind: "object", id: "cube-24" }, set: { scale: { x: 1, y: 0.006, z: 1 } } }] } }); assert.fail("out-of-range scale must be refused"); }
 		catch (error) {
 			assert.equal(error.code, "INVALID_ARGUMENT");
 			assert.match(error.message, /scale\.y/);
-			assert.match(error.message, /0\.1/);
+			assert.match(error.message, /0\.01/);
 			assert.match(error.message, /100/);
 		}
 		try { protocol.validateStudioCommand({ name: "patch_elements", args: { ops: [{ target: { kind: "character", id: "char-alex" }, set: { position: { x: 5, y: 0, z: 0 } } }] } }); assert.fail("out-of-range position must be refused"); }
@@ -325,6 +312,12 @@ function registerTests() {
 		const noop = receiptFixture("noop"); noop.ops = [{ index: 0, status: "partial", droppedPaths: ["object.renderer"] }];
 		protocol.validateReceipt(noop);
 		noop.ops = [{ index: 0, status: "applied" }]; rejects(() => protocol.validateReceipt(noop), "INVALID_RECEIPT");
+		// Inside an agent turn the bus answers a mutation "completed" (the turn owns the undo entry);
+		// a patch there still reports its ops.
+		const { mutated: _mutated, ...rest } = structuredClone(applied);
+		const composite = { ...rest, status: "completed", kind: "mutation", undo: { ...applied.undo, canUndoDirect: false } };
+		protocol.validateReceipt(composite);
+		composite.ops = [{ index: 1, status: "applied" }]; rejects(() => protocol.validateReceipt(composite), "INVALID_RECEIPT");
 	});
 	test("D4 context recursively rejects whole-document, credential and raw-pose payloads", () => {
 		for (const mutate of [c => c.document = {}, c => c.entities[0].rawPose = [1,2,3], c => c.host.accessToken = "secret", c => c.scene.inactiveScenes = [], c => c.camera = { dataUrl: "data:image/png;base64,AA" }, c => c.entities[0].position.extra = {}, c => c.jobs.push({ id: "j", payload: {} }), c => c.assets.push({ imageId: "x", path: "/tmp/private" })]) { const c = contextFixture(); mutate(c); rejects(() => protocol.validateStudioContext(c)); }
@@ -390,13 +383,8 @@ function registerTests() {
 		const viewChange = contextFixture(); viewChange.revision.view++; assert.equal(protocol.validateTargetGuard(guard(),guard()),true);
 		assert.equal(contextTools.studioCacheKey(viewChange),contextTools.studioCacheKey(contextFixture()));
 	});
-	test("D6 schemas are real frozen data, and generation compiles immutable half-open blocks", () => {
+	test("D6 schemas are real frozen data", () => {
 		for (const tool of protocol.STUDIO_CATALOGUE) { assert.equal(tool.parameters?.type,"object"); assert.equal(tool.parameters.additionalProperties,false); assert.ok(Object.isFrozen(tool.parameters)); }
-		assert.equal(typeof protocol.compileStudioBeats,"function");
-		const schedule = protocol.compileStudioBeats({kind:"generate",beats:[{text:"walk",seconds:5.5},{text:"wave",seconds:0.5}]});
-		assert.equal(schedule.frameCount,144); assert.equal(schedule.blocks[0].startFrame,0); assert.equal(schedule.blocks.at(-1).endFrameExclusive,144); assert.ok(schedule.blocks.every(b=>b.endFrameExclusive-b.startFrame<=120));
-		for(let i=1;i<schedule.blocks.length;i++) assert.equal(schedule.blocks[i-1].endFrameExclusive,schedule.blocks[i].startFrame);
-		assert.ok(Object.isFrozen(schedule.blocks[0]));
 	});
 	test("D6 shared physical projection includes inactive IK and path timing, excludes view/names/tints", () => {
 		assert.equal(typeof contextTools.physicsFingerprintInput,"function");
@@ -432,7 +420,7 @@ function registerTests() {
 		const fake=receiptFixture("undone");fake.restoredTargets[0].sceneEpoch="another-epoch";rejects(()=>protocol.validateReceipt(fake));
 	});
 	test("D4 compact fallback preserves every mandatory ID and validates stale cursors", () => {
-		const c = contextFixture(); c.entities = Array.from({length:24},(_,i)=>({id:`char-${i}`,kind:"character",token:`t-${i}`,name:"<".repeat(120),position:point(),yawDeg:0,scale:1,motion:{takeId:null,frames:144,ikKeyCount:0,promptBlockCount:0,keyIds:Array.from({length:8},(_,j)=>`key-${j}-${"x".repeat(100)}`)}}));
+		const c = contextFixture(); c.entities = Array.from({length:24},(_,i)=>({id:`char-${i}`,kind:"character",token:`t-${i}`,name:"<".repeat(120),position:point(),yawDeg:0,scale:1,motion:{takeId:null,frames:144,ikKeyCount:0,keyIds:Array.from({length:8},(_,j)=>`key-${j}-${"x".repeat(100)}`)}}));
 		// Filler whose escaped names overflow the budget through the index alone.
 		c.entities.push(...Array.from({length:376},(_,i)=>({id:`prop-${i}`,kind:"object",token:`p-${i}`,name:"<".repeat(120),position:point(),scale:{x:1,y:1,z:1}})));
 		c.selection={kind:"character",id:"char-23"};c.activeCharacterId="char-22";c.scene.characterCount=24;c.scene.objectCount=376;
@@ -452,7 +440,6 @@ function registerTests() {
 		protocol.validateStudioCommand({name:"arrange_objects",args:{ops:[{...createOp(),position:{relativeTo:"a",basis:"world",side:"right",gapM:0.3,support:"floor"}}],collisionPolicy:"avoid"}});
 		for(const op of [{op:"update",characterId:"a",scale:1.5},{op:"remove",characterId:"a"}]) protocol.validateStudioCommand({name:"arrange_characters",args:{ops:[op]}});
 		protocol.validateStudioCommand({name:"frame_shot",args:{subjectIds:["a"],keyAtFrame:0,framing:{exact:{position:point(),lookAt:{x:0,y:0,z:0},focalMm:35}}}});
-		protocol.validateStudioCommand({name:"generate_motion",args:{characterId:"a",source:{kind:"reuse",artifactId:"artifact-1"}}});
 		for(const size of protocol.STUDIO_VARIANTS.framingSizes) for(const view of protocol.STUDIO_VARIANTS.framingViews) for(const level of protocol.STUDIO_VARIANTS.framingLevels) protocol.validateStudioCommand({name:"frame_shot",args:{subjectIds:["a"],framing:{intent:{size,view,level,side:"right"}}}});
 	});
 	test("D7 failure uncertainty and explicit unverified acceptance remain distinguishable", () => {
@@ -488,6 +475,48 @@ function registerTests() {
 		const noop = { ...receiptFixture("noop"), action: "shot.create", summary: "No room for a new shot." };
 		assert.equal(protocol.validateReceipt(noop).summary, "No room for a new shot.");
 		rejects(() => protocol.validateReceipt({ ...receiptFixture("applied"), action: "not an id" }), "INVALID_RECEIPT");
+	});
+	test("schema refusals name the path, what is allowed and what arrived (G3)", () => {
+		const said = (name, args) => { try { protocol.validateStudioCommand({ name, args }); return "accepted"; } catch (error) { assert.equal(error.code, "INVALID_ARGUMENT"); return error.message; } };
+		const exact = [
+			["inspect_studio", { scope: "overview" }, '$.args.scope: "overview" is not one of: selection, scene, entities, shot, motion, catalogue, actions, document.'],
+			["inspect_studio", { scope: "actions", ids: '["motion.compile"]' }, "$.args.ids: expected an array of strings, got a string."],
+			["inspect_studio", {}, '$.args: missing required field "scope".'],
+			["inspect_studio", { scope: "actions", ids: ["a", "a"] }, '$.args.ids: items must be unique; "a" appears twice.'],
+			["inspect_studio", { scope: "actions", ids: ["bad id"] }, '$.args.ids[0]: "bad id" does not match ^[A-Za-z0-9][A-Za-z0-9._:-]*$.'],
+			["inspect_studio", { scope: "actions", ids: [""] }, "$.args.ids[0]: must not be empty."],
+			["inspect_studio", { scope: "actions", limit: 1.5 }, "$.args.limit: expected an integer, got 1.5."],
+			["inspect_studio", { scope: "actions", limit: 99 }, "$.args.limit: Expected a number within [1, 32], got 99."],
+			["run_action", { action: "motion.compile", characterId: "char-a", args: {} }, '$.args has unknown field "characterId"; allowed: action, args, confirmationToken.'],
+			["run_action", { action: "motion.compile", args: "{}" }, "$.args.args: expected an object, got a string."],
+			["verify_result", { checks: [], targets: ["a"] }, "$.args.checks: expected 1 to 4 items, got 0."],
+			["verify_result", { checks: ["motion"], targets: ["a"], range: "all" }, '$.args.range must be "whole_clip" or an object, got "all".'],
+			["undo_edit", { receiptId: 3 }, "$.args.receiptId: expected a string, got a number."],
+			["operate_studio", { selection: "char-a" }, '$.args.selection must be an object or null, got "char-a".'],
+			["operate_studio", { playing: "yes" }, "$.args.playing: expected a boolean, got a string."],
+			["arrange_objects", { ops: [{ op: "create", source: { kind: "chair" }, position: { world: { x: 1, y: 0, z: 0 }, extra: 1 } }] }, '$.args.ops[0].position has unknown field "extra"; allowed: world.'],
+		];
+		for (const [name, args, message] of exact) assert.equal(said(name, args), message);
+		// A plain-value union names every form (an action input such as install: true, false or "ifClean").
+		const install = { type: "object", properties: { install: { anyOf: [{ type: "boolean" }, { const: "ifClean" }] } }, required: [], additionalProperties: false };
+		assert.throws(() => protocol.validateStudioSchema(install, { install: "yes" }, "INVALID_ARGUMENT", "$.args"), { message: '$.args.install must be true, false or "ifClean", got "yes".' });
+		assert.deepEqual(protocol.validateStudioSchema(install, { install: "ifClean" }), { install: "ifClean" });
+		// A long payload shows as a 40-character preview, never whole.
+		const long = said("inspect_studio", { scope: "x".repeat(500) });
+		assert.ok(long.startsWith('$.args.scope: "xxxxxxxx') && long.includes('... is not one of:') && long.length < 160, long);
+	});
+	test("pi tool arguments: an unknown field is named, an array sent as JSON text is parsed (G3)", () => {
+		const tools = toAgentTools(["run_action", "inspect_studio"].map(name => ({ name, parameters: protocol.STUDIO_TOOL_SCHEMAS[name], handler: async () => ({}) })));
+		const call = (name, args) => { const tool = tools.find(t => t.name === name); return validateToolArguments(tool, { name, arguments: tool.prepareArguments(args) }); };
+		// run3 turn 2, the first motion.compile: characterId beside args, not inside it
+		assert.throws(() => call("run_action", { action: "motion.compile", characterId: "char-a", args: { characterId: "char-a", base: "spec-12350683d8db", install: false } }),
+			{ message: 'Validation failed for tool "run_action": root has unknown field "characterId"; allowed: action, args, confirmationToken. The action\'s own inputs go inside args: { "action": "<id>", "args": { ... } }.' });
+		assert.throws(() => call("inspect_studio", { section: "selection" }),
+			{ message: 'Validation failed for tool "inspect_studio": root has unknown field "section"; allowed: scope, ids, select, query, cursor, limit; missing required: scope.' });
+		// run3 turn 1: ids as JSON text is taken as the array it encodes, and still validated
+		assert.deepEqual(call("inspect_studio", { scope: "actions", ids: '["motion.compile", "motion.describe"]' }), { scope: "actions", ids: ["motion.compile", "motion.describe"] });
+		assert.throws(() => call("inspect_studio", { scope: "actions", ids: '["bad id"]' }), /ids\.0: must match pattern/);
+		assert.deepEqual(call("run_action", { action: "motion.compile", args: { characterId: "char-a" } }), { action: "motion.compile", args: { characterId: "char-a" } });
 	});
 	test("GENERATION_LIMIT is a failure code of its own, distinct from AUTH_REQUIRED", () => {
 		const failure={ok:false,commandId:"cmd-1",host:receiptFixture().host,code:"GENERATION_LIMIT",phase:"admission",affectedIds:[],expectedTargets:[],currentTargets:[],mutated:false,preserved:{authoredState:"unchanged"},recovery:{action:"none"}};

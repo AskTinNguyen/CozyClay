@@ -3,15 +3,11 @@ import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { GIZMO_LAYER, SHOT_ASPECT, fitAspect } from "./dualview.jsx";
 import { HANDLE_PROXY_FLAG, claimsPress } from "./gizmo-claim.js";
-import {
-	CUTOUT_KIND,
-	objectSize,
-	rotatePatch,
-	scalePatch,
-	screenRotatePatch,
-	translatePatch,
-	wrapAngle,
-} from "./scene-objects.js";
+import { CUTOUT_KIND, rotatePatch, scalePatch, screenRotatePatch, translatePatch, wrapAngle } from "./scene-objects.js";
+import { dragTravel, dragTurn } from "./held-object-pose.js";
+import { HeldTrail } from "./held-object-edit.jsx";
+import { ACTIVE_COLOR, ARROW_LEN, AXES, AXIS_VECTORS, BOX_SIZE, CARD_CORNERS, CENTRE_BOX, CORNER_BOX, FAR_HALF_ALPHA, GROUND, PICK_CENTRE_R, PICK_CORNER_R, PICK_SHAFT_R, PICK_TUBE_R,
+	PLANES, PLANE_OFFSET, PLANE_SIZE, RING_R, RING_TUBE, SCREEN_RING_R, SCREEN_SCALE, SHAFT_R, TIP_LEN, TIP_R, gizmoOrigin, gizmoTurn, handleKey } from "./object-gizmo-parts.js";
 
 /**
  * The transform gizmo for the selected scene object — the thing every 3D tool
@@ -46,109 +42,8 @@ import {
  * space and decomposed back into the same channels (screenRotatePatch).
  */
 
-const AXES = [
-	{ axis: "x", dir: new THREE.Vector3(1, 0, 0), color: "#ff5340" },
-	{ axis: "y", dir: new THREE.Vector3(0, 1, 0), color: "#54e05c" },
-	{ axis: "z", dir: new THREE.Vector3(0, 0, 1), color: "#3d8bff" },
-];
-/** the same three directions, addressable by the record's axis key */
-const AXIS_VECTORS = { x: AXES[0].dir, y: AXES[1].dir, z: AXES[2].dir };
-/** Move-tool plane handles. Unity colours each square after the axis it LOCKS,
- * so the blue square (z locked) slides in xy. `normal` is the pinned axis. */
-const PLANES = [
-	{ id: "xz", axes: ["x", "z"], normal: "y", color: "#54e05c" },
-	{ id: "xy", axes: ["x", "y"], normal: "z", color: "#3d8bff" },
-	{ id: "yz", axes: ["y", "z"], normal: "x", color: "#ff5340" },
-];
-const PLANE_OFFSET = 0.26; // where the square sits along each of its two axes
-const PLANE_SIZE = 0.2;
-const ARROW_LEN = 0.62;
-const SHAFT_R = 0.016;
-const TIP_R = 0.05;
-const TIP_LEN = 0.14;
-const RING_R = 0.52;
-/**
- * The axis rings are drawn as two half-tori instead of one full torus. A full
- * ring is misleading: the half facing away from the camera is pixel-identical
- * to the near half, so a drag started on the far side reads backwards.
- * Depth-sorting the ring against the object would only help when the object
- * is big enough to occlude the far half — the gizmo sits at the object's
- * centre and the ring is only 0.52 m across, so for the small props a
- * blocking tool is full of, the far half projects outside the silhouette and
- * stays ambiguous. Fading it instead (FAR_HALF_ALPHA vs the near half's
- * 0.95) is unambiguous at every object size and camera angle. Only the drawn
- * halves fade — the pick proxy stays one full invisible torus per ring.
- */
-const FAR_HALF_ALPHA = 0.28;
-/** the outer screen-space ring: larger than the axis rings (RING_R) so it
- * encloses them from every angle, and far enough out that its pick band
- * [0.61, 0.75] clears the axis rings' [0.45, 0.59] — the two can never fight
- * for a grab. (§3.3: "a larger circle enclosing the sphere, drawn flat to
- * the viewer" — rotates about the view axis.) */
-const SCREEN_RING_R = 0.68;
-/** Unity's yellow for the handle being dragged — and, after release, for the
- * last-dragged one, until the selection or the tool changes (§3.1). */
-const ACTIVE_COLOR = "#ffd23d";
-const RING_TUBE = 0.022;
-const BOX_SIZE = 0.09; // scale-mode axis knobs
-const CENTRE_BOX = 0.11; // uniform-scale knob at the pivot
-/** Pick proxies. A drawn 1.6 cm shaft is ~3 screen pixels — nothing anyone can
- * reliably grab — so hit testing runs against invisible fat volumes around each
- * arrow, ring and knob, the way every DCC gizmo does it. */
-const PICK_SHAFT_R = 0.09;
-const PICK_TUBE_R = 0.07;
-const PICK_CENTRE_R = 0.16;
-/** metres of gizmo per metre of camera distance: keeps it a constant size on
- * screen whether the object is at the lens or across the room */
-const SCREEN_SCALE = 0.16;
 
-/** the object's own centre height, where the gizmo sits */
-function gizmoHeight(object) {
-	return (object.y ?? 0) + Math.max(objectSize(object).height / 2, 0.25);
-}
-
-/** the handles-Map key a pick entry was registered under — the same
- * expression __gizmoPick reports, so highlights and QA hooks agree on handle
- * identity */
-function handleKey(entry) {
-	if (entry.corner) return `corner:${entry.corner.id}`;
-	return entry.axis ?? (entry.plane ? `plane:${entry.plane.id}` : "centre");
-}
-
-/**
- * The four corners of a cutout card, in the card's own local space.
- *
- * A standee is a picture, and a picture is resized by its corners — grabbing
- * one and pulling is the gesture everybody already has for "make this bigger",
- * and unlike an axis knob it says which way is bigger without reading a label.
- * `sx`/`sy` are which way each corner lies from the centre, so the drag can
- * measure travel along the diagonal that corner actually points down.
- */
-const CARD_CORNERS = [
-	{ id: "tr", sx: 1, sy: 1 },
-	{ id: "tl", sx: -1, sy: 1 },
-	{ id: "br", sx: 1, sy: -1 },
-	{ id: "bl", sx: -1, sy: -1 },
-];
-const CORNER_BOX = 0.085;
-const PICK_CORNER_R = 0.13;
-
-/**
- * Screen-space ring result: the object rotated `deltaDeg` about the world
- * `viewAxis`, written back as all three Euler channels in one patch. The
- * stored channels are Euler degrees per world axis, so the drag-start
- * orientation is composed with the delta in quaternion space and decomposed
- * again in the same order the renderer uses — exact for any start
- * orientation, where a single-channel approximation would drift. Snap
- * quantizes the accumulated delta to the same 5° grid the axis rings snap
- * their start+delta to (start values are always on the grid themselves).
- */
-
-// Path authoring intersects presses with the set floor, exactly where a
-// dropped pin will live.
-const GROUND = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-
-export default function ObjectGizmo({ object, objects = [], mode = "move", snap = true, enabled, pickOnly = false, paneRef, camRef, shotAspect = SHOT_ASPECT, onChange, onSelect, onGroundClick, onDragStart, onDragEnd, claimPointer }) {
+export default function ObjectGizmo({ object, objects = [], mode = "move", snap = true, enabled, pickOnly = false, paneRef, camRef, shotAspect = SHOT_ASPECT, onChange, onSelect, onGroundClick, onDragStart, onDragEnd, claimPointer, held = null }) {
 	const { gl, scene } = useThree();
 	// shotAspect null = the camera fills the pane (the editor working view):
 	// pointer mapping uses the pane rect itself instead of a letterboxed
@@ -174,7 +69,10 @@ export default function ObjectGizmo({ object, objects = [], mode = "move", snap 
 	const hoverRef = useRef(null); // last hovered key: pointer moves that keep it skip the re-render
 	const dragRef = useRef(null);
 	const stateRef = useRef(null);
-	stateRef.current = { object, objects, mode, snap, onChange, onSelect, onGroundClick, onDragStart, onDragEnd, claimPointer };
+	// `held` (held-object-edit.jsx): the object is drawn by a compiled take. The
+	// gizmo stands on that drawn pose, and while a hand holds the object a move
+	// or rotate drag edits its motion through `held` instead of the record.
+	stateRef.current = { object, objects, mode, snap, onChange, onSelect, onGroundClick, onDragStart, onDragEnd, claimPointer, held };
 	const tools = useMemo(
 		() => ({
 			raycaster: new THREE.Raycaster(),
@@ -347,6 +245,7 @@ export default function ObjectGizmo({ object, objects = [], mode = "move", snap 
 				// the moment the pointer crosses the ring's ±180° seam.
 				drag.turned += wrapAngle(((angle - drag.lastAngle) * 180) / Math.PI);
 				drag.lastAngle = angle;
+				if (drag.held) return void stateRef.current.held?.rotate(drag.dir, dragTurn(drag.turned, snapping ? 5 : 0));
 				if (drag.axis === "screen") {
 					// The screen ring spins about the view axis: compose the
 					// delta onto the drag-start orientation in quaternion space
@@ -399,6 +298,7 @@ export default function ObjectGizmo({ object, objects = [], mode = "move", snap 
 				return;
 			}
 			tools.delta.subVectors(tools.hit, drag.hitStart);
+			if (drag.held) return void stateRef.current.held?.move(dragTravel(tools.delta, drag.planeAxes ? drag.planeAxes.map((axis) => AXIS_VECTORS[axis]) : [drag.dir], snapping ? 0.05 : 0));
 			if (drag.planeAxes) {
 				// Plane handle: two axes travel, the third is pinned. This is what
 				// replaced body-dragging — the XZ square is how a set gets dressed.
@@ -438,7 +338,8 @@ export default function ObjectGizmo({ object, objects = [], mode = "move", snap 
 			const end = stateRef.current.onDragEnd;
 			const token = drag.token;
 			teardownDrag();
-			if (token != null && end) end(token, { commit });
+			if (drag.held) stateRef.current.held?.end(commit);
+			else if (token != null && end) end(token, { commit });
 		};
 
 		/** pointerup and pointercancel both commit: the travel already applied
@@ -482,7 +383,8 @@ export default function ObjectGizmo({ object, objects = [], mode = "move", snap 
 			// (a jump of however far the car has driven). The pivot, and the yaw
 			// the card's corners are seen at, are the shown ones.
 			const live = stateRef.current.objects.find((entry) => entry.id === shown.id) ?? shown;
-			tools.origin.set(shown.x, gizmoHeight(shown), shown.z);
+			const heldEdit = stateRef.current.held;
+			gizmoOrigin(shown, heldEdit, tools.origin);
 			camera.getWorldDirection(tools.eye);
 			let plane;
 			let drag;
@@ -491,7 +393,9 @@ export default function ObjectGizmo({ object, objects = [], mode = "move", snap 
 				// pivot. The screen ring has no axis of its own: it spins
 				// about the camera's own forward, so its plane is the
 				// camera-facing plane through the pivot.
-				const spinDir = axis === "screen" ? tools.eye : dir;
+				// A held object turns about its own axes (its rings are drawn turned too).
+				const turn = gizmoTurn(heldEdit, kind);
+				const spinDir = axis === "screen" ? tools.eye : turn ? dir.clone().applyQuaternion(new THREE.Quaternion(...turn)) : dir;
 				plane = new THREE.Plane().setFromNormalAndCoplanarPoint(spinDir, tools.origin.clone());
 				const hit = new THREE.Vector3();
 				if (!tools.raycaster.ray.intersectPlane(plane, hit)) return false;
@@ -577,12 +481,14 @@ export default function ObjectGizmo({ object, objects = [], mode = "move", snap 
 			// (§6.1). The `cancel` handed over is teardown-only — the
 			// coordinator owns the close, and a close attempted from inside it
 			// is inert because the token is retired first (§5.2).
-			const token = stateRef.current.onDragStart?.({
+			// A held-object drag edits the motion, not the record: no scene transaction.
+			const heldDrag = Boolean(heldEdit?.editable && (kind === "rotate" || (!heldEdit.hinge && (kind === "move" || kind === "plane"))) && heldEdit.begin());
+			const token = heldDrag ? undefined : stateRef.current.onDragStart?.({
 				owner: "gizmo",
 				cancel: teardownDrag,
 			});
 			const corner = kind === "corner" ? dir : null;
-			dragRef.current = { ...drag, id: live.id, axis, plane, corner, start: { ...live }, token };
+			dragRef.current = { ...drag, id: live.id, axis, plane, corner, start: { ...live }, token, held: heldDrag };
 			// the grabbed handle turns yellow now and stays yellow after
 			// release, until the selection or the tool changes (§3.1)
 			setActiveHandle(handleKey({ axis, plane, corner }));
@@ -593,7 +499,7 @@ export default function ObjectGizmo({ object, objects = [], mode = "move", snap 
 			// Only a real transaction gets the extra lifecycle edges: blur and
 			// Escape would otherwise change mid-drag behaviour for callers that
 			// pass no transaction props (the byte-for-byte fallback path).
-			if (token != null) {
+			if (token != null || heldDrag) {
 				window.addEventListener("blur", onBlur);
 				window.addEventListener("keydown", onKeyDown, true);
 			}
@@ -753,7 +659,7 @@ export default function ObjectGizmo({ object, objects = [], mode = "move", snap 
 		const camera = camRef?.current;
 		if (!root || !camera || !object) return;
 		camera.getWorldPosition(tools.camPos);
-		tools.origin.set(object.x, gizmoHeight(object), object.z);
+		gizmoOrigin(object, held, tools.origin);
 		root.scale.setScalar(Math.max(0.35, tools.camPos.distanceTo(tools.origin) * SCREEN_SCALE));
 		if (mode !== "rotate") return;
 		// The rotate rings are view-dependent, so their orientation is frame
@@ -764,6 +670,14 @@ export default function ObjectGizmo({ object, objects = [], mode = "move", snap 
 		camera.getWorldDirection(tools.eye);
 		const screen = screenRingRef.current;
 		if (screen) screen.quaternion.copy(camera.quaternion);
+		// Turned rings (a held object's own axes): the near/far split and the
+		// billboard are worked out in the gizmo's own frame.
+		const turn = gizmoTurn(held, mode);
+		if (turn) {
+			const unturn = new THREE.Quaternion(...turn).invert();
+			tools.eye.applyQuaternion(unturn);
+			screen?.quaternion.premultiply(unturn);
+		}
 		for (const { axis, u, v } of ringBases) {
 			const ring = ringGroupsRef.current[axis];
 			if (!ring) continue;
@@ -855,8 +769,9 @@ export default function ObjectGizmo({ object, objects = [], mode = "move", snap 
 	const screenHovered = hoveredHandle === "screen";
 	const centreActive = activeHandle === "centre";
 	const centreHovered = hoveredHandle === "centre";
-	return (
-		<group ref={rootRef} position={[object.x, gizmoHeight(object), object.z]} renderOrder={999}>
+	return (<>
+		<HeldTrail trail={held?.trail ?? null} />
+		<group ref={rootRef} position={gizmoOrigin(object, held, new THREE.Vector3()).toArray()} quaternion={gizmoTurn(held, mode) ?? [0, 0, 0, 1]} renderOrder={999}>
 			{AXES.map(({ axis, dir, color }) => {
 				const quat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
 				// The handle under a drag — and, after release, the last one —
@@ -1033,5 +948,5 @@ export default function ObjectGizmo({ object, objects = [], mode = "move", snap 
 				</>
 			)}
 		</group>
-	);
+	</>);
 }

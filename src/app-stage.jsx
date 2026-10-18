@@ -22,8 +22,6 @@ export {
 	characterModelUrl,
 	CHARACTER_MODEL_LABELS,
 	nextCharacterId,
-	DEMO_MOTION_URL,
-	DEMO_MOTION_PROMPT,
 	OBJECT_DELETE_UNDO_MS,
 	ASSET_DELETE_UNDO_MS,
 	CLAY,
@@ -64,7 +62,7 @@ export {
 
 export * from "./stage-attach-frames.js";
 
-export { Character, MotionTrails } from "./stage-characters.jsx";
+export { Character } from "./stage-characters.jsx";
 
 export {
 	ShotRig,
@@ -105,40 +103,10 @@ export {
 } from "./stage-capture.jsx";
 export {
 	TIMELINE_FPS,
-	ARDY_FPS,
-	toArdyFrame,
-	posePlacementFrame,
-	toArdyFrameEntries,
-	toArdySegments,
 	DEFAULT_DURATION_S,
 	DEFAULT_PLAYBACK_SPEED,
-	BRIDGE_RECHECK_MS,
-	ARDY_PROMPT_HORIZON_FRAMES,
 	MAX_WAYPOINTS,
-	ARDY_PROMPT_MAX,
-	ARDY_DURATION_MIN,
-	ARDY_DURATION_MAX,
-	ARDY_SEED_MAX,
-	ARDY_PRESERVE_DEFAULT,
-	DEFAULT_PROMPT_CLIPS,
-	buildPromptSchedule,
-	ikTracksInRange,
-	PRESERVE_TRACK_LIMBS,
-	PRESERVE_LIMB_ORDER,
-	preserveLimbLabel,
-	preserveTracksSummary,
-	LINE_EDIT_TRACK_OPTIONS,
-	lineTrackLabel,
-	LINE_EDIT_DEFAULT_TRACK,
-	LINE_CURVE_MARKER_STRIDE,
-	MIN_CURVE_POINTS,
-	LINE_PREVIEW_DEBOUNCE_MS,
-	LINE_CAPABILITY_RETRY_MS,
-	LINE_EDIT_REFUSALS,
-	LINE_CURVE_REFUSALS,
-	MULTIMODEL_REASONS,
-	MULTIMODEL_SAMPLE_FPS,
-} from "./ardy-bridge-contract.js";
+} from "./timeline-defaults.js";
 
 /* ------------------------------------------------------------------ 3D --- */
 

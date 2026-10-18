@@ -31,8 +31,8 @@ function stateNames(ast) {
   return names;
 }
 const domains = {
-  motion: { states: ['domain'], panels: ['VideoCapturePanel', 'RigControlPanel'] },
-  cast: { states: ['domain', 'activeCharacterId'], panels: ['SubjectsPanel', 'CharacterTransformPanel', 'RigPanel', 'PosePanel', 'PromptBlocksPanel'] },
+  motion: { states: ['domain'], panels: ['RigControlPanel'] },
+  cast: { states: ['domain', 'activeCharacterId'], panels: ['SubjectsPanel', 'CharacterTransformPanel', 'RigPanel', 'PosePanel'] },
   shots: { states: ['domain', 'tlFrame'], panels: ['CameraPanel'] },
   objects: { states: ['domain'], panels: ['PropsPanel', 'ObjectTransformPanel'] },
   scenes: { states: ['domain'], panels: ['ProjectPanel'] },
@@ -42,7 +42,7 @@ const domains = {
 // not a copy of it. Keep source text intact except for the extra default exports.
 export function readStudioSource() {
   const paths = ['src/App.jsx', 'src/use-camera-tutorial.js', ...['domains', 'panels', 'shell'].flatMap(directory =>
-    readdirSync(new URL(`src/${directory}/`, root)).filter(name => /\.(js|jsx)$/.test(name)).map(name => `src/${directory}/${name}`)), 'src/domains/motion/motion-video-capture.js'];
+    readdirSync(new URL(`src/${directory}/`, root)).filter(name => /\.(js|jsx)$/.test(name)).map(name => `src/${directory}/${name}`))];
   return paths.map(path => read(path).replace(/export default /g, '')).join('\n');
 }
 
@@ -141,8 +141,8 @@ function verify() {
       scenes: ['persistScenes', 'openScene', 'saveProject', 'applyProject'],
       objects: ['addSceneObject', 'importCutout', 'importMesh', 'spawnCutoutAt', 'spawnMeshAt'],
       shots: ['addCameraKeyframe', 'moveCameraKeyframe', 'removeCameraKeyframe'],
-      cast: ['updateCharacterAt', 'removeCharacter', 'addPromptClip', 'changePromptClip', 'removePromptClip'],
-      motion: ['runArdy', 'loadMotion', 'clearMotion', 'loadTakeVersion', 'commitTakeRecipe', 'runFixCollisions', 'runAutoPhysics'],
+      cast: ['updateCharacterAt', 'removeCharacter', 'savePose', 'removePose'],
+      motion: ['clearMotion', 'toggleIkMode', 'ikAddKeyframe', 'ikDragEnd'],
     };
     const functions = tree => {
       const names = [];

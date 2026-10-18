@@ -1,7 +1,6 @@
 import { useStudioShell } from "./studio-shell-context.js";
 import { ko } from "../locale.js";
-import { sceneObjectNameDisplayKo, HIERARCHY_INSPECTOR_TITLES, CHARACTER_MODEL_LABELS } from "../app-stage.jsx";
-import { CUTOUT_KIND, EMPTY_KIND, SCULPT_KIND } from "../scene-objects.js";
+import { detailsSelection } from "./details-selection.js";
 import LightPanel from "../panels/LightPanel.jsx";
 import CameraPanel from "../panels/CameraPanel.jsx";
 import SubjectsPanel from "../panels/SubjectsPanel.jsx";
@@ -9,85 +8,32 @@ import CharacterTransformPanel from "../panels/CharacterTransformPanel.jsx";
 import RigPanel from "../panels/RigPanel.jsx";
 import ProxyFigurePanel from "../panels/ProxyFigurePanel.jsx";
 import PosePanel from "../panels/PosePanel.jsx";
-import VideoCapturePanel from "../panels/VideoCapturePanel.jsx";
-import PromptBlocksPanel from "../panels/PromptBlocksPanel.jsx";
 import RigControlPanel from "../panels/RigControlPanel.jsx";
 import PoseImagePanel from "../panels/PoseImagePanel.jsx";
 import EnvironmentPanel from "../panels/EnvironmentPanel.jsx";
 import PropsPanel from "../panels/PropsPanel.jsx";
 import ObjectTransformPanel from "../panels/ObjectTransformPanel.jsx";
-import { ASSET_IMAGE_TYPES } from "../scene-assets.js";
+import ObjectLookPanel from "../panels/ObjectLookPanel.jsx";
 import { PoseStudioPanel } from "../posestudio.jsx";
 import { DEFAULT_POSE } from "../poses.js";
 import "../panels/details.css";
-
-const characterIndexForRow = (rowId, characters) => rowId === "characterA" ? 0
-	: rowId === "characterB" ? 1
-		: characters.findIndex((entry) => `character:${entry.id}` === rowId);
-const characterTitle = (index) => ko(`Character ${index + 1}`, `인물 ${index + 1}`);
-
-/** The 2a selection header: the selected item's name and a "Kind · detail"
- * type line. Null when nothing that owns settings is selected. */
-function detailsSelection({ selectedHierarchyId: id, selectedSceneObject, rigSelection, characters, shot, inspectorHasContent }) {
-	if (!inspectorHasContent) return null;
-	if (selectedSceneObject) {
-		const kind = selectedSceneObject.renderer === CUTOUT_KIND ? ko("Cutout", "컷아웃") : selectedSceneObject.renderer === EMPTY_KIND ? ko("Empty", "빈 오브젝트") : selectedSceneObject.renderer === SCULPT_KIND ? ko("Sculpt", "조형") : ko("Mesh", "메시");
-		return { name: sceneObjectNameDisplayKo(selectedSceneObject.name), type: `${selectedSceneObject.renderer === EMPTY_KIND ? ko("Node", "노드") : ko("Prop", "소품")} · ${kind}` };
-	}
-	if (rigSelection) {
-		const index = characterIndexForRow(rigSelection.rowId, characters);
-		const kind = rigSelection.token === "rig" ? ko("Rig", "리그") : ko("Bone", "본");
-		return { name: HIERARCHY_INSPECTOR_TITLES[rigSelection.token] ?? kind, type: index >= 0 ? `${kind} · ${characterTitle(index)}` : kind };
-	}
-	if (id === "camera") return { name: HIERARCHY_INSPECTOR_TITLES.camera, type: `${ko("Camera", "카메라")} · ${shot.focalMm}mm` };
-	if (id === "characterA" || id === "characterB" || id.startsWith("character:")) {
-		const index = characterIndexForRow(id, characters);
-		const model = CHARACTER_MODEL_LABELS[characters[index]?.model];
-		return { name: characterTitle(Math.max(index, 0)), type: model ? `${ko("Character", "인물")} · ${model}` : ko("Character", "인물") };
-	}
-	const types = {
-		shot: ko("Scene", "장면"),
-		light: ko("Light", "조명"),
-		characters: ko("Folder", "폴더"),
-		environment: ko("Environment", "환경"),
-		props: ko("Folder", "폴더"),
-	};
-	return { name: HIERARCHY_INSPECTOR_TITLES[id] ?? ko("Selection", "선택 항목"), type: types[id] ?? "" };
-}
 
 export default function DetailsSlot() {
 	const {
 		sculptPanel, selectedHierarchyId, sceneSaveError, studioAgentError, embedMode, studioAgentMode,
 		setStudioAgentMode, AgentPanel, setAgentCollapsed, scenes, activeSceneId,
-		buildStudioAgentContext, highlightAgentTargets, generateI2vMotionFromUi, selectedSceneObject, rigSelection,
+		buildStudioAgentContext, highlightAgentTargets, selectedSceneObject, rigSelection,
 		inspectorActionsOpen, setInspectorActionsOpen, runStudioAction, deleteSelectedSceneObject, inspectorHasContent,
-		keyLightSelected, keyLight, isCameraSelection,
+		keyLightSelected, keyLight, lighting, isCameraSelection,
 		shot, moveSequence, cameraKeys, activeShot,
 		isCharacterSelection, showB, characters, openStudio,
 		posing, workflowMode, activeChar,
-		activeCharIndex, i2vMotionModel, i2vMotionActions, setI2vMotionStudioOpen,
+		activeCharIndex,
 		selectablePoses, ikMode, ikApplyPoseAsKey, motion, setStudioPick,
-		appContext, removePose, setPhotoPoseError, photoPoseFileRef, photoPoseState,
-		photoPoseError, activeRig, saveCurrentPose, multiModelStatus, multiModelStage,
-		multiModelFileRef, chooseMultiModelFile, multiModelSource, multiModelUrl, setMultiModelUrl,
-		useMultiModelUrl, pasteMultiModelUrl, multiModelProgress, multiModelError, multiModelFootage,
-		extractMultiModelMotion, multiModelExtract, multiModelTake, multiModelExtractProgress, multiModelExtractError,
-		bridge, promptBlocksReveal, promptClips, selectedPromptId, setSelectedPromptId,
-		setArdyPrompt, setTlFrame, tlFrameCount, ardySeed,
-		changeArdySeed, lineEditMode, toggleLineEditMode, linePreviewUrl, lineCurve,
-		lineDrifted, lineTrack, setLineTrack, linePinMode, setLinePinMode,
-		linePins, lineClipFrames, lineEditRange, setLineRange, lineRadius,
-		changeLineRadius, lineCurveDirty, lineEditFrom, lineEditTo, lineCurvePointCount,
-		lineDriftHint, lineCurveHidden, linePreviewBusy, linePreviewMs, linePreviewError,
-		generationBusy, bridgeChecking, lineReadinessState, runLineEdit, openMotionSetup,
-		recheckMotionHealth, resetLineCurve, exitLineEditMode, readinessState, ardyRunning,
-		cancelArdy, ardyStatus, ardyOutcome, tlFrame,
-		isRigSelection, ikChains, ikFocus, footSnap, poseObjectOpacity, setPoseObjectOpacity, capturePoseImage, collisionCleanupSupported,
-		autoPhysicsRunning, physicsProgress, physicsPreview,
-		physicsShow, physicsOptions, platformFitRunning, platformFitProgress, platformFitLast,
-		platformFitApplied, changePhysicsOptions, runAutoPhysics, showPhysicsPreview, applyPhysicsPreview,
-		cancelPhysicsPreview, ikEditTool, setIkEditTool, showTrails, setShowTrails,
-		trailFalloffS, setTrailFalloffS, trailEdit, trailTrackFocus, selectTrailTrack, clearTrailTrackFocus, runTrailRegeneration, trailReadinessState,
+		appContext, removePose, activeRig, saveCurrentPose,
+		tlFrame,
+		isRigSelection, ikChains, ikFocus, footSnap, poseObjectOpacity, setPoseObjectOpacity, capturePoseImage,
+		ikEditTool, setIkEditTool,
 		pendingIkEdit, applyPendingIkEdit, cancelPendingIkEdit,
 		rangePins, rangePinResiduals, rangePinSelection, rangePinPartPick, rangePinPreview,
 		sceneObjects, setRangePinSelection, setRangePinPartPick, previewRangePinDraft, applyRangePinDraft,
@@ -99,7 +45,7 @@ export default function DetailsSlot() {
 		matteTolerance, setMatteTolerance, matteBrush, setMatteBrush, matteShrink,
 		setMatteShrink, matteFeather, setMatteFeather, matteBusy,
 		autoColor, recentObjectColors, rememberSceneObjectColor, objectColorDraft, setObjectColorDraft,
-		posePhotoFile, posingIndex, posingChar, charA, allPoses,
+		posingIndex, posingChar, charA, allPoses,
 		studioPick, posingClosing, closeStudio, castDomain, setToast,
 		savePose, beginWorkspaceResize,
 	} = useStudioShell();
@@ -164,8 +110,8 @@ export default function DetailsSlot() {
 		{!inspectorHasContent && (
 			<p className="inspector-empty" data-inspector-empty role="status">
 				{ko(
-					"Select something in the hierarchy — the scene, the camera, a character, the environment or a prop — and its settings appear here.",
-					"계층에서 항목을 고르면 — 씨, 카메라, 캐릭터, 환경, 소품 — 그 설정이 여기 나타납니다.",
+					"Select the camera, a character, the light, the environment or a prop in the Outliner, and its settings appear here.",
+					"아웃라이너에서 카메라, 캐릭터, 조명, 환경, 소품을 고르면 그 설정이 여기 나타납니다.",
 				)}
 			</p>
 		)}
@@ -175,7 +121,7 @@ export default function DetailsSlot() {
 
 			{/* Camera animation is authored against the same playhead as motion,
 			    so keep its controls beside the Motion tools as well as Shot setup. */}
-			<LightPanel keyLightSelected={keyLightSelected} keyLight={keyLight} />
+			<LightPanel keyLightSelected={keyLightSelected} keyLight={keyLight} lighting={lighting} />
 			{/* Lens, Recenter and Record used to live here as well as in the
 			    viewport camera bar and the topbar Export menu. One home each
 			    (#193, R1): framing is the bar's job, delivery is Export's, and
@@ -218,9 +164,6 @@ export default function DetailsSlot() {
 		<PosePanel
 			isCharacterSelection={isCharacterSelection}
 			activeCharIndex={activeCharIndex}
-			i2vMotionModel={i2vMotionModel}
-			i2vMotionActions={i2vMotionActions}
-			setI2vMotionStudioOpen={setI2vMotionStudioOpen}
 			selectablePoses={selectablePoses}
 			activeChar={activeChar}
 			ikMode={ikMode}
@@ -229,87 +172,10 @@ export default function DetailsSlot() {
 			setStudioPick={setStudioPick}
 			setToast={appContext.notify}
 			removePose={removePose}
-			setPhotoPoseError={setPhotoPoseError}
-			photoPoseFileRef={photoPoseFileRef}
-			photoPoseState={photoPoseState}
-			photoPoseError={photoPoseError}
 			activeRig={activeRig}
 			saveCurrentPose={saveCurrentPose}
 		/>
 
-		<VideoCapturePanel
-			isCharacterSelection={isCharacterSelection}
-			multiModelStatus={multiModelStatus}
-			multiModelStage={multiModelStage}
-			multiModelFileRef={multiModelFileRef}
-			chooseMultiModelFile={chooseMultiModelFile}
-			multiModelSource={multiModelSource}
-			multiModelUrl={multiModelUrl}
-			setMultiModelUrl={setMultiModelUrl}
-			useMultiModelUrl={useMultiModelUrl}
-			pasteMultiModelUrl={pasteMultiModelUrl}
-			multiModelProgress={multiModelProgress}
-			multiModelError={multiModelError}
-			multiModelFootage={multiModelFootage}
-			extractMultiModelMotion={extractMultiModelMotion}
-			multiModelExtract={multiModelExtract}
-			multiModelTake={multiModelTake}
-			multiModelExtractProgress={multiModelExtractProgress}
-			multiModelExtractError={multiModelExtractError}
-			activeChar={activeChar}
-			bridge={bridge}
-		/>
-		<PromptBlocksPanel
-			isCharacterSelection={isCharacterSelection}
-			promptBlocksReveal={promptBlocksReveal}
-			promptClips={promptClips}
-			selectedPromptId={selectedPromptId}
-			setSelectedPromptId={setSelectedPromptId}
-			setArdyPrompt={setArdyPrompt}
-			setTlFrame={setTlFrame}
-			tlFrameCount={tlFrameCount}
-			ardySeed={ardySeed}
-			changeArdySeed={changeArdySeed}
-			motion={motion}
-			lineEditMode={lineEditMode}
-			toggleLineEditMode={toggleLineEditMode}
-			linePreviewUrl={linePreviewUrl}
-			lineCurve={lineCurve}
-			lineDrifted={lineDrifted}
-			lineTrack={lineTrack}
-			setLineTrack={setLineTrack}
-			linePinMode={linePinMode}
-			setLinePinMode={setLinePinMode}
-			linePins={linePins}
-			lineClipFrames={lineClipFrames}
-			lineEditRange={lineEditRange}
-			setLineRange={setLineRange}
-			lineRadius={lineRadius}
-			changeLineRadius={changeLineRadius}
-			lineCurveDirty={lineCurveDirty}
-			lineEditFrom={lineEditFrom}
-			lineEditTo={lineEditTo}
-			lineCurvePointCount={lineCurvePointCount}
-			lineDriftHint={lineDriftHint}
-			lineCurveHidden={lineCurveHidden}
-			linePreviewBusy={linePreviewBusy}
-			linePreviewMs={linePreviewMs}
-			linePreviewError={linePreviewError}
-			generationBusy={generationBusy}
-			bridgeChecking={bridgeChecking}
-			bridge={bridge}
-			lineReadinessState={lineReadinessState}
-			runLineEdit={runLineEdit}
-			openMotionSetup={openMotionSetup}
-			recheckMotionHealth={recheckMotionHealth}
-			resetLineCurve={resetLineCurve}
-			exitLineEditMode={exitLineEditMode}
-			readinessState={readinessState}
-			ardyRunning={ardyRunning}
-			cancelArdy={cancelArdy}
-			ardyStatus={ardyStatus}
-			ardyOutcome={ardyOutcome}
-		/>
 
 			<RigControlPanel
 				isRigSelection={isRigSelection}
@@ -320,44 +186,14 @@ export default function DetailsSlot() {
 				poseObjectOpacity={poseObjectOpacity}
 				setPoseObjectOpacity={setPoseObjectOpacity}
 				ikMode={ikMode}
-				collisionCleanupSupported={collisionCleanupSupported}
 				motion={motion}
-				autoPhysicsRunning={autoPhysicsRunning}
-				physicsProgress={physicsProgress}
-				physicsPreview={physicsPreview}
-				physicsShow={physicsShow}
-				physicsOptions={physicsOptions}
-				platformFitRunning={platformFitRunning}
-				platformFitProgress={platformFitProgress}
-				platformFitLast={platformFitLast}
-				platformFitApplied={platformFitApplied}
 				tlFrame={tlFrame}
-				changePhysicsOptions={changePhysicsOptions}
-				runAutoPhysics={runAutoPhysics}
-				showPhysicsPreview={showPhysicsPreview}
-				applyPhysicsPreview={applyPhysicsPreview}
-				cancelPhysicsPreview={cancelPhysicsPreview}
-				setTlFrame={setTlFrame}
 				ikEditTool={ikEditTool}
 				setIkEditTool={setIkEditTool}
-				showTrails={showTrails}
-				setShowTrails={setShowTrails}
-				trailFalloffS={trailFalloffS}
-				setTrailFalloffS={setTrailFalloffS}
-				trailEdit={trailEdit}
-				trailTrackFocus={trailTrackFocus}
-				selectTrailTrack={selectTrailTrack}
-				clearTrailTrackFocus={clearTrailTrackFocus}
+				
 				pendingIkEdit={pendingIkEdit}
 				applyPendingIkEdit={applyPendingIkEdit}
 				cancelPendingIkEdit={cancelPendingIkEdit}
-				generationBusy={generationBusy}
-				bridgeChecking={bridgeChecking}
-				bridge={bridge}
-				runTrailRegeneration={runTrailRegeneration}
-				trailReadinessState={trailReadinessState}
-				openMotionSetup={openMotionSetup}
-				recheckMotionHealth={recheckMotionHealth}
 				rangePins={rangePins}
 				rangePinResiduals={rangePinResiduals}
 				rangePinSelection={rangePinSelection}
@@ -419,6 +255,7 @@ export default function DetailsSlot() {
 			objectColorDraft={objectColorDraft}
 			setObjectColorDraft={setObjectColorDraft}
 		/>
+		<ObjectLookPanel />
 		</>)}
 			</div>
 			{selectedSceneObject && (
@@ -465,23 +302,8 @@ export default function DetailsSlot() {
 				</button>
 				<AgentPanel embedded hidden={!studioAgentMode} surface="studio" defaultCollapsed onCollapsedChange={setAgentCollapsed}
 					sceneName={scenes.find((entry) => entry.id === activeSceneId)?.name ?? ko("Untitled Scene", "제목 없는 씬")}
-					buildContext={buildStudioAgentContext} onReceipt={highlightAgentTargets}
-					onI2vAction={(instruction) => void generateI2vMotionFromUi(instruction)} />
+					buildContext={buildStudioAgentContext} onReceipt={highlightAgentTargets} />
 			</div>}
-			{/* The reference-photo picker sits outside the panel so re-mounting
-			    the studio cannot cancel an in-flight read. */}
-			<input
-				ref={photoPoseFileRef}
-				className="multimodel-file-input"
-				type="file"
-				accept={ASSET_IMAGE_TYPES.join(",")}
-				data-pose-photo-input
-				onChange={(event) => {
-					const file = event.target.files?.[0];
-					event.target.value = ""; // the same photo must be re-pickable after an error
-					if (file) posePhotoFile(file);
-				}}
-			/>
 			{/* Pose Studio docks under the inspector instead of floating over
 			    the shot: the viewport keeps the posed character unobstructed. */}
 			{posing && (
@@ -518,12 +340,6 @@ export default function DetailsSlot() {
 						setToast(ko("Back to the default pose", "기본 포즈로 돌아왔어요"));
 					}}
 					onSave={savePose}
-					onPhoto={() => {
-						setPhotoPoseError("");
-						photoPoseFileRef.current?.click();
-					}}
-					photoState={photoPoseState}
-					photoError={photoPoseError}
 					onDelete={removePose}
 					onClose={closeStudio}
 				/>

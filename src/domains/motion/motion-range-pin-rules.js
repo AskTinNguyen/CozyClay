@@ -1,4 +1,4 @@
-import { rangePinTracks } from "../../ardy/range-pin.js";
+import { rangePinTracks } from "../../motion/range-pin.js";
 import { ko } from "../../locale.js";
 
 export function ensureRangePinState(state) {

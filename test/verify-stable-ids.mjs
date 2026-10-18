@@ -12,7 +12,6 @@ import {
 } from "../src/cuts.js";
 import { readSceneDocument, serializeSceneDocument } from "../src/scenes.js";
 import { readShotAuthoring, serializeShotAuthoring } from "../src/shot-authoring.js";
-import { toArdyWaypoints } from "../src/ardy/waypoints.js";
 
 const framing = (fovDeg) => ({ pos: { x: 1, y: 1.6, z: 2.4 }, yaw: 0.2, pitch: -0.1, fovDeg });
 
@@ -85,10 +84,9 @@ const legacySceneRaw = JSON.stringify({ version: 4, activeSceneId: "scene", scen
 const legacyScene = readSceneDocument(legacySceneRaw).document;
 const legacyLayer = legacyScene.scenes[0].stage.characters[0].layer;
 assert.deepEqual(legacyLayer.waypoints.map(({ id, ...waypoint }) => waypoint), legacyStage.characters[0].layer.waypoints.map(({ id, ...waypoint }) => waypoint), "legacy waypoints retain semantic fields");
-assert.deepEqual(legacyLayer.promptClips.map(({ id, ...clip }) => clip), legacyStage.characters[0].layer.promptClips.map(({ id, ...clip }) => clip), "legacy prompt clips retain semantic fields");
+assert.equal(legacyLayer.promptClips, undefined, "legacy prompt clips (ARDY generation blocks) are dropped");
 assert.deepEqual(readSceneDocument(legacySceneRaw).document.scenes[0].stage.characters[0].layer, legacyLayer, "legacy stage IDs are deterministic");
 assert.equal(new Set(legacyLayer.waypoints.map((item) => item.id)).size, legacyLayer.waypoints.length, "legacy waypoint IDs are unique");
-assert.equal(new Set(legacyLayer.promptClips.map((item) => item.id)).size, legacyLayer.promptClips.length, "legacy prompt IDs are unique");
 
 const legacyShotRaw = JSON.stringify({
 	version: 4,
@@ -109,15 +107,5 @@ const sceneRoundTrip = readSceneDocument(serializeSceneDocument(legacyScene)).do
 assert.deepEqual(sceneRoundTrip.scenes[0].stage.characters[0].layer, legacyLayer, "scene save/open preserves layer IDs");
 const shotRoundTrip = readShotAuthoring(serializeShotAuthoring(legacyShot)).state;
 assert.deepEqual(shotRoundTrip, legacyShot, "shot-document save/open preserves IDs");
-
-// Given: authored IDs are present internally.
-// When: the ARDY waypoint payload is built.
-// Then: external semantic payload fields remain unchanged and IDs do not leave the app.
-const ardyPayload = toArdyWaypoints(legacyLayer.waypoints, 0);
-assert.deepEqual(ardyPayload, [
-	{ frame: 24, x: 0, z: 0, heading: null },
-	{ frame: 48, x: 2, z: 2, heading: 0.5 },
-	{ frame: 72, x: 4, z: 4, heading: null },
-], "ARDY waypoint semantics are unchanged and IDs stay internal");
 
 console.log("stable ID checks PASS");

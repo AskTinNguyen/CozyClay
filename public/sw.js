@@ -9,7 +9,8 @@ const CACHE_PREFIX = "cozyclay-pwa-";
 // v6 also: hosted demo and ticket pages are network-only; never freeze queue state.
 // v7: force-refresh the asset cache — v6 clients were holding a stale app shell
 // (the html-flex crash-screen regression) and never re-fetching it.
-const CACHE_NAME = `${CACHE_PREFIX}v7`;
+// v8: CozyClay 3 drops the shipped walk clip (motion is compiled in the studio).
+const CACHE_NAME = `${CACHE_PREFIX}v8`;
 // The installable app is the studio, not the landing page.
 const APP_SHELL = "/app/";
 const CORE_ASSETS = [
@@ -23,7 +24,6 @@ const CORE_ASSETS = [
 	"./icons/apple-touch-icon.png",
 	"./favicon.ico",
 	"./fonts/inter-latin.woff2",
-	"./demo/walk-then-stop.npz",
 	"./models/x-bot-tpose.fbx",
 	"./models/y-bot-tpose.fbx",
 ];
@@ -79,14 +79,11 @@ self.addEventListener("message", (event) => {
 self.addEventListener("fetch", (event) => {
 	const { request } = event;
 	const url = new URL(request.url);
-	// The composer and ticket are live API surfaces. A stale shell would either
-	// submit with an old Turnstile key or show a frozen queue position.
-	if (url.pathname.startsWith("/d/") || url.pathname.startsWith("/demo/")) return;
 	// Landing-page playground presets are edited in place; a cache-first hit
 	// would pin the first version a visitor ever saw.
 	if (url.pathname.startsWith("/scenes/")) return;
 	if (request.method !== "GET") return;
-	if (url.origin !== self.location.origin || url.pathname.includes("/ardy/")) return;
+	if (url.origin !== self.location.origin) return;
 	if (request.headers.has("range")) {
 		event.respondWith((async () => {
 			try {

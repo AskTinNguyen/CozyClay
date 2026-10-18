@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { shotBlockGeometry } from "../src/ardy/timeline-coordinates.js";
+import { shotBlockGeometry } from "../src/motion/timeline-coordinates.js";
 
 const shots = [
 	{ id: "a", name: "Wide", startFrame: 10, endFrame: 29 },
@@ -13,12 +13,12 @@ assert.deepEqual(shotBlockGeometry(shots, 1, 100), { startFrame: 40, endFrame: 5
 assert.deepEqual(shotBlockGeometry(shots, 2, 100), { startFrame: 70, endFrame: 79, startPct: 70 / 99, endPct: 79 / 99 });
 assert.equal(shotBlockGeometry(shots, 5, 100), null);
 
-const timeline = readFileSync(new URL("../src/ardy/timeline.jsx", import.meta.url), "utf8");
+const timeline = readFileSync(new URL("../src/motion/timeline.jsx", import.meta.url), "utf8");
 import { readStudioSource } from "./bus/verify-domain-modules.mjs";
 const app = readStudioSource();
 const commands = readFileSync(new URL('../src/commands/shot.js', import.meta.url), 'utf8');
 const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
-const v2Css = readFileSync(new URL("../src/ardy/timeline.css", import.meta.url), "utf8");
+const v2Css = readFileSync(new URL("../src/motion/timeline.css", import.meta.url), "utf8");
 assert.ok(timeline.includes('const SHOTS_LANE = "Shots"'));
 assert.ok(timeline.includes('className={"timeline v2-sequencer"'));
 assert.ok(v2Css.includes('--tl-track-tree-width: 190px') && v2Css.includes('--tl-track-row-height: 38px'));

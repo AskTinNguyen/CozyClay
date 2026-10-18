@@ -11,6 +11,7 @@ import { elementByPath } from "../studio-elements.js";
 import { saveAutoColor } from "../auto-color.js";
 import { trackFeature } from "../analytics.js";
 import { GUIDE_LABELS, nextGuideMode } from "../shot-guides.js";
+import GhostsMenuGroup from "./GhostsMenuGroup.jsx";
 import "./viewport.css";
 
 // G1: the single mode+tool pill. Keys 1-5 and W/E/R are bound in App's
@@ -40,7 +41,6 @@ const ICON = {
 	rotate: "M13.25 8A5.25 5.25 0 1 1 11.7 4.3 M13.25 2.5v2.75H10.5",
 	scale: "M2.5 8.5v4a1 1 0 0 0 1 1h4 M8.5 2.5h5v5 M13.5 2.5 7.5 8.5",
 	ik: "M2.5 13.5 6.5 9l3 2.2 4-7.7 M6.5 9h.01 M9.5 11.2h.01",
-	trail: "M2 12.5c3 0 3-9 6-9s3 9 6 9",
 	pin: "M8 14.5v-4 M5 2h6 M6.2 2v3.6L4.5 10.5h7L9.8 5.6V2",
 	blocks: "M2 3.5h7.5v3.5H2z M6.5 9h7.5v3.5H6.5z",
 	refine: "M10.5 2.5l3 3L6 13H3v-3z",
@@ -63,12 +63,10 @@ function RailIcon({ name, size = 16 }) {
 
 // The gizmo's snap increments (TRANSLATE_SNAP / ROTATE_SNAP in
 // src/scene-objects.js). They are fixed, so the value group names them.
-const SNAP_MOVE = "5cm";
-const SNAP_TURN = "5°";
+const SNAP_MOVE = "5cm", SNAP_TURN = "5°";
 
 // Editor lens range: shotsDomain.changeLens and the FOV slider take 14-90°.
-const FOV_MIN = 14;
-const FOV_MAX = 90;
+const FOV_MIN = 14, FOV_MAX = 90;
 
 // "+ Add › Character" stands the new body one metre along X per existing
 // character, inside the same stage clamp the Content drag applies.
@@ -117,15 +115,14 @@ function MenuItem({ checked, role = "menuitemradio", className = "", children, .
 export default function ViewportToolbar() {
 	const {
 		workflowMode, selectWorkflowMode, poseRefusal, gizmoMode, setGizmoMode, snapEnabled,
-		setSnapEnabled, preset, applyPreset, cameraPresetId, i2vMotionCameraLocked,
+		setSnapEnabled, preset, applyPreset, cameraPresetId,
 		runStudioAction, shotAspectKey, fovDeg, shotsDomain, shot, shots, activeShot,
 		setNonce, workspaceLayout, viewMenuTriggerRef, viewMenuOpen,
 		setViewMenuOpen, viewLooksActive, gridView, setGridView, guideMode,
 		autoColor, setAutoColor, isCharacterSelection, partColoursChoice, embedMode,
 		agentCollapsed, addSceneObject, spawnCharacter, characters, flySpeed,
-		ikEditTool, setIkEditTool, showTrails, setShowTrails, motion, setRangePinPartPick,
-		trailFalloffS, setTrailFalloffS, lineEditMode, exitLineEditMode, enterRefineMode,
-		refineDisabledReason, previsMode, sculptView, requestSculptView,
+		ikEditTool, setIkEditTool, motion, setRangePinPartPick,
+		previsMode, sculptView, requestSculptView,
 	} = useStudioShell();
 	const menu = useOverlayMenu();
 
@@ -136,7 +133,6 @@ export default function ViewportToolbar() {
 		setAutoColor(next);
 	};
 
-	const refineReason = lineEditMode ? null : refineDisabledReason();
 	const tools = {
 		scene: [
 			{ key: "W", id: "move", name: ko("Move", "이동"), active: gizmoMode === "move", pick: () => setGizmoMode("move") },
@@ -145,11 +141,7 @@ export default function ViewportToolbar() {
 		],
 		pose: [
 			{ key: "W", id: "ik", name: ko("Pose fix (IK parts)", "포즈 수정 (IK 파츠)"), active: ikEditTool === "ik", pick: () => setIkEditTool("ik") },
-			{
-				key: "E", id: "trail", name: ko("Path fix (motion trail)", "경로 수정 (궤적선)"), active: ikEditTool === "trail",
-				refused: showTrails ? null : ko("Turn Trails on in Show to edit the motion path", "경로를 수정하려면 표시에서 궤적선을 켜세요"),
-				pick: () => setIkEditTool("trail"),
-			},
+			
 			{
 				key: "R", id: "pin", name: ko("Pin (range pin)", "고정 (범위 고정)"), active: ikEditTool === "pin",
 				refused: motion ? null : ko("Pinning needs a motion take", "고정하려면 모션 테이크가 필요해요"),
@@ -160,16 +152,8 @@ export default function ViewportToolbar() {
 			{ key: "W", id: "move", name: ko("Move camera", "카메라 이동"), active: gizmoMode === "move", pick: () => setGizmoMode("move") },
 			{ key: "E", id: "rotate", name: ko("Rotate camera", "카메라 회전"), active: gizmoMode === "rotate", pick: () => setGizmoMode("rotate") },
 		],
-		motion: [
-			{
-				key: "W", id: "blocks", name: ko("Blocks (select and move prompt blocks)", "블록 (프롬프트 블록 선택·이동)"), active: !lineEditMode,
-				pick: () => { if (lineEditMode) exitLineEditMode(); },
-			},
-			{
-				key: "E", id: "refine", name: ko("Refine (edit the path line)", "다듬기 (경로선 편집)"), active: lineEditMode,
-				refused: refineReason, pick: () => { if (!lineEditMode) enterRefineMode(); },
-			},
-		],
+		// Motion is compiled by the agent (motion.compile); the department has no tools of its own.
+		motion: [],
 		// Sculpt mode's W/E/R swing the turntable camera to a reference view.
 		sculpt: [
 			{ key: "W", id: "front", name: ko("Front view", "정면 보기"), active: sculptView?.view === "front", pick: () => requestSculptView("front") },
@@ -200,33 +184,6 @@ export default function ViewportToolbar() {
 			<span className="vp-value-part"><RailIcon name="grid" size={14} />{SNAP_MOVE}</span>
 			<span className="vp-value-part"><RailIcon name="angle" size={14} />{SNAP_TURN}</span>
 		</button>
-	) : workflowMode === "pose" ? (
-		<div className="vp-menu-wrap" data-vp-menu="influence">
-			<button
-				type="button"
-				className="vp-value"
-				aria-haspopup="dialog"
-				aria-expanded={menu.open === "influence"}
-				title={ko("Influence range — how far an edit blends into nearby frames", "영향 범위 — 수정이 주변 프레임에 섞이는 길이")}
-				onClick={() => menu.toggle("influence")}
-			>
-				{trimNumber(trailFalloffS)}s
-			</button>
-			{menu.open === "influence" && (
-				<div className="vp-menu vp-slider-popover" role="dialog" aria-label={ko("Influence range", "영향 범위")}>
-					<input
-						type="range"
-						min={0.1}
-						max={2}
-						step={0.1}
-						value={trailFalloffS}
-						aria-label={ko("Influence range", "영향 범위")}
-						onChange={(event) => setTrailFalloffS(Number(event.target.value))}
-					/>
-					<output>{trimNumber(trailFalloffS)}s</output>
-				</div>
-			)}
-		</div>
 	) : workflowMode === "camera" ? (
 		<>
 			<div className="vp-menu-wrap" data-vp-menu="lens">
@@ -248,7 +205,6 @@ export default function ViewportToolbar() {
 								key={mm}
 								data-lens={mm}
 								checked={shot.focalMm === mm}
-								disabled={i2vMotionCameraLocked}
 								onClick={() => { shotsDomain.changeLens(fov); menu.close(); }}
 							>
 								{mm}mm
@@ -262,7 +218,6 @@ export default function ViewportToolbar() {
 								max={FOV_MAX}
 								step="1"
 								value={fovDeg}
-								disabled={i2vMotionCameraLocked}
 								onChange={(event) => shotsDomain.changeLens(Number(event.target.value))}
 							/>
 							<output>{Math.round(fovDeg)}°</output>
@@ -460,7 +415,6 @@ export default function ViewportToolbar() {
 									<select
 										aria-label={ko("Camera preset", "카메라 프리셋")}
 										value={cameraPresetId ?? ""}
-										disabled={i2vMotionCameraLocked}
 										onChange={(event) => {
 											const id = event.target.value;
 											if (!id) { runStudioAction("stage.setFilmback", { cameraPresetId: null }); return; }
@@ -577,21 +531,7 @@ export default function ViewportToolbar() {
 									{ko("Composition guides", "구도 가이드")}
 									<small>{ko(GUIDE_LABELS[guideMode].en, GUIDE_LABELS[guideMode].ko)}</small>
 								</button>
-								<button
-									type="button"
-									role="menuitemcheckbox"
-									className={"view-menu-item trails-toggle" + (showTrails ? " active" : "")}
-									aria-checked={showTrails}
-									aria-pressed={showTrails}
-									title={ko("Motion trails while posing", "포즈 편집 중 궤적선")}
-									onClick={() => {
-										if (showTrails && ikEditTool === "trail") setIkEditTool("ik");
-										setShowTrails(!showTrails);
-									}}
-								>
-									<span className="view-menu-mark" aria-hidden="true">{showTrails ? "✓" : ""}</span>
-									{ko("Trails", "궤적선")}
-								</button>
+								<GhostsMenuGroup />
 								{/* Part colours repaint a BODY, so the section only exists
 								    while a character is selected (R2). */}
 								{isCharacterSelection && (

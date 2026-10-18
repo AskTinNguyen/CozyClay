@@ -64,7 +64,7 @@ await evaluate("document.querySelector('.agent-send:not(.stop)').click()");
 // The UI may briefly render the running state between CDP evaluations; wait for
 // the observable terminal state rather than relying on a Stop-button race.
 await waitFor("turn end", () => evaluate("!document.querySelector('.agent-send.stop') && !!document.querySelector('.agent-row.user')"), 360000);
-const labels = await evaluate("[...document.querySelectorAll('.agent-panel .agent-tool-card .agent-tool-label')].map((node) => node.textContent.trim())");
+const labels = await evaluate("[...document.querySelectorAll('.agent-panel .agent-step[data-step-kind=\"tool\"] .agent-step-label')].map((node) => node.textContent.trim())");
 // Bring every node into view: the agent places new nodes to the right of the graph.
 await evaluate("(() => { const fit = document.querySelector('.react-flow__controls-fitview'); fit?.click(); return !!fit; })()");
 await new Promise((resolve) => setTimeout(resolve, 800));

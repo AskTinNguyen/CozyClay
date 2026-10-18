@@ -8,7 +8,7 @@ import { readStudioSource } from "./bus/verify-domain-modules.mjs";
 const app = readStudioSource();
 // Playback lives in the timeline transport only (#193 removed the PlayView
 // bar's duplicate), so its icon contract is asserted where the buttons are.
-const timeline = readFileSync(new URL("../src/ardy/timeline.jsx", import.meta.url), "utf8");
+const timeline = readFileSync(new URL("../src/motion/timeline.jsx", import.meta.url), "utf8");
 
 // #523: the live workspace status is the top bar's MCP state (2a).
 assert.match(app, /ko\("MCP connected", "MCP 연결됨"\)/, "workspace status needs a Korean label");

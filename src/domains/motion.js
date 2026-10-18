@@ -1,24 +1,11 @@
-import { useState, useEffect, useSyncExternalStore, useContext, useRef, useMemo } from "react";
-import { AppContext } from '../app-context.js';
+import { useState, useEffect, useSyncExternalStore, useRef, useMemo } from "react";
 import { createDocumentStore } from '../document-store.js';
 import { useDocumentDomain } from '../store/use-document-store.js';
-import { createPhysicsProgress } from "../ardy/physics-panel.jsx";
 import {
-	TIMELINE_FPS,
 	hierarchyIdForIkFocus,
-	ARDY_PRESERVE_DEFAULT,
 	REST_BONES,
-	ARDY_SEED_MAX,
-	lineTrackLabel,
-	ARDY_DURATION_MIN,
-	buildPromptSchedule,
-	posePlacementFrame,
-	toArdySegments,
-	ARDY_FPS,
-	toArdyFrame,
 } from "../app-stage.jsx";
-import { copyPhysicsKeys, physicsKeyStamp, reviewAutoPhysics } from "../ardy/physics-review.js";
-import { fitPlatforms } from "../ardy/platform-fit.js";
+import { copyPhysicsKeys } from "../motion/physics-review.js";
 import {
 	createIkState,
 	ikTouch,
@@ -39,84 +26,46 @@ import {
 	ikBakeKeyframe,
 	ikEvaluate,
 	resolveIkRig,
-} from "../ardy/ik.js";
+} from "../motion/ik.js";
 import * as THREE from "three";
 import { StudioProtocolError } from "../studio-agent-protocol.js";
-import { restorePlaybackBones, snapshotPlaybackBones, applyMotionFrame, captureArdyRoot } from "../ardy/playback.js";
+
+import { applyTakeFrame } from "../motion3/playback.js";
 import { isKo, ko } from "../locale.js";
-import { characterScaleFor, loadMotionFromUrl } from "../ardy/npz.js";
-import { supportHeightForObject, OBJECT_LIBRARY } from "../scene-objects.js";
-import { applySupportRise, autoRoofDrop, applyAutoFall, applyRootDrop, normalizeRootDrop } from "../ardy/root-drop.js";
 import { isProxyFigure } from "../scenes.js";
-import { characterCapabilities, kindRefusal, refuseRigOnly } from "../character-kind.js";
-import { retimeMotion } from "../ardy/retime.js";
-import {
-	createMotionEdit,
-	motionEditLayout,
-	renderMotionEdit,
-	remapFrameKeyMap,
-	remapTimelineFrame,
-} from "../ardy/motion-edit.js";
+import { refuseRigOnly } from "../character-kind.js";
 import { DEFAULT_POSE, restoreBindPositions, applyPose, applyHipsOffset } from "../poses.js";
-import { normalizeMotionCalibration, applyMotionCalibration } from "../ardy/motion-calibration.js";
-import { collisionBlockers } from "../ardy/collision-blockers.js";
-import { fixCollisions, fixCollisionsRange } from "../ardy/fix-collisions.js";
-import { trackFeature, startMotionRequest, motionPreflightReason, trackActivation } from "../analytics.js";
-import { buildArdyPose } from "../ardy/export.js";
-import { slateLine } from "../shot.js";
-import { motionReadiness } from "../motion-readiness.js";
-import { motionReadinessMessage } from "../motion-readiness-ui.jsx";
-import {
-	resolveSeed,
-	stripSourceMotion,
-	blocksFromRequest,
-	replayPayload,
-	freshRecipe,
-	withLineEdit,
-	pushTakeVersion,
-	TAKE_VERSIONS_MAX,
-} from "../take-recipe.js";
-import { buildGenerationRequest, generationRefusal } from '../motion/generation.js';
-import { planPosePin } from '../ardy/pose-pin.js';
-import { TRAIL_TRACKS, applyTrailFalloffDelta, restoreTrailEdits, trailEditRange, worldDeltaToTrailClip } from "../motion-trail.js";
-import { bakeIkDragKey, bakeIkDragRange, chainsChangedBy, ikDragRecord, ikDragTouch } from "../ardy/ik-drag.js";
-import { ikKeyJson, ikTrackKeyFromJson } from "../ardy/ik-key-json.js";
-import { findAbsoluteIkKeyConflicts } from "../trail-key-conflicts.js";
+import { bakeIkDragKey, bakeIkDragRange, chainsChangedBy, ikDragRecord, ikDragTouch } from "../motion/ik-drag.js";
+import { ikKeyJson, ikTrackKeyFromJson } from "../motion/ik-key-json.js";
 import { chooseIkEntryPose } from "../ik-camera.js";
-import { generate as ardyGenerate } from "../ardy/client.js";
-import { isLineEditUnsupported } from "../line-edit.js";
-import { openMotionDb, getMotion, putMotion } from "../motion-store.js";
-import { resolveMotionSource, decodeMotionResource, encodeMotionResource, sha256Hex } from "../motion-resources.js";
-import { applyRangePin, captureRangePinTarget, normalizeRangePin, rangePinTargetWorld, rangePinTracks, removeRangePinKeys } from "../ardy/range-pin.js";
+import { applyRangePin, captureRangePinTarget, normalizeRangePin, rangePinTargetWorld, rangePinTracks, removeRangePinKeys } from "../motion/range-pin.js";
 import { rangePinObjectMatrixAt } from "../range-pin-object-transform.js";
-import { createMotionVideoCapture } from "./motion/motion-video-capture.js";
 import { ensureRangePinState, overlappingRangePin, rangePinConflictFrames, rangePinOverlapMessage } from "./motion/motion-range-pin-rules.js";
 
+import { takeSource, normalizeTakeSource, compileTakeSource, renderTakeEdit } from "./motion/take-source.js";
 import { sameMotionIntent, emptyMotionLayer, encodeMotionKeys, decodeMotionKeys, cloneRangePin, encodeRangePins, decodeRangePins, encodeRangePinResiduals, decodeRangePinResiduals } from "./motion/motion-intent-codec.js";
 // Plain intent owns take identities and JSON keys. Decoded buffers and rig
 // preimages are copy-on-record runtime resources, never mutable store values.
 export function createMotionDomain(appContext, characters) {
-	const takes = new Map(), decoded = new WeakMap(), rigImages = new WeakMap(), previews = new Map(), prepared = new Map();
+	const takes = new Map(), decoded = new WeakMap(), rigImages = new WeakMap();
 	let running = 0;
 	const references = entries => entries.map(entry => {
-		const ref = entry.motionRef;
-		const take = ref ? { resourceId: `restore:${entry.id}:${ref.motionId ?? ref.url}`, url: ref.url ?? null, anchorX: ref.anchorX, anchorZ: ref.anchorZ,
-			rotationDeg: ref.rotationDeg, prompt: ref.prompt ?? '', ...(ref.trailEdits ? { trailEdits: ref.trailEdits } : {}), ...(ref.studioTakeId ? { studioTakeId: ref.studioTakeId } : {}) } : null;
+		const saved = normalizeTakeSource(entry.motionTake), take = saved ? restoredTake(entry.id, saved) : null;
 		// The saved Pose-mode / IK edits come back with the scene (scenes.js ikEdits).
 		const edits = entry.ikEdits;
-		return { id: entry.id, take, fullTake: take, takeVersions: ref?.url ? [{ motionUrl: ref.url, recipe: null, savedAt: Date.now(), label: ko('Loaded', '불러옴') }] : [],
-			ikKeys: edits?.keys ?? [], ikPins: edits?.pins ?? [], ikPinResiduals: edits?.pinResiduals ?? [] };
+		return { id: entry.id, take, fullTake: take, ikKeys: edits?.keys ?? [], ikPins: edits?.pins ?? [], ikPinResiduals: edits?.pinResiduals ?? [] };
 	});
-	function snapshotTake(take) {
+	// A take v3 keeps its source (spec, placement, scene) in the authored layer, so a reload
+	// or an undo past a pruned resource compiles the same bones again (take-source.js).
+	function snapshotTake(take, resourceId = crypto.randomUUID(), source = null, stored = true) {
 		if (!take) return null;
 		if (take.resourceId) return { ...take };
-		const resourceId = crypto.randomUUID(), copy = structuredClone(take);
-		takes.set(resourceId, copy);
-		return { resourceId, frames: take.frames, fps: take.fps, url: take.url ?? null, prompt: take.prompt ?? '',
-			anchorX: take.anchorX ?? 0, anchorZ: take.anchorZ ?? 0, anchorFrame: take.anchorFrame ?? 0, rotationDeg: take.rotationDeg ?? 0,
-			...(take.trailEdits ? { trailEdits: take.trailEdits } : {}),
-			editSegments: take.editSegments ?? createMotionEdit(take.frames), studioTakeId: take.studioTakeId ?? resourceId };
+		if (stored) takes.set(resourceId, structuredClone(take));
+		source ??= takeSource(take, appContext.shared.storeRef?.current?.objects ?? appContext.shared.sceneObjects);
+		return { resourceId, frames: take.frames, fps: take.fps, prompt: take.prompt ?? '', studioTakeId: take.studioTakeId ?? resourceId, ...(source ? { source } : {}), ...(take.edit ? { edit: take.edit } : {}) };
 	}
+	const restoredTake = (id, { takeId, edit, ...source }) => snapshotTake({ schema: source.schema, frames: Math.round(source.spec.frames), fps: 24,
+		prompt: source.spec.label ?? '', studioTakeId: takeId, edit }, `restore:${id}:${takeId ?? 'take-v3'}`, source, false);
 	const normalize = rows => rows.map(row => ({ ...emptyMotionLayer(row.id), ...row,
 		take: snapshotTake(row.take), fullTake: snapshotTake(row.fullTake ?? row.take),
 		ikKeys: row.ikKeys ?? [], ikPins: row.ikPins ?? [], ikPinResiduals: row.ikPinResiduals ?? [], committedIkEdits: row.committedIkEdits ?? [] }));
@@ -128,15 +77,19 @@ export function createMotionDomain(appContext, characters) {
 	const read = () => documentStore.read('motion');
 	const layer = id => read().find(row => row.id === id) ?? emptyMotionLayer(id);
 	function materialize(take) {
+		if (take?.source && !takes.has(take.resourceId)) {
+			try { const compiled = compileTakeSource(take.source); if (compiled) takes.set(take.resourceId, compiled); }
+			catch (error) { console.warn('[cozyclay] could not compile the saved take', error); }
+		}
 		if (!take || !takes.has(take.resourceId)) return null;
 		if (!decoded.has(take)) {
 			const { resourceId, ...metadata } = take;
-			decoded.set(take, { ...takes.get(resourceId), ...metadata });
+			decoded.set(take, renderTakeEdit({ ...takes.get(resourceId), ...metadata }));
 		}
 		return decoded.get(take);
 	}
 	const motionFor = id => materialize(layer(id).take), fullMotionFor = id => materialize(layer(id).fullTake);
-	const visibleMotion = id => previews.get(id) ?? motionFor(id);
+	const visibleMotion = motionFor;
 	const frame = () => appContext.live.state?.timeline.currentFrame ?? 0;
 	const rigFor = id => appContext.shared.rigs[id];
 	// Rig-only tools refuse a capsule figure by name before looking for its rig.
@@ -160,9 +113,9 @@ export function createMotionDomain(appContext, characters) {
 			const rig = rigFor(id);
 			if (rig) {
 				const resolved = resolveIkRig(rig); if (resolved) Object.assign(state, resolved, { rig });
-				if (savedRigs?.has(id) && !previews.has(id)) appContext.shared.restoreExportRig(savedRigs.get(id));
+				if (savedRigs?.has(id)) appContext.shared.restoreExportRig(savedRigs.get(id));
 				else if (resolved) {
-					if (take) applyMotionFrame(rig, take, Math.min(frame(), take.frames - 1));
+					if (take) applyTakeFrame(rig, take, Math.min(frame(), take.frames - 1));
 					else {
 						const character = cast.read().find(entry => entry.id === id);
 						restoreBindPositions(rig); applyPose(rig, { ...REST_BONES, ...(character?.pose ?? DEFAULT_POSE).bones });
@@ -176,7 +129,6 @@ export function createMotionDomain(appContext, characters) {
 		const id = appContext.shared.loadedLayerCharRef.current;
 		appContext.shared.ikStateRef.current = states.get(id) ?? createIkState();
 		appContext.shared.bufferRef.current = { ...appContext.shared.bufferRef.current, motion: visibleMotion(id), ik: appContext.shared.ikStateRef.current };
-		appContext.shared.takeRecipeRef.current = layer(id).takeRecipe;
 		domain.onProject?.(); viewRevision++;
 	}
 	const unsubscribe = documentStore.subscribe(project);
@@ -270,60 +222,16 @@ export function createMotionDomain(appContext, characters) {
 			for (const [track, key] of incoming) entry.set(track, key); state.keys.set(at, entry);
 		});
 	}
-	function castWrite(update) { return appContext.recordAction('cast', () => appContext.storeDomain('cast').write(update), null, true); }
 	function synchronizeTimeline() { appContext.storeDomain('cast').syncTimeline(); }
-	function replace(id, take, { fullTake = take, ikKeys = [], ikPins = [], ikPinResiduals = [],
-		recipe = take ? { seed: null, blocks: [{ prompt: take.prompt ?? '', duration: take.frames / take.fps }], lineEdits: [] } : null,
-		versions = take?.url ? pushTakeVersion(layer(id).takeVersions, { motionUrl: take.url, recipe, savedAt: Date.now(), label: ko('Loaded', '불러옴') }, TAKE_VERSIONS_MAX) : layer(id).takeVersions,
-	} = {}) {
-		previews.delete(id);
-		writeLayer(id, { take: snapshotTake(take), fullTake: snapshotTake(fullTake), ikKeys, ikPins, ikPinResiduals, takeRecipe: recipe, takeVersions: versions, committedIkEdits: [] });
+	// Install a take (motion.compile): one descriptor serves as both the visible and the full take.
+	function replace(id, take, { ikKeys = [], ikPins = [], ikPinResiduals = [] } = {}) {
+		const descriptor = snapshotTake(take);
+		writeLayer(id, { take: descriptor, fullTake: descriptor, ikKeys, ikPins, ikPinResiduals, committedIkEdits: [] });
 		synchronizeTimeline();
 	}
 	function clear(id) {
-		previews.delete(id);
-		writeLayer(id, { take: null, fullTake: null, ikKeys: [], ikPins: [], ikPinResiduals: [], committedIkEdits: [], takeRecipe: null });
-		castWrite(rows => rows.map(row => row.id === id ? { ...row, scale: 1, motionRef: null,
-			layer: { ...row.layer, promptClips: [] } } : row));
+		writeLayer(id, { take: null, fullTake: null, ikKeys: [], ikPins: [], ikPinResiduals: [], committedIkEdits: [] });
 		synchronizeTimeline();
-	}
-	function editSegments(id, segments) {
-		const full = fullMotionFor(id), take = motionFor(id);
-		if (!full || !take) throw new StudioProtocolError('TARGET_NOT_READY', 'This character has no take to edit.');
-		const previous = take.editSegments, rendered = { ...renderMotionEdit(full, segments), url: null };
-		const keys = remapFrameKeyMap(decodeMotionKeys(layer(id).ikKeys), previous, segments);
-		writeLayer(id, { take: snapshotTake(rendered), ikKeys: encodeMotionKeys(keys) });
-		castWrite(rows => rows.map(row => row.id !== id ? row : { ...row, layer: { ...row.layer,
-			promptClips: row.layer.promptClips.flatMap(clip => {
-				const start = remapTimelineFrame(previous, segments, clip.startFrame), end = remapTimelineFrame(previous, segments, clip.endFrame);
-				if (start === null && end === null) return [];
-				const startFrame = Math.max(0, Math.min(start ?? 0, rendered.frames - 1));
-				const endFrame = Math.max(0, Math.min(end ?? rendered.frames - 1, rendered.frames - 1));
-				return startFrame <= endFrame ? [{ ...clip, startFrame, endFrame }] : [];
-			}) } }));
-		synchronizeTimeline();
-	}
-	function fix(id, scope = 'frame') {
-		rigOnly(id, 'collision');
-		const rig = rigFor(id), resolved = rig && resolveIkRig(rig);
-		if (!resolved) throw new StudioProtocolError('TARGET_NOT_READY', 'The character rig is not loaded.');
-		const state = appContext.shared.ikStatesRef.current.get(id) ?? { ...createIkState(), ...resolved };
-		const blockers = at => collisionBlockers({ rigs: appContext.shared.rigs, activeId: id, characterIds: appContext.live.characters,
-			sceneObjects: appContext.ports.read().objects, library: OBJECT_LIBRARY, frame: at, take: { frameCount: motionFor(id)?.frames ?? 1, fps: 24 } });
-		if (scope === 'clip') {
-			const take = motionFor(id); if (!take) throw new StudioProtocolError('TARGET_NOT_READY', 'Load a take first.');
-			const originals = rigSnapshots();
-			try {
-				fixCollisionsRange({ rig, ...resolved, ikState: state, startFrame: 0, endFrame: take.frames - 1,
-					applyFrame(at) { applyMotionFrame(rig, take, at); ikEvaluate(resolved.chains, state, at, resolved.fkJoints, 6); },
-					blockersAt(at) { for (const row of read()) if (row.id !== id && rigFor(row.id)) appContext.shared.poseMemberAtFrame(rigFor(row.id), motionFor(row.id), appContext.shared.ikStatesRef.current.get(row.id), at, 6); return blockers(at); } });
-			} finally { for (const snapshot of originals.values()) appContext.shared.restoreExportRig(snapshot); }
-		} else {
-			const result = fixCollisions(rig, resolved.chains, { ikState: state, fkJoints: resolved.fkJoints, blockers: blockers(frame()) });
-			if (!result.supported) throw new StudioProtocolError('TARGET_NOT_READY', 'This rig does not support collision cleanup.');
-			if (result.changed) ikBakeKeyframe(resolved.chains, state, frame(), resolved.fkJoints, result.touched, null, result.baseQuats);
-		}
-		setKeys(id, state.keys);
 	}
 	function bakeCurrentKey(id, at, dragIds = null) {
 		const rig = rigFor(id), resolved = rig && resolveIkRig(rig);
@@ -331,7 +239,7 @@ export function createMotionDomain(appContext, characters) {
 		const take = motionFor(id);
 		if (dragIds) {
 			const keyed = bakeIkDragKey(resolved.chains, resolved.fkJoints, at, dragIds, take
-				? (rawRig) => applyMotionFrame(rawRig, take, at)
+				? (rawRig) => applyTakeFrame(rawRig, take, at)
 				: null);
 			if (keyed && take) for (const key of keyed.values()) key.blend = 6;
 			return keyed ? run('ik.setKey', { characterId: id, frame: at, tracks: ikKeyJson(keyed) }) : null;
@@ -350,71 +258,6 @@ export function createMotionDomain(appContext, characters) {
 			state.tracked = new Set([...resolved.chains.keys(), ...resolved.fkJoints.keys()]);
 			ikBakeKeyframe(resolved.chains, state, at, resolved.fkJoints);
 		});
-	}
-	function editTrail(id, { track = "hips", grabFrame, radiusFrames, delta }) {
-		rigOnly(id, 'trails');
-		const take = motionFor(id), character = appContext.storeDomain('cast').read().find(row => row.id === id);
-		if (!take) throw new StudioProtocolError('TARGET_NOT_READY', 'Load a take first.');
-		const scale = character.scale ?? 1;
-		const rig = rigFor(id);
-		const clipDelta = worldDeltaToTrailClip(take, delta, { track, grabFrame, radiusFrames, rig, scale });
-		const edited = snapshotTake(applyTrailFalloffDelta(take, { track, grabFrame, radiusFrames, clipDelta }));
-		writeLayer(id, { take: edited });
-		castWrite(rows => rows.map(row => row.id === id ? { ...row, motionRef: { ...row.motionRef, trailEdits: edited.trailEdits } } : row));
-	}
-	const physicsReviews = new Map();
-	let physicsJob = 0;
-	const physicsStamp = id => JSON.stringify([layer(id), appContext.storeDomain('cast').read().find(row => row.id === id)]);
-	function applyPhysics(id) {
-		rigOnly(id, 'physics');
-		const preview = physicsReviews.get(id);
-		if (!preview || preview.stamp !== physicsStamp(id)) throw new StudioProtocolError('STALE_TARGET', 'Analyse this take again before applying corrections.');
-		setKeys(id, preview.result.candidate.keys);
-		domain.onPhysicsPreview?.(null);
-	}
-	async function autoPhysics(id, options, context) {
-		rigOnly(id, 'physics');
-		const rig = rigFor(id), resolved = rig && resolveIkRig(rig), take = motionFor(id);
-		if (!resolved || !take) throw new StudioProtocolError('TARGET_NOT_READY', 'Load a take and character rig first.');
-		const job = ++physicsJob, stamp = physicsStamp(id), original = appContext.shared.snapshotExportRig(rig);
-		let lastYield = performance.now();
-		const check = () => { context.check(); if (job !== physicsJob) throw new StudioProtocolError('STALE_TARGET', 'Physics analysis was superseded.'); };
-		domain.onPhysicsRunning?.(true); domain.onPhysicsPreview?.(null);
-		try {
-			check();
-			const result = await reviewAutoPhysics({ rig, ...resolved, motion: take, sourceKeys: decodeMotionKeys(layer(id).ikKeys),
-				applyRaw: at => applyMotionFrame(rig, take, at), sceneObjects: appContext.ports.read().objects,
-				...options, cache: appContext.shared.physicsSourceCacheRef.current, onProgress: value => domain.onPhysicsProgress?.(value),
-				yieldFrame: async () => {
-					check(); if (performance.now() - lastYield < 16) return;
-					appContext.shared.restoreExportRig(original);
-					await new Promise(resolve => { const channel = new MessageChannel(); channel.port1.onmessage = () => { channel.port1.close(); channel.port2.close(); resolve(); }; channel.port2.postMessage(0); });
-					lastYield = performance.now(); check();
-				},
-			});
-			appContext.shared.restoreExportRig(original); check();
-			physicsReviews.set(id, { result, stamp });
-			if (options.apply) context.commit(() => applyPhysics(id)); else domain.onPhysicsPreview?.(result);
-			return { before: result.before, after: result.after, changedFrames: result.changedFrames.length, warnings: result.warnings, unresolved: result.unresolved };
-		} finally {
-			if (job === physicsJob) { if (stamp === physicsStamp(id)) appContext.shared.restoreExportRig(original); domain.onPhysicsRunning?.(false); }
-		}
-	}
-	function runPrepared(characterId, apply) {
-		if (running) return apply();
-		let result;
-		const token = crypto.randomUUID(); prepared.set(token, () => { result = apply(); return result; });
-		try { run('motion.applyPrepared', { characterId, token }); return result; }
-		finally { prepared.delete(token); }
-	}
-	function persistTake(take, motionRef) {
-		if (!take?.sourceBytes) return;
-		(async () => {
-			let record = appContext.shared.motionEncodingCacheRef.current.get(take.sourceBytes);
-			if (!record) { record = await encodeMotionResource(take.sourceBytes, { prompt: motionRef?.prompt, sourceUrl: motionRef?.url }); appContext.shared.motionEncodingCacheRef.current.set(take.sourceBytes, record); }
-			appContext.shared.projectMotionsRef.current.set(record.motionId.toLowerCase(), record);
-			const db = await openMotionDb(); try { await putMotion(db, record); } finally { db.close(); }
-		})().catch(error => console.warn('[cozyclay] could not cache motions', error));
 	}
 	function run(id, args) {
 		const result = appContext.bus.run(id, args);
@@ -445,15 +288,14 @@ export function createMotionDomain(appContext, characters) {
 		return run('run.update', { txId: gesture.txId, args });
 	}
 	const domain = { documentStore, read, write, layer, writeLayer, motionFor, fullMotionFor, visibleMotion, snapshotTake, project,
-		setKeys, setRangePinState, bakeRangePin, removePin, editKeys, setKey, replace, clear, editSegments, fix, castWrite, run, edit, beginGesture, finishGesture, beginAction, runPrepared, persistTake,
-		insideAction: () => running > 0, bakeCurrentKey, keyPose, editTrail, autoPhysics, applyPhysics,
-		applyPrepared(token) { const apply = prepared.get(token); if (!apply) throw new StudioProtocolError('STALE_TARGET', 'Prepared motion is no longer available.'); return apply(); },
+		setKeys, setRangePinState, bakeRangePin, removePin, editKeys, setKey, replace, clear, run, edit, beginGesture, finishGesture, beginAction,
+		insideAction: () => running > 0, bakeCurrentKey, keyPose,
 		bindRender(context) { appContext = context; },
 		viewRevision: () => viewRevision, canUndo: id => documentStore.canUndo(id),
 		stepHistory: redo => { finishGesture(); return Boolean((redo ? documentStore.redo : documentStore.undo)()); },
 		document: () => ({ motion: read().map(row => {
 			const take = motionFor(row.id);
-			return take ? { ...row, take: { ...row.take, frames: take.frames, fps: take.fps, editSegments: take.editSegments } } : row;
+			return take ? { ...row, take: { ...row.take, frames: take.frames, fps: take.fps } } : row;
 		}) }), sceneSlice: slices => slices.motion ?? references(slices.cast),
 		publish: rows => write(rows), commitDraft: write,
 		switchLayer(id) { appContext.shared.loadedLayerCharRef.current = id; project(); notify(); },
@@ -465,27 +307,11 @@ export function createMotionDomain(appContext, characters) {
 				frameCount: state.frameCount, committedIkEdits: layer(id).committedIkEdits, renderer: rig ? appContext.shared.snapshotExportRig(rig) : null };
 		},
 		removeLayer(id) { write(rows => rows.filter(row => row.id !== id)); },
-		preview(id, take) { if (take) previews.set(id, take); else previews.delete(id); project(); notify(); },
-		hydrate(id, take, reference) {
-			const current = appContext.storeDomain('cast').read().find(row => row.id === id);
-			const descriptor = layer(id).take;
-			if (!descriptor || !sameMotionIntent(current?.motionRef, reference)) return false;
-			takes.set(descriptor.resourceId, structuredClone(take));
-			for (const rows of [read(), ...documentStore.history().past.map(entry => entry.snapshot.motion), ...documentStore.history().future.map(entry => entry.snapshot.motion)]) {
-				for (const row of rows) for (const value of [row.take, row.fullTake]) if (value?.resourceId === descriptor.resourceId) decoded.delete(value);
-			}
-			notify(); return true;
-		},
-		load(rows) { finishGesture(true); previews.clear(); release(); native.dispose(); native = createDocumentStore({ owned: { motion: normalize(rows) } }); release = native.subscribe(notify); pruneTakes(); notify(); },
+		load(rows) { finishGesture(true); release(); native.dispose(); native = createDocumentStore({ owned: { motion: normalize(rows) } }); release = native.subscribe(notify); pruneTakes(); notify(); },
 		dispose() { finishGesture(true); unregister(); unsubscribe(); release(); native.dispose(); listeners.clear(); takes.clear(); },
 	};
 	const unregister = appContext.registerStoreDomain('motion', domain);
 	return domain;
-}
-
-export function useMotionCommands() {
-	const app = useContext(AppContext), owner = app.storeDomain('motion');
-	return { run: (id, args = {}) => owner.run(id, { characterId: app.storeDomain('cast').activeId, ...args }) };
 }
 
 export function useMotion(appContext) {
@@ -498,7 +324,6 @@ export function useMotion(appContext) {
 		const start = () => domain.beginGesture(); window.addEventListener('pointerdown', start, true);
 		return () => { window.removeEventListener('pointerdown', start, true); domain.finishGesture(true); };
 	}, [domain, appContext.shared.activeChar.id]);
-	const [i2vMotion, setI2vMotion] = useState({ a: null, b: null, job: null, status: "idle", error: "", instruction: "", dailyRemaining: null });
 	// IK posing for Subject 1: dragging a wrist/ankle handle FOCUSES that
 	// joint and solves its chain backward (two-bone analytic IK) on top of
 	// the current pose; joints never dragged stay purely on the FK pose.
@@ -534,52 +359,20 @@ export function useMotion(appContext) {
 	// hide the seam, short enough that a mid-clip fix stays visibly local.
 	const IK_CORRECTION_BLEND_FRAMES = 6;
 
-	const [autoPhysicsRunning, setAutoPhysicsRunning] = useState(false);
-
-	const [physicsPreview, setPhysicsPreview] = useState(null);
-
-	const [physicsShow, setPhysicsShow] = useState(true);
-
-	const [physicsProgress] = useState(createPhysicsProgress);
-
-	const setPhysicsProgress = physicsProgress.set;
-
-	const [physicsOptions, setPhysicsOptions] = useState({ overrides: [], protectedFrames: [], strength: 1 });
-
-	const [platformFitRunning, setPlatformFitRunning] = useState(false);
-	const [platformFitLast, setPlatformFitLast] = useState(null);
-	const [platformFitProgress] = useState(createPhysicsProgress);
-	const platformFitProgressSet = platformFitProgress.set;
-	const platformFitJobRef = useRef(0);
-	const platformFitAppliedRef = useRef(null);
-	const [platformFitApplied, setPlatformFitApplied] = useState(false);
-
 	const [ikTick, setIkTick] = useState(0);
 
 	const committedIkEdits = domain.layer(appContext.shared.activeChar.id).committedIkEdits;
 	const setCommittedIkEdits = update => domain.writeLayer(appContext.shared.activeChar.id, { committedIkEdits: typeof update === 'function' ? update(domain.layer(appContext.shared.activeChar.id).committedIkEdits) : update });
 	domain.onProject = () => setIkTick(value => value + 1);
 
-	/* Grabbing the viewport trajectory line deforms the loaded take with a
-	 * smoothstep falloff around the grab frame (pure local preview). The last
-	 * finished drag stays pending so "Regenerate from trail edit" can send the
-	 * auto-derived window through the existing motionEdit pipeline. */
-	const [trailFalloffS, setTrailFalloffS] = useState(0.5);
-
-	const [showTrails, setShowTrails] = useState(true);
-
+	// The Pose-mode tool: "ik" (drag handles) or "pin" (range pins).
 	const [ikEditTool, setIkEditTool] = useState("ik");
-
-	const [trailEdit, setTrailEdit] = useState(null);
-	const [trailTrackFocus, setTrailTrackFocus] = useState("hips");
 	const [rangePinSelection, setRangePinSelection] = useState(null);
 	const [rangePinPartPick, setRangePinPartPick] = useState(null);
 	const [rangePinPreview, setRangePinPreview] = useState(null);
 	const pinLayer = domain.layer(appContext.shared.activeChar.id);
 	const rangePins = useMemo(() => encodeRangePins(pinLayer.ikPins), [pinLayer.ikPins]);
 	const rangePinResiduals = useMemo(() => decodeRangePinResiduals(pinLayer.ikPinResiduals), [pinLayer.ikPinResiduals]);
-
-	const trailFalloffFrames = Math.max(1, Math.round(trailFalloffS * TIMELINE_FPS));
 
 	function focusIkHandle(focus) {
 		setIkFocus(focus);
@@ -589,17 +382,10 @@ export function useMotion(appContext) {
 		}
 	}
 
-	function selectedIkRange(frame = appContext.shared.tlFrame) {
+	// An IK correction applies across the whole installed take.
+	function selectedIkRange() {
 		const count = Math.max(1, motion?.frames ?? appContext.shared.tlFrameCount ?? 1);
-		if (!motion) return { startFrame: 0, endFrame: count - 1 };
-		const edit = motion.editSegments ?? createMotionEdit(count);
-		const layout = motionEditLayout(edit);
-		const at = Math.max(0, Math.min(count - 1, Math.round(frame) || 0));
-		const selected = layout.find((segment) => at >= segment.timelineStart && at <= segment.timelineEnd) ?? layout[0];
-		return {
-			startFrame: Math.max(0, selected?.timelineStart ?? 0),
-			endFrame: Math.min(count - 1, selected?.timelineEnd ?? count - 1),
-		};
+		return { startFrame: 0, endFrame: count - 1 };
 	}
 
 	function setPendingIkEditValue(value) {
@@ -658,19 +444,6 @@ export function useMotion(appContext) {
 			: `Applied IK correction across frames ${pending.startFrame}–${pending.endFrame}`);
 		return true;
 	}
-
-	function clearTrailTrackFocus() {
-		setTrailTrackFocus(null);
-		setIkFocus(null);
-	}
-	function selectTrailTrack(track) {
-		setTrailTrackFocus(track);
-		focusIkHandle(track);
-	}
-
-	useEffect(() => {
-		if (!ikMode || ikEditTool !== "trail") setTrailTrackFocus(TRAIL_TRACKS.some(track => track.id === ikFocus) ? ikFocus : "hips");
-	}, [ikMode, ikEditTool, ikFocus]);
 
 	function rangePinObjectWorldMatrix(objectId, frame) {
 		const object = appContext.shared.sceneObjects.find((entry) => entry.id === objectId);
@@ -817,85 +590,6 @@ export function useMotion(appContext) {
 		return count;
 	}
 
-	const [bridge, setBridge] = useState(null);
-
-	const [bridgeChecking, setBridgeChecking] = useState(false);
-
-	const [motionSetupReveal, setMotionSetupReveal] = useState(0);
-
-	const [motionSetupKind, setMotionSetupKind] = useState("prompt");
-
-	const [ardyPrompt, setArdyPrompt] = useState("");
-
-	const [ardyDuration, setArdyDuration] = useState(4);
-
-	// Optional native-ARDY seed: empty string = omit from the request (the
-	// box picks a fresh random one each run); otherwise a plain integer in
-	// 0..2**31-1 to reproduce a result.
-	const [ardySeed, setArdySeed] = useState("");
-
-	// How much of the loaded take a regeneration keeps (scheduled inpainting).
-	// 1 = hold the take everywhere the user did not edit, 0 = ignore it and
-	// generate fresh. Only ever consulted when the take still has a bridge
-	// source to preserve FROM, so the control renders with the take, not with
-	// the panel.
-	const [preserveStrength, setPreserveStrength] = useState(ARDY_PRESERVE_DEFAULT);
-
-	// Off by default on purpose: pinning runs the box's pose mode, which builds
-	// on a fixed reference base, so it is a choice the operator makes when they
-	// actually want the pose in the generated clip.
-	const [ardyStartFromPose, setArdyStartFromPose] = useState(false);
-
-	// WHERE the pose lands in the clip. "start" leaves from it, "end" arrives at
-	// it, "middle" passes through it, "playhead" places it on the frame the
-	// operator scrubbed to — the box takes any destination frame.
-	const [ardyPosePlacement, setArdyPosePlacement] = useState("start");
-
-	/* The recipe of the take that is loaded RIGHT NOW: seed + prompt blocks +
-	 * the line edits pulled on top of it. It is written in exactly one place
-	 * (commitTakeRecipe, on a successful run) and read in two: the request
-	 * assembly, which attaches it as C10 `replay`, and the version strip, which
-	 * stores a copy beside every motionUrl so clicking v1 restores v1's recipe
-	 * and not the one the artist has since edited into existence.
-	 * The ref shadows the state because the recipe is consulted from inside an
-	 * async job completion, where a stale closure would silently record the
-	 * previous take's edits against this take's url. */
-	const takeRecipe = domain.layer(appContext.shared.activeChar.id).takeRecipe;
-	const setTakeRecipe = value => domain.writeLayer(appContext.shared.activeChar.id, { takeRecipe: value });
-	const takeVersions = domain.layer(appContext.shared.activeChar.id).takeVersions;
-	const setTakeVersions = update => domain.writeLayer(appContext.shared.activeChar.id, { takeVersions: typeof update === 'function' ? update(domain.layer(appContext.shared.activeChar.id).takeVersions) : update });
-
-	// Which C10 replay entries came back failed or boundary-warned. Non-blocking
-	// by contract: the take generated, one refinement may not have survived it,
-	// and that is worth a line next to the take rather than a toast that scrolls
-	// away before the artist has looked at the result.
-	const [replayNotices, setReplayNotices] = useState([]);
-
-	// Whether the Scene entry's action menu is open. The Refine entry needs no
-	// equivalent — it IS its action.
-	const [sceneMenuOpen, setSceneMenuOpen] = useState(false);
-
-	const [ardyRunning, setArdyRunning] = useState(false);
-
-	const [ardyStatus, setArdyStatus] = useState("");
-
-	// Keep the latest ARDY status inline with the Prompt Blocks controls. The
-	// former bottom Console history was removed because it duplicated this state
-	// and exposed an editor surface that is not part of the production workflow.
-	function reportArdyStatus(line) {
-		setArdyStatus(line);
-	}
-
-	const [ardyReport, setArdyReport] = useState(null);
-
-	const [ardyOutcome, setArdyOutcome] = useState(null);
-
-	// Wave-2 gate: the bridge only routes lineEdit once M4's routing lands.
-	// Until the /ardy/health payload says so, the request is never sent —
-	// today's bridge ignores unknown fields, so an ungated POST would quietly
-	// return a fresh unrelated take instead of an edit.
-	const [lineEditBackend, setLineEditBackend] = useState(false);
-
 	// Loaded motion: decoded arrays plus the world anchor captured at load.
 	const motion = domain.visibleMotion(appContext.shared.activeChar.id);
 	useEffect(() => {
@@ -907,19 +601,6 @@ export function useMotion(appContext) {
 	}, [appContext.shared.activeChar.id, appContext.shared.activeRig, motion, pinLayer, ikMode, ikEditTool]);
 	const rangePinRebuildRef = useRef(null);
 	const rangePinSourceStamp = JSON.stringify([pinLayer.take, appContext.shared.activeChar.id]);
-	// A fit is invalidated by a different take, trim or preview, not by key
-	// writes: every layer write re-snapshots the take descriptor, so the decoded
-	// `motion` object is new after the fit's own commit even though the take is
-	// unchanged. Key the reset on the descriptor's content instead.
-	const platformFitPreview = motion === domain.motionFor(appContext.shared.activeChar.id) ? null : motion;
-	useEffect(() => {
-		platformFitJobRef.current += 1;
-		setPlatformFitRunning(false);
-		setPlatformFitLast(null);
-		platformFitProgressSet(0);
-		platformFitAppliedRef.current = null;
-		setPlatformFitApplied(false);
-	}, [rangePinSourceStamp, platformFitPreview, appContext.shared.activeRig]);
 	// Object-bound pins follow edited prop transforms and paths, as in the
 	// source branch. Rebuilding derived keys must not create an undo entry.
 	useEffect(() => {
@@ -941,33 +622,7 @@ export function useMotion(appContext) {
 	}, [rangePinSourceStamp, ikChains]);
 
 
-	const [motionBusy, setMotionBusy] = useState(false);
 
-	const [motionError, setMotionError] = useState("");
-
-	const [multiModelUrl, setMultiModelUrl] = useState("");
-
-	const [multiModelSource, setMultiModelSource] = useState(null);
-
-	const [multiModelStatus, setMultiModelStatus] = useState("idle");
-
-	// The ingest is a real download + decode, so it owns real progress and a
-	// real receipt: the footage numbers below come from the decoded media.
-	const [multiModelStage, setMultiModelStage] = useState("idle");
-
-	const [multiModelProgress, setMultiModelProgress] = useState(null);
-
-	const [multiModelFootage, setMultiModelFootage] = useState(null);
-
-	const [multiModelError, setMultiModelError] = useState("");
-
-	const [multiModelTake, setMultiModelTake] = useState(null);
-
-	const [multiModelExtract, setMultiModelExtract] = useState("idle");
-
-	const [multiModelExtractProgress, setMultiModelExtractProgress] = useState(null);
-
-	const [multiModelExtractError, setMultiModelExtractError] = useState("");
 
 	function advanceFrame(steps = 1) {
 		const count = Math.max(1, Math.floor(steps));
@@ -1001,192 +656,11 @@ export function useMotion(appContext) {
 		setIkFocus(null);
 	}
 
-	/** Hand `rig` over to playback. Every path that starts a clip — a loaded
-	 *  take, a browser-baked one — does the same two things: drop out of IK
-	 *  EDIT mode (playback is the new context; the IK KEYS stay and keep
-	 *  correcting the clip layer-style) and swap the pre-playback bone
-	 *  baseline, so a re-load never snapshots mid-animation and clearing
-	 *  always returns to the blocking pose. */
-	function beginPlaybackOn(rig) {
-		leaveIkMode();
-		const previous = appContext.shared.restoreRef.current;
-		appContext.shared.restoreRef.current = null;
-		if (previous) restorePlaybackBones(previous.rig, previous.bones);
-		appContext.shared.restoreRef.current = { rig, bones: snapshotPlaybackBones(rig) };
-	}
+	
 
-	/** Land takes 1..N-1 on the rest of the cast. Each extra take is its OWN
-	 *  layer: it goes to that entry's sessionMotion, NOT through the editing
-	 *  buffer, which holds the active character's clip alone. Returns how many
-	 *  performers actually landed. */
-	const authoredSupportDescriptors = () => appContext.shared.sceneObjects.map((object) => ({
-		x: object.x,
-		z: object.z,
-		rotDeg: object.rot ?? 0,
-		supportY: (object.y ?? 0) + supportHeightForObject(object) * (object.scaleY ?? 1),
-		topY: (object.y ?? 0) + supportHeightForObject(object) * (object.scaleY ?? 1),
-		width: (object.footprint?.width ?? 0) * (object.scaleX ?? 1),
-		depth: (object.footprint?.depth ?? 0) * (object.scaleZ ?? 1),
-	}));
-
-	const applyAuthoredSupportRise = (clip, anchor, rotationDeg, worldScale = characterScaleFor(clip)) => applySupportRise(clip, authoredSupportDescriptors(), {
-		subjectX: anchor.x,
-		subjectY: anchor.y ?? 0,
-		subjectZ: anchor.z,
-		rotationDeg,
-		worldScale,
-	});
-
-	function commitLoadedTake(characterId, take, { recipe = null, job = null, promptClips = null, scale = characterScaleFor(take) } = {}) {
-		const owned = appContext.storeDomain('motion');
-		const previous = owned.layer(characterId);
-		const imported = recipe ?? (job ? previous.takeRecipe : { seed: null, blocks: [{ prompt: take.prompt, duration: take.frames / take.fps }], lineEdits: [] });
-		const versions = recipe || job ? previous.takeVersions : pushTakeVersion(previous.takeVersions, {
-			motionUrl: take.url, recipe: imported, savedAt: Date.now(), label: ko('Loaded', '불러옴'),
-		}, TAKE_VERSIONS_MAX);
-		owned.replace(characterId, take, { recipe: imported, versions });
-		const motionRef = { url: take.url, prompt: take.prompt, rotationDeg: take.rotationDeg, anchorX: take.anchorX, anchorZ: take.anchorZ,
-			calibration: take.sceneCalibration, ...(take.trailEdits ? { trailEdits: take.trailEdits } : {}), ...(take.motionId ? { motionId: take.motionId } : {}) };
-		owned.castWrite(rows => rows.map(row => row.id === characterId ? { ...row, scale, motionRef,
-			layer: promptClips ? { ...row.layer, promptClips } : row.layer } : row));
-		if (job) {
-			commitTakeRecipe(job, take.url);
-			if (job.hasBlockEdits) owned.writeLayer(characterId, { committedIkEdits: job.committedEditKeys });
-		}
-		owned.persistTake(take, motionRef);
-	}
-
-	// Decoded motion + the world anchor: frame 0 always starts at Subject 1.
-	// Authored root destinations are generated by ARDY as sparse constraints,
-	// so playback consumes the returned trajectory without coordinate warping.
-	async function loadMotion(
-		url,
-		prompt,
-		rotationDeg = appContext.shared.charA.rot,
-		drop = null,
-		targetCharacterId = appContext.shared.activeChar.id,
-		targetPromptClips = null,
-		// `preview: true` means "put this clip on screen, do not treat it as a
-		// new take". The line-edit preview loop swaps the viewport several times
-		// a minute, and every announcement this function normally makes — the
-		// load toast, the auto-drop toast, clearing the IK keys, snapping the
-		// playhead back to 0 — is an announcement about a take CHANGING. A
-		// preview is the same take seen a second time, so it makes none of them.
-		{ preview = false, calibration = null, tutorialEpoch = null, commandContext = null, recipe = null, job = null, personScaleFallback = null } = {},
-	) {
-		setMotionBusy(true);
-		setMotionError("");
-		try {
-			refuseRigOnly(appContext.live.characters.find((entry) => entry.id === targetCharacterId), "take");
-			// Inbound boundary: an ARDY take (20 fps) or a filmed one (30/60)
-			// becomes a production-clock clip here, once, before anything on
-			// the timeline counts its frames. Same-rate input rides through.
-			// A drop is staging applied to the clip itself, so it happens at
-			// the same boundary — trims and IK then see the dropped take.
-			const retimed = retimeMotion(await loadMotionFromUrl(url), TIMELINE_FPS);
-			if (retimed.sourceBytes) retimed.motionId = await sha256Hex(retimed.sourceBytes);
-			if (tutorialEpoch !== null && tutorialEpoch !== appContext.shared.tutorialProjectEpochRef.current) return null;
-			const normalizedCalibration = normalizeMotionCalibration(calibration);
-			// Scene yaw/XY translation belong to the character's scene transform.
-			// Applying them to both the arrays and the Character group would rotate
-			// the trajectory twice and leave rotMats facing the old direction.
-			const playbackCalibration = { ...normalizedCalibration, yawDeg: 0, offsetX: 0, offsetZ: 0 };
-			// Scene calibration is optional metadata from the capture boundary. It
-			// runs before support/fall staging so every downstream measurement uses
-			// the same scene-space coordinates.
-			const raw = applyMotionCalibration(retimed, playbackCalibration).motion;
-			// Staging descriptors are authored in scene metres while decoded
-			// trajectories are canonical-body units. Resolve stature before any
-			// support or fall math so a 0.8x/1.2x performer still lands exactly on
-			// the same authored surface after playback multiplies the clip.
-			const motionScale = characterScaleFor(raw);
-			const targetCharacter = appContext.live.characters.find((entry) => entry.id === targetCharacterId);
-			if (!targetCharacter) throw new Error(`Motion target ${targetCharacterId} no longer exists.`);
-			const sceneAnchorX = targetCharacter.x + normalizedCalibration.offsetX;
-			const sceneAnchorZ = targetCharacter.z + normalizedCalibration.offsetZ;
-			const sceneRotationDeg = rotationDeg + normalizedCalibration.yawDeg;
-			const rig = appContext.shared.rigs[targetCharacter.id] ?? await appContext.shared.waitForRig(targetCharacter.id);
-			if (tutorialEpoch !== null && tutorialEpoch !== appContext.shared.tutorialProjectEpochRef.current) return null;
-			// No explicit drop staged: a character standing on a raised object
-			// whose take walks off the edge falls on its own — ARDY motion is
-			// flat-ground, so the stage supplies the gravity.
-			const supports = authoredSupportDescriptors();
-			// A support's top is scene data, never guessed from the motion.  Apply
-			// only when the clip shows an upward root trend entering its footprint;
-			// ordinary deck walks remain byte-for-byte unchanged.
-			const raised = drop ? raw : applySupportRise(raw, supports, {
-				subjectX: sceneAnchorX,
-				subjectY: targetCharacter.y ?? 0,
-				subjectZ: sceneAnchorZ,
-				rotationDeg: sceneRotationDeg,
-				worldScale: motionScale,
-			});
-			const staging = drop ?? autoRoofDrop(
-				raised,
-				{ x: sceneAnchorX, z: sceneAnchorZ, y: targetCharacter.y ?? 0, rotationDeg: sceneRotationDeg },
-				supports,
-				{ worldScale: motionScale },
-			);
-			const decoded = drop ? applyRootDrop(raised, staging, { worldScale: motionScale }) : applyAutoFall(raised, staging, { worldScale: motionScale });
-			if (!drop && staging && !preview) {
-				appContext.notify((isKo, ko) => ko(
-					`Auto drop staged: the take leaves its support at ${staging.fromS.toFixed(1)}s and falls ${staging.meters.toFixed(1)}m`,
-					`자동 낙하 적용: ${staging.fromS.toFixed(1)}초에 지지면을 벗어나 ${staging.meters.toFixed(1)}m 낙하`,
-				));
-			}
-			const targetStillExists = appContext.live.characters.some((entry) => entry.id === targetCharacter.id);
-			if (!targetStillExists) throw new Error(`Motion target ${targetCharacterId} no longer exists.`);
-			const apply = () => {
-			const bufferOwnsTarget = targetCharacter.id === appContext.shared.loadedLayerCharRef.current;
-			beginPlaybackOn(rig);
-			// THE INVARIANT: the take's travel assumes the character is scaled.
-			// Extraction divided the root translation by the filmed person's
-			// stature, so the clip and that stature have to be applied together
-			// or every stride overshoots by the same factor and the feet skate.
-			// The scale rides INSIDE the npz, so this one line covers every path
-			// that loads a motion; an ARDY-generated take stores none and is
-			// canonical, 1.
-			const measuredScale = characterScaleFor(decoded);
-			const scale = measuredScale === 1 && Number.isFinite(personScaleFallback) ? characterScaleFor(null, personScaleFallback) : measuredScale;
-			const loaded = {
-			// Identity calibration retains the legacy frame-zero anchorX: targetCharacter.x
-			// and anchorZ: targetCharacter.z contract; calibrated takes use the scene anchor.
-			// Capture the exact prompt this motion was generated from; the
-			// timeline keeps showing it even if the input field is edited
-			// afterwards.
-			prompt: typeof prompt === "string" ? prompt : "",
-				...decoded,
-				url,
-				anchorX: sceneAnchorX,
-				anchorZ: sceneAnchorZ,
-				anchorFrame: 0,
-				rotationDeg: sceneRotationDeg,
-				sceneCalibration: normalizedCalibration,
-				editSegments: createMotionEdit(decoded.frames),
-			};
-			const owned = appContext.storeDomain('motion');
-			if (preview) owned.preview(targetCharacter.id, url === owned.motionFor(targetCharacter.id)?.url ? null : loaded);
-			else {
-				commitLoadedTake(targetCharacter.id, loaded, { recipe, job, promptClips: targetPromptClips, scale });
-				if (bufferOwnsTarget) { appContext.shared.setTlFrame(0); appContext.shared.setTlPlaying(false); }
-				setMotionError('');
-			}
-			return scale;
-			};
-			return preview ? apply() : commandContext ? commandContext.commit(apply)
-				: appContext.storeDomain('motion').runPrepared(targetCharacterId, apply);
-		} catch (err) {
-			if (tutorialEpoch !== null && tutorialEpoch !== appContext.shared.tutorialProjectEpochRef.current) return null;
-			setMotionError(err?.message || String(err));
-			throw err;
-		} finally {
-			setMotionBusy(false);
-		}
-	}
-
-	/** Drop the ACTIVE character's take, its IK corrections, prompt blocks and
-	 * the stature the take imposed. One Ctrl+Z entry brings all four back; nothing to clear
-	 * records nothing, so the shortcut never becomes a dead press.
+	/** Drop the ACTIVE character's take and its IK corrections. One Ctrl+Z
+	 * entry brings both back; nothing to clear records nothing, so the shortcut
+	 * never becomes a dead press.
 	 *
 	 * The pose flows (studio Apply/Reset, pose tiles, photo pose) call this
 	 * first and then write the pose: the snapshot taken here predates both, so
@@ -1195,40 +669,8 @@ export function useMotion(appContext) {
 		return appContext.storeDomain('motion').clear(appContext.shared.activeChar.id);
 	}
 
-	/** Cut the ACTIVE character's take to [start, end] of the CURRENT view.
-	 *  Offsets compose, so a second cut still slices the original take; a cut
-	 *  take drops its bridge url — its frames no longer match the source npz,
-	 *  and IK-edit regeneration must not pretend they do. Per-character layers
-	 *  mean the cut lands on this layer only; nobody else's clip moves. */
-	function applyMotionTrim(start, end) {
-		return appContext.storeDomain('motion').edit('motion.trim', { characterId: appContext.shared.activeChar.id, start, end });
-	}
-
-	function resetMotionTrim() {
-		return appContext.storeDomain('motion').run('motion.resetTrim', { characterId: appContext.shared.activeChar.id });
-	}
-
-	function cutMotionAtPlayhead() {
-		return appContext.storeDomain('motion').run('motion.cut', { characterId: appContext.shared.activeChar.id, frame: appContext.shared.tlFrame });
-	}
-
-	function changeMotionSegmentSpeed(id, speed) {
-		return appContext.storeDomain('motion').run('motion.setSegmentSpeed', { characterId: appContext.shared.activeChar.id, id, speed });
-	}
-
-	/** Drop one Full-Body segment from the take. The removal composes like a
-	 * trim: the source frames stay untouched, so the trim-reset path (right-click
-	 * an outer handle) still restores the whole take. */
-	function removeMotionSegmentById(id) {
-		return appContext.storeDomain('motion').run('motion.removeSegment', { characterId: appContext.shared.activeChar.id, id });
-	}
-
 	// Everyone EXCEPT the active character, posed at an absolute frame from
-	// their own session clips and their STORED IK corrections (#77). Factored
-	// out of the effect below because the whole-clip Fix Collisions pass needs
-	// the same thing: the other bodies are static blockers, and a blocker
-	// sampled from a rig still standing at the playhead would block the wrong
-	// volume on every other frame of the walk.
+	// their own session clips and their STORED IK corrections (#77).
 	const poseOtherCastMembers = (frame) => {
 		for (const entry of appContext.shared.characters) {
 			if (entry.id === appContext.shared.activeChar.id || isProxyFigure(entry)) continue;
@@ -1241,9 +683,8 @@ export function useMotion(appContext) {
 		// Authoring modes are mutually exclusive: IK mode swaps the main pane to
 		// the poser camera, which would silently invalidate any pulled path
 		// anyway. Leaving the line mode explicitly says so instead.
-		if (next && appContext.shared.lineEditMode) appContext.shared.exitLineEditMode();
 		if (next) {
-			// Always enter on the safe, detailed IK tool. Trail editing is an
+			// Always enter on the safe, detailed IK tool. Range pins are an
 			// explicit second tool and must never leave the regular handles
 			// locked when the user re-enters IK mode.
 			setIkEditTool("ik");
@@ -1291,9 +732,11 @@ export function useMotion(appContext) {
 		// Exit: the keyed pose stays — the evaluate effect re-applies the
 		// current frame's keyed rotations the moment ikMode flips, so nothing
 		// the user authored is lost by toggling. Untracked/unkeyed parts keep
-		// their current (FK) pose.
+		// their current (FK) pose. A correction still in preview is applied, as
+		// Apply range would: leaving the mode (the Stage tab, a mode key) is not
+		// a Cancel, and dropping it threw away what the user just posed.
+		if (!applyPendingIkEdit()) appContext.notify(ko("Pose mode off — keyed poses keep playing", "포즈 모드 꺼짐 — 키로 찍은 포즈는 계속 재생됩니다"));
 		leaveIkMode();
-		appContext.notify(ko("Pose mode off — keyed poses keep playing", "포즈 모드 꺼짐 — 키로 찍은 포즈는 계속 재생됩니다"));
 	}
 
 	// Drag solve, routed by handle kind: chain targets solve the two-bone
@@ -1448,283 +891,6 @@ export function useMotion(appContext) {
 		appContext.notify(isKo ? `${appContext.shared.tlFrame}프레임에 전신 IK 키를 추가했어요` : `Full-body IK key at frame ${appContext.shared.tlFrame}`);
 	}
 
-	// Self-collision cleanup: push interpenetrating body parts apart with the
-	// IK solver, then bake the fix as an ordinary IK correction key so it
-	// survives scrubs, undo, and blends back into the clip outside its range.
-	//
-	// The result has THREE outcomes, not two, and each gets its own sentence.
-	// "supported: false" means the rig has no capsule proxies to build at all
-	// — a non-Mixamo skeleton — and reporting that as "no collisions" would
-	// be a lie the user cannot act on: they would keep clicking a button that
-	// silently does nothing. The buttons below are disabled in that case, so
-	// this branch is the belt to that suspenders (a rig can be swapped under
-	// a stale render).
-	/**
-	 * Everything OUTSIDE the active character that a limb has to stay out of:
-	 * the other cast members' bodies (capsules, built from the rigs AS THEY ARE
-	 * POSED at the moment of the call) and every scene object (an upright box
-	 * on its footprint). Ids are namespaced `char:<id>:<capsule>` / `obj:<id>`,
-	 * so a penetration label names the thing that was hit.
-	 *
-	 * `frame` re-samples travel paths — a prop walking a route stands somewhere
-	 * else on every frame — but the CAST is read live from the scene graph, so
-	 * a caller walking a clip must pose the others at that frame first (see
-	 * runFixCollisionsRange's blockersAt).
-	 */
-	const externalBlockers = (frame = appContext.shared.tlFrame) => collisionBlockers({
-		rigs: appContext.shared.rigs,
-		activeId: appContext.shared.activeChar.id,
-		// The CAST is the authority on who is on stage, not the rig map: undo can
-		// put the cast list back to one subject while the rig mounted for the
-		// removed one is still in `rigs`, and a ghost body would go on blocking
-		// limbs that pass through empty space.
-		characterIds: appContext.shared.characters,
-		sceneObjects: appContext.shared.sceneObjects,
-		library: OBJECT_LIBRARY,
-		frame,
-		take: { frameCount: appContext.shared.tlFrameCount, fps: appContext.shared.tlFps },
-	});
-
-	function runFixCollisions() {
-		if (appContext.storeDomain('motion')) return appContext.storeDomain('motion').run('motion.fixCollisions', { characterId: appContext.shared.activeChar.id, scope: 'frame' });
-		if (!ikChains || !appContext.shared.activeRig) return;
-		// A rig swap leaves one render where ikChains still describes the old
-		// skeleton; solving the new rig with them would push the wrong bones.
-		if (appContext.shared.ikStateRef.current.rig !== appContext.shared.activeRig) return;
-		// The set as it stands right now: the other bodies at this frame's pose
-		// and the props at this frame's placement.
-		const result = fixCollisions(appContext.shared.activeRig, ikChains, { ikState: appContext.shared.ikStateRef.current, fkJoints: ikFkJoints, blockers: externalBlockers(appContext.shared.tlFrame) });
-		if (!result.supported) {
-			appContext.notify(ko("This rig doesn't support collision cleanup", "이 리그는 신체 관통 정리를 지원하지 않아요"));
-			return;
-		}
-		if (!result.changed) {
-			appContext.notify(ko("No body collisions at this frame", "이 프레임에는 신체 관통이 없어요"));
-			return;
-		}
-		editIkKeys(() => ikBakeKeyframe(ikChains, appContext.shared.ikStateRef.current, appContext.shared.tlFrame, ikFkJoints, result.touched, null, result.baseQuats));
-		setIkTick((n) => n + 1);
-		appContext.notify(result.residual > 1e-4
-			? ko(`Collisions reduced (residual ${(result.residual * 100).toFixed(1)} cm)`, `관통을 줄였어요 (잔여 ${(result.residual * 100).toFixed(1)} cm)`)
-			: ko(`Collisions fixed at frame ${appContext.shared.tlFrame}`, `프레임 ${appContext.shared.tlFrame}의 관통을 정리했어요`));
-	}
-
-	// Whole-clip variant: walk the motion frame by frame, clean each pose and
-	// key ONLY the frames that changed, so a clean clip stays keyless.
-	function runFixCollisionsRange() {
-		if (appContext.storeDomain('motion')) return appContext.storeDomain('motion').run('motion.fixCollisions', { characterId: appContext.shared.activeChar.id, scope: 'clip' });
-		if (!ikChains || !appContext.shared.activeRig || !motion) return;
-		if (appContext.shared.ikStateRef.current.rig !== appContext.shared.activeRig) return;
-		// Screened before the undo entry: an unsupported rig would record an
-		// undo step for a walk that keys nothing, leaving a no-op in history.
-		if (!appContext.shared.collisionCleanupSupported) {
-			appContext.notify(ko("This rig doesn't support collision cleanup", "이 리그는 신체 관통 정리를 지원하지 않아요"));
-			return;
-		}
-		const currentFrame = appContext.shared.tlFrame;
-		const applyFrame = (frame) => {
-			applyMotionFrame(appContext.shared.activeRig, motion, frame);
-			ikEvaluate(ikChains, appContext.shared.ikStateRef.current, frame, ikFkJoints, IK_CORRECTION_BLEND_FRAMES);
-		};
-		// The other bodies move too. blockersAt runs AFTER applyFrame(frame), so
-		// it poses the rest of the cast at that same frame — their own clips and
-		// their own stored IK layers, the very pass the viewport renders with —
-		// and only then samples their capsules. Without this the blockers would
-		// describe everyone frozen at the playhead, which is a wrong obstacle on
-		// every frame but one.
-		const blockersAt = (frame) => {
-			poseOtherCastMembers(frame);
-			return externalBlockers(frame);
-		};
-		let keyed = [];
-		let unresolved = [];
-		try {
-			const walked = editIkKeys(() => fixCollisionsRange({
-				rig: appContext.shared.activeRig,
-				chains: ikChains,
-				ikState: appContext.shared.ikStateRef.current,
-				fkJoints: ikFkJoints,
-				startFrame: 0,
-				endFrame: motion.frames - 1,
-				applyFrame,
-				blockersAt,
-			}));
-			// The frames the walk keyed. `unresolved` — the frames whose residual
-			// survived every pass — is ADDITIVE: read it defensively off either
-			// shape so this keeps working before and after the driver grows it.
-			keyed = Array.isArray(walked) ? walked : walked?.keyed ?? [];
-			unresolved = (Array.isArray(walked) ? walked.unresolved : walked?.unresolved) ?? [];
-		} finally {
-			// The restore is the pass's CLEANUP, not its epilogue: a throw mid-walk
-			// would otherwise leave the active rig and the rest of the cast frozen
-			// at whatever frame it died on, which is a wrong-looking set the user
-			// cannot scrub out of without touching the playhead.
-			applyFrame(currentFrame);
-			poseOtherCastMembers(currentFrame);
-			setIkTick((n) => n + 1);
-		}
-		// Residual is worth saying out loud: a limb pinned between two blockers
-		// (another body and a prop, say) can come out of the walk still touching,
-		// and silence would read as "all clean".
-		const stillPenetrating = unresolved.length
-			? ko(` · ${unresolved.length} frame(s) still penetrate`, ` · ${unresolved.length}개 프레임은 남아 있어요`)
-			: "";
-		// "No body collisions" must never share a sentence with "still
-		// penetrate": a converged pass over an unfixable clip has nothing more
-		// to do, which is a different statement from the clip being clean.
-		appContext.notify((keyed.length
-			? ko(`Fixed collisions on ${keyed.length} frame(s)`, `${keyed.length}개 프레임의 관통을 정리했어요`)
-			: unresolved.length
-				? ko("Nothing more to fix", "더 고칠 수 있는 게 없어요")
-				: ko("No body collisions in the clip", "클립에 신체 관통이 없어요")) + stillPenetrating);
-	}
-
-	function changePhysicsOptions(next) {
-		setPhysicsOptions(next); setPhysicsPreview(null); setIkTick((n) => n + 1);
-	}
-
-	function showPhysicsPreview(show) { setPhysicsShow(show); setIkTick((n) => n + 1); }
-
-	function cancelPhysicsPreview() { setPhysicsPreview(null); setIkTick((n) => n + 1); }
-
-	function applyPhysicsPreview() {
-		if (appContext.storeDomain('motion')) return appContext.storeDomain('motion').run('motion.applyPhysics', { characterId: appContext.shared.activeChar.id });
-		if (!physicsPreview || physicsPreview.sourceStamp !== physicsKeyStamp(appContext.shared.ikStateRef.current.keys)) return;
-		editIkKeys(() => { appContext.shared.ikStateRef.current.keys = copyPhysicsKeys(physicsPreview.candidate.keys); });
-		appContext.shared.ikStateRef.current.tracked = new Set(physicsPreview.candidate.tracked);
-		appContext.shared.autoPhysicsRunRef.current = { motion, rig: appContext.shared.activeRig, stamp: physicsKeyStamp(appContext.shared.ikStateRef.current.keys) };
-		setPhysicsPreview(null); setIkTick((n) => n + 1);
-		appContext.notify(ko("AutoPhysics applied · Undo restores the original", "오토피직스를 적용했어요 · 실행 취소로 원본 복구"));
-	}
-
-	async function runAutoPhysics() {
-		if (appContext.storeDomain('motion')) return appContext.storeDomain('motion').run('motion.autoPhysics', { characterId: appContext.shared.activeChar.id, ...physicsOptions, apply: false });
-		if (autoPhysicsRunning || !ikChains || !appContext.shared.activeRig || !motion || appContext.shared.ikStateRef.current.rig !== appContext.shared.activeRig) return null;
-		const previous = appContext.shared.autoPhysicsRunRef.current;
-		if (previous?.motion === motion && previous.rig === appContext.shared.activeRig && previous.stamp === physicsKeyStamp(appContext.shared.ikStateRef.current.keys)) {
-			appContext.notify(ko("Already applied. Undo to review this correction again.", "이미 적용했어요. 실행 취소 후 다시 비교할 수 있어요.")); return null;
-		}
-		const job = ++appContext.shared.physicsJobRef.current, frame = appContext.shared.tlFrame;
-		const sourceKeys = copyPhysicsKeys(appContext.shared.ikStateRef.current.keys), stamp = physicsKeyStamp(sourceKeys);
-		let lastYieldAt = Date.now(), yieldWaitMs = 0, yieldCount = 0;
-		const restore = () => { appContext.shared.poseMemberAtFrame(appContext.shared.activeRig, motion, appContext.shared.ikStateRef.current, frame, IK_CORRECTION_BLEND_FRAMES); };
-		appContext.shared.setTlPlaying(false); setAutoPhysicsRunning(true); setPhysicsProgress(0); setPhysicsPreview(null);
-		try {
-			const result = await reviewAutoPhysics({ rig: appContext.shared.activeRig, motion, chains: ikChains, fkJoints: ikFkJoints, sourceKeys,
-				applyRaw: (f) => appContext.shared.poseMemberAtFrame(appContext.shared.activeRig, motion, null, f), sceneObjects: appContext.shared.sceneObjects, ...physicsOptions,
-				cache: appContext.shared.physicsSourceCacheRef.current,
-				onProgress: setPhysicsProgress,
-				yieldFrame: async () => {
-					if (appContext.shared.physicsJobRef.current !== job) throw new Error("Analysis cancelled after changing the character or motion");
-					// A batch is a cancellation checkpoint, not necessarily a paint/
-					// event-loop boundary. Yield on a time budget, not every 12 frames.
-					if (Date.now() - lastYieldAt < 16) return;
-					restore();
-					const queuedAt = Date.now();
-					// Yield CPU work without waiting for a paint. requestAnimationFrame
-					// can be throttled/paused in an occluded tab, stretching a seconds-
-					// long solve into minutes. MessageChannel also lets input run.
-					await new Promise((resolve) => {
-						const channel = new MessageChannel();
-						channel.port1.onmessage = () => { channel.port1.close(); channel.port2.close(); resolve(); };
-						channel.port2.postMessage(0);
-					});
-					lastYieldAt = Date.now(); yieldWaitMs += lastYieldAt - queuedAt; yieldCount += 1;
-					if (appContext.shared.physicsJobRef.current !== job) throw new Error("Analysis cancelled after changing the character or motion");
-				},
-			});
-			Object.assign(result.performance, { yieldWaitMs, yieldCount });
-			if (appContext.shared.physicsJobRef.current !== job || physicsKeyStamp(appContext.shared.ikStateRef.current.keys) !== stamp) return null;
-			setPhysicsPreview(result); setPhysicsShow(true);
-			return { before: result.before, after: result.after, warnings: result.warnings, unresolved: result.unresolved, contacts: result.contacts.spans };
-		} catch (error) {
-			if (appContext.shared.physicsJobRef.current === job) appContext.notify(ko(`AutoPhysics: ${error.message}`, `오토피직스: ${error.message}`));
-			return null;
-		} finally {
-			if (appContext.shared.physicsJobRef.current === job) { restore(); setAutoPhysicsRunning(false); setIkTick((n) => n + 1); }
-		}
-	}
-
-	async function platformFitRun(id, context, { removal = false, preview = false } = {}) {
-		const rig = appContext.shared.rigs[id], resolved = rig && resolveIkRig(rig), take = domain.motionFor(id);
-		if (!resolved || !take) throw new StudioProtocolError('TARGET_NOT_READY', 'Load a take and character rig first.');
-		if (platformFitRunning) throw new StudioProtocolError('TARGET_BUSY', 'A platform fit is already running.');
-		const job = ++platformFitJobRef.current;
-		const sourceKeys = copyPhysicsKeys(decodeMotionKeys(domain.layer(id).ikKeys));
-		const sourceTracked = new Set([...sourceKeys.values()].flatMap(entry => [...entry.keys()]));
-		const stamp = physicsKeyStamp(sourceKeys);
-		const prior = platformFitAppliedRef.current;
-		const stacked = prior && prior.id === id && prior.stamp === stamp ? prior : null;
-		const frame = appContext.shared.tlFrame;
-		const restore = () => appContext.shared.poseMemberAtFrame(rig, take, appContext.shared.ikStatesRef.current.get(id), frame, 6);
-		let lastYield = performance.now();
-		const check = () => { context?.check?.(); if (platformFitJobRef.current !== job) throw new StudioProtocolError('STALE_TARGET', 'Platform fit was superseded.'); };
-		setPlatformFitRunning(true); platformFitProgressSet(0); setPlatformFitLast(null);
-		try {
-			const result = await fitPlatforms({
-				rig: rig, motion: take, chains: resolved.chains, fkJoints: resolved.fkJoints, sourceKeys,
-				applyRaw: at => appContext.shared.poseMemberAtFrame(rig, take, null, at),
-				sceneObjects: removal ? [] : (appContext.ports.read?.().objects ?? appContext.shared.sceneObjects),
-				onProgress: platformFitProgressSet,
-				yieldFrame: async () => {
-					check(); if (performance.now() - lastYield < 16) return;
-					restore();
-					await new Promise(resolve => { const channel = new MessageChannel(); channel.port1.onmessage = () => { channel.port1.close(); channel.port2.close(); resolve(); }; channel.port2.postMessage(0); });
-					lastYield = performance.now(); check();
-				},
-			});
-			check();
-			const last = { summary: result.summary, steps: result.steps, changedFrames: result.changedFrames };
-			if (removal) {
-				setPlatformFitLast(last);
-				if (result.changedFrames.length) context.commit(() => domain.setKeys(id, result.candidate.keys));
-				platformFitAppliedRef.current = null; setPlatformFitApplied(false); setPlatformFitLast(null);
-				return { ...last, removed: result.changedFrames.length > 0 };
-			}
-			if (!preview) {
-				if (result.changedFrames.length) context.commit(() => domain.setKeys(id, result.candidate.keys));
-				platformFitAppliedRef.current = { id, before: stacked?.before ?? sourceKeys, tracked: stacked?.tracked ?? sourceTracked, stamp: physicsKeyStamp(decodeMotionKeys(domain.layer(id).ikKeys)) };
-				setPlatformFitLast(last); setPlatformFitApplied(true);
-				return last;
-			}
-			platformFitAppliedRef.current = { preview: { id, sourceStamp: stamp, sourceKeys, sourceTracked, candidate: result.candidate, last }, before: stacked?.before ?? sourceKeys, tracked: stacked?.tracked ?? sourceTracked, stamp };
-			setPlatformFitLast({ ...last, candidate: result.candidate });
-			setPlatformFitApplied(false);
-			return last;
-		} finally {
-			if (platformFitJobRef.current === job) { restore(); setPlatformFitRunning(false); }
-		}
-	}
-
-	function platformFitApply(id, context) {
-		const preview = platformFitAppliedRef.current?.preview;
-		if (!preview || preview.id !== id || platformFitRunning) return { applied: false };
-		const current = physicsKeyStamp(decodeMotionKeys(domain.layer(id).ikKeys));
-		if (current !== preview.sourceStamp) throw new StudioProtocolError('STALE_TARGET', 'The platform preview is out of date. Analyse this take again before applying.');
-		context.commit(() => domain.setKeys(id, copyPhysicsKeys(preview.candidate.keys)));
-		platformFitAppliedRef.current = { id, before: preview.sourceKeys, tracked: preview.sourceTracked, stamp: physicsKeyStamp(decodeMotionKeys(domain.layer(id).ikKeys)) };
-		setPlatformFitApplied(true);
-		setPlatformFitLast({ ...preview.last, candidate: undefined });
-		return { applied: true, changedFrames: preview.last.changedFrames };
-	}
-
-	function platformFitRemove(id, context, { apply = false } = {}) {
-		if (apply) return platformFitApply(id, context);
-		const applied = platformFitAppliedRef.current;
-		if (applied?.preview?.id === id) {
-			platformFitAppliedRef.current = null; setPlatformFitLast(null); setPlatformFitApplied(false);
-			return { removed: false, cancelled: true };
-		}
-		if (!applied || applied.id !== id || platformFitRunning) return { removed: false };
-		const current = physicsKeyStamp(decodeMotionKeys(domain.layer(id).ikKeys));
-		if (current === applied.stamp) {
-			context.commit(() => domain.setKeys(id, copyPhysicsKeys(applied.before)));
-			platformFitAppliedRef.current = null; setPlatformFitApplied(false); setPlatformFitLast(null);
-			return { removed: true };
-		}
-		return platformFitRun(id, context, { removal: true });
-	}
-
 	function ikDeleteKeyframe(frame) {
 		if (!appContext.shared.ikStateRef.current.keys.has(frame)) return;
 		appContext.shared.runStudioAction("character.removeIkKey", { characterId: appContext.shared.activeChar.id, frame });
@@ -1765,966 +931,22 @@ export function useMotion(appContext) {
 		return true;
 	}
 
-	function recheckMotionHealth() {
-		setBridgeChecking(true);
-		return appContext.shared.bridgeRefreshRef.current().finally(() => setBridgeChecking(false));
-	}
-
-	function requestMotionGeneration(surface, inputMode, body = {}) {
-		const request = startMotionRequest({ surface, input_mode: inputMode });
-		const options = { body, lineEditSupported: lineEditBackend };
-		// Record known readiness refusals even if existing input validation returns
-		// early. A pass waits for the fully packaged payload at the queue boundary.
-		// The queue independently checks readiness; telemetry failure cannot
-		// enable or disable generation.
-		if (motionPreflightReason(bridge, options)) {
-			request.preflight(bridge, options);
-			const readiness = motionReadiness(bridge, options);
-			appContext.notify(motionReadinessMessage(readiness), ({ loading: "Checking motion generation…", ready: "Ready for this motion request", not_configured: "No motion backend configured", unsupported_route: "This route cannot run the selected motion request" })[readiness] ?? "The motion backend is unavailable");
-		}
-		return request;
-	}
-
-	// Optional native-ARDY seed. Empty = request omits seed; the raw string
-	// is kept as typed (trimmed only). runArdy validates the bridge contract
-	// (integer in 0..2**31-1) right before the request and toasts on a
-	// violation, so an invalid seed can never reach the bridge silently.
-	function changeArdySeed(value) {
-		setArdySeed(value.trim());
-	}
-
-	/** THE SEED RULE (contract C9), enforced in ONE place so no take-creating
-	 * call site can forget it: an empty field is rolled here, a typed one is
-	 * kept exactly as typed, and either way a concrete integer comes back to be
-	 * both SENT and RECORDED. A take whose seed was never written down cannot
-	 * be rebuilt from its recipe, which is the one promise the whole recipe
-	 * model rests on. Returns null after toasting when the typed value violates
-	 * the bridge contract — the caller must then abandon the request. */
-	function takeSeed() {
-		try {
-			return resolveSeed(ardySeed, ARDY_SEED_MAX);
-		} catch {
-			appContext.notify((isKo, ko) => isKo ? `Seed는 0..${ARDY_SEED_MAX} 범위의 정수여야 해요. 비워 두면 자동으로 선택됩니다` : `Seed must be an integer in 0..${ARDY_SEED_MAX} — clear it to let the box pick one`);
-			return null;
-		}
-	}
-
-	/** CONFIRM the pull: the full-quality run of exactly what the preview has
-	 * been showing. Its own run mode — the body carries lineEdit and NOTHING
-	 * else authored, because C6 makes it exclusive with preserve, waypoints,
-	 * segments, regenerateSegments and motionEdit — and it is the one path that
-	 * commits a recipe and a version. Same builder, same SESSION SEED and same
-	 * curve as the last preview; only `preview: true` is absent, which is what
-	 * buys the full step count. */
-	function runLineEdit() {
-		if (appContext.shared.generationPendingRef.current || appContext.shared.genRunningRef.current || ardyRunning) return;
-		if (isProxyFigure(appContext.shared.activeChar)) {
-			appContext.notify(kindRefusal("lineEdit", isKo));
-			return;
-		}
-		const generationRequest = requestMotionGeneration("line_edit", "edit", { lineEdit: true });
-		if (!appContext.shared.takeSourceUrl) {
-			appContext.notify(ko("The current take has no bridge source — generate it once before editing a path", "현재 테이크에 브리지 원본이 없어요 — 궤적을 편집하기 전에 한 번 생성하세요"));
-			return;
-		}
-		// No curve object means no edit — an untouched path is the take's own
-		// trajectory, and sending it would ask the box to spend eight seconds
-		// reproducing what is already there.
-		if (!appContext.shared.lineEditPayload) {
-			appContext.notify(ko(
-				"Draw along the path, pull a dot, or pin a moment first",
-				"먼저 궤적을 따라 그리거나, 점을 잡아당기거나, 순간을 찍어 주세요",
-			));
-			return;
-		}
-		if (!lineEditBackend) {
-			appContext.notify(ko(
-				"The line-editing backend is not connected yet",
-				"라인 편집 백엔드가 아직 연결 전이에요",
-			));
-			return;
-		}
-		const request = appContext.shared.buildLineEditRequest(appContext.shared.lineEditPayload);
-		if (!request.ok) {
-			if (request.message) appContext.notify(request.message);
-			return;
-		}
-		const { body, lineEdit, seed } = request;
-		// The take being edited, not the draft that may be on screen: a preview
-		// is a picture and must never become anyone's lineage.
-		const source = appContext.shared.linePreviewSource;
-		const queued = enqueueMotionJob({
-			request: generationRequest,
-			charId: source?.charId ?? appContext.shared.activeChar.id,
-			charIndex: appContext.shared.activeCharIndex,
-			prompt: body.prompt,
-			body,
-			hasBlockEdits: false,
-			committedEditKeys: [],
-			rootRotationDeg: source?.rotationDeg ?? motion.rotationDeg ?? appContext.shared.activeChar.rot,
-			anchor: { x: motion.anchorX ?? appContext.shared.activeChar.x, z: motion.anchorZ ?? appContext.shared.activeChar.z },
-			ikState: null,
-			recipeIntent: "lineEdit",
-			recipeSeed: seed,
-			// sourceMotion is dropped on the way into the recipe: replay rebinds
-			// it to whatever take it is re-applied to.
-			// (stripSourceMotion keeps only C10's replay keys, so `preview` — when
-			// the object came back from a draft build — cannot leak into a recipe.)
-			recipeLineEdit: stripSourceMotion({ ...lineEdit, sourceMotion: undefined, seed }),
-			recipeLabel: isKo ? `다듬기 · ${lineTrackLabel(appContext.shared.lineTrack)}` : `Refine · ${lineTrackLabel(appContext.shared.lineTrack)}`,
-		});
-		if (!queued) return;
-		appContext.shared.generationPendingRef.current = true;
-		// The pull has left the building. The curve stays (it is the reference
-		// the next edit starts from) but its deformation is released, so the
-		// Generate button goes back to needing a fresh pull instead of inviting
-		// a second identical run while the first is still queued. The undo
-		// stack goes with it: restoring a pull that is already generating would
-		// invite the identical run this reset exists to prevent.
-		//
-		// This also ENDS THE PREVIEW SESSION: the draft comes off the viewport
-		// (the real result will land on it in a couple of seconds, and until it
-		// does the take on screen should be the take that exists) and the seed
-		// is released, so the next pull is a new piece of work with a new roll.
-		appContext.shared.clearLineEdit();
-	}
-
-	function runAllPromptBlocks(commandContext = null) {
-		const characterId = appContext.storeDomain('cast').activeId;
-		return commandContext ? generateMotion({ characterId }, commandContext)
-			: appContext.bus.run('motion.generate', { characterId });
-	}
-
-	// The UI's uncommitted prompt/fresh choice is read synchronously at admission,
-	// just like its seed and pose controls. It never survives into another run.
-	let uiGenerationIntent = null;
-	function runArdy({ promptOverride = ardyPrompt, durationOverride = ardyDuration, promptClipsOverride = [], fresh = false } = {}) {
-		uiGenerationIntent = { prompt: promptOverride, blocks: promptClipsOverride, fresh };
-		try { return appContext.bus.run('motion.generate', { characterId: appContext.storeDomain('cast').activeId, durationSeconds: Math.round(Number(durationOverride)) || ARDY_DURATION_MIN }); }
-		finally { uiGenerationIntent = null; }
-	}
-
-	async function generateMotion(args, commandContext) {
-		if (appContext.shared.generationPendingRef.current || appContext.shared.genRunningRef.current || ardyRunning) throw generationRefusal('TARGET_BUSY', 'A motion generation is already running.');
-		if (appContext.shared.linePreviewUrl) throw generationRefusal('TARGET_NOT_READY', previewBlockingReason(en => en), previewBlockingReason(ko));
-		const character = appContext.storeDomain('cast').read().find(row => row.id === args.characterId);
-		refuseRigOnly(character, 'motion');
-		const active = character.id === appContext.shared.loadedLayerCharRef.current;
-		const posing = active && appContext.shared.posing;
-		const rig = posing ? appContext.shared.posedRig() : appContext.shared.rigs[character.id];
-		if (!rig) throw generationRefusal('TARGET_NOT_READY', 'Character not loaded yet', ko('Character not loaded yet', '캐릭터가 아직 로드되지 않았어요'));
-		const take = domain.motionFor(character.id), state = ikStateFor(character.id);
-		const intent = commandContext.origin === 'ui' ? uiGenerationIntent : null;
-		const blocks = (intent?.blocks ?? character.layer.promptClips).filter(clip => clip.text.trim()).sort((a, b) => a.startFrame - b.startFrame);
-		const prompt = intent?.prompt ?? blocks[0]?.text ?? (active ? ardyPrompt : '');
-		let seed;
-		try { seed = resolveSeed(args.seed ?? (active ? ardySeed : ''), ARDY_SEED_MAX); }
-		catch (error) { throw generationRefusal('INVALID_ARGUMENT', error.message); }
-		const input = { character, prompt, blocks, seed, durationSeconds: args.durationSeconds ?? (blocks.length ? Math.max(ARDY_DURATION_MIN, Math.ceil(Math.max(...blocks.map(clip => clip.endFrame)) / TIMELINE_FPS)) : ardyDuration),
-			waypoints: character.layer.waypoints, motion: take, ikKeys: state.keys,
-			startFromPose: ardyStartFromPose, posePlacement: ardyPosePlacement, frame: appContext.shared.tlFrame,
-			preserveStrength, recipe: domain.layer(character.id).takeRecipe, fresh: intent?.fresh ?? false };
-		const plan = buildGenerationRequest(input), resolved = resolveIkRig(rig);
-		const image = appContext.shared.snapshotExportRig(rig);
-		let poses;
-		try {
-			poses = plan.constraintFrames.map(frame => {
-				if (take) applyMotionFrame(rig, take, frame);
-				if (resolved && state.keys.size) ikEvaluate(resolved.chains, state, frame, resolved.fkJoints, take ? IK_CORRECTION_BLEND_FRAMES : 0);
-				return { frame, pose: buildArdyPose({ rig, camRef: appContext.shared.shotCamRef, look: appContext.shared.look,
-					fovDeg: appContext.shared.fovDeg, slate: slateLine(appContext.shared.shot), rigName: posing ? appContext.shared.posingChar?.model ?? character.model : character.model, root: captureArdyRoot(rig) }) };
-			});
-		} finally { appContext.shared.restoreExportRig(image); }
-		const built = buildGenerationRequest({ ...input, poses });
-		for (const warning of built.warnings) appContext.notify(warning);
-		const request = requestMotionGeneration('timeline', take?.url && state.keys.size ? 'edit' : ardyStartFromPose ? 'pose' : 'prompt');
-		commandContext.check();
-		return new Promise((resolve, reject) => {
-			const job = { request, commandContext, commandCompletion: { resolve, reject }, charId: character.id,
-				charIndex: appContext.live.characters.findIndex(row => row.id === character.id), prompt: built.body.prompt,
-				body: built.body, hasBlockEdits: built.hasBlockEdits, committedEditKeys: built.committedEditKeys,
-				rootRotationDeg: built.rootRotationDeg, anchor: { x: character.x, z: character.z }, ikState: built.hasBlockEdits ? state : null,
-				recipeIntent: built.hasBlockEdits ? 'carry' : 'fresh', recipeSeed: seed,
-				recipeLabel: built.hasBlockEdits ? ko('Block fix', '블록 수정') : built.hasPromptSchedule ? ko('Blocks', '블록 생성')
-					: input.fresh ? ko('New', '새로 만들기') : take?.url ? ko('Again', '다시 뽑기') : ko('Generate', '생성') };
-			appContext.shared.generationPendingRef.current = enqueueMotionJob(job) === true;
-			if (!appContext.shared.generationPendingRef.current) reject(generationRefusal('TARGET_NOT_READY', 'The motion backend cannot run this request.'));
-		});
-	}
-
-	function onTrailDragStart({ track, grabFrame } = {}) {
-		if (!motion) return;
-		if (track) {
-			setTrailTrackFocus(track);
-			focusIkHandle(track);
-		}
-		const frame = Math.round(grabFrame ?? appContext.shared.tlFrame);
-		appContext.shared.setTlFrame(frame);
-		// The pre-drag take is both the deformation base (repeated moves re-derive
-		// from it, so deltas never accumulate) and the undo snapshot.
-		appContext.shared.trailBaseMotionRef.current = motion;
-		appContext.storeDomain('motion').beginGesture();
-	}
-
-	/** World drag delta -> clip delta, shedding the character's stature scale
-	 * (the trail is drawn scaled by it). */
-	function trailClipDelta(base, delta, track = "hips", grabFrame = appContext.shared.tlFrame) {
-		const statureScale = appContext.shared.activeChar.scale ?? 1;
-		return worldDeltaToTrailClip(base, delta, { track, grabFrame, radiusFrames: trailFalloffFrames, rig: appContext.shared.activeRig, scale: statureScale });
-	}
-
-	/** Per-rAF drag preview. Deliberately React-free: the deformed take lands in
-	 * a ref and on the rig directly, so a drag never re-renders the app. The
-	 * trail/highlight lines are rewritten in place by MotionTrails itself. */
-	function onTrailDragPreview({ track, grabFrame, delta }) {
-		const base = appContext.shared.trailBaseMotionRef.current;
-		if (!base) return;
-		const deformed = applyTrailFalloffDelta(base, {
-			grabFrame,
-			radiusFrames: trailFalloffFrames,
-			track, clipDelta: trailClipDelta(base, delta, track, grabFrame),
-		});
-		appContext.shared.trailPreviewMotionRef.current = deformed;
-		const rig = appContext.shared.activeRig;
-		if (!rig) return;
-		applyMotionFrame(rig, deformed, Math.round(grabFrame));
-		if (ikChains && appContext.shared.ikStateRef.current.keys.size > 0) {
-			ikEvaluate(ikChains, appContext.shared.ikStateRef.current, Math.round(grabFrame), ikFkJoints, IK_CORRECTION_BLEND_FRAMES);
-		}
-	}
-
-	function onTrailDragEnd({ track, grabFrame, delta }) {
-		const base = appContext.shared.trailBaseMotionRef.current;
-		const deformed = appContext.shared.trailPreviewMotionRef.current;
-		appContext.shared.trailBaseMotionRef.current = null;
-		appContext.shared.trailPreviewMotionRef.current = null;
-		const size = delta ? Math.hypot(delta.x, delta.y, delta.z) : 0;
-		if (!base || !deformed || size < 0.01) {
-			// A sub-centimetre nudge is a mis-grab, not an authored edit: the
-			// motion state never changed, so only the rig pose needs restoring.
-			if (base && appContext.shared.activeRig) {
-				applyMotionFrame(appContext.shared.activeRig, base, appContext.shared.tlFrame);
-				if (ikChains && appContext.shared.ikStateRef.current.keys.size > 0) {
-					ikEvaluate(ikChains, appContext.shared.ikStateRef.current, appContext.shared.tlFrame, ikFkJoints, IK_CORRECTION_BLEND_FRAMES);
-				}
-			}
-			setTrailEdit(null);
-			return;
-		}
-		const owned = appContext.storeDomain('motion');
-		if (base !== owned.motionFor(appContext.shared.activeChar.id)) { owned.project(); throw new StudioProtocolError('STALE_TARGET', 'The take changed during the trail drag.'); }
-		owned.run('motion.editTrail', { characterId: appContext.shared.activeChar.id, track, grabFrame, radiusFrames: trailFalloffFrames, delta });
-		owned.finishGesture();
-		setTrailEdit({ track, grabFrame, radiusFrames: trailFalloffFrames, clipDelta: trailClipDelta(base, delta, track, grabFrame) });
-		const { startFrame, endFrame } = trailEditRange(base.frames, grabFrame, trailFalloffFrames);
-		const conflictFrames = findAbsoluteIkKeyConflicts({ keys: appContext.shared.ikStateRef.current.keys, track, startFrame, endFrame });
-		if (conflictFrames.length) appContext.notify(`${ko("Absolute IK keys in this range override the path edit — remove or re-key them", "이 구간의 절대 IK 키가 궤적 수정을 덮어써요 — 해당 키를 지우거나 다시 찍어주세요")} ${isKo ? `프레임 ${conflictFrames.join(", ")}` : `frames ${conflictFrames.join(", ")}`}`);
-	}
-
-	/** Send the pending trail edit through the existing motionEdit pipeline:
-	 * the regen window is auto-derived from the grab + falloff, explicit IK
-	 * keys inside the window ride as hard constraints (their tracks), and the
-	 * deformed line contributes the grab-frame pose as a root guide. */
-	function runTrailRegeneration() {
-		if (appContext.shared.generationPendingRef.current || appContext.shared.genRunningRef.current || ardyRunning) return;
-		if (isProxyFigure(appContext.shared.activeChar)) {
-			appContext.notify(kindRefusal("trails", isKo));
-			return;
-		}
-		const request = requestMotionGeneration("trail", "edit", { motionEdit: true });
-		if (!trailEdit) return;
-		// Same rule as runArdy: motionEdit rewrites a span of THE take, and a
-		// draft on the viewport is not it.
-		if (appContext.shared.linePreviewUrl) {
-			appContext.notify(previewBlockingReason());
-			return;
-		}
-		if (!motion?.url) {
-			appContext.notify(ko("The current motion has no bridge source; generate the prompt blocks once before regenerating a trail edit", "현재 모션에 브리지 원본이 없어요. 궤적 수정을 재생성하려면 프롬프트 블록을 먼저 한 번 생성하세요"));
-			return;
-		}
-		const rig = appContext.shared.activeRig;
-		if (!rig) {
-			appContext.notify(ko("Character not loaded yet", "캐릭터가 아직 로드되지 않았어요"));
-			return;
-		}
-		const { startFrame, endFrame } = trailEditRange(motion.frames, trailEdit.grabFrame, trailEdit.radiusFrames);
-		const frames = [...new Set([
-			trailEdit.grabFrame,
-			...appContext.shared.ikFrames.filter((frame) => frame >= startFrame && frame < endFrame),
-		])].sort((a, b) => a - b);
-		const currentFrame = appContext.shared.tlFrame;
-		const entries = [];
-		for (const frame of frames) {
-			applyMotionFrame(rig, motion, frame);
-			if (ikChains && appContext.shared.ikStateRef.current.keys.size > 0) {
-				ikEvaluate(ikChains, appContext.shared.ikStateRef.current, frame, ikFkJoints, IK_CORRECTION_BLEND_FRAMES);
-			}
-			const pose = buildArdyPose({
-				rig,
-				camRef: appContext.shared.shotCamRef,
-				look: appContext.shared.look,
-				fovDeg: appContext.shared.fovDeg,
-				slate: slateLine(appContext.shared.shot),
-				rigName: appContext.shared.activeChar.model,
-				root: captureArdyRoot(rig),
-			});
-			const wireFrame = toArdyFrame(frame);
-			if (entries.length && wireFrame <= entries[entries.length - 1].frame) continue;
-			const ikTracks = [...(appContext.shared.ikStateRef.current.keys.get(frame)?.keys() || [])];
-			if (frame === trailEdit.grabFrame && trailEdit.track && !ikTracks.includes(trailEdit.track)) ikTracks.push(trailEdit.track);
-			entries.push({ frame: wireFrame, timelineFrame: frame, tracks: ikTracks.length ? ikTracks : ["hips"], pose });
-		}
-		applyMotionFrame(rig, motion, currentFrame);
-		if (ikChains && appContext.shared.ikStateRef.current.keys.size > 0) {
-			ikEvaluate(ikChains, appContext.shared.ikStateRef.current, currentFrame, ikFkJoints, IK_CORRECTION_BLEND_FRAMES);
-		}
-		const prompt = (motion.prompt || "").trim() || "A person continues the motion naturally.";
-		const body = {
-			prompt,
-			duration: motion.frames / TIMELINE_FPS,
-			posePin: true,
-			motionEdit: {
-				sourceMotion: motion.url,
-				startFrame: toArdyFrame(startFrame),
-				endFrame: toArdyFrame(endFrame),
-				contextBefore: 40,
-				contextAfter: 20,
-				edits: entries.map(({ frame, tracks, pose }) => ({ frame, tracks, pose })),
-			},
-		};
-		// THE SEED RULE (C9) — a trail regeneration writes a new take too, so its
-		// seed is rolled, sent and recorded like every other take-creating run.
-		const seed = takeSeed();
-		if (seed === null) return;
-		body.seed = seed;
-		const queued = enqueueMotionJob({
-			request,
-			charId: appContext.shared.activeChar.id,
-			charIndex: appContext.shared.activeCharIndex,
-			prompt,
-			body,
-			hasBlockEdits: true,
-			committedEditKeys: entries.map(({ timelineFrame, tracks }) => ({ frame: timelineFrame, tracks })),
-			rootRotationDeg: motion.rotationDeg ?? appContext.shared.activeChar.rot,
-			anchor: { x: motion.anchorX ?? appContext.shared.activeChar.x, z: motion.anchorZ ?? appContext.shared.activeChar.z },
-			ikState: appContext.shared.ikStateRef.current,
-			// motionEdit rewrites a span of the loaded take; the recipe travels
-			// forward unchanged because there is no recipe field that could
-			// describe the splice (C10 excludes motionEdit from replay outright).
-			recipeIntent: "carry",
-			recipeSeed: seed,
-			recipeLabel: ko("Trail fix", "궤적 수정"),
-		});
-		if (!queued) return;
-		appContext.shared.generationPendingRef.current = true;
-		setTrailEdit(null);
-	}
-
-	/* One box, one job at a time: explicit entry points suppress duplicate
-	 * requests through queueing and execution. The
-	 * payload is frozen at enqueue time; completion delivers the clip to the
-	 * REQUESTING character's layer, not whoever happens to be selected then. */
-	const [genQueue, setGenQueue] = useState([]);
-
-	function enqueueMotionJob(spec) {
-		const options = { body: spec.body, lineEditSupported: lineEditBackend };
-		spec.request.preflight(bridge, options);
-		if (motionPreflightReason(bridge, options)) return;
-		const id = `gen-${++appContext.shared.genJobSeq.current}`;
-		setGenQueue((queue) => [...queue, { id, status: "queued", ...spec }]);
-		appContext.notify((isKo, ko) => isKo ? `인물 ${spec.charIndex + 1} 모션 생성을 대기열에 넣었어요` : `Queued motion generation for Subject ${spec.charIndex + 1}`);
-		return true;
-	}
-
-	async function executeMotionJob(job) {
-		job.commandContext?.check();
-		const controller = new AbortController();
-		const abort = () => controller.abort(job.commandContext.signal.reason);
-		job.commandContext?.signal.addEventListener("abort", abort, { once: true });
-		appContext.shared.ardyAbortRef.current = controller;
-		setArdyRunning(true);
-		reportArdyStatus(ko("connecting…", "연결 중…"));
-		setArdyReport(null);
-		setArdyOutcome(null);
-		// Replay notices belong to ONE run; the next run re-earns them.
-		setReplayNotices([]);
-		const request = job.request;
-		request.start();
-		controller.signal.addEventListener("abort", () => request.fail(new DOMException("", "AbortError")), { once: true });
-		let editCommitReport = null;
-		try {
-			const done = await ardyGenerate(
-				job.body,
-				(event) => {
-					if (event.event === "status") reportArdyStatus(event.message);
-					else if (event.event === "report") {
-						setArdyReport(event.report);
-						if (job.hasBlockEdits) editCommitReport = event.report;
-						// C10's per-entry replay report. Only the entries worth
-						// acting on are kept: a refinement that failed outright,
-						// or one whose range straddles an internal block
-						// boundary (where block N+1 was conditioned on N's
-						// PRE-edit tail, so the replay is approximate rather
-						// than exact). Both are non-blocking — the take exists.
-						if (Array.isArray(event.report.replay)) {
-							setReplayNotices(event.report.replay.filter((entry) => entry?.ok === false || entry?.boundaryWarning === true));
-						}
-					}
-				},
-				{ signal: controller.signal },
-			);
-			if (
-				job.hasBlockEdits &&
-				(
-					editCommitReport?.commit_verified !== true ||
-					!job.body.motionEdit.edits.every((entry) =>
-						editCommitReport.committed_keys?.includes(entry.frame)
-					)
-				)
-			) {
-				throw new Error(ko("The generated motion came back without verified authored pose keys", "생성된 모션에 검증된 수동 포즈 키가 없어요"));
-			}
-			job.commandContext?.check();
-			if (!done.motionUrl) throw generationRefusal('TARGET_NOT_READY', 'The generator finished without a motion artifact.');
-			setArdyOutcome({ ok: true, output: done.output, bytes: done.bytes, motionUrl: done.motionUrl, rotationDeg: job.rootRotationDeg });
-			request.succeed();
-			trackActivation("motion");
-			// Fetch and decode the real npz right away; decode errors are shown
-			// in the card, playback is never faked. The clip lands on the
-			// REQUESTING character, not whoever is selected now.
-			if (done.motionUrl) {
-				await deliverMotion(job, done.motionUrl);
-				if (!controller.signal.aborted && appContext.live.characters.some((entry) => entry.id === job.charId)) request.apply();
-				if (!appContext.storeDomain('motion')) commitTakeRecipe(job, done.motionUrl);
-			}
-			if (!appContext.storeDomain('motion') && job.hasBlockEdits && job.ikState) {
-				// Timeline frames, not the wire frames in body.motionEdit.edits:
-				// these light up the IK markers on the production clock.
-				setCommittedIkEdits((current) => [...current, ...job.committedEditKeys]);
-				job.ikState.keys.clear();
-				job.ikState.tracked.clear();
-				job.ikState.plants.clear();
-				setIkTick((value) => value + 1);
-			}
-			appContext.notify((isKo, ko) => isKo ? `인물 ${job.charIndex + 1} 모션 생성됨` : `Motion generated for Subject ${job.charIndex + 1}`);
-		} catch (err) {
-			// Wave-2 gate, second line of defence. The capability preflight
-			// normally stops a line edit before it is sent, but a bridge that
-			// advertises the route and then 400s on the field (a half-landed
-			// wave 2, an older sidecar behind the proxy) must read as "not
-			// connected yet", not as a red generation failure the user could
-			// act on.
-			if (job.body.lineEdit && isLineEditUnsupported(err?.message)) {
-				appContext.notify(ko(
-					"The line-editing backend is not connected yet",
-					"라인 편집 백엔드가 아직 연결 전이에요",
-				));
-			}
-			setArdyOutcome({
-				ok: false,
-				message: err?.name === "AbortError" ? ko("Cancelled", "취소됨") : err?.message || String(err),
-			});
-			request.fail(err, job.body.lineEdit && isLineEditUnsupported(err?.message) ? "unsupported_route" : undefined);
-			throw err;
-		} finally {
-			setArdyRunning(false);
-			appContext.shared.ardyAbortRef.current = null;
-			job.commandContext?.signal.removeEventListener("abort", abort);
-		}
-	}
-
-	/* ONE writer for both. Every take that reaches the app came out of a job,
-	 * so a job's completion is the only place where "what is this take made of"
-	 * can be answered honestly, and the answer is checkpointed next to the
-	 * motionUrl in the same breath. Nothing else may write takeRecipeRef except
-	 * loadTakeVersion, which restores a checkpoint rather than authoring one. */
-	function commitTakeRecipe(job, motionUrl) {
-		const owned = appContext.storeDomain('motion');
-		const base = owned ? owned.layer(job.charId).takeRecipe : appContext.shared.takeRecipeRef.current;
-		let next = base;
-		if (job.recipeIntent === "fresh") {
-			// A regeneration that carried `replay` produced a take that ALREADY
-			// contains those edits, so they stay on the recipe. Resetting
-			// lineEdits to [] here would make the second regeneration lose what
-			// the first one preserved — the exact failure replay exists to fix.
-			next = freshRecipe({
-				seed: job.recipeSeed,
-				blocks: blocksFromRequest(job.body, ARDY_FPS),
-				lineEdits: job.body.replay ?? [],
-			});
-		} else if (job.recipeIntent === "lineEdit") {
-			// A take imported by url (?motion=, a reload) has no recipe of its own.
-			// The edit's body carries the take's prompt and length, so a
-			// best-effort single block is recorded rather than dropping the
-			// refinement on the floor; only the SEED is a guess, and it is the
-			// one this edit actually ran with. The seedless placeholder recipe an
-			// imported take is given (seedLoadedTake) counts as "no recipe" for
-			// the seed specifically: adopting this edit's seed is what turns it
-			// into something that can replay at all.
-			const seeded = Number.isInteger(base?.seed)
-				? base
-				: freshRecipe({
-					seed: job.recipeSeed,
-					blocks: base?.blocks?.length ? base.blocks : blocksFromRequest(job.body, ARDY_FPS),
-					lineEdits: base?.lineEdits ?? [],
-				});
-			next = withLineEdit(seeded, job.recipeLineEdit);
-		}
-		if (owned) {
-			owned.writeLayer(job.charId, { takeRecipe: next, takeVersions: pushTakeVersion(owned.layer(job.charId).takeVersions, {
-				motionUrl, recipe: next, savedAt: Date.now(), label: job.recipeLabel ?? '',
-			}, TAKE_VERSIONS_MAX) });
-			return;
-		}
-		appContext.shared.takeRecipeRef.current = next;
-		setTakeRecipe(next);
-		setTakeVersions((list) => pushTakeVersion(list, {
-			motionUrl,
-			recipe: next,
-			savedAt: Date.now(),
-			label: job.recipeLabel ?? "",
-		}, TAKE_VERSIONS_MAX));
-	}
-
-	/* A take can also arrive WITHOUT a job behind it — ?motion=<url>, the shipped
-	 * demo clip, a scene reload that re-fetches a stored motionRef. Those takes
-	 * used to leave the version strip empty, so the first refinement had nothing
-	 * to walk back to and the artist's only checkpoint was the thing they had
-	 * just overwritten. They get a v1 like everything else.
-	 *
-	 * WHAT IS HONESTLY KNOWN is the take's url, its prompt and its length —
-	 * NOT its seed, which was rolled on the box in a session nobody here
-	 * witnessed. So the placeholder recipe carries `seed: null` and every reader
-	 * treats that as "this take cannot be rebuilt": no request may attach it as
-	 * C10 `replay` (a replay whose base is a different random take re-applies
-	 * refinements to a stranger), and the first real edit adopts its own seed in
-	 * commitTakeRecipe. A checkpoint you can return to beats a recipe you can
-	 * replay, and this gets the first without pretending to the second. */
-	function seedLoadedTake(url, prompt, frames) {
-		if (appContext.storeDomain('motion')) return;
-		if (!url || appContext.shared.takeRecipeRef.current) return;
-		const recipe = Object.freeze({
-			seed: null,
-			blocks: Object.freeze([Object.freeze({
-				prompt: typeof prompt === "string" ? prompt : "",
-				duration: frames > 0 ? frames / TIMELINE_FPS : 0,
-			})]),
-			lineEdits: Object.freeze([]),
-		});
-		appContext.shared.takeRecipeRef.current = recipe;
-		setTakeRecipe(recipe);
-		setTakeVersions((list) => pushTakeVersion(list, {
-			motionUrl: url,
-			recipe,
-			savedAt: Date.now(),
-			label: ko("Loaded", "불러옴"),
-		}, TAKE_VERSIONS_MAX));
-	}
-
-	/** Click a chip: that motionUrl becomes the active take through the SAME
-	 * delivery path a fresh generation result travels, and the recipe saved
-	 * beside it becomes the current one. Nothing is truncated — editing from an
-	 * old version pushes a NEW version on top, so no click can destroy work. */
-	async function loadTakeVersion(entry) {
-		if (!entry?.motionUrl || motionBusy) return;
-		if (appContext.storeDomain('motion')) return appContext.storeDomain('motion').run('motion.loadVersion', { characterId: appContext.shared.activeChar.id, motionUrl: entry.motionUrl });
-		if (entry.motionUrl === appContext.shared.takeSourceUrl) return;
-		// A pull in hand was authored against the take that is leaving. The
-		// preview is dropped WITHOUT reverting: this call is already loading a
-		// different take, and a revert would race it with a reload of the one
-		// being left behind.
-		appContext.shared.cancelLinePreview({ revert: false });
-		if (appContext.shared.lineEditMode) appContext.shared.clearLineEdit();
-		setReplayNotices([]);
-		appContext.shared.takeRecipeRef.current = entry.recipe ?? null;
-		setTakeRecipe(entry.recipe ?? null);
-		try {
-			await deliverMotion({
-				charId: appContext.shared.activeChar.id,
-				prompt: entry.recipe?.blocks?.[0]?.prompt ?? motion?.prompt ?? "",
-				rootRotationDeg: motion?.rotationDeg ?? appContext.shared.activeChar.rot,
-				anchor: { x: motion?.anchorX ?? appContext.shared.activeChar.x, z: motion?.anchorZ ?? appContext.shared.activeChar.z },
-				calibration: motion?.sceneCalibration ?? null,
-			}, entry.motionUrl);
-		} catch {
-			/* loadMotion already surfaced the decode failure in the panel */
-		}
-	}
-
-	/* Scene blocks the shot with Kimodo; Refine pulls one joint's path with
-	 * ProjFlow. Everything else the pipeline can do is one of those two said
-	 * more precisely, and both are reachable from the take itself instead of
-	 * from a foldout the artist has to remember to open.
-	 *
-	 * WHY THE REASONS ARE FUNCTIONS, not toasts. An action the artist cannot
-	 * take must say so BEFORE the click, in place, next to the button. A toast
-	 * fired after the click teaches nothing: it arrives once, scrolls away, and
-	 * leaves the button looking identical to the ones that work. Each reason
-	 * below is rendered as a line under its entry AND as data-disabled-reason,
-	 * which is also what the CDP surface gate reads. */
-	function selectedMotionReadiness({ fresh = false, clips = appContext.shared.promptClips } = {}) {
-		const authored = clips.filter((clip) => clip.text.trim()).sort((a, b) => a.startFrame - b.startFrame);
-		const prompt = authored[0]?.text.trim() || ardyPrompt.trim();
-		const duration = motion && appContext.shared.ikFrames.length > 0 ? motion.frames / motion.fps
-			: authored.length ? Math.max(ARDY_DURATION_MIN, Math.ceil(Math.max(...authored.map((clip) => clip.endFrame)) / TIMELINE_FPS))
-				: Math.round(Number(ardyDuration)) || ARDY_DURATION_MIN;
-		const clipFrames = duration * TIMELINE_FPS;
-		const segments = buildPromptSchedule(authored, clipFrames, prompt);
-		const hasPromptSchedule = segments.length > 1;
-		const editedSegments = motion?.url && hasPromptSchedule
-			? segments.filter((segment) => appContext.shared.ikFrames.some((frame) => frame >= segment.startFrame && frame < segment.endFrame))
-			: [];
-		const hasBlockEdits = editedSegments.length > 0;
-		const pinPlan = planPosePin({
-			startFromPose: ardyStartFromPose,
-			poseFrame: posePlacementFrame(ardyPosePlacement, clipFrames, appContext.shared.tlFrame),
-			hasPromptSchedule, hasBlockEdits, waypointMode: appContext.shared.waypointMode, ikFrames: appContext.shared.ikFrames, clipFrames, segments, editedSegments,
-		});
-		// Only the capability-bearing fields are needed here; the queue still
-		// preflights the actual frozen request before any generation HTTP call.
-		const body = { prompt, duration, posePin: pinPlan.pin };
-		if (hasBlockEdits) body.motionEdit = {};
-		else if (hasPromptSchedule) body.segments = toArdySegments(segments);
-		if (appContext.shared.waypointMode) body.waypoints = [{}];
-		const recipe = appContext.shared.takeRecipeRef.current;
-		if (!fresh && !hasBlockEdits && Number.isInteger(recipe?.seed)) body.replay = replayPayload(recipe);
-		if (!fresh && !hasBlockEdits && !hasPromptSchedule && motion?.url && preserveStrength > 0
-			&& Math.abs(motion.frames / TIMELINE_FPS - duration) <= 1 / ARDY_FPS + 1e-9) {
-			const blocks = blocksFromRequest(body, ARDY_FPS);
-			if (recipe?.blocks?.length === blocks.length
-				&& recipe.blocks.every((block, index) => block.prompt.trim() === blocks[index].prompt.trim())) body.preserve = {};
-		}
-		return motionReadiness(bridge, { body, lineEditSupported: lineEditBackend });
-	}
-
-	const generationBusy = ardyRunning || genQueue.some((job) => job.status === "queued" || job.status === "running");
-
-	function openMotionSetup(kind = "prompt") {
-		setMotionSetupKind(kind);
-		setMotionSetupReveal((value) => value + 1);
-	}
-
-	function refineDisabledReason() {
-		if (!characterCapabilities(appContext.shared.activeChar).lineEdit) return kindRefusal("lineEdit", isKo);
-		if (!motion) return ko("No take yet — block a scene first", "아직 테이크가 없어요 — 먼저 장면을 만들어 주세요");
-		if (!motion.url) return ko("This take has no bridge source — generate it once before refining", "이 테이크에는 브리지 원본이 없어요 — 한 번 생성해야 다듬을 수 있어요");
-		return "";
-	}
-
-	function sceneDisabledReason() {
-		// A standing capability, so it outranks the bridge probe: a capsule figure
-		// cannot generate whatever the backend says.
-		if (!characterCapabilities(appContext.shared.activeChar).motion) return kindRefusal("motion", isKo);
-		if (bridge === null || bridgeChecking) return motionReadinessMessage("loading");
-		if (generationBusy) return ko("A generation is already running", "이미 생성이 돌고 있어요");
-		// NOT a line-edit preview, deliberately. Every other reason here is a
-		// standing capability the entry should be greyed for; a draft on the
-		// viewport lasts a second and a half, and a reason line appearing and
-		// vanishing under the Scene button RESIZES THE TAKE BAR — which shortens
-		// the stage, which changes the camera aspect, which the drift watcher
-		// reads as "the view moved".
-		//
-		// THE TEETH ARE OUT OF THAT TRAP: drift no longer discards anything, so a
-		// take-bar resize now costs at most a flicker of the ghosted paint and the
-		// hint while the aspect settles — it used to kill the pull ~400 ms after
-		// every draft landed. The refusal still lives in runArdy /
-		// runTrailRegeneration rather than here, because a reason line that
-		// appears and vanishes under the pointer is its own small nuisance and
-		// nothing is gained by moving it back.
-		return "";
-	}
-
-	/** The one sentence every take-consuming action says while a draft is up. */
-	function previewBlockingReason(localize = ko) {
-		return localize(
-			"A line-edit preview is on the viewport — press Generate to keep it, or undo (Ctrl/Cmd+Z) to drop it",
-			"라인 편집 미리보기가 떠 있어요 — 생성으로 확정하거나 Ctrl/Cmd+Z로 되돌린 뒤에 쓰세요",
-		);
-	}
-
-	function sceneGenerateDisabledReason() {
-		return sceneDisabledReason()
-			|| (ardyPrompt.trim() || appContext.shared.promptClips.some((clip) => clip.text.trim())
-				? ""
-				: ko("Describe the motion first — press 4 and add a prompt with + on the Prompt lane", "먼저 어떤 동작인지 적어 주세요 — 4를 누르고 프롬프트 레인의 +로 프롬프트를 추가하세요"));
-	}
-
-	/** Taking it AGAIN needs no fresh wording: the loaded take already knows what
-	 * it was asked for, so its own prompt is the fallback (the same fallback
-	 * runLineEdit uses). What it does need is a take to re-take. */
-	function sceneAgainPrompt() {
-		return ardyPrompt.trim() || (motion?.prompt ?? "").trim();
-	}
-
-	function sceneAgainDisabledReason() {
-		return sceneDisabledReason()
-			|| (motion?.url ? "" : ko("Nothing to redo yet — make a take first", "다시 뽑을 테이크가 없어요 — 먼저 한 번 만들어 주세요"))
-			|| (sceneAgainPrompt() || appContext.shared.promptClips.some((clip) => clip.text.trim())
-				? ""
-				: ko("This take carries no prompt — add a block and describe it", "이 테이크에는 프롬프트가 없어요 — 블록을 추가하고 동작을 적어 주세요"));
-	}
-
-	/** ONE CLICK from a loaded take into drag mode. The pull itself is authored
-	 * on the viewport, but its controls live under the character's Inspector, so
-	 * selecting that character and revealing the panel happen HERE rather than
-	 * being three clicks the artist has to find first. */
-	function enterRefineMode() {
-		const reason = refineDisabledReason();
-		if (reason) {
-			appContext.notify(reason);
-			return;
-		}
-		setSceneMenuOpen(false);
-		appContext.shared.selectActiveCharacterInHierarchy();
-		appContext.shared.revealPromptBlocks();
-		appContext.shared.toggleLineEditMode();
-	}
-
-	/** Take it again — same blocks, same lineage, refinements replayed. Authored
-	 * blocks go through the batch path so the schedule survives; a single-prompt
-	 * take goes straight through runArdy. */
-	function runSceneAgain() {
-		if (appContext.shared.promptClips.some((clip) => clip.text.trim())) runAllPromptBlocks();
-		else runArdy({ promptOverride: sceneAgainPrompt() });
-	}
-
-	/** Add a block — the timeline's own add-block gesture, said as a button. */
-	function addSceneBlock() {
-		appContext.shared.addPromptClip(appContext.shared.tlFrame);
-		appContext.shared.selectActiveCharacterInHierarchy();
-		appContext.shared.revealPromptBlocks();
-	}
-
-	/** Hand a finished clip to the layer that asked for it: the buffer when
-	 * the requester is still active, its stored session motion otherwise. A
-	 * lightweight motionRef is persisted with the entry either way, so the
-	 * clip can be re-fetched after a reload. */
-	async function deliverMotion(job, motionUrl) {
-		const calibration = job.calibration ?? job.sceneCalibration ?? null;
-		const normalizedCalibration = normalizeMotionCalibration(calibration);
-		const sceneAnchorX = job.anchor.x + normalizedCalibration.offsetX;
-		const sceneAnchorZ = job.anchor.z + normalizedCalibration.offsetZ;
-		const sceneRotationDeg = job.rootRotationDeg + normalizedCalibration.yawDeg;
-		const motionRef = {
-			url: motionUrl,
-			prompt: job.prompt,
-			rotationDeg: sceneRotationDeg,
-			anchorX: sceneAnchorX,
-			anchorZ: sceneAnchorZ,
-		};
-		if (calibration && typeof calibration === "object") motionRef.calibration = normalizedCalibration;
-		if (!appContext.storeDomain('motion') && !job.commandContext) appContext.shared.publishStudioCharacters((list) => list.map((entry) => entry.id === job.charId ? { ...entry, motionRef } : entry));
-		if (job.charId === appContext.shared.loadedLayerCharRef.current) {
-			await loadMotion(motionUrl, job.prompt, job.rootRotationDeg, null, job.charId, null, { calibration, commandContext: job.commandContext, job });
-			if (!appContext.storeDomain('motion') && job.commandContext) appContext.shared.publishStudioCharacters(appContext.live.characters.map(entry => entry.id === job.charId ? { ...entry, motionRef } : entry));
-			return;
-		}
-		// Inbound boundary for a clip delivered to a non-active layer.
-		const retimed = retimeMotion(await loadMotionFromUrl(motionUrl), TIMELINE_FPS);
-		if (retimed.sourceBytes) retimed.motionId = await sha256Hex(retimed.sourceBytes);
-		const decoded = applyMotionCalibration(retimed, { ...normalizedCalibration, yawDeg: 0, offsetX: 0, offsetZ: 0 }).motion;
-		const clip = {
-			...decoded,
-			url: motionUrl,
-			prompt: job.prompt,
-			anchorX: sceneAnchorX,
-			anchorZ: sceneAnchorZ,
-			anchorFrame: 0,
-			rotationDeg: sceneRotationDeg,
-			sceneCalibration: normalizedCalibration,
-			editSegments: createMotionEdit(decoded.frames),
-		};
-		if (calibration && typeof calibration === "object") clip.sceneCalibration = normalizedCalibration;
-		// Same stature rule as loadMotion, on the layer that asked for the clip.
-		const scale = characterScaleFor(decoded);
-		const apply = () => {
-			if (appContext.storeDomain('motion')) return commitLoadedTake(job.charId, clip, { job });
-			appContext.shared.motionFullRef.current.set(job.charId, clip);
-			const next = appContext.live.characters.map(entry => entry.id === job.charId ? { ...entry, scale, sessionMotion: clip, motionRef } : entry);
-			appContext.shared.publishStudioCharacters(next);
-		};
-		if (job.commandContext) job.commandContext.commit(apply);
-		else if (appContext.storeDomain('motion')) appContext.storeDomain('motion').runPrepared(job.charId, apply);
-		else apply();
-	}
-
-	/** After a scene (re)load, re-fetch every persisted clip reference and
-	 * rebuild the session motions. The bridge may be gone — failures just
-	 * leave the character posed, never an error the user must act on. */
-	async function restoreMotionRefs(list) {
-		const epoch = ++appContext.shared.restoreEpochRef.current;
-		const motions = appContext.shared.projectMotionsRef.current;
-		try { const db = await openMotionDb(); const ids = [...new Set(list.map((entry) => entry.motionRef?.motionId?.toLowerCase()).filter(Boolean))]; const cached = await Promise.all(ids.map((id) => getMotion(db, id))); cached.filter(Boolean).forEach((record) => motions.set(record.motionId.toLowerCase(), record)); db.close(); } catch (error) { console.warn("[cozyclay] could not restore motion cache", error); }
-		for (const entry of list) {
-			const source = resolveMotionSource(entry.motionRef, motions);
-			if (!entry.motionRef) continue;
-			if (source.kind === "missing") {
-				appContext.notify(isKo ? `저장된 모션이 누락되었습니다 (${entry.subject || entry.id})` : `Saved motion is missing for ${entry.subject || entry.id}`);
-				continue;
-			}
-			const load = source.kind === "embedded" ? decodeMotionResource(source.record) : loadMotionFromUrl(source.url);
-			load.then((raw) => {
-				if (epoch !== appContext.shared.restoreEpochRef.current) return;
-			// Inbound boundary: a re-fetched clip is retimed exactly like a
-			// freshly generated one, so a reload cannot resurrect 20 fps frames.
-			const sourceUrl = source.kind === "url" ? source.url : entry.motionRef?.url;
-				const retimed = retimeMotion(raw, TIMELINE_FPS);
-				const normalizedCalibration = normalizeMotionCalibration(entry.motionRef.calibration);
-				const decoded = applyMotionCalibration(retimed, { ...normalizedCalibration, yawDeg: 0, offsetX: 0, offsetZ: 0 }).motion;
-				const clip = {
-					...decoded,
-					url: sourceUrl,
-					sourceBytes: raw.sourceBytes,
-					prompt: entry.motionRef.prompt,
-					anchorX: entry.motionRef.anchorX,
-					anchorZ: entry.motionRef.anchorZ,
-					anchorFrame: 0,
-					rotationDeg: entry.motionRef.rotationDeg,
-					sceneCalibration: normalizedCalibration,
-					editSegments: createMotionEdit(decoded.frames),
-				};
-				if (entry.motionRef.calibration) clip.sceneCalibration = entry.motionRef.calibration;
-				if (entry.motionRef.trailEdits) Object.assign(clip, restoreTrailEdits(clip, entry.motionRef.trailEdits));
-				if (entry.motionRef.studioTakeId) clip.studioTakeId = entry.motionRef.studioTakeId;
-				appContext.storeDomain('motion').hydrate(entry.id, clip, entry.motionRef);
-			}).catch((error) => {
-				if (epoch !== appContext.shared.restoreEpochRef.current) return;
-				appContext.shared.setProjectManifest((current) => {
-					const id = entry.motionRef?.motionId?.toLowerCase();
-					if (!id || !current?.items?.some((item) => item.kind === "motion" && item.id === id)) return current;
-					const items = current.items.map((item) => item.kind === "motion" && item.id === id
-						? { ...item, status: "missing", url: undefined }
-						: item);
-					const totals = { embedded: 0, external: 0, missing: 0, bytes: 0 };
-					for (const item of items) {
-						totals[item.status] += 1;
-						if (Number.isFinite(item.bytes)) totals.bytes += item.bytes;
-					}
-					return { items, totals, missing: items.filter((item) => item.status === "missing") };
-				});
-				// A saved take that fails to refetch used to vanish silently — the
-				// user would find a merely posed character and assume their motion
-				// was lost. Name it and offer the reload path.
-				const subject = entry.subject || entry.id;
-				appContext.notify(isKo
-					? `저장된 모션을 다시 불러오지 못했어요 (${subject}) [${error?.code || "decode"}]`
-					: `Saved motion could not be restored for ${subject} [${error?.code || "decode"}]`);
-			});
-		}
-	}
-
-	function cancelArdy() {
-		appContext.shared.ardyAbortRef.current?.abort();
-	}
-	const {
-		chooseMultiModelFile,
-		pasteMultiModelUrl,
-		useMultiModelUrl,
-		ingestPlatformFootage,
-		ingestFootage,
-		extractMultiModelMotion,
-		extractMultiModelMotionGpu,
-		deliverExtraTakes,
-		captureI2vStill,
-		enterI2vFraming,
-		markI2vPose,
-		clearI2vPose,
-		clearI2vMotion,
-		restoreI2vCamera,
-		framingDistance,
-		showI2vMotionLock,
-		generateI2vMotion,
-		i2vMotionUnavailable,
-		generateI2vMotionFromUi,
-		updateI2vMotionQuota,
-	} = createMotionVideoCapture({
-		appContext,
-		bridge,
-		i2vMotion,
-		setI2vMotion,
-		multiModelUrl,
-		multiModelSource,
-		multiModelFootage,
-		multiModelExtract,
-		setMultiModelUrl,
-		setMultiModelSource,
-		setMultiModelStatus,
-		setMultiModelStage,
-		setMultiModelProgress,
-		setMultiModelFootage,
-		setMultiModelError,
-		setMultiModelTake,
-		setMultiModelExtract,
-		setMultiModelExtractProgress,
-		setMultiModelExtractError,
-		loadMotion,
-		authoredSupportDescriptors,
-		applyAuthoredSupportRise,
-	});
-	domain.setVideoDraft = patch => setI2vMotion(current => ({ ...current, ...patch }));
-	domain.requestLineEdit = runLineEdit;
-	domain.requestTrailRegeneration = runTrailRegeneration;
-	domain.generate = generateMotion;
-	domain.isGenerating = () => appContext.shared.generationPendingRef.current || appContext.shared.genRunningRef.current || ardyRunning;
-	domain.onPhysicsRunning = setAutoPhysicsRunning;
-	domain.onPhysicsProgress = setPhysicsProgress;
-	domain.onPhysicsPreview = result => { setPhysicsPreview(result); setPhysicsShow(true); setIkTick(value => value + 1); };
-	domain.platformFitRun = platformFitRun;
-	domain.platformFitRemove = platformFitRemove;
-	domain.beginPlayback = id => { const rig = appContext.shared.rigs[id]; if (rig) beginPlaybackOn(rig); };
-	domain.loadRemote = async (args, context) => {
-		const entry = domain.layer(args.characterId).takeVersions.find(version => version.motionUrl === args.motionUrl);
-		if (args.motionUrl && !entry) throw new StudioProtocolError('TARGET_NOT_READY', 'This take version is no longer available.');
-		if (args.drop != null && !normalizeRootDrop(args.drop)) throw new StudioProtocolError('INVALID_ARGUMENT', 'Invalid drop.');
-		const toTimeline = frame => Math.round(frame * TIMELINE_FPS / ARDY_FPS);
-		const clips = args.blocks?.length ? args.blocks.map(block => {
-			if (block.endFrame <= block.startFrame) throw new StudioProtocolError('INVALID_RANGE', 'Prompt blocks must have a positive range.');
-			return { id: crypto.randomUUID(), startFrame: toTimeline(block.startFrame), endFrame: toTimeline(block.endFrame), text: block.prompt };
-		}) : null;
-		const character = appContext.storeDomain('cast').read().find(row => row.id === args.characterId);
-		const commandContext = !clips ? context : { ...context, commit: apply => context.commit(() => {
-			const result = apply();
-			appContext.recordAction('cast', () => appContext.storeDomain('cast').extendTimeline(Math.max(...clips.map(clip => clip.endFrame))), null, true);
-			return result;
-		}) };
-		await loadMotion(args.url ?? args.motionUrl, args.prompt ?? entry?.recipe?.blocks?.map(block => block.prompt).join(' ') ?? domain.motionFor(args.characterId)?.prompt ?? '', character.rot,
-			args.drop ?? null, args.characterId, clips, { commandContext, recipe: entry?.recipe });
-	};
+	
 	appContext.updateActionPorts({ clearMotionNative: clearMotion, setCharacterIkKey, removeCharacterIkKey, clearCharacterIkKeys });
 	return {
 		...domain,
-		i2vMotion, setI2vMotion, captureI2vStill, enterI2vFraming, markI2vPose, clearI2vPose, clearI2vMotion, restoreI2vCamera, framingDistance, showI2vMotionLock, generateI2vMotion, i2vMotionUnavailable, generateI2vMotionFromUi, updateI2vMotionQuota,
 		ikMode, ikChains, setIkChains, ikFkJoints, setIkFkJoints, ikFocus, setIkFocus, footSnap, setFootSnap,
-		bodyContact, setBodyContact, IK_CORRECTION_BLEND_FRAMES, autoPhysicsRunning, setAutoPhysicsRunning,
-		physicsPreview, setPhysicsPreview, physicsShow, physicsProgress, physicsOptions, setPhysicsOptions,
-		ikTick, setIkTick, committedIkEdits, setCommittedIkEdits, trailFalloffS, setTrailFalloffS, showTrails,
-		setShowTrails, ikEditTool, setIkEditTool, trailEdit, trailTrackFocus, selectTrailTrack, clearTrailTrackFocus, trailFalloffFrames, focusIkHandle, snapshotIkKeys,
+		bodyContact, setBodyContact, IK_CORRECTION_BLEND_FRAMES,
+		ikTick, setIkTick, committedIkEdits, setCommittedIkEdits, ikEditTool, setIkEditTool, focusIkHandle, snapshotIkKeys,
 		pendingIkEdit, applyPendingIkEdit, cancelPendingIkEdit,
 		rangePinApplySpec: (pin) => {
 			domain.run('motion.rangePin.apply', { characterId: appContext.shared.activeChar.id, pin });
 			return { residuals: decodeRangePinResiduals(domain.layer(appContext.shared.activeChar.id).ikPinResiduals).get(pin.id) };
 		},
 		rangePins, rangePinResiduals, rangePinSelection, setRangePinSelection, rangePinPartPick, setRangePinPartPick, rangePinPreview, previewRangePinDraft, applyRangePinDraft, deleteRangePin,
-		setCharacterIkKey, removeCharacterIkKey, clearCharacterIkKeys, bridge, setBridge, bridgeChecking,
-		motionSetupReveal, motionSetupKind, setArdyPrompt, setArdyDuration, ardySeed, preserveStrength,
-		setPreserveStrength, takeRecipe, takeVersions, replayNotices, sceneMenuOpen, setSceneMenuOpen,
-		ardyRunning, ardyStatus, ardyOutcome, lineEditBackend, setLineEditBackend, motion, motionBusy,
-		multiModelUrl, setMultiModelUrl, multiModelSource, setMultiModelSource, multiModelStatus,
-		multiModelStage, multiModelProgress, multiModelFootage, multiModelError, multiModelTake,
-		multiModelExtract, multiModelExtractProgress, multiModelExtractError, advanceFrame, stepFrame,
-		leaveIkMode, beginPlaybackOn, chooseMultiModelFile, pasteMultiModelUrl, useMultiModelUrl, ingestFootage,
-		extractMultiModelMotion, deliverExtraTakes, loadMotion, clearMotion: () => appContext.bus.run('motion.clear', { characterId: appContext.shared.activeChar.id }), clearMotionNative: clearMotion, applyMotionTrim, resetMotionTrim, cutMotionAtPlayhead,
-		changeMotionSegmentSpeed, removeMotionSegmentById, poseOtherCastMembers, toggleIkMode, ikSolve,
-		ikDragEnd, ikAddKeyframe, externalBlockers, runFixCollisions, runFixCollisionsRange,
-		changePhysicsOptions, showPhysicsPreview, cancelPhysicsPreview, applyPhysicsPreview, runAutoPhysics,
-		platformFitRun, platformFitApply, platformFitRemove, platformFitRunning, platformFitLast, platformFitProgress, platformFitApplied,
-		ikDeleteKeyframe, ikApplyPoseAsKey, recheckMotionHealth, changeArdySeed, takeSeed,
-		runLineEdit: () => domain.run('motion.commitLineEdit', { characterId: appContext.shared.activeChar.id }),
-		runAllPromptBlocks, runArdy, onTrailDragStart, onTrailDragPreview, onTrailDragEnd,
-		runTrailRegeneration: () => domain.run('motion.regenerateTrail', { characterId: appContext.shared.activeChar.id }),
-		genQueue, setGenQueue, executeMotionJob, seedLoadedTake, loadTakeVersion, selectedMotionReadiness,
-		generationBusy, openMotionSetup, refineDisabledReason, sceneDisabledReason, sceneGenerateDisabledReason,
-		sceneAgainDisabledReason, enterRefineMode, runSceneAgain, addSceneBlock, restoreMotionRefs, cancelArdy,
+		setCharacterIkKey, removeCharacterIkKey, clearCharacterIkKeys, motion,
+		advanceFrame, stepFrame,
+		leaveIkMode, clearMotion: () => appContext.bus.run('motion.clear', { characterId: appContext.shared.activeChar.id }), clearMotionNative: clearMotion,
+		poseOtherCastMembers, toggleIkMode, ikSolve, ikDragEnd, ikAddKeyframe, ikDeleteKeyframe, ikApplyPoseAsKey,
 	};
 }

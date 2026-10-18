@@ -199,17 +199,18 @@ shots.push(await shot("streaming"));
 
 expect("the capture tool completes", await waitFor("document.querySelector('[data-tool-name=\"capture_blocking_frame\"]')?.dataset.toolStatus === 'done'", 10000));
 expect("the render tool runs after the capture", await waitFor("!!document.querySelector('[data-tool-name=\"render_from_frame\"]')", 10000));
-expect("tool cards read as verb + target", await evaluate("document.querySelector('[data-tool-name=\"capture_blocking_frame\"] .agent-tool-label')?.textContent === 'Capture blocking frame'"));
-expect("a completed tool card shows its elapsed time", await waitFor("/\\d/.test(document.querySelector('[data-tool-name=\"render_from_frame\"] .agent-tool-elapsed')?.textContent || '')", 10000));
+expect("tool steps read as verb + target", await evaluate("document.querySelector('[data-tool-name=\"capture_blocking_frame\"] .agent-step-label')?.textContent === 'Capture blocking frame'"));
+expect("a completed tool step shows its elapsed time", await waitFor("/\\d/.test(document.querySelector('[data-tool-name=\"render_from_frame\"] .agent-step-time')?.textContent || '')", 10000));
 expect("the image result card arrives", await waitFor("!!document.querySelector('.agent-image-card img')", 12000));
 expect("the turn finishes and Stop reverts to Send", await waitFor("!document.querySelector('.agent-send.stop')", 12000));
 expect("the account strip picks up the plan from the quota event", await evaluate("(document.querySelector('.agent-plan-badge')?.textContent || '').trim() === 'Plus'"));
 expect("the image card offers Use in scene / Download / Regenerate", await evaluate("['.agent-image-use', '.agent-image-download', '.agent-image-regenerate'].every((sel) => !!document.querySelector(sel))"));
 shots.push(await shot("turn-complete"));
 
-// a tool card expands to its details
-await evaluate("document.querySelector('[data-tool-name=\"render_from_frame\"] summary').click()");
-expect("tool cards expand to raw args/result", await waitFor("!!document.querySelector('[data-tool-name=\"render_from_frame\"] details[open] .agent-tool-detail')", 5000));
+// a finished turn folds its steps to the header, which opens them again
+await evaluate("document.querySelector('.agent-steps-head').click()");
+expect("the step list opens from its header", await waitFor("document.querySelector('.agent-steps')?.dataset.open === 'true'", 5000));
+expect("no step shows raw JSON", await evaluate("![...document.querySelectorAll('.agent-steps')].some((node) => /[{}]/.test(node.textContent))"));
 
 // lightbox
 await evaluate("document.querySelector('.agent-image-card img').click()");
@@ -252,12 +253,11 @@ expect("Switch model clears the paused card and re-enables the composer", await 
 // --- error -----------------------------------------------------------------
 await open("error");
 expect("the failing tool call is marked failed", await waitFor("document.querySelector('[data-tool-name=\"capture_blocking_frame\"]')?.dataset.toolStatus === 'failed'", 15000));
-expect("the error card is attached to the failing tool call", await evaluate("!!document.querySelector('[data-tool-status=\"failed\"] .agent-error')"));
-expect("the error card offers Retry and Details", await evaluate("!!document.querySelector('.agent-error-retry') && !!document.querySelector('.agent-error-details')"));
+expect("the error is attached to the turn's steps", await evaluate("!!document.querySelector('.agent-steps [data-tool-status=\"failed\"]') && !!document.querySelector('.agent-steps .agent-error')"));
+expect("the error offers Retry", await evaluate("!!document.querySelector('.agent-error-retry')"));
 expect("the panel reports the error state", await evaluate("document.querySelector('.agent-panel')?.dataset.agentState === 'error'"));
 shots.push(await shot("error"));
-await evaluate("document.querySelector('.agent-error-details').click()");
-expect("Details expands the failing tool call", await waitFor("!!document.querySelector('[data-tool-status=\"failed\"] details[open]')", 5000));
+expect("a failed turn keeps its steps open", await evaluate("document.querySelector('.agent-steps')?.dataset.open === 'true'"));
 
 // --- header controls -------------------------------------------------------
 await open("ready");
@@ -679,12 +679,11 @@ const selectionBeforeTurn = await evaluate("document.querySelector('.hierarchy-r
 await evaluate("document.querySelector('.studio-agent-inspector .agent-send').click()");
 expect("the Studio turn opens a tool card for a Studio family", await waitFor("!!document.querySelector('[data-tool-name=\"inspect_studio\"]')", 15000),
 	await evaluate("document.querySelector('.scene-save-error')?.textContent || document.querySelector('.agent-activity-text')?.textContent || ''"));
-expect("a Studio tool card reads as an action, not a function name", await evaluate("document.querySelector('[data-tool-name=\"inspect_studio\"] .agent-tool-label')?.textContent === 'Read the scene'"),
-	await evaluate("document.querySelector('[data-tool-name=\"inspect_studio\"] .agent-tool-label')?.textContent"));
-expect("the card is badged for the surface it edits", await evaluate("document.querySelector('[data-tool-name=\"inspect_studio\"] .agent-tool-badge')?.textContent === 'Scene'"));
-expect("the second Studio family is labelled too", await waitFor("document.querySelector('[data-tool-name=\"arrange_characters\"] .agent-tool-label')?.textContent === 'Arrange characters'", 15000),
-	await evaluate("document.querySelector('[data-tool-name=\"arrange_characters\"] .agent-tool-label')?.textContent"));
-expect("a finished Studio tool card states its elapsed time", await waitFor("/\\d/.test(document.querySelector('[data-tool-name=\"arrange_characters\"] .agent-tool-elapsed')?.textContent || '')", 15000));
+expect("a Studio tool card reads as an action, not a function name", await evaluate("document.querySelector('[data-tool-name=\"inspect_studio\"] .agent-step-label')?.textContent === 'Read the scene'"),
+	await evaluate("document.querySelector('[data-tool-name=\"inspect_studio\"] .agent-step-label')?.textContent"));
+expect("the second Studio family is labelled too", await waitFor("document.querySelector('[data-tool-name=\"arrange_characters\"] .agent-step-label')?.textContent === 'Arrange characters'", 15000),
+	await evaluate("document.querySelector('[data-tool-name=\"arrange_characters\"] .agent-step-label')?.textContent"));
+expect("a finished Studio tool card states its elapsed time", await waitFor("/\\d/.test(document.querySelector('[data-tool-name=\"arrange_characters\"] .agent-step-time')?.textContent || '')", 15000));
 expect("the receipt lands as a card", await waitFor("!!document.querySelector('[data-receipt-status=\"applied\"]')", 15000));
 // The highlight is deliberately short-lived, so it is screenshotted the moment
 // it appears rather than after the rest of the assertions.

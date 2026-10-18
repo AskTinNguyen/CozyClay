@@ -5,204 +5,28 @@
  * world" (a car to lean on, to walk past, to frame behind glass) has nothing
  * to work with. These props are built from primitives in the same clay style
  * as the Room and the character tint, so the whole frame stays one
- * consistent maquette. Dimensions are metres against real vehicle sizes so
- * the 1.8 m figure keeps honest scale.
+ * consistent maquette. The hand-built set pieces live in set-pieces.jsx;
+ * practical lights and glow in scene-lights.jsx and object-glow.js.
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 import { objectTransformAt } from "./object-path.js";
-import { sceneObjectCarryMatrixAt, sceneObjectTravelMatrixAt, travelPose } from "./object-travel.js";
+import { sceneObjectCarryMatrixAt, sceneObjectTravelMatrixAt, trackShown, travelPose } from "./object-travel.js";
 import * as THREE from "three";
 import { GIZMO_LAYER } from "./dualview.jsx";
 import { CUTOUT_KIND, MESH_KIND, EMPTY_KIND, EMPTY_MARKER_SIZE, SCULPT_KIND } from "./scene-objects.js";
 import { buildSculptGroup, disposeSculptGroup } from "./sculpt-geometry.js";
 import { subscribeToAssetTexture } from "./scene-asset-cache.js";
-import { subscribeToMeshScene } from "./scene-mesh-cache.js";
-import { cloneMeshGraph } from "./mesh-graph-clone.js";
+import { ImportedMesh } from "./imported-mesh.jsx";
+import { EffectMarker, EffectsLayer } from "./effects/EffectsLayer.jsx";
+import { EFFECT_KIND } from "./effects/effect-record.js";
 import { applyPoseFade } from "./pose-fade.js";
 import { coplanarDepthRanks } from "./coplanar-depth.js";
-
-const CLAY_CAR = "#d98770";
-const CLAY_CAR_TOP = "#e49a84";
-const CLAY_TIRE = "#41484c";
-const CLAY_RIM = "#7c8588";
-const CLAY_GLASS = "#55697a";
-const CLAY_PLANE = "#7896a4";
-const CLAY_PLANE_TRIM = "#e1a849";
-const CLAY_CHAIR = "#b9855d";
-const CLAY_CHAIR_LIGHT = "#cf9d72";
-
-function Wheel({ position }) {
-	return (
-		<group position={position}>
-			<mesh rotation={[0, 0, Math.PI / 2]}>
-				<cylinderGeometry args={[0.33, 0.33, 0.24, 20]} />
-				<meshStandardMaterial color={CLAY_TIRE} roughness={0.95} />
-			</mesh>
-			<mesh rotation={[0, 0, Math.PI / 2]}>
-				<cylinderGeometry args={[0.17, 0.17, 0.26, 16]} />
-				<meshStandardMaterial color={CLAY_RIM} roughness={0.5} metalness={0.35} />
-			</mesh>
-		</group>
-	);
-}
-/**
- * A generic 5-door-ish sedan silhouette, ~4.5 m long. Origin at the centre
- * of the footprint, +Z forward.
- */
-export function Car({ position = [0, 0, 0], rotY = 0, color = CLAY_CAR, topColor = CLAY_CAR_TOP, autoColor = undefined }) {
-	const bodyMaterial = autoColor
-		? { ...autoFlat(autoColor) }
-		: { color, roughness: 0.55, metalness: 0.25 };
-	const topMaterial = autoColor
-		? { ...autoFlat(autoColor) }
-		: { color: topColor, roughness: 0.5, metalness: 0.2 };
-	return (
-		<group position={position} rotation={[0, rotY, 0]}>
-			<mesh position={[0, 0.62, 0]}>
-				<boxGeometry args={[1.78, 0.62, 4.45]} />
-				<meshStandardMaterial {...bodyMaterial} />
-			</mesh>
-			<mesh position={[0, 1.12, -0.15]}>
-				<boxGeometry args={[1.58, 0.5, 2.2]} />
-				<meshStandardMaterial {...topMaterial} />
-			</mesh>
-			<mesh position={[0, 1.14, -0.15]}>
-				<boxGeometry args={[1.62, 0.3, 1.9]} />
-				<meshStandardMaterial color={CLAY_GLASS} roughness={0.15} metalness={0.6} />
-			</mesh>
-			<mesh position={[0, 1.05, 0.95]} rotation={[0.5, 0, 0]}>
-				<boxGeometry args={[1.56, 0.42, 0.08]} />
-				<meshStandardMaterial color={CLAY_GLASS} roughness={0.15} metalness={0.6} />
-			</mesh>
-			<mesh position={[0, 1.05, -1.25]} rotation={[-0.55, 0, 0]}>
-				<boxGeometry args={[1.56, 0.42, 0.08]} />
-				<meshStandardMaterial color={CLAY_GLASS} roughness={0.15} metalness={0.6} />
-			</mesh>
-			<Wheel position={[0.82, 0.33, 1.45]} />
-			<Wheel position={[-0.82, 0.33, 1.45]} />
-			<Wheel position={[0.82, 0.33, -1.45]} />
-			<Wheel position={[-0.82, 0.33, -1.45]} />
-		</group>
-	);
-}
-
-/** Compact single-engine propeller plane, ~3.4 m wingspan and +Z forward. */
-export function SmallPlane({ position = [0, 0, 0], rotY = 0, autoColor = undefined }) {
-	// Auto-color mode tints the PRIMARY surfaces only (fuselage, wings, trim);
-	// glass, tires and rims keep their materials so the silhouette still reads.
-	// Each mesh keeps its own hand-tuned roughness when the mode is off.
-	const mat = (color, roughness, metalness) =>
-		autoColor ? autoFlat(autoColor) : { color, roughness, metalness };
-	return (
-		<group position={position} rotation={[0, rotY, 0]}>
-			<mesh position={[0, 0.76, 0]} rotation={[Math.PI / 2, 0, 0]}>
-				<cylinderGeometry args={[0.23, 0.31, 2.75, 16]} />
-				<meshStandardMaterial {...mat(CLAY_PLANE, 0.58, 0.18)} />
-			</mesh>
-			<mesh position={[0, 0.76, 1.55]} rotation={[Math.PI / 2, 0, 0]}>
-				<coneGeometry args={[0.23, 0.55, 16]} />
-				<meshStandardMaterial {...mat(CLAY_PLANE_TRIM, 0.52, 0.2)} />
-			</mesh>
-
-			<mesh position={[0, 0.73, 0.15]}>
-				<boxGeometry args={[3.4, 0.09, 0.58]} />
-				<meshStandardMaterial {...mat(CLAY_PLANE, 0.62, 0.14)} />
-			</mesh>
-			<mesh position={[0, 0.84, -1.18]}>
-				<boxGeometry args={[1.45, 0.07, 0.38]} />
-				<meshStandardMaterial {...mat(CLAY_PLANE_TRIM, 0.62, 0.12)} />
-			</mesh>
-			<mesh position={[0, 1.08, -1.2]} rotation={[0.22, 0, 0]}>
-				<boxGeometry args={[0.08, 0.62, 0.48]} />
-				<meshStandardMaterial {...mat(CLAY_PLANE, 0.62, 0.12)} />
-			</mesh>
-
-			<mesh position={[0, 1.02, 0.42]} scale={[0.62, 0.46, 0.9]}>
-				<sphereGeometry args={[0.42, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2]} />
-				<meshStandardMaterial color={CLAY_GLASS} roughness={0.16} metalness={0.55} />
-			</mesh>
-
-			<group position={[0, 0.76, 1.86]}>
-				<mesh rotation={[Math.PI / 2, 0, 0]}>
-					<cylinderGeometry args={[0.11, 0.11, 0.2, 12]} />
-					<meshStandardMaterial color={CLAY_RIM} roughness={0.45} metalness={0.4} />
-				</mesh>
-				<mesh position={[0, 0, 0.12]} rotation={[0, 0, 0.28]}>
-					<boxGeometry args={[1.25, 0.08, 0.06]} />
-					<meshStandardMaterial color={CLAY_TIRE} roughness={0.8} />
-				</mesh>
-			</group>
-
-			{[-0.55, 0.55].map((x) => (
-				<group key={x} position={[x, 0.2, 0.15]}>
-					<mesh position={[0, 0.24, 0]} rotation={[0, 0, x < 0 ? -0.35 : 0.35]}>
-						<boxGeometry args={[0.045, 0.55, 0.045]} />
-						<meshStandardMaterial color={CLAY_RIM} roughness={0.65} metalness={0.3} />
-					</mesh>
-					<mesh rotation={[0, 0, Math.PI / 2]}>
-						<cylinderGeometry args={[0.16, 0.16, 0.09, 14]} />
-						<meshStandardMaterial color={CLAY_TIRE} roughness={0.95} />
-					</mesh>
-				</group>
-			))}
-		</group>
-	);
-}
-
-export function Chair({ position = [0, 0, 0], rotY = 0, autoColor = undefined }) {
-	// Auto-color mode tints seat/back and frame together; undefined keeps the
-	// hand-picked clay pair exactly as it ships.
-	const seat = autoColor ? autoFlat(autoColor) : { color: CLAY_CHAIR_LIGHT, roughness: 0.86 };
-	const frame = autoColor ? autoFlat(autoColor) : { color: CLAY_CHAIR, roughness: 0.9 };
-	const legPositions = [
-		[-0.24, 0.23, -0.22],
-		[0.24, 0.23, -0.22],
-		[-0.24, 0.23, 0.22],
-		[0.24, 0.23, 0.22],
-	];
-	return (
-		<group position={position} rotation={[0, rotY, 0]} scale={0.9}>
-			<mesh position={[0, 0.49, 0]} castShadow receiveShadow>
-				<boxGeometry args={[0.6, 0.12, 0.58]} />
-				<meshStandardMaterial {...seat} />
-			</mesh>
-			{legPositions.map((leg, index) => (
-				<mesh key={index} position={leg} castShadow receiveShadow>
-					<boxGeometry args={[0.09, 0.46, 0.09]} />
-					<meshStandardMaterial {...frame} />
-				</mesh>
-			))}
-			<mesh position={[-0.24, 0.92, -0.245]} castShadow receiveShadow>
-				<boxGeometry args={[0.09, 0.86, 0.09]} />
-				<meshStandardMaterial {...frame} />
-			</mesh>
-			<mesh position={[0.24, 0.92, -0.245]} castShadow receiveShadow>
-				<boxGeometry args={[0.09, 0.86, 0.09]} />
-				<meshStandardMaterial {...frame} />
-			</mesh>
-			<mesh position={[0, 1.08, -0.245]} castShadow receiveShadow>
-				<boxGeometry args={[0.52, 0.38, 0.1]} />
-				<meshStandardMaterial {...seat} />
-			</mesh>
-		</group>
-	);
-}
-
-/**
- * The creatable primitives, Unity's 3D Object menu in clay. Each one is built
- * with its base on the local floor (y = 0), so an object's `y` reads as height
- * above the deck rather than "half of me is underground".
- */
-// Blender's solid-view response for auto-colored surfaces. Workbench shades
-// with a neutral studio rig, so the derived hue reaches the eye unmultiplied;
-// under our warm key light a plain standard material turns every hue olive.
-// Full roughness kills the specular sheen and a self-light of the same hue
-// lifts the shadow side the way workbench's studio lighting does.
-function autoFlat(hex) {
-	return { color: hex, roughness: 1, metalness: 0, emissive: hex, emissiveIntensity: 0.4 };
-}
+import { autoFlat, Car, Chair, SmallPlane } from "./set-pieces.jsx";
+import { LIGHT_KIND, capPracticalShadows } from "./object-look.js";
+import { SceneLight, useLookRefresh } from "./scene-lights.jsx";
+import { placeObjectLook } from "./scene-light-place.js";
 
 // Parts of an assembly can share a plane with an earlier part (hood top and
 // grille top). The depth test can't order them and the winner flips as the
@@ -212,6 +36,11 @@ function depthRankProps(rank) {
 	return rank > 0 ? { polygonOffset: true, polygonOffsetFactor: -rank, polygonOffsetUnits: -rank } : null;
 }
 
+/**
+ * The creatable primitives, Unity's 3D Object menu in clay. Each one is built
+ * with its base on the local floor (y = 0), so an object's `y` reads as height
+ * above the deck rather than "half of me is underground".
+ */
 function Primitive({ kind, color, autoColor, depthRank = 0 }) {
 	const side = kind === "plane" ? THREE.DoubleSide : THREE.FrontSide;
 	const material = autoColor ? (
@@ -283,97 +112,6 @@ function useAssetTexture(assetId) {
 /** The placeholder tint for a card whose picture has not arrived (or has gone
  * missing): blockout grey, because that is exactly what it is again. */
 const MISSING_CUTOUT = "#c2c6c8";
-
-/** The parsed GLB for an `assetId`, or null while it loads (or forever, if
- * the blob is gone). The cached graph is the FILE's own pivot and materials;
- * each instance clones, then fits to the stored height. */
-function useMeshScene(assetId) {
-	const [scene, setScene] = useState(null);
-	useEffect(() => {
-		setScene(null);
-		if (!assetId) return undefined;
-		return subscribeToMeshScene(assetId, setScene);
-	}, [assetId]);
-	return scene;
-}
-
-function disposeOwnedMaterials(root) {
-	if (!root) return;
-	root.traverse((node) => {
-		if (!node.isMesh || !(node.userData?.clayOwned || node.userData?.instanceOwned)) return;
-		const materials = Array.isArray(node.material) ? node.material : [node.material];
-		for (const material of materials) material?.dispose?.();
-	});
-}
-
-/**
- * Clone the cached graph, scale so its bbox height equals the stored
- * `object.height`, and sit the underside on y = 0. The import heuristic
- * already wrote that height — this pass must not re-guess it.
- *
- * Skinned graphs go through `cloneMeshGraph` so a Mixamo-as-statue keeps
- * its bind pose. Clay replaces materials on THIS clone only, so a second
- * instance of the same file can keep the textures from the disk. Every clone
- * owns its materials, so auto-color tints and opacity fades never leak.
- */
-function instantiateMesh(source, object) {
-	const root = cloneMeshGraph(source);
-	root.updateMatrixWorld(true);
-	const box = new THREE.Box3().setFromObject(root);
-	const size = box.getSize(new THREE.Vector3());
-	const targetHeight = Number(object.height);
-	if (Number.isFinite(targetHeight) && targetHeight > 0 && size.y > 1e-8) {
-		root.scale.multiplyScalar(targetHeight / size.y);
-		root.updateMatrixWorld(true);
-		box.setFromObject(root);
-	}
-	if (Number.isFinite(box.min.y)) root.position.y -= box.min.y;
-	const clay = object.clay === true;
-	const clayColor = object.autoColor ?? object.color ?? "#c4b8a8";
-	root.traverse((node) => {
-		if (node.isLight || node.isCamera) {
-			node.visible = false;
-			return;
-		}
-		if (!node.isMesh) return;
-		node.castShadow = true;
-		node.receiveShadow = true;
-		if (clay) {
-			const make = () => new THREE.MeshStandardMaterial({ color: clayColor, roughness: 0.9, metalness: 0 });
-			for (const material of Array.isArray(node.material) ? node.material : [node.material]) material?.dispose?.();
-			node.material = Array.isArray(node.material) ? node.material.map(() => make()) : make();
-			node.userData.clayOwned = true;
-			return;
-		}
-		if (!object.autoColor || !node.material) return;
-		// cloneMeshGraph already gave this instance its own materials.
-		for (const material of Array.isArray(node.material) ? node.material : [node.material]) {
-			if (material.color) material.color.set(object.autoColor);
-		}
-	});
-	return root;
-}
-
-function ImportedMesh({ object }) {
-	const source = useMeshScene(object.assetId);
-	const root = useMemo(
-		() => (source ? instantiateMesh(source, object) : null),
-		[source, object.height, object.clay, object.autoColor, object.color],
-	);
-	useEffect(() => () => disposeOwnedMaterials(root), [root]);
-	if (!root) {
-		const width = object.footprint?.width ?? 1;
-		const depth = object.footprint?.depth ?? 1;
-		const height = object.height ?? 1;
-		return (
-			<mesh position={[0, height / 2, 0]} castShadow receiveShadow>
-				<boxGeometry args={[width, height, depth]} />
-				<meshStandardMaterial color={MISSING_CUTOUT} roughness={0.92} metalness={0} />
-			</mesh>
-		);
-	}
-	return <primitive object={root} />;
-}
 
 /**
  * A cutout: an imported picture standing on a card, the standee a blockout
@@ -499,6 +237,8 @@ function SceneObjectContent({ object, depthRank = 0 }) {
 	// override as a cube — file materials are cloned and tinted per instance.
 	const { renderer, color, autoColor } = object;
 	if (renderer === EMPTY_KIND) return <EmptyMarker />;
+	if (renderer === LIGHT_KIND) return <SceneLight object={object} />;
+	if (renderer === EFFECT_KIND) return <EffectMarker object={object} />;
 	if (renderer === CUTOUT_KIND) return <Cutout object={object} />;
 	if (renderer === MESH_KIND) return <ImportedMesh object={object} />;
 	if (renderer === SCULPT_KIND) return <Sculpt object={object} depthRank={depthRank} />;
@@ -517,7 +257,7 @@ function SceneObjectContent({ object, depthRank = 0 }) {
 function SelectionBox({ object }) {
 	// An Empty has no extent, so its cage is the marker's own cube, centred on
 	// the origin (a prop's cage stands on it).
-	const empty = object.renderer === EMPTY_KIND;
+	const empty = object.renderer === EMPTY_KIND || object.renderer === LIGHT_KIND || object.renderer === EFFECT_KIND;
 	const height = empty ? EMPTY_MARKER_SIZE : Math.max(object.height ?? 1, 0.08);
 	const width = empty ? EMPTY_MARKER_SIZE : object.footprint?.width ?? 1;
 	const depth = empty ? EMPTY_MARKER_SIZE : object.footprint?.depth ?? 1;
@@ -575,7 +315,7 @@ function SceneObject({ object, selected, frameRef = null, take = null, attachFra
 		const travelled = frameRef && !attach && travelLookupRef?.current
 			? sceneObjectTravelMatrixAt(travelLookupRef.current, object.id, frame, take ?? {}, placeWorld)
 			: null;
-		if (travelled) {
+		if ((group.visible = trackShown(object.id, frame, take, travelLookupRef?.current)) && travelled) {
 			travelled.decompose(group.position, group.quaternion, group.scale);
 		} else if (attach || object.path) {
 			// The authored numbers first. While attached they are the prop's LOCAL
@@ -617,8 +357,11 @@ function SceneObject({ object, selected, frameRef = null, take = null, attachFra
 			(window.__cclayPropWorld ??= {})[object.id] = { x: group.position.x, y: group.position.y, z: group.position.z, quat: { x: group.quaternion.x, y: group.quaternion.y, z: group.quaternion.z, w: group.quaternion.w }, frame };
 		}
 		applyPoseFade(group, fadeOpacity, object.opacity ?? 1);
+		// A light's level, flicker and aim, and a glow, for this frame (scene-light-place.js).
+		placeObjectLook(group, object, frame, take);
 	};
 	useFrame(place);
+	useLookRefresh(object);
 	// Two things the App needs to reach imperatively, registered per prop: a
 	// placement pass for the recorder (which renders through gl.render() and so
 	// never runs the frame loop — see SetProps' syncRef), and the prop's live
@@ -684,7 +427,8 @@ export function SetProps({ objects = [], authoredObjects = null, selectedId = nu
 	if (worldRef) worldRef.current = (id, out) => registryRef.current.get(id)?.world(out) ?? null;
 	return (
 		<group>
-			{objects.map((object) => (
+			{/* Lights past the practical shadow cap draw without one (object-look.js). */}
+			{capPracticalShadows(objects).map((object) => (
 				<SceneObject
 					key={object.id}
 					object={object}
@@ -698,6 +442,7 @@ export function SetProps({ objects = [], authoredObjects = null, selectedId = nu
 					depthRank={depthRanks.get(object.id) ?? 0}
 				/>
 			))}
+			<EffectsLayer objects={authoredObjects ?? objects} frameRef={frameRef} take={take} registryRef={registryRef} fadeOpacity={fadeOpacity} />
 		</group>
 	);
 }

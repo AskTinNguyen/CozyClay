@@ -2,6 +2,66 @@
 
 ## Unreleased
 
+## 3.0.0 - 2026-10-19
+
+Motion is computed, not generated. The Studio agent writes a motion spec (key
+poses, skills, walks, contacts and goals) and a deterministic compiler in the
+browser bakes it frame by frame and measures it with QA. The agent compiles,
+reads the numbers and fixes the spec in seconds, with no GPU host.
+
+Breaking
+
+- The motion-generation backend (ARDY with Kimodo) is removed, and with it
+  text-to-motion generation, AI video, video motion capture, line edit,
+  AutoPhysics, platform fit and the collision fixer. `npm run dev` starts no
+  motion bridge and `CCLAY_KIMODO_HOST` is no longer read.
+- Motion is stored as a new take, `cozyclay.take.v3`: per-bone rotations on
+  the X Bot and Y Bot rigs, the hips' path, object tracks and the spec that
+  made it. A 2.x project still opens, but its generated (npz) motion is
+  dropped when the project is read; compile new motion for its characters.
+
+Motion compiler
+
+- `motion.compile`, `motion.qa`, `motion.sample`, `motion.describe` and
+  `motion.keyObject`. Specs combine keys, generators and skills (`standIdle`,
+  `walkTo`, `sitInSeat`, `exitCar`, `reachGrip`, `smokeCigarette`), with
+  two-bone IK limbs, finger presets and hand anchors on the world, the body,
+  bones, moving objects or the mouth.
+- QA measures collisions with scene objects and the body's own skin, foot
+  slides, floating, reach, balance, elbow, knee and wrist limits and pops, and
+  names each issue's cause with a hint. Hints become patches that
+  `repair` rounds apply; `goals` (near, above, moved, still, speed, ordering)
+  state what the motion must do.
+- Held props: grab and release, carried groups, keyed and falling objects,
+  prop kits and aim keys; the arm follows what the hand holds.
+- The walk rolls heel to toe, sets its hips from the legs, keeps an uneven
+  natural rhythm, and scales its knees, ankles, arm swing and trunk with its
+  pace. A held pose breathes and shifts its weight.
+- Compiles run in a Web Worker, off the editor's main thread. The Sequencer
+  cuts, retimes and trims an installed take.
+
+Look
+
+- Practical point and spot lights, glow, lighting looks
+  (`stage.applyLighting`), sky light with ambient occlusion and HDR
+  environment maps.
+- Deterministic effects: smoke, exhale, steam, fire, sparks, dust, rain, snow
+  and a motion trail.
+- Characters default to white clay; the outline ink is at half strength.
+
+Agent and Studio
+
+- The agent's motion drafts show while it works: as beats on the timeline,
+  as a ghost on the character and in the panel, which also shows the running
+  turn's reasoning and steps. Replies render their Markdown.
+- Contact sheets pick beat frames, add views that show depth, and draw
+  trails and onion-skin ghosts; the viewport has ghosts too.
+- The agent cuts for a new view and lays a camera move as one rail.
+- Connect a model runs the agent runtime's own provider login; keys are
+  checked before they are kept. Supervisor review is off by default.
+- Objects scale down to 1 cm, inspect reports each object's world box,
+  verify reports support gaps, and a follow dolly goes up to 40 m/s.
+
 ## 2.1.1 - 2026-10-13
 
 - Include the sampled framing fix, embedded composition-guide controls, and

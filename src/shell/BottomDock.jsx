@@ -5,9 +5,9 @@ import "./dock.css";
 import LibrarySlot from "./LibrarySlot.jsx";
 import BoardSlot from "./BoardSlot.jsx";
 import { ko } from "../locale.js";
-import Timeline from "../ardy/timeline.jsx";
+import Timeline, { timelineTake } from "../motion/timeline.jsx";
 import { DEFAULT_PLAYBACK_SPEED, SHOT_ASPECT_PRESETS, sceneObjectNameDisplayKo } from "../app-stage.jsx";
-import { motionEditLayout, createMotionEdit } from "../ardy/motion-edit.js";
+
 import { trackFeature } from "../analytics.js";
 import { defaultRailRange } from "../camera-rail-schedule.js";
 import { insertPathMark, pathMarks } from "../object-path.js";
@@ -74,9 +74,8 @@ export default function BottomDock({ tab: requestedTab = "animation", onTabChang
 		tlFrame, motion, waypointMode, craneSelectedIndex,
 		isCameraSelection, addActiveCranePoint, deleteSelectedCranePoint, setCraneSelectedIndex, tlFrameCount,
 		tlFps, characters, activeCharIndex, ghostLayers, pathSpeed,
-		tlPlaying, workflowMode, waypoints, pendingWaypointFrame, promptClips,
-		selectedPromptId, stateBadge, ikMode, ikChains, applyMotionTrim,
-		resetMotionTrim, cutMotionAtPlayhead, changeMotionSegmentSpeed, removeMotionSegmentById, ikFrames,
+		tlPlaying, workflowMode, waypoints, pendingWaypointFrame,
+		stateBadge, ikMode, ikChains, ikFrames,
 		rangePins, rangePinSelection, ikEditTool, rangePinPreview, footSnap,
 		bodyContact, shots, shotAspectKey, activeShotIdx, railDraw,
 		pathDraw, pathTarget, setPathDraw, setRailDraw, setWorkspaceLayout,
@@ -85,13 +84,12 @@ export default function BottomDock({ tab: requestedTab = "animation", onTabChang
 		setBodyContact, setToast, setFootSnap, setTlFrame, advanceFrame,
 		stepFrame, cameraPreviewEndRef, manualCameraOverrideRef, setTlPlaying, toggleWaypointMode,
 		setWaypointMode, selectActiveCharacterInHierarchy, setActiveWaypointId, setPendingWaypointFrame, removeWaypoint,
-		queueRootWaypointFrame, addPromptClip, revealPromptBlocks, setSelectedPromptId, setArdyPrompt,
-		changePromptClip, resizePromptClip, movePromptClip, removePromptClip, setSelectedHierarchyId,
+		queueRootWaypointFrame, setSelectedHierarchyId,
 		selectWorkflowMode, addCameraKeyframe, moveCameraKeyframe, removeCameraKeyframe, syncActiveCameraFraming,
 		activeCamera, activeShotDuration, changeActiveCamera, cameraRail, previewCameraShot,
 		toggleCameraRailDraw, deleteCameraRail, selectTimelineShot, shotsDomain, runStudioAction,
-		clearMotion, subscribeToasts, exportStatus, exportPhaseLabel, ardyRunning, ardyStatus,
-		ardyOutcome, pathPointIndex, setPathPointIndex,
+		clearMotion, subscribeToasts, exportStatus, exportPhaseLabel,
+		pathPointIndex, setPathPointIndex,
 	} = useStudioShell();
 	const dockRef = useRef(null);
 	const [dockHeight, setDockHeight] = useState(readDockHeight);
@@ -160,20 +158,6 @@ export default function BottomDock({ tab: requestedTab = "animation", onTabChang
 	useEffect(() => subscribeToasts((toast) => logStore.push({ kind: "toast", text: toast.uiMessage })),
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 		[]);
-	const generationWasRunning = useRef(false);
-	useEffect(() => {
-		if (ardyRunning && !generationWasRunning.current) logStore.push({ kind: "generation", text: ko("Motion generation started", "모션 생성을 시작했어요") });
-		generationWasRunning.current = ardyRunning;
-	}, [ardyRunning]);
-	useEffect(() => {
-		if (ardyRunning && ardyStatus) logStore.push({ kind: "generation", key: "generation:status", text: ardyStatus });
-	}, [ardyRunning, ardyStatus]);
-	useEffect(() => {
-		if (!ardyOutcome) return;
-		logStore.push({ kind: "generation", text: ardyOutcome.ok
-			? ko("Motion generation finished", "모션 생성을 마쳤어요")
-			: ko(`Motion generation failed — ${ardyOutcome.message}`, `모션 생성 실패 — ${ardyOutcome.message}`) });
-	}, [ardyOutcome]);
 	const exportPhase = exportStatus?.phase, exportLabel = exportStatus?.label, exportMessage = exportStatus?.message;
 	const exportDone = exportStatus?.completedFrames, exportTotal = exportStatus?.frameCount;
 	useEffect(() => {
@@ -238,22 +222,10 @@ export default function BottomDock({ tab: requestedTab = "animation", onTabChang
 			waypointMode={waypointMode}
 			waypoints={waypoints}
 			pendingWaypointFrame={pendingWaypointFrame}
-			previsMode={previsMode}
-			promptClips={promptClips}
-			selectedPromptId={selectedPromptId}
 			badge={stateBadge}
 			ikMode={ikMode}
 			ikDisabled={!ikChains}
-			motion={motion ? {
-				frames: motion.frames,
-				label: motion.prompt || ko("Loaded take", "불러온 테이크"),
-				segments: motionEditLayout(motion.editSegments ?? createMotionEdit(motion.frames)),
-			} : null}
-			onMotionTrim={applyMotionTrim}
-			onMotionTrimReset={resetMotionTrim}
-			onMotionCut={cutMotionAtPlayhead}
-			onMotionSpeedChange={changeMotionSegmentSpeed}
-			onMotionSegmentRemove={removeMotionSegmentById}
+			motion={timelineTake(motion, characters[activeCharIndex]?.id, runStudioAction)}
 			ikFrames={ikFrames}
 			rangePins={rangePins}
 			selectedPinId={rangePinSelection}
@@ -351,21 +323,7 @@ export default function BottomDock({ tab: requestedTab = "animation", onTabChang
 			}}
 			onMarkerRemove={removeWaypoint}
 			onRootKeyframeAdd={queueRootWaypointFrame}
-			onPromptAdd={(frame) => {
-				addPromptClip(frame);
-				selectActiveCharacterInHierarchy();
-				revealPromptBlocks();
-			}}
-			onPromptSelect={(id) => {
-				setSelectedPromptId(id);
-				setArdyPrompt(promptClips.find((clip) => clip.id === id)?.text ?? "");
-				selectActiveCharacterInHierarchy();
-				revealPromptBlocks();
-			}}
-			onPromptChange={changePromptClip}
-			onPromptResize={resizePromptClip}
-			onPromptMove={movePromptClip}
-			onPromptRemove={removePromptClip}
+			
 			onCameraMoveSelect={() => {
 				setSelectedHierarchyId("camera");
 				if (workflowMode !== "camera") selectWorkflowMode("camera");

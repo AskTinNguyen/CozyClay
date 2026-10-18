@@ -17,6 +17,11 @@
 			"text": "hello"
 		},
 		{
+			"type": "tool.compose",
+			"index": 1,
+			"name": "describe_workflow"
+		},
+		{
 			"type": "execution_tool_started",
 			"turn_id": "<turn>",
 			"telemetry_id": "<telemetry>",
@@ -49,6 +54,11 @@
 				"duration_bucket": "<bucket>"
 			},
 			"telemetry_id": "<telemetry>"
+		},
+		{
+			"type": "tool.compose",
+			"index": 0,
+			"name": "add_workflow_node"
 		},
 		{
 			"type": "execution_tool_started",
@@ -93,6 +103,11 @@
 		{
 			"type": "text.delta",
 			"text": " done"
+		},
+		{
+			"type": "tool.compose",
+			"index": 1,
+			"name": "run_workflow"
 		},
 		{
 			"type": "execution_tool_started",
@@ -153,6 +168,12 @@
 	],
 	"S": [
 		{
+			"type": "tool.compose",
+			"index": 0,
+			"name": "inspect_studio",
+			"eventSeq": 1
+		},
+		{
 			"type": "execution_tool_started",
 			"turn_id": "<turn>",
 			"telemetry_id": "<telemetry>",
@@ -166,7 +187,7 @@
 			"args": {
 				"section": "selection"
 			},
-			"eventSeq": 1
+			"eventSeq": 2
 		},
 		{
 			"type": "tool.done",
@@ -174,7 +195,7 @@
 			"ok": false,
 			"elapsedMs": "<ms>",
 			"error": "INVALID_ARGUMENT: Unexpected field.",
-			"eventSeq": 2
+			"eventSeq": 3
 		},
 		{
 			"type": "execution_telemetry",
@@ -186,6 +207,12 @@
 				"duration_bucket": "<bucket>"
 			},
 			"telemetry_id": "<telemetry>"
+		},
+		{
+			"type": "tool.compose",
+			"index": 0,
+			"name": "patch_elements",
+			"eventSeq": 4
 		},
 		{
 			"type": "execution_tool_started",
@@ -210,7 +237,7 @@
 					}
 				]
 			},
-			"eventSeq": 3
+			"eventSeq": 5
 		},
 		{
 			"type": "execution_telemetry",
@@ -265,7 +292,7 @@
 				},
 				"warnings": []
 			},
-			"eventSeq": 4
+			"eventSeq": 6
 		},
 		{
 			"type": "execution_telemetry",
@@ -277,6 +304,12 @@
 				"duration_bucket": "<bucket>"
 			},
 			"telemetry_id": "<telemetry>"
+		},
+		{
+			"type": "tool.compose",
+			"index": 0,
+			"name": "verify_result",
+			"eventSeq": 7
 		},
 		{
 			"type": "execution_tool_started",
@@ -298,7 +331,7 @@
 				],
 				"visual": "frame"
 			},
-			"eventSeq": 5
+			"eventSeq": 8
 		},
 		{
 			"type": "tool.done",
@@ -319,7 +352,7 @@
 				"visualStatus": "attached",
 				"imageId": "capture-1"
 			},
-			"eventSeq": 6
+			"eventSeq": 9
 		},
 		{
 			"type": "execution_telemetry",
@@ -335,7 +368,7 @@
 		{
 			"type": "text.delta",
 			"text": "done",
-			"eventSeq": 7
+			"eventSeq": 10
 		},
 		{
 			"type": "execution_telemetry",
@@ -354,7 +387,7 @@
 				"cacheWrite": "<tokens>",
 				"requests": 4
 			},
-			"eventSeq": 8
+			"eventSeq": 11
 		}
 	],
 	"B": [

@@ -102,9 +102,9 @@ const key = async (code, keyName, virtualKeyCode) => {
 	await send("Input.dispatchKeyEvent", { type: "keyDown", text: keyName, ...common });
 	await send("Input.dispatchKeyEvent", { type: "keyUp", ...common });
 };
-/** The shipped walk take's length on the production clock (24 fps): the
- * transport counts 0 … 431 and the hierarchy says "432 frames". */
-const WALK_FRAMES = 432;
+/** The compiled tutorial walk (src/tutorial-walk.js) on the production clock (24 fps): the
+ * transport counts 0 … 215 and the hierarchy says "216 frames". */
+const WALK_FRAMES = 216;
 // #552: the project name lives in the top bar's project menu trigger, beside
 // its unsaved dot and caret; its own text node is the name.
 const projectLabel = `[...(document.querySelector('.project-menu-trigger')?.childNodes ?? [])].filter((node) => node.nodeType === Node.TEXT_NODE).map((node) => node.textContent).join('').trim()`;

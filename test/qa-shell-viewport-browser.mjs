@@ -1,7 +1,11 @@
 #!/usr/bin/env node
-// Browser QA for issue #524: the v2 viewport overlays. Drives the real studio
-// through CDP: the G1 mode+tool pill in every mode, "+ Add" › Cube, the
-// 300px camera preview inset, the speed readout, and the 1280px layout.
+// Browser QA for issue #524: the viewport overlays. Drives the real studio
+// through CDP: the mode toolbar in every mode, "+ Add" › Cube, the camera
+// preview inset, the speed readout, the 1280px layout and the project-mode
+// gating (#650). CozyClay 3 dropped the v2 pixel spec (32 px amber toolbar
+// with W/E/R and a value group inside it); the glass shell's toolbar is 40 px
+// and carries the mode keys only. Motion comes from motion.compile, so there is
+// no top-bar Generate and no + Block control to look for.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { afterPageLoad } from "./bus/browser-navigation.mjs";
 import { waitForFrameState } from "./bus/browser-frame-state.mjs";
@@ -110,7 +114,7 @@ await evaluate(`(() => {
 await send("Page.navigate", { url: appUrl });
 
 expect("the studio renders the mode toolbar", await waitFor("!!document.querySelector('[data-testid=mode-toolbar] [data-mode-key]') && !!window.__cozyclay"));
-expect("the character rig can be posed", await waitFor("!!window.__cozyclay?.ikChains && !!window.__cozyclay?.motion", 60000));
+expect("the character rig can be posed", await waitFor("!!window.__cozyclay?.ikChains && !!window.__cozyclay?.rigA", 60000));
 await evaluate("window.__cozyclay.pause?.()");
 
 const TOOLBAR = "[data-testid=mode-toolbar]";
@@ -124,20 +128,20 @@ const toolbar = await evaluate(`(() => {
 		titles: keys.every((key) => key.title.length > 0),
 	};
 })()`);
-expect("the toolbar is 32 px tall", toolbar.height === 32, JSON.stringify(toolbar));
-expect("mode keys read 1 2 3 4", toolbar.keys.join("") === "1234", JSON.stringify(toolbar));
+expect("the toolbar is 40 px tall", toolbar.height === 40, JSON.stringify(toolbar));
+expect("mode keys read 1 2 3 4 5", toolbar.keys.join("") === "12345", JSON.stringify(toolbar));
 expect("exactly one mode key is active", toolbar.active === 1, JSON.stringify(toolbar));
 expect("every mode key has a title", toolbar.titles, JSON.stringify(toolbar));
 
 const speed = await evaluate("document.querySelector('[data-testid=fly-speed]')?.textContent.trim()");
-expect("the top-right pill reads the fly speed", /^speed \d+(\.\d+)?$/.test(speed ?? ""), String(speed));
+expect("the top-right pill reads the fly speed", /^\d+(\.\d+)?×$/.test(speed ?? ""), String(speed));
 
-// G1 per mode: tool keys, active fill, and the value group.
+// Per mode: one active key that names the mode, and the inset where it belongs.
 const G1 = {
-	scene: { key: "1", name: "Stage", tools: "WER", value: /^5cm\s*5°$/ },
-	pose: { key: "2", name: "Pose", tools: "WER", value: /^\d+(\.\d+)?s$/ },
-	camera: { key: "3", name: "Camera", tools: "WE", value: /^\d+mm\s*[\d.:]+/ },
-	motion: { key: "4", name: "Motion", tools: "WE", value: null },
+	scene: { key: "1", name: "Stage" },
+	pose: { key: "2", name: "Pose" },
+	camera: { key: "3", name: "Camera" },
+	motion: { key: "4", name: "Motion" },
 };
 const snapshots = [];
 const modeReport = {};
@@ -148,35 +152,17 @@ for (const [mode, spec] of Object.entries(G1)) {
 	const state = await evaluate(`(() => {
 		const bar = document.querySelector('${TOOLBAR}');
 		const active = [...bar.querySelectorAll('[data-mode-key]')].filter((key) => key.classList.contains('active'));
-		const tools = [...bar.querySelectorAll('[data-tool-key]')];
-		const activeTool = tools.find((tool) => tool.classList.contains('active'));
-		const values = bar.querySelector('.vp-values');
 		return {
 			height: bar.getBoundingClientRect().height,
 			activeModes: active.length,
 			activeText: active[0]?.textContent.trim(),
-			digitColor: active[0] && getComputedStyle(active[0].querySelector('.vp-key-digit')).color,
-			inactiveWidths: [...bar.querySelectorAll('[data-mode-key]:not(.active)')].map((key) => key.getBoundingClientRect().width),
-			tools: tools.map((tool) => tool.dataset.toolKey).join(''),
-			toolTitles: tools.every((tool) => tool.title.length > 0),
-			activeTool: activeTool?.dataset.toolKey ?? null,
-			activeBackground: activeTool ? getComputedStyle(activeTool).backgroundColor : null,
-			activeColor: activeTool ? getComputedStyle(activeTool).color : null,
-			idleColor: tools.find((tool) => !tool.classList.contains('active') && tool.getAttribute('aria-disabled') !== 'true') ? getComputedStyle(tools.find((tool) => !tool.classList.contains('active') && tool.getAttribute('aria-disabled') !== 'true')).color : null,
-			value: values ? values.textContent.replace(/\\s+/g, ' ').trim() : null,
 			html: bar.outerHTML,
 		};
 	})()`);
 	modeReport[mode] = { ...state, html: undefined };
 	snapshots.push(state.html);
-	expect(`${mode}: the toolbar stays 32 px`, state.height === 32, JSON.stringify(modeReport[mode]));
+	expect(`${mode}: the toolbar stays 40 px`, state.height === 40, JSON.stringify(modeReport[mode]));
 	expect(`${mode}: exactly one active mode key, named ${spec.name}`, state.activeModes === 1 && state.activeText === `${spec.key}${spec.name}`, JSON.stringify(modeReport[mode]));
-	expect(`${mode}: the active digit is amber`, state.digitColor === "rgb(232, 163, 61)", JSON.stringify(modeReport[mode]));
-	expect(`${mode}: inactive mode keys are 28 px digits`, state.inactiveWidths.every((width) => width === 28), JSON.stringify(modeReport[mode]));
-	expect(`${mode}: tool keys are ${spec.tools}`, state.tools === spec.tools && state.toolTitles, JSON.stringify(modeReport[mode]));
-	expect(`${mode}: the active tool key is filled amber`, state.activeBackground === "rgb(232, 163, 61)" && state.activeColor === "rgb(26, 18, 4)", JSON.stringify(modeReport[mode]));
-	expect(`${mode}: idle tool keys are #9b9ba1`, state.idleColor === "rgb(155, 155, 161)", JSON.stringify(modeReport[mode]));
-	expect(`${mode}: value group matches G1`, spec.value ? spec.value.test(state.value ?? "") : state.value === null, JSON.stringify(modeReport[mode]));
 
 	const inset = await evaluate(`(() => {
 		const el = document.querySelector('.vp-shot-preview');
@@ -185,8 +171,8 @@ for (const [mode, spec] of Object.entries(G1)) {
 		return { visible: !el.hidden && getComputedStyle(el).display !== 'none' && r.width > 0, width: r.width, header: head.height, text: el.querySelector('[data-testid=shot-preview-header]')?.textContent.trim() };
 	})()`);
 	if (mode === "scene" || mode === "camera") {
-		expect(`${mode}: the camera preview inset is 300 px wide`, inset.visible && inset.width === 300, JSON.stringify(inset));
-		expect(`${mode}: the inset has a 26 px header naming the shot and lens`, inset.header === 26 && /^Shot_A\s*\d+mm$/.test(inset.text ?? ""), JSON.stringify(inset));
+		expect(`${mode}: the camera preview inset is visible`, inset.visible && inset.width > 0, JSON.stringify(inset));
+		expect(`${mode}: the inset header names the shot and lens`, inset.header > 0 && /^Shot_A\s*\d+mm$/.test(inset.text ?? ""), JSON.stringify(inset));
 	} else {
 		expect(`${mode}: the camera preview inset is hidden`, !inset.visible, JSON.stringify(inset));
 	}
@@ -246,9 +232,9 @@ await waitFor("document.querySelector('.app')?.dataset.workflowMode === 'scene'"
 save("task-10-1280", await capture());
 
 // #650: the project mode gates the shell. Each project is opened fresh in the
-// light and the dark theme: a storyboard shows 1 2 3, ignores key 4, hides the
-// Generate group and badges "Storyboard"; an animation project is unchanged
-// (1 2 3 4, Generate) with the badge "Animation".
+// light and the dark theme: a storyboard shows 1 2 3 5 (no Motion), ignores
+// key 4 and badges "Storyboard"; an animation project shows 1 2 3 4 5 with the
+// badge "Animation". Neither has a top-bar Generate in CozyClay 3.
 const nextFrame = () => evaluate("new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(true))))");
 const openPrevisProject = async (previsMode, theme) => {
 	await send("Page.navigate", { url: `${origin}/favicon.ico` });
@@ -302,7 +288,7 @@ const previsReport = {};
 for (const theme of ["light", "dark"]) {
 	await openPrevisProject("storyboard", theme);
 	const storyboard = await readPrevisShell();
-	expect(`storyboard/${theme}: three mode tabs read 1 2 3`, storyboard.keys === "123", JSON.stringify(storyboard));
+	expect(`storyboard/${theme}: mode tabs read 1 2 3 5`, storyboard.keys === "1235", JSON.stringify(storyboard));
 	expect(`storyboard/${theme}: the badge reads Storyboard`, storyboard.badge === "Storyboard", JSON.stringify(storyboard));
 	expect(`storyboard/${theme}: no topbar-generate`, storyboard.generate === false, JSON.stringify(storyboard));
 	expect(`storyboard/${theme}: no prompt lane, chip, add control or Prompt Blocks panel despite an existing block`, storyboard.promptLane === false && storyboard.promptChips === 0 && storyboard.promptAdd === false && storyboard.promptPanel === false, JSON.stringify(storyboard));
@@ -318,17 +304,16 @@ for (const theme of ["light", "dark"]) {
 
 	await openPrevisProject("animation", theme);
 	const animation = await readPrevisShell();
-	expect(`animation/${theme}: four mode tabs read 1 2 3 4`, animation.keys === "1234", JSON.stringify(animation));
+	expect(`animation/${theme}: mode tabs read 1 2 3 4 5`, animation.keys === "12345", JSON.stringify(animation));
 	expect(`animation/${theme}: the badge reads Animation`, animation.badge === "Animation", JSON.stringify(animation));
-	expect(`animation/${theme}: the prompt lane and its chip are present`, animation.promptLane === true && animation.promptChips === 1, JSON.stringify(animation));
-	expect(`animation/${theme}: topbar-generate is rendered`, animation.generate === true, JSON.stringify(animation));
+	expect(`animation/${theme}: no topbar-generate`, animation.generate === false, JSON.stringify(animation));
 	previsReport[`animation-${theme}`] = animation;
 	console.log(`QA_PREVIS animation/${theme} ${JSON.stringify(animation)}`);
 	save(`task-19-animation-${theme}`, await capture());
 	await evaluate("document.activeElement?.blur()");
 	await pressDigit4();
-	const animationMotion = await waitFor("!!document.querySelector('[data-testid=sequencer-add-block]')", 10000);
-	expect(`animation/${theme}: key 4 shows the + Block control`, animationMotion === true, String(animationMotion));
+	const animationMotion = await waitFor("document.querySelector('.app')?.dataset.workflowMode === 'motion'", 10000);
+	expect(`animation/${theme}: key 4 enters Motion`, animationMotion === true, String(animationMotion));
 }
 
 // Failure path: Motion through every door of a storyboard is refused. The bus

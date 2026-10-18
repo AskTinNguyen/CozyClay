@@ -1,7 +1,7 @@
 // Studio composites prepare private domain drafts; the App owns publication,
 // history, gesture fences and semantic revision/telemetry. No UI callbacks here.
 import { Euler, Vector3, Quaternion, PerspectiveCamera } from 'three';
-import { createSceneObject, updateSceneObject, removeSceneObject, setSceneObjectParent, descendantsOf, isEffectivelyHidden, supportHeightForObject, OBJECT_LIBRARY } from './scene-objects.js';
+import { createSceneObject, updateSceneObject, removeSceneObject, setSceneObjectParent, descendantsOf, isEffectivelyHidden, supportHeightForObject, OBJECT_MENU_ENTRIES } from './scene-objects.js';
 import { createCharacterEntry } from './scenes.js';
 import { createShot, shotAtFrame } from './cuts.js';
 import { captureFraming } from './camera-move.js';
@@ -12,6 +12,7 @@ import { clampWarning } from './receipt-findings.js';
 import { occludersOf, primarySubjects, sideOfAxis } from './studio-geometry-facts.js';
 import { StudioProtocolError, StudioSchemas, STUDIO_PATCH_KINDS, STUDIO_PATCH_DESCRIPTORS, validateStudioSchema, validateStudioIdentity, validateReceipt, freezeStudioData } from './studio-agent-protocol.js';
 import { sampleContactSheetFrames } from './studio-contact-sheet.js';
+import { supportGaps } from './studio-support-gap.js';
 
 const DEG = Math.PI / 180, EPS = 1e-8, CHARACTER_SUPPORT_TOLERANCE = 5e-3;
 const fail = (code, message) => { throw new StudioProtocolError(code, message); };
@@ -241,9 +242,8 @@ export function entityWorldBounds(entity, state, ports) {
   } catch { return null; }
 }
 const overlapEvidence = overlaps => ({ coverage: 'same-frame-world-AABB-proxies', overlapIds: [...new Set(overlaps.map(o => o.id))].slice(0, 100), maximumFootprintOverlapM: Math.max(0, ...overlaps.map(o => o.depth)) });
-/** Placement evidence for entity ids in the given scene: the same-frame AABB
- * overlap an arrangement receipt reports for the entities it moved. */
-export const placementChecks = (ids, state, ports) => overlapEvidence(overlapsOf(ids, state, ports));
+// Placement evidence for entity ids: the AABB overlap an arrangement receipt reports, and each object's support gap (studio-support-gap.js).
+export const placementChecks = (ids, state, ports) => ({ ...overlapEvidence(overlapsOf(ids, state, ports)), ...supportGaps(ids, state, ports.takes, entity => entityWorldBounds(entity, state, ports)) });
 function avoid(entity, relation, state, ports) {
   const blocked = overlapsFor(entity, state, ports);
   if (!blocked.length) return entity;
@@ -369,7 +369,7 @@ const LEVELS = { ground: 0.3 / 1.8, low: 0.7 / 1.8, hip: 1.1 / 1.8, eye: 1.65 / 
 const ANGLES = { front: 0, 'front three-quarter': 40, profile: 90, 'rear three-quarter': 140, back: 180 };
 /** Where subject bound points land through one camera: the evidence a
  * frame_shot receipt reports, plus the screen box its details keep. */
-function projectSubject(points, camera, fov, aspectRatio) {
+export function projectSubject(points, camera, fov, aspectRatio) {
   const direction = vector(camera.lookAt).sub(vector(camera.position));
   const projection = new PerspectiveCamera(fov / DEG, aspectRatio, 0.01, 10000);
   projection.position.copy(vector(camera.position)); projection.lookAt(vector(camera.lookAt)); projection.updateMatrixWorld(true);
@@ -436,9 +436,13 @@ export function frameDraft(command, state, ports) {
   const created = !shot && !state.shotDocument.shots.length && !command.args.shotId;
   if (created) shot = createShot('Shot 1', 0, state.frameCount - 1);
   if (!shot) fail('AMBIGUOUS_TARGET', 'No shot owns this frame; select an existing shot explicitly.');
-  const still = shot.kind === 'still';
+  // The shot's camera keys are what the contact sheet and the export render, so
+  // every framing lands in them. Without keyAtFrame, a shot that holds one
+  // framing (a still, or a clip with at most one key) is reframed whole; a clip
+  // that already moves takes the framing as a key at the playhead.
   const existingKey = shot.cameraKeys[0];
-  const frame = still ? (existingKey?.frame ?? shot.startFrame) : command.args.keyAtFrame ?? state.frame;
+  const hold = shot.kind === 'still' || (command.args.keyAtFrame === undefined && shot.cameraKeys.length <= 1);
+  const frame = hold ? (existingKey?.frame ?? shot.startFrame) : command.args.keyAtFrame ?? state.frame;
   if (frame < shot.startFrame || frame > shot.endFrame || shot.endFrame >= state.frameCount) fail('INVALID_RANGE', 'Framing/key frame must be inside the shot range.');
   const intent = command.args.framing.intent;
   let camera = command.args.framing.exact;
@@ -457,19 +461,17 @@ export function frameDraft(command, state, ports) {
   const direction = vector(camera.lookAt).sub(vector(camera.position));
   if (direction.length() <= EPS) fail('INVALID_ARGUMENT', 'Camera position and aim must differ.');
   const framing = captureFraming({ pos: camera.position, yaw: Math.atan2(-direction.x, -direction.z), pitch: Math.atan2(direction.y, Math.hypot(direction.x, direction.z)), fovDeg: fov / DEG });
-  let keyId;
-  let keys = shot.cameraKeys;
-  if (still || command.args.keyAtFrame !== undefined) {
-    keyId = (still ? existingKey?.id : keys.find(k => k.frame === frame)?.id) ?? createStableItemId('camera-key');
-    keys = still ? [{ id: keyId, frame, framing }] : [...keys.filter(k => k.frame !== frame), { id: keyId, frame, framing }].sort((a, b) => a.frame - b.frame);
-  }
+  const keyId = (hold ? existingKey?.id : shot.cameraKeys.find(k => k.frame === frame)?.id) ?? createStableItemId('camera-key');
+  const keys = hold ? [{ id: keyId, frame, framing }] : [...shot.cameraKeys.filter(k => k.frame !== frame), { id: keyId, frame, framing }].sort((a, b) => a.frame - b.frame);
   const nextShot = { ...shot, cameraKeys: keys, camera: { ...shot.camera, mode: 'keys' } };
   const shots = created ? [nextShot] : state.shotDocument.shots.map(s => s.id === shot.id ? nextShot : s);
   const { screenBounds, checks: projected } = projectSubject(points, camera, fov, state.filmback.aspectRatio), derivedSize = projected.derivedSize;
   const sight = sightChecks([subject], [points], camera.position, state, ports), checks = { ...projected, ...sight.checks };
   const resolvedCamera = { ...camera, sensorId: state.filmback.sensorId, slate: derivedSize };
-  const draft = { shotDocument: { ...state.shotDocument, shots }, camera: resolvedCamera, manual: true };
-  return { domain: 'shot', draft, affectedIds: [shot.id, ...(keyId ? [keyId] : [])],
+  // Not a manual override: the keys drive the live shot camera from here, so a
+  // later playhead move shows what the export renders at that frame.
+  const draft = { shotDocument: { ...state.shotDocument, shots }, camera: resolvedCamera, manual: false };
+  return { domain: 'shot', draft, affectedIds: [shot.id, keyId],
     checks,
     warnings: sight.occluders.slice(0, 5).map(item => ({ code: 'OCCLUDED', id: item.byObjectId })), details: { created, shotId: shot.id, keyId, frame, framing, screenBounds, subjectIds: [subject.id] } };
 }
@@ -514,7 +516,8 @@ export function createStudioCommandJournal({ host, now = Date.now, isRetained = 
   };
 }
 export function studioObjectCatalogue() {
-  return freezeStudioData({ objects: OBJECT_LIBRARY.map(({ kind, footprint, height, supportY }) => ({ kind, footprint: { ...footprint }, height, supportY: supportY ?? height })), imageRefs: [],
+  // Every creatable kind: the sized library, the Empty and the two practical lights (zero footprint).
+  return freezeStudioData({ objects: OBJECT_MENU_ENTRIES.map(({ kind, footprint, height, supportY }) => ({ kind, footprint: { ...footprint }, height, supportY: supportY ?? height })), imageRefs: [],
     // The patchable vocabulary, so a caller reads the paths and their declared
     // ranges instead of guessing them from a rejection.
     patchable: Object.fromEntries(STUDIO_PATCH_KINDS.map(kind => [kind, STUDIO_PATCH_DESCRIPTORS.filter(descriptor => descriptor.path.startsWith(`${kind}.`))])) });

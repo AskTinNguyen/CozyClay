@@ -1,5 +1,9 @@
 import { useEffect, useMemo } from "react";
 import * as THREE from "three";
+import { stageLook } from "./stage-lighting.js";
+// Patches three's PCF filter before any material compiles (16 taps past radius 1).
+import "./soft-shadows.js";
+export { StageAtmosphere } from "./stage-sky.jsx";
 
 /**
  * The blocking set: an open stage floor.
@@ -128,25 +132,24 @@ export function keyLightColor(warmth = 0.5) {
  * One neutral rig (Blender's workbench studio light idea): a white sky over
  * a grey ground bounce. `neutral` is the grid view, where the deck is gone
  * and the ambient is lifted so authored colours stay saturated without any
- * pretend floor.
+ * pretend floor. `lighting` (stage.lighting) scales and tints the rig into a
+ * look — night, golden hour, a black stage — through stageLook(); its studio
+ * default renders the tuned rig unchanged.
  */
-export function StageLights({ keyLight = { x: 6, y: 9, z: 4, intensity: 1.12, warmth: 0.5 }, neutral = false, light = false }) {
-	const dim = keyLight.intensity / 1.12;
+export function StageLights({ keyLight = { x: 6, y: 9, z: 4, intensity: 1.12, warmth: 0.5 }, lighting = null, neutral = false, light = false }) {
+	const look = stageLook({ lighting, keyLight, theme: light ? "light" : "dark", grid: neutral });
 	return (
 		<>
-			<hemisphereLight
-				args={neutral ? ["#ffffff", "#3a3d42", 0.9] : ["#ffffff", light ? "#d6d8de" : "#5a5d64", 0.9]}
-				intensity={0.9 * Math.min(1, 0.35 + 0.65 * dim)}
-			/>
+			<hemisphereLight args={[look.hemi.sky, look.hemi.ground, 0.9]} intensity={look.hemi.intensity} />
 			{/* The light stage is a bright room: more ambient, so the clay's shaded
 			    side stays soft grey instead of going charcoal against white. */}
-			<ambientLight intensity={(neutral ? 0.34 : light ? 0.32 : 0.18) * Math.min(1, 0.35 + 0.65 * dim)} />
+			<ambientLight intensity={look.ambient} />
 			{/* Only the key casts: one soft, unambiguous contact shadow reads as
 			    ground contact, while three overlapping shadows read as noise. The
 			    map covers the blocking area rather than the whole 500 m deck — a
 			    stage-wide frustum would spend its resolution on empty floor. */}
 			<directionalLight
-				color={keyLightColor(keyLight.warmth)}
+				color={keyLight.color ?? keyLightColor(keyLight.warmth)}
 				position={[keyLight.x, keyLight.y, keyLight.z]}
 				intensity={keyLight.intensity}
 				castShadow
@@ -162,10 +165,15 @@ export function StageLights({ keyLight = { x: 6, y: 9, z: 4, intensity: 1.12, wa
 				// shadow there. 60 covers the clamp envelope with headroom.
 				shadow-camera-far={60}
 				shadow-bias={-0.0006}
-				shadow-normalBias={0.02}
+				// PCF spreads its noise-rotated taps over shadow.radius texels, so a
+				// larger radius is a wider penumbra in the same single pass
+				// (stage.lighting.shadowSoftness; soft-shadows.js says why not VSM).
+				// The normal offset grows with the radius.
+				shadow-normalBias={look.shadowNormalBias}
+				shadow-radius={look.shadowRadius}
 			/>
-			<directionalLight color="#eef2f4" position={[-6, 4, -4]} intensity={0.36 * dim} />
-			<directionalLight color="#ffffff" position={[2, 3, 9]} intensity={0.22 * dim} />
+			<directionalLight color="#eef2f4" position={[-6, 4, -4]} intensity={look.fill} />
+			<directionalLight color="#ffffff" position={[2, 3, 9]} intensity={look.rim} />
 		</>
 	);
 }

@@ -43,28 +43,15 @@ server -> editor, one per command:
 
     { "type": "cmd", "id": "<opaque string>", "name": "<command>", "args": { ... } }
 
-server -> editor, for an MCP-owned motion job state or terminal outcome (and again
-on reconnect while retained). A completed event follows the editor's successful
-`load_motion` acknowledgement:
-
-    { "type": "event", "name": "motion_job", "payload": { "taskId", "status", "createdAt", "lastUpdatedAt", "ttlMs", "pollIntervalMs", "outcome?" } }
-
-editor -> server, to cancel its own active job before editor delivery:
-
-    { "type": "event", "name": "motion_job_cancel", "payload": { "taskId": "<opaque task id>" } }
-
 editor -> server, one per command, echoing `id`:
 
     { "type": "result", "id": "<same id>", "ok": true,  "value": { ... } }
     { "type": "result", "id": "<same id>", "ok": false, "error": "<human message>" }
 
 Unknown `name` MUST answer `ok:false`, never silence. The server times a
-command out after 5 s and treats it as failed, except `load_motion` and
-`import_asset`, which retain a dedicated 30 s editor bound (decode and stand a
-mesh, or install a take). Measurement
-justifies the existing headroom: 12 real editor installs of one 94,672-byte
-ARDY NPZ had nearest-rank p50 29.96 ms, p95 547.29 ms, and p99 547.29 ms;
-30 s remains appropriate for materially larger cold-cache production takes. A timeout or disconnect during
+command out after 5 s and treats it as failed, except `import_asset` and the
+Studio commands (`inspect_studio`, `run_action`, `capture_framing_png`, ...),
+which retain a dedicated 30 s editor bound. A timeout or disconnect during
 a mutation is ambiguous: it may already have applied, so callers MUST NOT retry
 blindly and should `describe` before recovering.
 
@@ -113,29 +100,6 @@ can wait for an editor instead of polling:
 
     { "type": "event", "name": "editor_connected" | "editor_disconnected", "payload": { "handle", "workspaceId", "meta" } }
 
-## Motion jobs
-
-`generate_motion` returns immediately with exactly `{ taskId, status, createdAt,
-lastUpdatedAt, ttlMs, pollIntervalMs }`; `pollIntervalMs` is `0` because the
-model never polls it. The MCP server retains terminal outcomes for `ttlMs`
-(currently 10 minutes) and pushes `motion_job` to the matching stable workspace
-on completion, failure, cancellation, or reconnect. For a completed job, the
-server first installs the take through the request/response `load_motion`
-command, then publishes the terminal lifecycle event. The event never installs
-the take a second time. A retained outcome that passes its TTL is explicitly
-expired and is never replayed.
-
-If the editor explicitly rejects `load_motion`, the job transitions to `failed`
-and publishes that terminal event. If the socket disconnects or times out while
-installation is in flight, the job also fails but is not retried: the mutation
-may already have applied, so retrying could install the same take twice.
-
-Cancellation is cooperative at the bridge HTTP stream: `motion_job_cancel`
-aborts that request. The ARDY bridge detects the disconnected stream and kills
-its request-owned child process groups. A cancelled job is terminal and is never
-sent to editor installation. There are no `tasks/*` tools or start/status/list
-polling tools in the MCP surface.
-
 ## Commands (v1)
 
 All coordinates are metres, rotations are degrees of yaw, ids are the ids the
@@ -158,8 +122,6 @@ scene document already uses.
 | `group_objects` | `{ parent, children }` | `{ parent, children }` | attach every child under parent |
 | `ungroup_objects` | `{ children }` | `{ children }` | detach every child |
 | `apply_batch` | `{ ops, atomic?: false, stopOnError?: true, label?: "MCP batch" }` | `{ label, applied: number[], failed: [{ index, error }], rolledBack }` | executes at most 100 object mutations as one undo entry. `atomic` and `stopOnError` are independent; atomic failure restores the pre-batch objects and creates no undo entry. Nested batches are rejected. v1 rejects character mutations because cast history is a separate store. |
-| `set_prompt_blocks` | `{ blocks: [{ startFrame, endFrame, text }] }` | `{ blocks }` | replace the active character's authored prompt clips after validating each frame range and text |
-| `load_motion` | `{ url, prompt?, blocks?, drop? }` | `{ loaded, url, blocks }` | install an ARDY motion on the selected character. It has the dedicated 30-second editor-processing timeout; motion-job completion carries the character id captured when generation started |
 | `load_scenes` | `{ document }` | `{ sceneName, activeSceneId, scenes: [{ id, name }] }` | replace the whole scene document (same shape `serializeSceneDocument` emits); the response attests the full scene list and active scene for `add_scene` and `switch_scene` parity |
 
 ### Previs mode and character kind in the Studio context
@@ -176,12 +138,10 @@ is admitted against. Two parts of it describe what a project and its cast can do
 
 Before an animation-only tool runs, the server reads these fields from the
 context it admits the command against (`mark_camera_move`, which sends no
-command, reads `previsMode` from `describe`). In a storyboard project `generate_motion`, `set_prompt_blocks`, `load_motion` and
-`mark_camera_move` answer `{ ok: false, code: "NOT_IN_MODE", reason }` and send
-no command; `generate_motion` and `load_motion` on a capsule figure answer
-`{ ok: false, code: "TARGET_NOT_READY", reason }` with the kind's reason. The
-editor's own motion, take, IK and pose commands refuse a capsule figure with
-`TARGET_NOT_READY` as well, so `studio_run` reaches the same answer.
+command, reads `previsMode` from `describe`). In a storyboard project
+`mark_camera_move` answers `{ ok: false, code: "NOT_IN_MODE", reason }` and sends
+no command. The editor's own motion, take, IK and pose commands refuse a capsule
+figure with `TARGET_NOT_READY`, so `studio_run` reaches that answer.
 
 ## Hard rules for the editor side
 

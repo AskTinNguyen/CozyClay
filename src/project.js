@@ -3,8 +3,9 @@
  *
  * A project is ONE file (`.cclayproject`, JSON) holding the full authoring
  * state: the scene document (scenes + cast + animation layers), the
- * workspace layout, the custom pose library, the workflow graph, and the
- * embedded resources (images + motions) the scenes point at. Editor
+  * workspace layout, the custom pose library, the workflow graph, and the
+ * embedded resources (images and meshes) the scenes point at. A compiled
+ * take travels inside the scene document as its motion spec. Editor
  * preferences (theme, locale) deliberately stay OUT — they belong to the
  * operator, not the project.
  *
@@ -16,7 +17,7 @@
 
 import { SCENES_VERSION } from "./scenes.js";
 import { ASSET_MAX_SOURCE_BYTES, assetIdForBytes, isAssetId, isImageAssetId, isMeshAssetId, meshIdForBytes, normalizeAsset, referencedAssetIds } from "./scene-assets.js";
-import { ko } from "./locale.js";
+import { ko } from "./locale.js"; import { hdrIdForBytes, isHdrAssetId } from "./stage-hdr.js";
 
 export const PROJECT_VERSION = 5;
 // A project is authored either as a storyboard (stills) or as animation
@@ -36,10 +37,8 @@ const IDB_KEY = "lastProjectHandle";
 
 // Embedded resources are bounded: the file is JSON, so every raw byte costs
 // 4/3 on disk and the whole file has to fit in one string on the way in.
-export const MOTION_MAX_BYTES = 192 * 1024 * 1024;
 export const PROJECT_MAX_RESOURCE_BYTES = 256 * 1024 * 1024;
-// A motion id is the SHA-256 of the raw NPZ bytes (see motion-resources.js).
-const MOTION_ID_PATTERN = /^[0-9a-f]{64}$/i;
+
 
 function plainRecord(value) {
 	if (!value || typeof value !== "object") return false;
@@ -245,49 +244,12 @@ function workflowAssetIds(workflow) {
 	return ids;
 }
 
-/** The optional motion fields carried verbatim; frames/fps come from the
- * encoder (motion-resources.js), never from decoding the NPZ here. */
-function motionDetails(record) {
-	return {
-		...(Number.isInteger(record.frames) && record.frames >= 0 ? { frames: record.frames } : {}),
-		...(Number.isFinite(record.fps) && record.fps > 0 ? { fps: record.fps } : {}),
-		...(typeof record.name === "string" && record.name.trim() ? { name: record.name } : {}),
-		...(plainRecord(record.meta) ? { meta: jsonValue(record.meta) } : {}),
-	};
-}
-
-function motionId(value) {
-	return typeof value === "string" && MOTION_ID_PATTERN.test(value) ? value.toLowerCase() : null;
-}
-
-/**
- * Validate a motion record for embedding. Accepts the encoded shape
- * (`encoding: "base64"`, `data`) and raw `bytes` (ArrayBuffer or view); the
- * payload is encoded later, once the size budget is known to hold.
- */
-function embeddedMotion(record) {
-	if (!record || typeof record !== "object") return null;
-	const id = motionId(record.motionId);
-	if (!id) return null;
-	const raw = asArrayBuffer(record.bytes);
-	if (raw) {
-		if (!raw.byteLength) return null;
-		if (raw.byteLength > MOTION_MAX_BYTES) throw resourcesTooLarge(raw.byteLength, MOTION_MAX_BYTES, `Motion ${id}`);
-		return { motionId: id, bytes: raw.byteLength, raw, details: motionDetails(record) };
-	}
-	if (record.encoding !== "base64") return null;
-	const shape = base64Shape(record.data, MOTION_MAX_BYTES);
-	if (shape.code === "too-large") throw resourcesTooLarge((record.data.length / 4) * 3, MOTION_MAX_BYTES, `Motion ${id}`);
-	if (shape.code || (record.bytes !== undefined && record.bytes !== shape.bytes)) return null;
-	return { motionId: id, bytes: shape.bytes, data: record.data, details: motionDetails(record) };
-}
-
 /** Verify that an embedded record still belongs at its content-addressed id. */
 export async function verifyEmbeddedAsset(record, subtle) {
 	const bytes = asArrayBuffer(record?.bytes);
 	if (!bytes) return false;
 	try {
-		const expected = isMeshAssetId(record.id) ? await meshIdForBytes(bytes, subtle) : await assetIdForBytes(bytes, subtle);
+		const expected = isHdrAssetId(record.id) ? await hdrIdForBytes(bytes, subtle) : isMeshAssetId(record.id) ? await meshIdForBytes(bytes, subtle) : await assetIdForBytes(bytes, subtle);
 		return expected === record.id;
 	} catch {
 		return false;
@@ -334,49 +296,12 @@ function readEmbeddedAssets(value, report) {
 	return assets;
 }
 
-/** Motion records are returned in their encoded shape; decoding and hash
- * verification belong to motion-resources.js. */
-function readEmbeddedMotions(value, report) {
-	const motions = [];
-	if (!Array.isArray(value)) return motions;
-	const seen = new Set();
-	for (const entry of value) {
-		const id = motionId(entry?.motionId);
-		if (!id) {
-			report("motion", typeof entry?.motionId === "string" ? entry.motionId : null, "bad-id");
-			continue;
-		}
-		if (seen.has(id)) {
-			report("motion", id, "duplicate");
-			continue;
-		}
-		if (entry.encoding !== "base64") {
-			report("motion", id, "bad-encoding");
-			continue;
-		}
-		const shape = base64Shape(entry.data, MOTION_MAX_BYTES);
-		if (shape.code) {
-			report("motion", id, shape.code);
-			continue;
-		}
-		if (entry.bytes !== shape.bytes) {
-			report("motion", id, "length-mismatch");
-			continue;
-		}
-		seen.add(id);
-		motions.push({ motionId: id, encoding: "base64", data: entry.data, bytes: shape.bytes, ...motionDetails(entry) });
-	}
-	return motions;
-}
-
 /**
  * Build the v5 envelope. Images are embedded when a scene or workflow
- * assetRef references them; motions are embedded as given (deduped by
- * motionId, first record wins) because the caller already knows which ones
- * the project uses. Throws `resources-too-large` when one motion or the whole
+ * assetRef references them. Throws `resources-too-large` when the whole
  * manifest exceeds its budget.
  */
-export function createProjectDocument({ scenesDocument, workspaceLayout, customPoses, name, previsMode, assets, motions, savedAt, workflow }) {
+export function createProjectDocument({ scenesDocument, workspaceLayout, customPoses, name, previsMode, assets, savedAt, workflow }) {
 	const assetRecords = new Map();
 	for (const record of Array.isArray(assets) ? assets : []) {
 		const asset = embeddedAsset(record);
@@ -392,21 +317,7 @@ export function createProjectDocument({ scenesDocument, workspaceLayout, customP
 		embeddedAssets.push(asset.record);
 		resourceBytes += asset.bytes;
 	}
-	const motionRecords = new Map();
-	for (const record of Array.isArray(motions) ? motions : []) {
-		const motion = embeddedMotion(record);
-		if (!motion || motionRecords.has(motion.motionId)) continue;
-		motionRecords.set(motion.motionId, motion);
-		resourceBytes += motion.bytes;
-	}
-	if (resourceBytes > PROJECT_MAX_RESOURCE_BYTES) throw resourcesTooLarge(resourceBytes, PROJECT_MAX_RESOURCE_BYTES, "Embedded resources");
-	const embeddedMotions = [...motionRecords.values()].map(({ motionId: id, bytes, raw, data, details }) => ({
-		motionId: id,
-		encoding: "base64",
-		data: data ?? bytesToBase64(raw),
-		bytes,
-		...details,
-	}));
+		if (resourceBytes > PROJECT_MAX_RESOURCE_BYTES) throw resourcesTooLarge(resourceBytes, PROJECT_MAX_RESOURCE_BYTES, "Embedded resources");
 	return {
 		app: "cozyclay",
 		kind: "project",
@@ -418,7 +329,7 @@ export function createProjectDocument({ scenesDocument, workspaceLayout, customP
 		workspace: workspaceLayout ?? null,
 		poseLibrary: Array.isArray(customPoses) ? customPoses : [],
 		workflow: normalizeWorkflowGraph(workflow),
-		resources: { assets: embeddedAssets, motions: embeddedMotions },
+		resources: { assets: embeddedAssets },
 	};
 }
 
@@ -445,8 +356,7 @@ export function buildAnimationProjectFromStoryboard(project) {
 		customPoses: structuredClone(project?.customPoses ?? []),
 		name: `${project?.name || "Untitled"} - ${ko("Animation", "애니메이션")}`,
 		previsMode: "animation",
-		assets: project?.assets ?? [],
-		motions: project?.motions ?? [],
+				assets: project?.assets ?? [],
 		workflow: structuredClone(project?.workflow ?? createWorkflowGraph()),
 		savedAt: Date.now(),
 	});
@@ -484,7 +394,7 @@ export function readProjectDocument(raw) {
 	};
 	const assetRecords = parsed.version >= 4 ? parsed.resources?.assets : parsed.version >= 2 ? parsed.assets : undefined;
 	const assets = readEmbeddedAssets(assetRecords, report);
-	const motions = parsed.version >= 4 ? readEmbeddedMotions(parsed.resources?.motions, report) : [];
+	
 	const workflow = normalizeWorkflowGraph(parsed.workflow);
 	return {
 		ok: true,
@@ -499,8 +409,7 @@ export function readProjectDocument(raw) {
 			customPoses: Array.isArray(parsed.poseLibrary)
 				? parsed.poseLibrary.filter((p) => p && typeof p === "object" && typeof p.id === "string" && p.bones && typeof p.bones === "object")
 				: [],
-			assets,
-			motions,
+						assets,
 			workflow,
 		},
 	};

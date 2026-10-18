@@ -54,3 +54,35 @@ export function removeKey(id) {
 	return next;
 }
 
+// Credentials pi's login flows return that are more than a bare key (#pi-login): OAuth tokens (Claude Pro/Max,
+// GitHub Copilot, xAI, Kimi, OpenRouter) and api-key credentials that carry provider env (CLIProxyAPI's server
+// address). They are kept as pi's canonical Credential, one per provider id, in auth.json beside providers.json;
+// a bare api key stays in providers.json as before. credential-store.mjs decides which file a write goes to.
+function authPath() {
+	return join(configDir(), "auth.json");
+}
+
+/** { [providerId]: Credential } from auth.json; a missing or unreadable file is {}. */
+export function readCredentials() {
+	try {
+		const value = JSON.parse(readFileSync(authPath(), "utf8"));
+		if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+		return Object.fromEntries(Object.entries(value).filter(([id, entry]) => id && entry && typeof entry === "object" && ["api_key", "oauth"].includes(entry.type)));
+	} catch {
+		return {};
+	}
+}
+
+export function setCredential(id, credential) {
+	const next = { ...readCredentials(), [id]: credential };
+	writeSecureJson(authPath(), next);
+	return next;
+}
+
+export function removeCredential(id) {
+	const current = readCredentials();
+	if (!(id in current)) return current;
+	delete current[id];
+	writeSecureJson(authPath(), current);
+	return current;
+}

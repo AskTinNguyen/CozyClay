@@ -227,10 +227,7 @@ cases['timeout'] = async () => {
   let entered, release;
   // The command holds until the test has read the hub's frame for it.
   const held = { ...STAMP, run: async args => { entered.resolve(); await release.promise; return stamped(args); } };
-  const generate = { id: 'fixture.generate', label: 'Generate fixture motion', kind: 'job', generation: 'motion',
-    description: 'A motion generation registered only in this editor fixture.', input: { type: 'object', properties: {}, required: [], additionalProperties: false },
-    run: () => ({ affectedIds: [], summary: 'Generated.' }) };
-  const s = await studio([held, generate]);
+  const s = await studio([held]);
   const observe = async (label, start) => {
     entered = signal(); release = signal();
     const running = start();
@@ -253,13 +250,8 @@ cases['timeout'] = async () => {
     // A caller's own timeout comes from its frame and is capped at the ceiling.
     const capped = await observe('cclay live run --timeout', () => cli(['run', STAMP.id, '--timeout', '900000'], s));
     assert.deepEqual(capped.deadlines, [300_000], 'the hub caps a frame timeout at 300 s');
-    // The generation gate reads the declaration too: an editor-only command
-    // declared generation "motion" takes the message's one generation.
-    const turn = await agentTools(s);
-    assert.equal((await turn('run_action', { action: generate.id })).status, 'completed');
-    await assert.rejects(turn('run_action', { action: generate.id }), { code: 'GENERATION_LIMIT' });
   } finally { await s.close(); }
-  console.log('PASS #438 acceptance 5: a declared timeoutMs of 120 s reaches the hub frame from the agent, MCP and the CLI; generation comes from the declaration');
+  console.log('PASS #438 acceptance 5: a declared timeoutMs of 120 s reaches the hub frame from the agent, MCP and the CLI');
 };
 
 cases['confirm'] = async () => {

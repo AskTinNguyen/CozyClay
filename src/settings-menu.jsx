@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { ko, localeChosen } from "./locale.js";
 import PreferencesDialog from "./shell/PreferencesDialog.jsx";
 
@@ -14,7 +14,7 @@ const LANGUAGES = [
 	{ id: "ko", label: "한국어", action: "한국어로 전환" },
 ];
 
-export default function SettingsMenu({ motionSetup, motionSetupReveal = 0 }) {
+export default function SettingsMenu() {
 	const [open, setOpen] = useState(false);
 	const triggerRef = useRef(null);
 	const close = useCallback(() => {
@@ -38,13 +38,6 @@ export default function SettingsMenu({ motionSetup, motionSetupReveal = 0 }) {
 			</button>
 		</>
 	);
-
-	// A contextual readiness action can reveal Preferences directly on the
-	// motion connection page without changing the topbar or adding a second
-	// settings surface.
-	useEffect(() => {
-		if (motionSetupReveal) setOpen(true);
-	}, [motionSetupReveal]);
 
 	// First-run cue: the studio starts in English even on a Korean browser, so
 	// the only visible hint that Korean exists used to be the old locale button.
@@ -70,8 +63,7 @@ export default function SettingsMenu({ motionSetup, motionSetupReveal = 0 }) {
 			<PreferencesDialog
 				open={open}
 				onClose={close}
-				motionSetup={motionSetup}
-				initialSection={motionSetupReveal ? "ARDY Connection" : "Appearance"}
+				initialSection="Appearance"
 				cameraTutorial={cameraTutorial}
 			/>
 		</div>

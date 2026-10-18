@@ -38,14 +38,14 @@ try {
   console.log('PASS object.update names an unknown key on the wire and stays lenient for the UI');
 
   // 3. Clamps are warnings, in object.update and in arrange_objects.
-  const clamped = f.run('object.update', { id: crateB, patch: { scaleY: 0.025, x: 6.2 } }, 'ui');
+  const clamped = f.run('object.update', { id: crateB, patch: { scaleY: 0.0025, x: 6.2 } }, 'ui');
   assert.equal(clamped.status, 'applied', JSON.stringify(clamped));
-  assert.deepEqual(find(clamped, 'CLAMPED').map(w => [w.id, w.message]), [[crateB, 'Clamped: scaleY 0.025→0.1 (minimum 0.1)']]);
-  assert.equal(f.run('object.update', { id: crateB, patch: { scaleY: 0.1 } }, 'ui').status, 'noop');
+  assert.deepEqual(find(clamped, 'CLAMPED').map(w => [w.id, w.message]), [[crateB, 'Clamped: scaleY 0.0025→0.01 (minimum 0.01)']]);
+  assert.equal(f.run('object.update', { id: crateB, patch: { scaleY: 0.01 } }, 'ui').status, 'noop');
   const far = f.run('object.update', { id: crateB, patch: { x: 900 } }, 'ui');
   assert.match(find(far, 'CLAMPED')[0].message, /x 900→240 \(maximum 240 m\)/);
-  const squash = arrange([create('Slab', { x: -6, y: 0, z: -6 }, { x: 1, y: 0.025, z: 1 })]);
-  assert.match(find(squash, 'CLAMPED')[0].message, /scaleY 0\.025→0\.1 \(minimum 0\.1\)/, JSON.stringify(squash.warnings));
+  const squash = arrange([create('Slab', { x: -6, y: 0, z: -6 }, { x: 1, y: 0.0025, z: 1 })]);
+  assert.match(find(squash, 'CLAMPED')[0].message, /scaleY 0\.0025→0\.01 \(minimum 0\.01\)/, JSON.stringify(squash.warnings));
   console.log('PASS clamps are CLAMPED warnings');
 
   // 4. Readback: transform kept, group links, world box.
@@ -53,10 +53,10 @@ try {
   const row = f.objects.read().find(o => o.id === crate);
   const readback = squash.delta[0].after, path = name => readback.patched.find(p => p.path === `object.${name}`);
   assert.deepEqual(path('rotation').vec, { x: 0, y: 0, z: 0 });
-  assert.deepEqual(path('scale').vec, { x: 1, y: 0.1, z: 1 }, 'scale reads back after the clamp');
+  assert.deepEqual(path('scale').vec, { x: 1, y: 0.01, z: 1 }, 'scale reads back after the clamp');
   assert.equal(path('parent').text, null);
   assert.equal(readback.childIds, undefined);
-  assert.deepEqual(readback.bounds, { min: { x: -6 - row.footprint.width / 2, y: 0, z: -6 - row.footprint.depth / 2 }, max: { x: -6 + row.footprint.width / 2, y: row.height * 0.1, z: -6 + row.footprint.depth / 2 } });
+  assert.deepEqual(readback.bounds, { min: { x: -6 - row.footprint.width / 2, y: 0, z: -6 - row.footprint.depth / 2 }, max: { x: -6 + row.footprint.width / 2, y: row.height * 0.01, z: -6 + row.footprint.depth / 2 } });
   const many = arrange(Array.from({ length: 10 }, (_, i) => create(`Bulk ${i}`, { x: 20 + i * 3, y: 0, z: -20 })));
   assert.equal(many.delta.length, 8);
   const truncated = find(many, 'READBACK_TRUNCATED');
@@ -64,7 +64,7 @@ try {
   assert.equal(truncated[0].count, 2, 'the receipt says how many readbacks it left out');
   assert.equal(many.affectedIds.length, 10);
   // A batch whose readback and findings overflow 8 KiB sheds extras instead of failing an applied edit.
-  const huge = arrange(Array.from({ length: 100 }, (_, i) => create(`Prop ${i} ${'x'.repeat(100)}`, { x: 40, y: 0, z: 40 }, { x: 1, y: 0.01, z: 1 })));
+  const huge = arrange(Array.from({ length: 100 }, (_, i) => create(`Prop ${i} ${'x'.repeat(100)}`, { x: 40, y: 0, z: 40 }, { x: 1, y: 0.001, z: 1 })));
   assert.equal(huge.status, 'applied', JSON.stringify(huge).slice(0, 300));
   assert.equal(huge.affectedIds.length, 100);
   assert.ok(find(huge, 'CLAMPED').length > 0 && find(huge, 'READBACK_TRUNCATED').length === 1, 'the findings that fit still lead');

@@ -25,24 +25,8 @@ import {
 } from "@react-three/drei";
 import * as THREE from "three";
 
-import { checkBridge, generate as ardyGenerate } from "./ardy/client.js";
-import {
-	loadMotionFromUrl,
-} from "./ardy/npz.js";
-
-import { motionUrlFromQuery } from "./ardy/motion-url.js";
-
-import {
-	applyMotionFrame,
-	restorePlaybackBones,
-	snapshotPlaybackBones,
-} from "./ardy/playback.js";
-
-import {
-	TRAIL_EFFECTOR_JOINTS,
-	jointTrailPoints,
-	worldPointToClip,
-} from "./motion-trail.js";
+import { restorePlaybackBones, snapshotPlaybackBones } from "./motion/rig-snapshot.js";
+import { applyTakeFrame } from "./motion3/playback.js";
 
 import { FlyControls, aimAt, forwardFrom } from "./controls.jsx";
 import { createLiveControl, loadLiveWorkspaceId, mintLiveWorkspaceId } from "./live-control.js";
@@ -61,7 +45,6 @@ import { useFirstSuccessPrompt } from "./use-first-success-prompt.js";
 import { useCameraTutorial } from "./use-camera-tutorial.js";
 import { useEmbedBridge } from "./use-embed-bridge.js";
 import { useAssetShelf } from "./use-asset-shelf.js";
-import { useI2vCaptureModal } from "./use-i2v-capture-modal.js";
 import { StudioProtocolError } from "./studio-agent-protocol.js";
 import { elementByPath } from "./studio-elements.js";
 import {
@@ -79,59 +62,15 @@ import { drawPlanDiagram } from "./plan-diagram.js";
 import { placementAt } from "./root-path.js";
 import { proxyYaw } from "./proxy-figure.jsx";
 import { autoColorHex, loadAutoColor } from "./auto-color.js";
-import { DualRender, fitAspect, GIZMO_LAYER } from "./dualview.jsx";
+import { DualRender, GIZMO_LAYER } from "./dualview.jsx";
 import { GridFloor } from "./grid-floor.jsx";
-import { GRID_BACKGROUND, GRID_FOG, stageBackground, readStoredGridView, writeStoredGridView } from "./grid-view.js";
+import { readStoredGridView, writeStoredGridView } from "./grid-view.js";
 import { useUiTheme } from "./theme.js";
-import {
-	CURVE_GRAB_RADIUS_PX,
-	DRAG_RADIUS_DEFAULT,
-	DRAG_RADIUS_MAX,
-	DRAG_RADIUS_MIN,
-	DRAG_WEIGHT_EPSILON,
-	DRAW_MIN_STROKE_POINTS,
-	DRAW_MIN_STROKE_PX,
-	MAX_LINE_POINTS,
-	MIN_LINE_POINTS,
-	cameraDrifted,
-	cameraToC6,
-	changedFrameRange,
-	curveToPoints2d,
-	curvesEqual,
-	sliceCurveToRange,
-	dragCurve,
-	dragWeight,
-	isCurveEndPinned,
-	isCurvePointOnScreen,
-	nearestCurvePoint,
-	projectTrailCurve,
-	projectPointC6,
-	reprojectCurveWorld,
-	drawStrokeEdit,
-	unprojectDeltaC6,
-	pinsFrameRange,
-	upsertPin,
-	validateLineEdit,
-} from "./line-edit.js";
 
-import { Room, StageLights } from "./room.jsx";
-import {
-	createShotAuthoringDocument,
-} from "./shot-authoring.js";
-import {
-	buildFollowTrack,
-	buildRail,
-	buildRailFollowTrack,
-	simplifyStroke,
-} from "./camera-follow.js";
-import {
-	createCameraBlock,
-} from "./camera-block.js";
-import {
-	RAIL_SCHEDULE_LEGACY,
-	RAIL_SCHEDULE_RANGE,
-	resolveRailSchedule,
-} from "./camera-rail-schedule.js";
+import { Room, StageLights, StageAtmosphere } from "./room.jsx";
+import { createDocumentMirrors } from "./document-mirrors.js";
+import { buildRail, simplifyStroke } from "./camera-follow.js";
+import { useShotCameraTracks } from "./use-shot-camera-tracks.js";
 import { ObjectCarrier, SetProps } from "./props.jsx";
 import {
 	CUTOUT_KIND,
@@ -172,7 +111,6 @@ import {
 } from "./scenes.js";
 import {
 	hasFileSystemAccess,
-	loadProjectSession,
 	loadStoredProjectHandle,
 	queryHandlePermission,
 	requestHandlePermission,
@@ -186,17 +124,14 @@ import { CameraTutorial } from "./camera-tutorial.jsx";
 import { createTutorialAnalytics } from "./tutorial-analytics.js";
 import { cameraTutorialSuppressed, createFirstShotHandoff, rememberCameraTutorialTerminal } from "./first-shot-handoff.js";
 import ObjectGizmo from "./object-gizmo.jsx";
+import { useHeldObjectEdit } from "./held-object-edit.jsx";
 
 import {
 	SaveBlockedDialog,
 } from "./resource-status.jsx";
 
 import ResultModal from "./result-modal.jsx";
-import {
-	I2vMotionModal,
-} from "./i2v-motion-studio.jsx";
 
-import { demoSeedGate, hasLineEditCapability, motionReadiness } from "./motion-readiness.js";
 
 import { PWA_UPDATE_EVENT } from "./pwa.js";
 import {
@@ -206,7 +141,7 @@ import {
 	pathMetrics,
 	strokeToPathPoints,
 } from "./object-path.js";
-import { carriedPointAt, sceneObjectsAt } from "./object-travel.js";
+import { carriedPointAt, sceneObjectsAt } from "./object-travel.js"; import { objectTracksOf } from "./motion3/object-tracks.js"; import { tutorialWalkSpec } from "./tutorial-walk.js"; import { ViewGhosts } from "./view-ghosts.jsx"; import { DraftGhost } from "./draft-ghost.jsx";
 import { routeOwnerFor } from "./route-owner.js";
 import {
 	analyticsActive,
@@ -243,19 +178,7 @@ import {
 	ikSeedTargets,
 	resolveIkRig,
 	shareContactMeasurements,
-} from "./ardy/ik.js";
-import {
-	buildCollisionCapsules,
-	detectPenetrations,
-	supportsCollisionCleanup,
-} from "./ardy/fix-collisions.js";
-import {
-	blockerSummary,
-} from "./ardy/collision-blockers.js";
-import { computeCenterOfMass, markerPositions } from "./ardy/auto-physics.js";
-import {
-	physicsKeyStamp,
-} from "./ardy/physics-review.js";
+} from "./motion/ik.js";
 
 import {
 	Toast,
@@ -287,7 +210,6 @@ import { buildZip } from "./zip-store.js";
 import { composeStoryboard } from "./storyboard.js";
 import { DEPTH_RANGE_M, depthRangeFromFrames, passFileName, renderPass } from "./render-passes.js";
 
-import { motionApiOrigin, I2V_MOTION_SHOT_ASPECT } from "./i2v-motion-client.js";
 import { serializeOtio } from "./otio.js";
 import "./shell/mode.css";
 import { readPoseFadeOpacity, withPoseFadeLifted, writePoseFadeOpacity } from "./pose-fade.js";
@@ -296,7 +218,6 @@ import {
 	shotIndexAtFrame,
 } from "./cuts.js";
 import {
-	BRIDGE_RECHECK_MS,
 	CameraGlide,
 	CameraRailScenePreview,
 	CaptureRig,
@@ -305,20 +226,13 @@ import {
 	CraneHandles,
 	DEFAULT_CAMERA_POSITION,
 	DEFAULT_DURATION_S,
-	DEMO_MOTION_PROMPT,
-	DEMO_MOTION_URL,
 	EditorCamSeed,
 	FollowCamRig,
 	GIZMO_HOTKEYS,
 	KeyLightPuck,
-	LINE_CURVE_MARKER_STRIDE,
-	LINE_CURVE_REFUSALS,
-	LINE_EDIT_DEFAULT_TRACK,
-	LINE_EDIT_REFUSALS,
-	LINE_PREVIEW_DEBOUNCE_MS,
 	MCP_CAPTURE_H,
 	MCP_CAPTURE_W,
-	MotionTrails,
+	
 	MoveRig,
 	OBJECT_DELETE_UNDO_MS,
 	ObjectPathHandles,
@@ -333,15 +247,12 @@ import {
 	ViewportLayoutInvalidator,
 	WORKSPACE_LAYOUT_KEY,
 	attachFrameMatrix,
-	buildPromptSchedule,
 	captureMcpFrame,
 	characterModelUrl,
 	defaultCharacterTint,
-	ikTracksInRange,
 	loadSceneStartup,
 	loadWorkspaceLayout,
 	moveSequenceSlateKo,
-	preserveTracksSummary,
 	slateLineKo,
 	useStageFilesDrop,
 } from "./app-stage.jsx";
@@ -375,10 +286,6 @@ function ShotGuideOverlay({ mode, aspect, className = "" }) {
 	);
 }
 
-// Below this the mean landmark visibility is too low to claim the fit measured
-// the photograph rather than guessed at it. Same number the fit diagnostics are
-// scaled on (0..1 visibility), so it reads as "less than half seen".
-const PHOTO_POSE_LOW_CONFIDENCE = 0.5;
 const CHARACTER_POSITION_BOUNDS = elementByPath("character.position").gizmo;
 const CHARACTER_SCALE_BOUNDS = elementByPath("character.scale");
 
@@ -410,42 +317,12 @@ function storyboardCaption(prompt) {
 		.join(" · "));
 }
 
-// cskel27 joint names are rig vocabulary — "RightForeArm" means nothing to
-// someone holding a photograph. Every joint collapses into one of six groups a
-// viewer can check against their own picture, ordered so the sentence always
-// reads limbs before body.
-const RELEASED_BONE_LABELS = [
-	["LeftArm", "left arm", "왼팔"],
-	["RightArm", "right arm", "오른팔"],
-	["LeftLeg", "left leg", "왼다리"],
-	["RightLeg", "right leg", "오른다리"],
-	["Torso", "torso", "몸통"],
-	["Head", "head", "머리"],
-];
-
-function releasedBoneGroup(name) {
-	const side = name.startsWith("Left") ? "Left" : name.startsWith("Right") ? "Right" : "";
-	const part = side ? name.slice(side.length) : name;
-	if (part === "UpLeg" || part === "Leg" || part === "Foot" || part === "ToeBase") return side + "Leg";
-	if (part === "Shoulder" || part === "Arm" || part === "ForeArm" || part === "Hand" || part === "HandEnd") return side + "Arm";
-	if (part === "Head" || part === "Neck") return "Head";
-	// Hips and the Spine chain are the only names left, and they are the torso.
-	return "Torso";
-}
-
-// 이/가 is fixed by the final syllable of the word it follows — 왼팔이 but
-// 왼다리가 — so it cannot be baked into the sentence template.
-function koSubjectParticle(word) {
-	const syllable = word.charCodeAt(word.length - 1) - 0xac00;
-	return syllable >= 0 && syllable < 11172 && syllable % 28 !== 0 ? "이" : "가";
-}
-
 /**
  * Pose ONE cast member's rig at an absolute timeline frame: its own clip first,
  * then its own IK correction layer on top. This is the single description of
  * "where is this character at frame N" — the viewport effect, the offscreen
- * recorder and the whole-clip collision pass all go through it, so a body used
- * as a collision blocker stands exactly where the render would draw it.
+ * recorder and the range-pin bake all go through it, so a body stands exactly
+ * where the render would draw it.
  *
  * Pure in the sense that matters here: it takes the rig, the clip and the layer
  * state and writes bones. No React, no refs, no knowledge of who is active — a
@@ -459,7 +336,7 @@ function poseMemberAtFrame(rig, clip, ikState, frame, blendFrames = 0, pose = nu
 	if (!rig) return;
 	if (clip) {
 		const sampled = sampleAt({ frameCount: clip.frames, motion: clip }, null, frame);
-		applyMotionFrame(rig, clip, sampled.motionFrame);
+		applyTakeFrame(rig, clip, sampled.motionFrame);
 	} else if (pose) {
 		applyPose(rig, pose);
 		applyHipsOffset(rig, pose.rootY ?? 0);
@@ -668,7 +545,7 @@ export default function App() {
 		get objects() { return storeRef.current.objects; },
 	}));
 	const {
-		preset, shotAspectKey, environmentImage, cameraPresetId, sensorId, keyLight, changeKeyLight,
+		preset, shotAspectKey, environmentImage, cameraPresetId, sensorId, keyLight, lighting, changeKeyLight,
 		resetKeyLight, changeEnvironmentImage, hasEnvSheet, environment, style, publishStudioStage,
 	} = stageDomain;
 	const shotsDomain = useShots(appContext.forRender({
@@ -684,7 +561,7 @@ export default function App() {
 		get markSemanticEdit() { return markSemanticEdit; },
 		get motionPos() { return motionPos; },
 		get playMode() { return playMode; },
-		get promptTextSessionRef() { return promptTextSessionRef; },
+		
 
 		get runStudioAction() { return runStudioAction; },
 		get selectWorkflowMode() { return selectWorkflowMode; },
@@ -704,9 +581,8 @@ export default function App() {
 		get executeExportRequest() { return executeExportRequest; },
 		get exportRequest() { return exportRequest; },
 		get motion() { return motion; },
-		get multiModelFootage() { return multiModelFootage; },
 		get playgroundMode() { return playgroundMode; },
-		get promptClips() { return promptClips; },
+		
 		get recRef() { return recRef; },
 		get runShotExport() { return runShotExport; },
 		get setCameraPos() { return setCameraPos; },
@@ -1104,25 +980,21 @@ export default function App() {
 		get committedIkEdits() { return committedIkEdits; },
 		get environment() { return environment; },
 		get environmentImage() { return environmentImage; },
-		get exitLineEditMode() { return exitLineEditMode; },
 		get frameCountRef() { return frameCountRef; },
 		get gestureUndoRef() { return gestureUndoRef; },
 		get hasEnvSheet() { return hasEnvSheet; },
 		get ikStateRef() { return ikStateRef; },
 		get ikStatesRef() { return ikStatesRef; },
 		get keyLight() { return keyLight; },
-		get lineEditMode() { return lineEditMode; },
 		get loadedLayerCharRef() { return loadedLayerCharRef; },
 		get markSemanticEdit() { return markSemanticEdit; },
 		get motion() { return motion; },
 		get motionFullRef() { return motionFullRef; },
-		get promptTextSessionRef() { return promptTextSessionRef; },
+		
 		get publishStudioCharacters() { return publishStudioCharacters; },
 		get rigReportersRef() { return rigReportersRef; },
 		get rigWaitersRef() { return rigWaitersRef; },
 		get runStudioAction() { return runStudioAction; },
-		get setArdyDuration() { return setArdyDuration; },
-		get setArdyPrompt() { return setArdyPrompt; },
 		get setCommittedIkEdits() { return setCommittedIkEdits; },
 		get setIkTick() { return setIkTick; },
 		get setSelectedHierarchyId() { return setSelectedHierarchyId; },
@@ -1159,53 +1031,28 @@ export default function App() {
 		get snapshotExportRig() { return snapshotExportRig; },
 		get studioBindingRef() { return studioBindingRef; },
 		get objectsDomain() { return objectsDomain; },
-		get restoreMotionRefs() { return restoreMotionRefs; },
+		
 		get shotsDomain() { return shotsDomain; },
 	}));
 	const {
-		characters, customPoses, posing, setPosing, posingClosing, studioPick, setStudioPick,
+		characters, customPoses, posing, posingClosing, studioPick, setStudioPick,
 		rigs, rigMountEpoch, setRigMountEpoch, setPoseTick, charA, charB, showB, poseA, poseB, subject, subject2,
 		updateCharacterAt, setShowB, moveCharacter, removeCharacter, reportRig, spawnCharacter,
 		charKeyToHierarchyId, charIdFromHierarchyId, activeCharacterId, setActiveCharacterId, rowIdForCharIndex,
 		activeChar, selectActiveCharacterInHierarchy, activeCharIndex, activeRig, waitForRig, ghostLayers,
-		snapshotCast, changeInspectorCharacter, hasCharSheet, setHasCharSheet, promptBlocksReveal,
-		setPromptBlocksReveal, revealPromptBlocks, waypointMode, setWaypointMode, waypoints, setWaypoints,
-		activeWaypointId, setActiveWaypointId, pendingWaypointFrame, setPendingWaypointFrame, promptClips,
-		setPromptClips, editPromptClips, selectedPromptId, setSelectedPromptId, photoPoseState, photoPoseError,
-		setPhotoPoseError, allPoses, selectablePoses, posingIndex, posingChar, posedRig, setPosed, rootStart, commitPosedPose,
+		snapshotCast, changeInspectorCharacter, hasCharSheet, setHasCharSheet,
+		waypointMode, setWaypointMode, waypoints, setWaypoints,
+		activeWaypointId, setActiveWaypointId, pendingWaypointFrame, setPendingWaypointFrame, allPoses, selectablePoses, posingIndex, posingChar, posedRig, setPosed, rootStart, commitPosedPose,
 		queueRootWaypointFrame, castMemberOf, addCharacterWaypoint, moveCharacterWaypoint,
 		removeCharacterWaypoint, clearCharacterWaypoints, addFloorWaypoint, moveWaypoint, removeWaypoint,
-		toggleWaypointMode, openStudio, closeStudio, saveCurrentPose, savePose, posePhotoFile, removePose,
-		addPromptClip, changePromptClip, PROMPT_BLOCK_MAX_FRAMES, resizePromptClip, movePromptClip,
-		removePromptClip,
+		toggleWaypointMode, openStudio, closeStudio, saveCurrentPose, savePose, removePose,
+		
 	} = castDomain;
 	const { publishStudioCharacters, syncStudioLayerBuffer, undoScene, redoScene, snapshotStudioDomain } = castDomain;
 	// The cast as of this render, for async handlers: an extraction that
 	// started three renders ago must place its takes against the CURRENT cast,
 	// not the one its closure captured.
 	appContext.publishCharacters(characters);
-
-	const {
-		i2vMotionEnabled,
-		setI2vMotionEnabled,
-		i2vMotionMode,
-		setI2vMotionMode,
-		i2vMotionCameraUnlocked,
-		setI2vMotionCameraUnlocked,
-	} = useI2vCaptureModal();
-
-	useEffect(() => {
-		let cancelled = false;
-		fetch(`${motionApiOrigin()}/v1/motion/me`, { credentials: "include" })
-			.then((response) => response.ok ? response.json() : null)
-			.then((payload) => {
-				if (cancelled || !payload) return;
-				setI2vMotionEnabled(payload.enabled === true);
-				if (Number.isFinite(payload.dailyRemaining)) motionDomain.updateI2vMotionQuota(payload.dailyRemaining);
-			})
-			.catch(() => { if (!cancelled) setI2vMotionEnabled(false); });
-		return () => { cancelled = true; };
-	}, []);
 
 	// Per-character rig report: stable callback identity per character so
 	// the Character effect does not re-fire on every App render.
@@ -1265,66 +1112,46 @@ export default function App() {
 
 	const motionDomain = useMotion(appContext.forRender({
 		get attachFrameRef() { return attachFrameRef; },
-		get PROMPT_BLOCK_MAX_FRAMES() { return PROMPT_BLOCK_MAX_FRAMES; },
+		
 		get activeChar() { return activeChar; },
 		get activeCharIndex() { return activeCharIndex; },
 		get activeRig() { return activeRig; },
-		get addPromptClip() { return addPromptClip; },
-		get ardyAbortRef() { return ardyAbortRef; },
-		get autoPhysicsRunRef() { return autoPhysicsRunRef; },
-		get bridgeRefreshRef() { return bridgeRefreshRef; },
+		
 		get bufferRef() { return bufferRef; },
-		get buildLineEditRequest() { return buildLineEditRequest; },
 		get cameraPreviewEndRef() { return cameraPreviewEndRef; },
-		get cancelLinePreview() { return cancelLinePreview; },
 		get castDomain() { return castDomain; },
 		get castMemberOf() { return castMemberOf; },
 		get charA() { return charA; },
 		get characters() { return characters; },
-		get clearLineEdit() { return clearLineEdit; },
-		get collisionCleanupSupported() { return collisionCleanupSupported; },
-		get exitLineEditMode() { return exitLineEditMode; },
 		get fovDeg() { return fovDeg; },
 		get frameCountRef() { return frameCountRef; },
-		get genJobSeq() { return genJobSeq; },
-		get genRunningRef() { return genRunningRef; },
-		get generationPendingRef() { return generationPendingRef; },
 		get ikBodyDragRef() { return ikBodyDragRef; },
 		get ikFrames() { return ikFrames; },
 		get ikStateRef() { return ikStateRef; },
 		get ikStatesRef() { return ikStatesRef; },
-		get lineEditMode() { return lineEditMode; },
-		get lineEditPayload() { return lineEditPayload; },
-		get linePreviewSource() { return linePreviewSource; },
-		get linePreviewUrl() { return linePreviewUrl; },
-		get lineTrack() { return lineTrack; },
 		get loadedLayerCharRef() { return loadedLayerCharRef; },
 		get look() { return look; },
 		get markSemanticEdit() { return markSemanticEdit; },
 		get motionFullRef() { return motionFullRef; },
-		get multiModelObjectUrlRef() { return multiModelObjectUrlRef; },
-		get multiModelRunRef() { return multiModelRunRef; },
-		get physicsJobRef() { return physicsJobRef; },
-		get physicsSourceCacheRef() { return physicsSourceCacheRef; },
 		get poseMemberAtFrame() { return poseMemberAtFrame; },
 		get posedRig() { return posedRig; },
 		get poserCamRef() { return poserCamRef; },
 		get poserLook() { return poserLook; },
 		get posing() { return posing; },
 		get posingChar() { return posingChar; },
-		get projectMotionsRef() { return projectMotionsRef; },
-		get promptClips() { return promptClips; },
+		
+		
 		get publishStudioCharacters() { return publishStudioCharacters; },
-		get restoreEpochRef() { return restoreEpochRef; },
-		get restoreRef() { return restoreRef; },
-		get revealPromptBlocks() { return revealPromptBlocks; },
+		
+		
+		
 		get rigs() { return rigs; },
 		get rowIdForCharIndex() { return rowIdForCharIndex; },
 		get runStudioAction() { return runStudioAction; },
 		get sceneObjects() { return sceneObjects; },
 		get selectActiveCharacterInHierarchy() { return selectActiveCharacterInHierarchy; },
 		get setProjectManifest() { return setProjectManifest; },
-		get setPromptClips() { return setPromptClips; },
+		
 		get setSelectedHierarchyId() { return setSelectedHierarchyId; },
 		get setTlFps() { return setTlFps; },
 		get setTlFrame() { return setTlFrame; },
@@ -1332,31 +1159,24 @@ export default function App() {
 		get setTlPlaying() { return setTlPlaying; },
 		get shot() { return shot; },
 		get shotCamRef() { return shotCamRef; },
-		get takeRecipeRef() { return takeRecipeRef; },
-		get takeSourceUrl() { return takeSourceUrl; },
 		get tlFps() { return tlFps; },
 		get tlFrame() { return tlFrame; },
 		get tlFrameCount() { return tlFrameCount; },
 		get tlFrameRef() { return tlFrameRef; },
-		get toggleLineEditMode() { return toggleLineEditMode; },
-		get trailBaseMotionRef() { return trailBaseMotionRef; },
-		get trailPreviewMotionRef() { return trailPreviewMotionRef; },
+		
+		
 		get tutorialProjectEpochRef() { return tutorialProjectEpochRef; },
 		get waitForRig() { return waitForRig; },
 		get waypointMode() { return waypointMode; },
 		get waypoints() { return waypoints; },
 		get captureCurrentFraming() { return captureCurrentFraming; },
 		get enterShotLook() { return enterShotLook; },
-		get i2vMotionEnabled() { return i2vMotionEnabled; },
-		get i2vMotionSegmentationReady() { return i2vMotionSegmentationReady; },
 		get captureLiveFraming() { return liveQueries.capture_framing_png; },
 		get lookThroughShot() { return lookThroughShot; },
-		get motionEncodingCacheRef() { return motionEncodingCacheRef; },
+		
 		get readStudioState() { return readStudioState; },
 		get restoreExportRig() { return restoreExportRig; },
 		get setCameraPos() { return setCameraPos; },
-		get setI2vMotionCameraUnlocked() { return setI2vMotionCameraUnlocked; },
-		get setI2vMotionStudioOpen() { return setI2vMotionStudioOpen; },
 		get setFovDeg() { return setFovDeg; },
 		get setResult() { return setResult; },
 		get setResultOpen() { return setResultOpen; },
@@ -1366,32 +1186,17 @@ export default function App() {
 	}));
 	const {
 		ikMode, ikChains, setIkChains, ikFkJoints, setIkFkJoints, ikFocus, setIkFocus, footSnap, setFootSnap,
-		bodyContact, setBodyContact, IK_CORRECTION_BLEND_FRAMES, autoPhysicsRunning, setAutoPhysicsRunning,
-		physicsPreview, setPhysicsPreview, physicsShow, physicsProgress, physicsOptions, setPhysicsOptions,
-		ikTick, setIkTick, committedIkEdits, setCommittedIkEdits, trailFalloffS, setTrailFalloffS, showTrails,
-		setShowTrails, ikEditTool, setIkEditTool, trailEdit, trailTrackFocus, selectTrailTrack, clearTrailTrackFocus, trailFalloffFrames, focusIkHandle, snapshotIkKeys,
+		bodyContact, setBodyContact, IK_CORRECTION_BLEND_FRAMES,
+		ikTick, setIkTick, committedIkEdits, setCommittedIkEdits, ikEditTool, setIkEditTool, focusIkHandle, snapshotIkKeys,
 		pendingIkEdit, applyPendingIkEdit, cancelPendingIkEdit,
 		rangePins, rangePinResiduals, rangePinSelection, setRangePinSelection, rangePinPartPick, setRangePinPartPick, rangePinPreview, previewRangePinDraft, applyRangePinDraft, deleteRangePin,
-		setCharacterIkKey, removeCharacterIkKey, clearCharacterIkKeys, bridge, setBridge, bridgeChecking,
-		motionSetupReveal, motionSetupKind, setArdyPrompt, setArdyDuration, ardySeed, preserveStrength,
-		setPreserveStrength, takeRecipe, takeVersions, replayNotices, sceneMenuOpen, setSceneMenuOpen,
-		ardyRunning, ardyStatus, ardyOutcome, lineEditBackend, setLineEditBackend, motion, motionBusy,
-		multiModelUrl, setMultiModelUrl, multiModelSource, setMultiModelSource, multiModelStatus,
-		multiModelStage, multiModelProgress, multiModelFootage, multiModelError, multiModelTake,
-		multiModelExtract, multiModelExtractProgress, multiModelExtractError, advanceFrame, stepFrame,
-		leaveIkMode, beginPlaybackOn, chooseMultiModelFile, pasteMultiModelUrl, useMultiModelUrl, ingestFootage,
-		extractMultiModelMotion, loadMotion, clearMotion, applyMotionTrim, resetMotionTrim, cutMotionAtPlayhead,
-		changeMotionSegmentSpeed, removeMotionSegmentById, poseOtherCastMembers, toggleIkMode, ikSolve,
-		ikDragEnd, ikAddKeyframe, externalBlockers, runFixCollisions, runFixCollisionsRange,
-		changePhysicsOptions, showPhysicsPreview, cancelPhysicsPreview, applyPhysicsPreview, runAutoPhysics,
-		platformFitRunning, platformFitLast, platformFitProgress, platformFitApplied,
-		ikDeleteKeyframe, ikApplyPoseAsKey, recheckMotionHealth, changeArdySeed, takeSeed, runLineEdit,
-		runAllPromptBlocks, runArdy, onTrailDragStart, onTrailDragPreview, onTrailDragEnd, runTrailRegeneration,
-		genQueue, setGenQueue, executeMotionJob, seedLoadedTake, loadTakeVersion, selectedMotionReadiness,
-		generationBusy, openMotionSetup, refineDisabledReason, sceneDisabledReason, sceneGenerateDisabledReason,
-		sceneAgainDisabledReason, enterRefineMode, runSceneAgain, addSceneBlock, restoreMotionRefs, cancelArdy,
+		setCharacterIkKey, removeCharacterIkKey, clearCharacterIkKeys,
+		motion,
+		advanceFrame, stepFrame,
+		leaveIkMode, clearMotion, poseOtherCastMembers, toggleIkMode, ikSolve,
+		ikDragEnd, ikAddKeyframe,
+		ikDeleteKeyframe, ikApplyPoseAsKey,
 	} = motionDomain;
-	const { i2vMotion, captureI2vStill, enterI2vFraming, markI2vPose, clearI2vPose, clearI2vMotion, restoreI2vCamera, framingDistance, showI2vMotionLock, generateI2vMotion, i2vMotionUnavailable, generateI2vMotionFromUi } = motionDomain;
 	const [partColoursEnabled, setPartColoursEnabled] = useState(false);
 	const [partColoursMode, setPartColoursMode] = useState("shaded");
 
@@ -1429,9 +1234,7 @@ export default function App() {
 			// renders for a specific cast member, so selecting the group used to
 			// drop the operator into Motion with nothing to drag.
 			setSelectedHierarchyId(rowIdForCharIndex(activeCharIndex));
-			// Selecting Motion should land on its first useful control rather than
-			// leaving the operator to hunt through a long inspector column.
-			setPromptBlocksReveal((signal) => signal + 1);
+			
 		}
 		// Pose lands on the active character's rig: its Rig Control panel holds
 		// the IK tools that W/E/R switch between.
@@ -1598,14 +1401,14 @@ export default function App() {
 		get loadedLayerCharRef() { return loadedLayerCharRef; },
 		get manualCameraOverrideRef() { return manualCameraOverrideRef; },
 		get markSemanticEdit() { return markSemanticEdit; },
-		get motionEncodingCacheRef() { return motionEncodingCacheRef; },
+		
 		get motionFullRef() { return motionFullRef; },
 		get playgroundMode() { return playgroundMode; },
 		get projectHandleRef() { return projectHandleRef; },
-		get projectMotionsRef() { return projectMotionsRef; },
+		
 		get projectSnapshotRef() { return projectSnapshotRef; },
 		get projectStateRef() { return projectStateRef; },
-		get restoreMotionRefs() { return restoreMotionRefs; },
+		
 		get runStudioAction() { return runStudioAction; },
 		get saveBlockedRef() { return saveBlockedRef; },
 		get saveFailureToastRef() { return saveFailureToastRef; },
@@ -1617,11 +1420,11 @@ export default function App() {
 		get setHasCharSheet() { return setHasCharSheet; },
 		get setMovePlaying() { return setMovePlaying; },
 		get setPendingWaypointFrame() { return setPendingWaypointFrame; },
-		get setPromptClips() { return setPromptClips; },
+		
 		get setRailDraw() { return setRailDraw; },
 		get setRigMountEpoch() { return setRigMountEpoch; },
 		get setSelectedHierarchyId() { return setSelectedHierarchyId; },
-		get setSelectedPromptId() { return setSelectedPromptId; },
+		
 		get setShots() { return setShots; },
 		get setTlFrame() { return setTlFrame; },
 		get setTlFrameCount() { return setTlFrameCount; },
@@ -1676,10 +1479,6 @@ export default function App() {
 	const ikBodyDragRef = useRef(false); // true while a body drag is active
 
 	const ikStateRef = useRef(createIkState());
-	const autoPhysicsRunRef = useRef(null);
-
-	const physicsJobRef = useRef(0);
-	const physicsSourceCacheRef = useRef({ value: null });
 
 	// Sorted full-body key frames for the timeline markers. Derived from the
 	// ref state; ikTick re-derives after every key add/remove.
@@ -1687,9 +1486,7 @@ export default function App() {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 		[ikTick]);
 
-	 // {track, grabFrame, radiusFrames, clipDelta}
-	const trailBaseMotionRef = useRef(null);
-	const trailPreviewMotionRef = useRef(null);
+	 
 
 	function selectHierarchy(id) {
 		// A selection switch is the user starting something else: settle any open
@@ -1834,10 +1631,7 @@ export default function App() {
 		camera.rotation.set(angles.pitch, angles.yaw, 0);
 	}
 
-	// Prompt-block text (inspector field AND the timeline chip both land in
-	// changePromptClip) and viewport/plan camera framing are the two streams
-	// that would otherwise push an entry per keystroke / per pointermove.
-	const promptTextSessionRef = useRef(null);
+	// Viewport/plan camera framing would otherwise push an entry per pointermove.
 	const framingSessionRef = useRef(null);
 	// A colour picker streams values for as long as its dialog is open.
 	const tintSessionRef = useRef(null);
@@ -1924,19 +1718,13 @@ export default function App() {
 				requestSculptView({ KeyW: "front", KeyE: "side", KeyR: "back" }[event.code]);
 				return;
 			}
-			// Pose mode's W/E/R are the IK tools, gated like their Rig Control
-			// buttons: the trail tool needs visible trails, the range pin a take.
+			// Pose mode's W/R are the IK tools, gated like their Rig Control
+			// buttons: the range pin needs a take.
 			if (workflowMode === "pose" && GIZMO_HOTKEYS[event.code]) {
 				event.preventDefault();
 				if (event.code === "KeyW") setIkEditTool("ik");
-				else if (event.code === "KeyE" && showTrails) setIkEditTool("trail");
+				
 				else if (event.code === "KeyR" && motion) { setIkEditTool("pin"); setRangePinPartPick(null); }
-				return;
-			}
-			// Motion mode's E is Refine: drag the take's path to re-route it.
-			if (workflowMode === "motion" && event.code === "KeyE") {
-				event.preventDefault();
-				enterRefineMode();
 				return;
 			}
 			if (GIZMO_HOTKEYS[event.code]) {
@@ -2067,7 +1855,6 @@ export default function App() {
 	const liveWorkspaceIdRef = useRef("");
 	if (!liveWorkspaceIdRef.current) liveWorkspaceIdRef.current = loadLiveWorkspaceId();
 	const [result, setResult] = useState(null);
-	const [i2vMotionStudioOpen, setI2vMotionStudioOpen] = useState(false);
 	const [resultOpen, setResultOpen] = useState(false);
 	const [copied, setCopied] = useState(false);
 	const [recordedVideoName, setRecordedVideoName] = useState(null);
@@ -2100,13 +1887,10 @@ export default function App() {
 	}, []);
 	const [glContextLost, setGlContextLost] = useState(false);
 
-	const bridgeRefreshRef = useRef(null);
 
-	const generationPendingRef = useRef(false);
 
 	 // default clip length in seconds; aligned with the recommended 3-5 s block range
 
-	const takeRecipeRef = useRef(null);
 
 	const [bottomTab, setBottomTab] = useState("timeline");
 	const { shelfImageIds, setShelfImageIds, shelfMeshIds, setShelfMeshIds, manageAssetStorage, setManageAssetStorage, unusedAssetIds, setUnusedAssetIds, usedAssetIds, setUsedAssetIds, usageCounts, setUsageCounts, assetShelfScanTokenRef, legacyDerivedIdsRef, assetTrash, setAssetTrash, assetUndoOffered, setAssetUndoOffered, deletingAssetId, setDeletingAssetId, cutoutLineage, meshLineage, projectCutoutLineage, projectAssetGraphSignature } = useAssetShelf({ scenes, activeSceneId, sceneObjects });
@@ -2273,7 +2057,6 @@ export default function App() {
 		}
 	}
 
-	const ardyAbortRef = useRef(null);
 
 	const renderActive = useRenderActivity(tlPlaying || movePlaying);
 	 // the clip length on the production clock
@@ -2282,10 +2065,12 @@ export default function App() {
 	// the export overwrites it per captured frame and restores nothing, which
 	// is correct — the next render puts it back.
 	propFrameRef.current = tlFrame;
+	// A held object's gizmo drag edits its motion; its live preview rides the take tracks (held-object-edit.jsx).
+	const heldEdit = useHeldObjectEdit({ selected: selectedSceneObject, objects: sceneObjects, tracks: objectTracksOf(appContext.storeDomain("motion"), appContext.live.characters), frame: tlFrame, frameCount: tlFrameCount, fps: tlFps, motion: appContext.storeDomain("motion"), run: runStudioAction });
 	// Routed records and everything grouped under them (object-travel.js).
-	const animatedSceneObjects = useMemo(
-		() => sceneObjectsAt(sceneObjects, tlFrame, { frameCount: tlFrameCount, fps: tlFps }),
-		[sceneObjects, tlFrame, tlFrameCount, tlFps],
+	const objectTracks = heldEdit.tracks, animatedSceneObjects = useMemo(
+		() => sceneObjectsAt(sceneObjects, tlFrame, { frameCount: tlFrameCount, fps: tlFps, objectTracks }),
+		[sceneObjects, tlFrame, tlFrameCount, tlFps, objectTracks],
 	);
 
 	// The selection as it is DRAWN at this frame, for the transform gizmo to sit
@@ -2293,10 +2078,8 @@ export default function App() {
 	// routed descendant all stand away from their authored numbers while the
 	// playhead is off frame 0. Drags still read the authored records (the gizmo
 	// is handed those separately), so they stay delta-based on authored numbers.
-	const gizmoSceneObject = useMemo(
-		() => (selectedSceneObject ? animatedSceneObjects.find((object) => object.id === selectedSceneObject.id) ?? selectedSceneObject : null),
-		[selectedSceneObject, animatedSceneObjects],
-	);
+	// A take-drawn object also gets `heldEdit.gizmo`: the exact drawn centre and rotation.
+	const gizmoSceneObject = selectedSceneObject ? animatedSceneObjects.find((object) => object.id === selectedSceneObject.id) ?? selectedSceneObject : null;
 
 	// Auto color: Blender's viewport "Random" mode. A DISPLAY-ONLY marker rides
 	// each non-cutout object into the renderers; the authored `color`, the scene
@@ -2376,167 +2159,6 @@ export default function App() {
 	const frameCountRef = useRef(DEFAULT_DURATION_S * TIMELINE_FPS);
 	frameCountRef.current = tlFrameCount;
 
-	/* ------------------------------ line editing ---------------------------
-	 * Contract C6. A modal editing surface exactly like waypointMode above,
-	 * but it works in SCREEN space on a 2D overlay canvas rather than raycast
-	 * onto the floor — depth is the model's problem, not the UI's.
-	 *
-	 * TWO GESTURES, ONE CURVE. The primary interaction is TRAJECTORY DRAGGING:
-	 * the joint's existing path is projected onto the viewport and the user
-	 * grabs a point on it and pulls, with a Gaussian falloff carrying the
-	 * neighbours along. A press that lands nowhere near the path instead DRAWS
-	 * one freehand (drawStrokeEdit), because a trail can project into a few
-	 * screen pixels — a person backing up and falling barely moves the hand
-	 * across the image — and with nothing grabbable the whole mode reads as
-	 * dead. Drawing is not the old freehand tool coming back, though: that one
-	 * popped the take 8x its own frame delta at the range edges because the
-	 * joint teleported to wherever the stroke began (gate GP2). A stroke here is
-	 * MATCHED BACK ONTO THE TRAIL — its endpoints pick the frames it was drawn
-	 * over, and those frames become the edit's range — so it reroutes the stretch
-	 * of path it covers, replays it with that stretch's own velocity profile, and
-	 * eases out of the original trajectory at both seams. See the block comment
-	 * above matchStrokeWindow in line-edit.js for why all three are one decision.
-	 * A drag pins its ends instead (its Gaussian already eases), and both
-	 * gestures produce the SAME dense frame-indexed curve, so everything
-	 * downstream (preview, undo, camera drift, the wire payload) cannot tell them
-	 * apart — except that a drawn curve also carries the `frameRange` it chose.
-	 *
-	 * `lineCurve` is non-null EXACTLY WHEN THERE IS AN EDIT, and that invariant
-	 * is the whole camera policy in one sentence. Null means the curve is
-	 * re-projected from the LIVE camera on every repaint, so orbiting the view
-	 * carries the path along and navigation never fights the mode. Non-null is
-	 * `{ camera, original, edited }` — one object, because a pull is a 2D offset
-	 * that only means something through the lens it was authored with, so the
-	 * camera is frozen beside the points and travels with them onto the wire.
-	 * Moving the view therefore does NOT drop the pull; it only stops the line
-	 * being drawable here (see lineDrifted just below, and the watcher further
-	 * down).
-	 *
-	 * The four refs never re-render: `lineDragRef` is the in-flight grab and
-	 * carries the live deformed curve, `lineDrawRef` is the in-flight freehand
-	 * stroke, `lineLiveRef` caches the last projection the painter made so the
-	 * hit test does not redo it, and `lineHoverRef` is the marker under the
-	 * pointer. A pointermove must repaint the overlay
-	 * without re-rendering an 11k-line component 200 times a second, so the
-	 * painter reads the refs and only pointerup commits to state. */
-	const [lineEditMode, setLineEditMode] = useState(false);
-	const [lineTrack, setLineTrack] = useState(LINE_EDIT_DEFAULT_TRACK);
-	// null means "the whole clip" — resolved against the loaded take at use
-	// time so loading a different clip cannot leave a stale range behind.
-	const [lineRange, setLineRange] = useState(null);
-	const [lineCurve, setLineCurve] = useState(null);
-	/* THE VIEW HAS MOVED, AND THE EDIT IS STILL HERE.
-	 *
-	 * A committed curve carries its OWN camera (the `{ camera, original, edited }`
-	 * above), and buildLineEditRequest sends that snapshot — so a later orbit,
-	 * fly or shot switch cannot invalidate the pending edit, its preview or the
-	 * confirming run. What it invalidates is only the ALIGNMENT of the painted
-	 * overlay: the uv were authored through one lens, there is no depth to
-	 * reproject them with, and drawing them over a different view would put the
-	 * line somewhere the artist never aimed. So drift is a PRESENTATION state,
-	 * not a destruction trigger — the curve is painted detached (ghosted, no
-	 * grab handles), the panel says so, and a NEW gesture is refused because it
-	 * would mix two cameras into one curve. Come back toward the snapshot and the
-	 * line paints normally again.
-	 *
-	 * The ref is what the pointer handlers and the painter read (a poll is 250 ms
-	 * stale and a press must not be); the state is what re-renders the panel. */
-	const [lineDrifted, setLineDrifted] = useState(false);
-	const lineDriftRef = useRef(false);
-	/* ------------------------------ 3D pins --------------------------------
-	 * The THIRD gesture: scrub to a moment, grab the joint where it is, put it
-	 * where it should be. Entries are `{ frame, position: [x, y, z] }` in the
-	 * TAKE's own clip space (worldPointToClip converts on commit), ascending by
-	 * frame, capped at LINE_EDIT_PINS_MAX — exactly the C6 `pins3d` payload, so
-	 * the panel state and the wire object are the same value.
-	 *
-	 * ONE EDIT IS ONE GESTURE (v1). A pin clears the curve and a stroke or drag
-	 * clears the pins, because a 2D path and a set of 3D points are two answers
-	 * to "where does this joint go" and the box would be asked to average them.
-	 * Combining them is a real feature (pin the extremes, draw the arc between)
-	 * and it needs a story about which one owns a frame they both name — that
-	 * story is not written, so the modes are exclusive and say so.
-	 *
-	 * `linePinMode` is the stage's gesture selector rather than a modifier key:
-	 * pressing on the joint's own marker is ALSO how a curve drag starts, so the
-	 * two cannot share a press, and a modal toggle beside the joint picker is
-	 * discoverable in a way a chord is not. */
-	const [linePins, setLinePins] = useState([]);
-	const [linePinMode, setLinePinMode] = useState(false);
-	// The in-flight pin drag. Same no-re-render discipline as lineDragRef: a
-	// pointermove writes the ref and repaints the overlay, only pointerup
-	// commits to state.
-	const linePinDragRef = useRef(null);
-	const [lineRadius, setLineRadius] = useState(DRAG_RADIUS_DEFAULT);
-	const lineDragRef = useRef(null);
-	// The in-flight freehand STROKE, when the press missed the curve. Same
-	// no-re-render discipline as lineDragRef: pointermove appends a uv sample and
-	// repaints the overlay, and only pointerup turns the stroke into a curve (via
-	// strokeToCurve) and commits it through the drag's own pipeline.
-	const lineDrawRef = useRef(null);
-	// The range a DRAW just auto-matched into the panel. "Switching the range
-	// drops the pull in hand" is the right rule for a range the ARTIST typed —
-	// the pull was authored against a trajectory that is no longer on screen —
-	// but a drawn stroke authors its range and its curve in the same gesture,
-	// and letting that rule fire on the range the draw itself installed would
-	// wipe the drawing on commit and cancel its preview. One-shot: the effect
-	// consumes it.
-	const lineAutoRangeRef = useRef(null);
-	const lineLiveRef = useRef(null);
-	const lineHoverRef = useRef(null);
-	// Undo stack for committed pulls: each entry is the WHOLE lineCurve value
-	// that a commit replaced (null = "no edit yet"), so Ctrl/Cmd+Z is a plain
-	// pop-and-restore. A camera move no longer touches it: an edit survives the
-	// view moving, so the pulls behind it are still meaningful too, and undo is
-	// one of the three things (with reset and Generate) that must keep working
-	// while the view has drifted away from the line.
-	const lineUndoRef = useRef([]);
-	const lineOverlayRef = useRef(null);
-
-	/* ------------------ live preview of a pull (contracts C10/C11) ------------
-	 * Releasing the drag fires a FULL-QUALITY run of the same edit (same steps
-	 * and session seed as Generate, ~2 s on the warm resident, so the draft and
-	 * the confirmed take are bit-identical) and swaps the VIEWPORT to it, so
-	 * the artist judges the correction by watching it move instead of by
-	 * reading a curve. Three rules make that honest:
-	 *
-	 *   1. A PREVIEW IS A PICTURE, NOT A TAKE. It never pushes a version, never
-	 *      touches the recipe and never becomes anyone's sourceMotion. The take
-	 *      being edited is `takeSourceUrl` — remembered here the moment a
-	 *      preview starts — and `motion.url` is merely what is on screen.
-	 *   2. ONE SEED PER EDITING SESSION. A draft rendered with a different seed
-	 *      predicts nothing, so the seed is rolled once (first preview or the
-	 *      confirming run, whichever comes first), reused by every preview, SENT
-	 *      by the full-quality run, and only then re-rolled. A typed seed is
-	 *      already constant, so the rule costs nothing there.
-	 *   3. SUPERSEDE, NEVER STACK. At most one request is in flight; a drag
-	 *      that lands while one is out replaces the pending curve, and the older
-	 *      answer is dropped on arrival. Queueing them would make the viewport
-	 *      replay a history the artist has already moved past.
-	 *
-	 * Undo, reset and leaving the mode all revert the viewport to the source take
-	 * and discard whatever is in flight. A CAMERA MOVE does not: the draft is a
-	 * picture of an edit that survives the view moving, so it stays on screen and
-	 * stays confirmable. */
-	const [linePreviewSource, setLinePreviewSource] = useState(null);
-	const linePreviewSourceRef = useRef(null);
-	// The preview motionUrl currently ON SCREEN — null means the source take is.
-	const [linePreviewUrl, setLinePreviewUrl] = useState(null);
-	const [linePreviewBusy, setLinePreviewBusy] = useState(false);
-	const [linePreviewError, setLinePreviewError] = useState("");
-	// Round trip of the last preview, in ms. Surfaced because "is this loop
-	// actually live?" is the question the number answers in one glance.
-	const [linePreviewMs, setLinePreviewMs] = useState(0);
-	const linePreviewSeedRef = useRef(null);
-	// Monotonic: a result whose token is stale was superseded or cancelled, and
-	// is discarded without ever reaching the viewport.
-	const linePreviewTokenRef = useRef(0);
-	const linePreviewAbortRef = useRef(null);
-	const linePreviewPendingRef = useRef(null);
-	const linePreviewTimerRef = useRef(0);
-	// The draft that actually REACHED the viewport, so a cancel knows whether
-	// there is anything to put back.
-	const linePreviewShownRef = useRef(null);
 	useEffect(castDomain.removeLegacyRootWaypoint, []);
 
 	// Shot trims also trim their local Rail Follow card once. Growing a shot
@@ -2548,31 +2170,22 @@ export default function App() {
 	// its latest objects and camera department envelope before React opens the
 	// destination room.
 	const activeSceneIdRef = useRef(activeSceneId);
-	const shotDocumentRef = useRef(null);
-	const actorStageRef = useRef(null);
+	// The shot document and the stage's cast are read from the stores when used,
+	// not rebuilt here: a render-time copy lagged a synchronous command by one
+	// render and moved the scene revision after its receipt (document-mirrors.js).
+	const [{ shotDocumentRef, actorStageRef }] = useState(() => createDocumentMirrors(appContext));
 	appContext.publishScenes(scenes);
 	activeSceneIdRef.current = activeSceneId;
-	shotDocumentRef.current = createShotAuthoringDocument({ shots, waypoints, frameCount: tlFrameCount });
-	// The motion layers: their IK edits (Pose mode, IK keys, range pins) ride
-	// into the saved stage below with each character, and a change to them is
-	// a reason to autosave.
+	// The motion layers (IK edits ride into the saved stage with each
+	// character): a change to them is a reason to autosave.
 	const motionLayers = appContext.storeDomain("motion")?.read() ?? null;
-	const ikEditsOf = (id) => {
-		const row = motionLayers?.find((layer) => layer.id === id);
-		if (!row || (!row.ikKeys?.length && !row.ikPins?.length)) return null;
-		return { keys: row.ikKeys, pins: row.ikPins ?? [], pinResiduals: row.ikPinResiduals ?? [] };
-	};
-	// sessionMotion is stripped: generated clips are session-only and far too
-	// heavy for the stage envelope; paths, prompt blocks and IK edits persist.
-	const stageCharacters = characters.map(({ sessionMotion, ...entry }) => ({ ...entry, ikEdits: ikEditsOf(entry.id) }));
 	actorStageRef.current = {
-		characters: stageCharacters,
 		hasCharSheet,
 		environmentImage,
 		shotAspect: shotAspectKey,
 		cameraPresetId,
 		sensorId,
-		keyLight,
+		keyLight, lighting,
 		// What this location IS and how it should look. Session state until #345:
 		// a reopened scene came back with another room's description.
 		environment,
@@ -2716,11 +2329,7 @@ export default function App() {
 		return () => { window.removeEventListener("cozyclay:agent-panel-toggle", toggle); window.removeEventListener("keydown", key); };
 	}, [embedMode]);
 	const projectHandleRef = useRef(null);
-	const projectMotionsRef = useRef(new Map());
-	// Loaded clips keep the same Uint8Array identity while they remain active.
-	// Reuse the expensive encoded record until a new byte buffer is supplied.
-	const motionEncodingCacheRef = useRef(new WeakMap());
-	const restoreEpochRef = useRef(0);
+	
 
 	const projectSnapshotRef = useRef("");
 	const projectStateRef = useRef(null);
@@ -2798,7 +2407,6 @@ export default function App() {
 			&& tutorialInitialSnapshotRef.current === collectProjectSnapshot("Tutorial");
 		if (seed) {
 			tutorialLoadingRef.current = true;
-			demoSeeded.current = true;
 			try {
 				const opened = await openStarterScene("city-block", "tutorial");
 				if (opened) {
@@ -2893,7 +2501,7 @@ export default function App() {
 		filmback,
 		// keyLight rides the live stage envelope: it is authored, undoable and
 		// patchable state, so every reader sees the body the save path writes.
-		stage: { shotAspect: shotAspectKey, cameraPresetId, sensorId, hasCharSheet, environmentImage, environment, style, hasEnvSheet, keyLight },
+		stage: { shotAspect: shotAspectKey, cameraPresetId, sensorId, hasCharSheet, environmentImage, environment, style, hasEnvSheet, keyLight, lighting },
 		timeline: { currentFrame: tlFrame, frameCount: tlFrameCount, fps: tlFps },
 		activeCharacterId,
 		partColours: partColoursEnabled ? PART_COLOURS : null,
@@ -2905,7 +2513,6 @@ export default function App() {
 		removeCharacter,
 		persistScenes,
 		openScene,
-		loadMotion,
 		// The framing-capture pair the agent commands call. Both are per-render
 		// closures (captureFramingPng sizes its canvas off the render's own
 		// shotOutput), so the ref must always hold THIS render's instance — a
@@ -3095,10 +2702,10 @@ export default function App() {
 
 	// These hooks are declared after the liveStateRef assignment above runs, so
 	// they join the live read model here — same render, no TDZ.
-	appContext.patchLive({ promptClips, setPromptClips, editPromptClips, setTlFrameCount });
+	appContext.patchLive({ setTlFrameCount });
 
 	// Dirty tracking: any divergence from the last saved file lights the dot.
-	useEffect(scenesDomain.refreshProjectDirty, [scenes, activeSceneId, workspaceLayout, customPoses, characters, shots, waypoints, promptClips, projectName, keyLight, sceneObjects, shotAspectKey, environmentImage, environment, style, hasEnvSheet, sensorId, tlFrameCount, workflowRevision]);
+	useEffect(scenesDomain.refreshProjectDirty, [scenes, activeSceneId, workspaceLayout, customPoses, characters, shots, waypoints, projectName, keyLight, sceneObjects, shotAspectKey, environmentImage, environment, style, hasEnvSheet, sensorId, tlFrameCount, workflowRevision]);
 
 	// The untrimmed take per CHARACTER. Trims are non-destructive views of the
 	// full take, so re-trimming and "restore full" always cut from the
@@ -3106,35 +2713,8 @@ export default function App() {
 	// ref would hand Subject 2's take to Subject 1 on the next switch.
 	const motionFullRef = useRef(new Map()); // charId -> untrimmed take
 
-	// Which ik tracks a preserve run would name in its editRanges, derived the
-	// same way runArdy derives them: the prompt-block schedule, the blocks that
-	// contain authored IK keys, the tracks keyed inside those blocks. The blocks
-	// TILE 0..clipFrames, so the union over the edited ones is just the union
-	// over the whole clip — blocks without keys contribute nothing either way.
-	// Empty means the request carries no `tracks` at all and the panel says
-	// nothing extra. Regenerating a take is the only clock that matters here, so
-	// clipFrames comes from the loaded take exactly as runArdy takes it.
-	const preserveEditedTracks = useMemo(() => {
-		if (!motion?.url || ikFrames.length === 0) return [];
-		const sourcePromptClips = promptClips
-			.filter((clip) => clip.text.trim())
-			.sort((a, b) => a.startFrame - b.startFrame);
-		if (sourcePromptClips.length === 0) return [];
-		const clipFrames = (motion.frames / motion.fps) * TIMELINE_FPS;
-		// A single block spanning the whole take is not a schedule, and without a
-		// schedule there are no edited blocks to attribute (runArdy's own rule).
-		if (buildPromptSchedule(sourcePromptClips, clipFrames, sourcePromptClips[0].text).length < 2) return [];
-		return ikTracksInRange(ikStateRef.current, ikFrames, 0, clipFrames);
-	}, [motion, promptClips, ikFrames]);
-	const preserveTracksLine = preserveTracksSummary(preserveEditedTracks);
+	
 
-	const multiModelFileRef = useRef(null);
-	const multiModelRunRef = useRef(0);
-	const multiModelObjectUrlRef = useRef(null);
-
-	 // idle | running | done | error
-
-	const photoPoseFileRef = useRef(null);
 
 	// Cast render props, memoized with Character itself (React.memo): during
 	// playback the playhead ticks 24 times a second, and a character whose
@@ -3203,20 +2783,18 @@ export default function App() {
 	}, [gizmoView, characters, activeChar.id]);
 
 	/* --------------------- per-character layer buffers ---------------------
-	 * waypoints / promptClips / motion above are the EDITING BUFFER of the
+	 * waypoints / motion above are the EDITING BUFFER of the
 	 * active character's animation layer. On a character switch the buffer is
 	 * committed back into the previous character's entry and the new one's
 	 * layer is loaded, so each cast member keeps its own schedule. The
 	 * generated clip is session-only; paths and prompt blocks persist in the
 	 * stage envelope via the characters array. */
-	const bufferRef = useRef({ waypoints: [], promptClips: [], motion: null, ik: null });
-	bufferRef.current = { waypoints, promptClips, motion, ik: ikStateRef.current };
+	const bufferRef = useRef({ waypoints: [], motion: null, ik: null });
+	bufferRef.current = { waypoints, motion, ik: ikStateRef.current };
 	const loadedLayerCharRef = useRef(activeChar.id);
 	const ikStatesRef = useRef(new Map()); // charId -> ikState, one per layer
 	useEffect(castDomain.switchActiveCharacterLayer, [activeChar.id]);
-	// Pre-playback bone snapshot; restoring it (after Character's pose effect
-	// has re-applied poseA) puts the rig back exactly where it was.
-	const restoreRef = useRef(null);
+	
 
 	const shotCamRef = useRef(null);
 	const captureRef = useRef(null);
@@ -3569,11 +3147,10 @@ export default function App() {
 			characters,
 			activeChar.id,
 			motion,
-			promptClips,
-			multiModelFootage?.frames,
+			null,
 		);
 		// Camera-only scenes still use their authored production duration. Once
-		// motion or prompt content exists, content is the authoritative record
+		// motion exists, content is the authoritative record
 		// range even if an older timeline count was left behind.
 		return contentExtent > 0 ? contentExtent : tlFrameCount;
 	}
@@ -4124,10 +3701,6 @@ export default function App() {
 		return captureFraming({ pos: { x: pos.x, y: pos.y, z: pos.z }, yaw: look.current.yaw, pitch: look.current.pitch, fovDeg });
 	}
 
-	/** The agent panel's Generate motion chip: the motion.generateFromVideo
-	 * action. Locked, the action is unavailable and never runs, so the chip shows
-	 * the AI motion card's lock line itself, as it always did. */
-
 	// What a framing capture says about the shot it came from: lens, delivery
 	// aspect, cast, cut range and the video model the shot is aimed at. Both
 	// capture paths (the live command and the embed message) attach this, so a
@@ -4171,7 +3744,6 @@ export default function App() {
 	// sidebar tabs. Every panel belongs to the thing that owns it: the scene
 	// owns what gets generated, the camera owns the lens, and a character owns
 	// its pose and its motion.
-	const isSceneSelection = selectedHierarchyId === "shot";
 	const isCameraSelection = selectedHierarchyId === "camera";
 	const isCharacterSelection = selectedHierarchyId === "characters"
 		|| selectedHierarchyId === "characterA"
@@ -4181,64 +3753,18 @@ export default function App() {
 	// for the part colours, and a dot on the trigger whenever the viewport is
 	// showing something other than the plain stage.
 	const partColoursChoice = partColoursEnabled ? partColoursMode : "off";
-	// Shaded part colours keep the stable per-part hues while preserving the
-	// surface lighting H3 uses to infer the character's volume and pose.
-	const i2vMotionSegmentationReady = partColoursEnabled && partColoursMode === "shaded";
-	const i2vMotionHasA = Boolean(i2vMotion.a);
-	const i2vMotionHasB = Boolean(i2vMotion.b);
-	const i2vMotionCameraMatch = i2vMotionHasA && i2vMotionHasB && framingDistance(i2vMotion.a.framing, i2vMotion.b.framing) <= 0.001;
-	const i2vMotionCameraLocked = i2vMotionHasA && !i2vMotionCameraUnlocked;
-	const i2vMotionCurrentCameraMatch = !i2vMotionHasA || framingDistance(i2vMotion.a.framing, captureCurrentFraming()) <= 0.001;
-	const i2vMotionStep = !i2vMotionSegmentationReady ? 1 : !i2vMotionHasA ? 2 : i2vMotionMode === "interpolate" && !i2vMotionHasB ? 3 : 4;
-	// The AI motion workflow is split into a viewport-side capture card and a wide
-	// authoring modal (i2v-motion-studio.jsx); both render from this one model
-	// and action set so they cannot drift.
-	const i2vMotionModel = {
-		i2vMotion,
-		mode: i2vMotionMode,
-		enabled: i2vMotionEnabled,
-		segmentationReady: i2vMotionSegmentationReady,
-		step: i2vMotionStep,
-		hasA: i2vMotionHasA,
-		hasB: i2vMotionHasB,
-		cameraMatch: i2vMotionCameraMatch,
-		cameraUnlocked: i2vMotionCameraUnlocked,
-		currentCameraMatch: i2vMotionCurrentCameraMatch,
-		framingActive: lookThroughShot && shotAspectKey === I2V_MOTION_SHOT_ASPECT,
-	};
-	const i2vMotionActions = {
-		setI2vMotion: motionDomain.setI2vMotion,
-		setMode: setI2vMotionMode,
-		enterFraming: enterI2vFraming,
-		markPose: markI2vPose,
-		clearPose: clearI2vPose,
-		clear: clearI2vMotion,
-		toggleCameraLock: () => setI2vMotionCameraUnlocked((value) => !value),
-		restoreCamera: restoreI2vCamera,
-		generate: (kind) => void generateI2vMotion(kind),
-		enableShaded: () => runStudioAction("view.setPartColours", { mode: "shaded" }),
-	};
 	const viewLooksActive = gridView || autoColor || partColoursEnabled || guideMode !== "off";
 	const rigSelection = parseRigNodeId(selectedHierarchyId);
 	const isRigSelection = rigSelection !== null;
-	const inspectorHasContent = isSceneSelection || isCameraSelection || isCharacterSelection || isRigSelection
+	// The scene row owns no settings of its own, so it leaves the empty-panel hint up rather than a blank column.
+	const inspectorHasContent = isCameraSelection || isCharacterSelection || isRigSelection
 		|| selectedHierarchyId === "environment" || selectedHierarchyId === "props" || selectedHierarchyId === "light" || Boolean(selectedSceneObject) || sculptMode;
 
-	useEffect(() => () => {
-		if (multiModelObjectUrlRef.current) URL.revokeObjectURL(multiModelObjectUrlRef.current);
-	}, []);
-
-	// Hosted-demo seed. A build served as static files has no ARDY sidecar, so
-	// a first-time visitor would otherwise land on a character standing still
-	// with no way to see generated motion. The clip below ships with the build
-	// and is loaded once, only when the bridge is absent and nothing has been
-	// loaded or generated yet. A local session with the bridge running is
-	// untouched.
-	const motionRefsRestored = useRef(false);
+	// Startup idle work, once.
+	const startupWarmed = useRef(false);
 	useEffect(() => {
-		if (motionRefsRestored.current) return;
-		motionRefsRestored.current = true;
-		restoreMotionRefs(startupStage.characters);
+		if (startupWarmed.current) return;
+		startupWarmed.current = true;
 		// Parse the thumbnail rigs during startup idle so the first pose-studio
 		// open starts rendering immediately instead of paying a 100ms+ FBX parse.
 		warmPoseThumbnails();
@@ -4246,64 +3772,21 @@ export default function App() {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
-	const demoSeeded = useRef(false);
-	// Latched on the first healthy probe: a session that has seen the sidecar is
-	// not the hosted demo, and a later failed probe is a blip, not "no bridge".
-	const bridgeSeenOk = useRef(false);
+	// The camera tutorial's seed (#209). startCameraTutorial arms
+	// tutorialSeedPending once the starter scene is applied, and a compiled walk
+	// (take v3) goes on as soon as that scene's character has a parsed rig: a
+	// state condition, not a timer. The compile runs in the worker; an edit that lands
+	// before it answers makes the job's fence refuse the install (set dressing, no error).
 	useEffect(() => {
-		const demoSeed = demoSeedGate(bridge, bridgeSeenOk.current);
-		bridgeSeenOk.current = demoSeed.bridgeSeenOk;
-		if (demoSeeded.current) return;
-		if (!activeRig || motion || motionBusy) return;
-		// A hosted-demo result link opens the app with ?motion=<url>. The value
-		// is gated by motionUrlFromQuery (same-origin or allowlisted https host
-		// only) and, unlike the shipped seed below, loads regardless of bridge
-		// state — the visitor followed a link whose whole point is this clip.
-		const queryMotion = motionUrlFromQuery(window.location.search, window.location.origin);
-		if (queryMotion) {
-			demoSeeded.current = true;
-			loadMotion(queryMotion, "").catch(() => {
-				/* a dead link degrades to the normal empty stage, not an error */
-			});
-			return;
-		}
-		// The seed dresses a visitor's first, unnamed stage and the starter set a
-		// `?scene=` launch always re-opens ("one character mid-walk"). A named
-		// project is the author's document: reloading it must never put the demo
-		// walk back on a character they deliberately left without a take.
-		if (loadProjectSession()?.name && !new URLSearchParams(window.location.search).get("scene")) { demoSeeded.current = true; return; }
-		if (!demoSeed.seed) return;
-		demoSeeded.current = true;
-		// Loaded, not played: the clip walks the subject out of the default
-		// framing, so autoplay would greet a first-time visitor with an empty
-		// room. Frame 0 is composed; PLAYBACK is one click away.
-		loadMotion(DEMO_MOTION_URL, DEMO_MOTION_PROMPT).catch(() => {
-			/* the seed is a nicety, never a failure the visitor must act on */
-		});
-	}, [bridge, activeRig, motion, motionBusy]);
-
-	// The camera tutorial's seed (#209). The hosted-demo seed above is gated on
-	// a missing bridge, which is why the tutorial used to open on an empty room
-	// in a local session. startCameraTutorial arms tutorialSeedPending once the
-	// starter scene is applied, and the same clip goes on regardless of bridge
-	// state as soon as that scene's character has a parsed rig — a state
-	// condition, not a timer, exactly like the seed above.
-	useEffect(() => {
-		if (!tutorialSeedPending || !activeRig || motionBusy) return;
+		if (!tutorialSeedPending || !activeRig) return;
 		const seedEpoch = tutorialSeedEpochRef.current;
-		if (seedEpoch === null || seedEpoch !== tutorialProjectEpochRef.current) {
-			tutorialSeedEpochRef.current = null;
-			setTutorialSeedPending(false);
-			return;
-		}
 		tutorialSeedEpochRef.current = null;
 		setTutorialSeedPending(false);
-		demoSeeded.current = true; // one seeded clip per session, whichever got here first
-		loadMotion(DEMO_MOTION_URL, DEMO_MOTION_PROMPT, undefined, null, activeChar.id, null, { tutorialEpoch: seedEpoch }).catch(() => {
-			/* the take is the tutorial's set dressing, never an error to act on */
-		});
+		if (seedEpoch === null || seedEpoch !== tutorialProjectEpochRef.current) return;
+		const spec = tutorialWalkSpec(activeChar); // the take is set dressing, never an error to act on
+		if (spec && runStudioAction("motion.compile", { characterId: activeChar.id, spec })) { setTlFrame(0); setTlPlaying(false); }
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [tutorialSeedPending, activeRig, motionBusy]);
+	}, [tutorialSeedPending, activeRig]);
 
 	// Drive every cast member from ITS OWN clip on the shared playhead. The
 	// active character's buffer motion and the stored session motions of the
@@ -4322,7 +3805,7 @@ export default function App() {
 	// clock. Recomputing both directions matters: deleting Subject 2 or
 	// shortening its take must pull the end back in instead of leaving the
 	// recorder with frozen tail frames (#80).
-	useEffect(shotsDomain.syncTimelineExtent, [characters, activeChar.id, motion, promptClips, multiModelFootage?.frames, shots]);
+	useEffect(shotsDomain.syncTimelineExtent, [characters, activeChar.id, motion, shots]);
 
 	/* ------------------------------ IK logic ------------------------------ */
 
@@ -4342,32 +3825,6 @@ export default function App() {
 		if (!chains) leaveIkMode();
 	}, [activeRig, activeCapabilities.ik]);
 
-	// Whether the collision capsules can be built for this rig at all. Bone
-	// lookups only — no mesh measurement — so it is cheap enough to hang off
-	// the rig identity and read straight in the render. A rig that resolves
-	// for IK can still miss the toes/spine the capsule table needs, so this is
-	// a SEPARATE question from `ikChains`: the two collision buttons disable
-	// on it rather than offering a click whose only possible answer is "not
-	// supported".
-	const collisionCleanupSupported = useMemo(() => activeCapabilities.physics && supportsCollisionCleanup(activeRig), [activeRig, activeCapabilities.physics]);
-
-	//
-
-	useEffect(() => {
-		physicsJobRef.current += 1;
-		physicsSourceCacheRef.current.value = null;
-		setPhysicsPreview(null);
-		setPhysicsOptions({ overrides: [], protectedFrames: [], strength: 1 });
-		setAutoPhysicsRunning(false);
-		autoPhysicsRunRef.current = null;
-		return () => { physicsJobRef.current += 1; };
-	}, [activeRig, motion, activeChar.x, activeChar.y, activeChar.z, activeChar.rot, activeChar.scale]);
-	useEffect(() => {
-		if (physicsPreview && physicsPreview.sourceStamp !== physicsKeyStamp(ikStateRef.current.keys)) {
-			setPhysicsPreview(null);
-		}
-	}, [ikTick, physicsPreview]);
-
 	// Keyed-pose playback: the IK layer's keyed bone rotations apply at the
 	// current frame whether or not IK edit mode is on — IK-authored keys are
 	// the source of truth (the user designs first/end keys and ARDY in-
@@ -4386,12 +3843,11 @@ export default function App() {
 		// Preview changes may re-run this effect without a playhead change.
 		// Always re-establish the motion base before adding a correction.
 		if (motion) poseMemberAtFrame(activeRig, motion, null, tlFrame);
-		const layer = pendingIkEdit?.characterId === activeChar.id ? pendingIkEdit.candidate
-			: physicsPreview && physicsShow ? physicsPreview.candidate : ikStateRef.current;
+		const layer = pendingIkEdit?.characterId === activeChar.id ? pendingIkEdit.candidate : ikStateRef.current;
 		if (ikMode || layer.keys.size > 0) {
 			ikEvaluate(ikChains, layer, tlFrame, ikFkJoints, motion ? IK_CORRECTION_BLEND_FRAMES : 0);
 		}
-	}, [ikMode, ikChains, activeRig, motion, posing, tlFrame, ikTick, ikFkJoints, physicsPreview, physicsShow, pendingIkEdit, activeChar.id]);
+	}, [ikMode, ikChains, activeRig, motion, posing, tlFrame, ikTick, ikFkJoints, pendingIkEdit, activeChar.id]);
 
 	// Re-seat the handles on the keyed pose when the FRAME changes with IK
 	// on — scrubbing to frame 39 shows that frame's interpolated pose AND
@@ -4409,11 +3865,10 @@ export default function App() {
 	}, [ikMode, ikChains, activeRig, motion, posing, tlFrame, ikTick, ikFkJoints]);
 
 	// QA hook: lets headless visual checks read the live rig/motion state
-	// (tools/ardy/visual-qa.mjs). Harmless in normal use.
+	// (test/motion3/qa-motion3-*-browser.mjs). Harmless in normal use.
 	useEffect(() => {
 	window.__cozyclay = {
-			runStudioAction,
-			runArdy: (options) => appContext.live.state.runArdy(options),
+			runStudioAction, setFrame: setTlFrame,
 			rigA: activeRig, motion, tlFrame, frameCount: tlFrameCount, playing: tlPlaying, ikMode, ikChains, ikFocus, contactRadii: ikChains?.values().next().value?.contactRadii ?? null, ik: ikStateRef.current,
 			rangePins, rangePinResiduals,
 			rangePinApplySpec: motionDomain.rangePinApplySpec,
@@ -4526,16 +3981,7 @@ export default function App() {
 			addSceneObject: (kind, placement = {}) => addSceneObject(kind, placement),
 			scrub: (frame) => setTlFrame(Math.max(0, Math.min(tlFrameCount - 1, Math.round(frame)))),
 			pause: () => setTlPlaying(false),
-			// Motion-trail QA surface: read the current trail policy and drive the
-			// same drag -> preview -> pending-edit path headless checks cannot reach
-			// through synthetic pointers reliably.
-			trail: { falloffFrames: trailFalloffFrames, falloffS: trailFalloffS, edit: trailEdit, tool: ikEditTool, visible: showTrails, activeTrackId: trailTrackFocus, visibleTracks: trailTrackFocus ? [trailTrackFocus] : null },
-			trailPoints: (jointName = "Hips") => jointTrailPoints(motion, jointName, { baseY: activeChar.y ?? 0, scale: activeChar.scale ?? 1 }),
-			trailEditApply: (grabFrame, delta) => {
-				onTrailDragStart({ track: "hips", grabFrame });
-				onTrailDragPreview({ track: "hips", grabFrame, delta });
-				onTrailDragEnd({ track: "hips", grabFrame, delta });
-			},
+			
 			// QA-only IK drag seam: resolves the same production solve/end path as
 			// the viewport manipulator, with a deterministic world-space offset.
 			ikPreviewApply: (track = "leftHand", offset = { x: 0.02, y: 0, z: 0 }) => {
@@ -4546,53 +3992,11 @@ export default function App() {
 				ikDragEnd();
 				return true;
 			},
-			trailRegenerate: runTrailRegeneration,
-			// Fix-collisions QA surface: live penetration readout for headless
-			// checks; the fix itself runs through the buttons / runFixCollisions.
-			// null (not []) on an unsupported rig, so a check can tell "the tool
-			// cannot describe this skeleton" from "this pose is clean".
-			// EXTERNAL blockers ride this readout too, so a headless check can see
-			// `leftHand×obj:chair` / `leftHand×char:subject-2:torso` and not just
-			// self-collisions. A blocker hit has no `def` on its side of the pair
-			// — it is not a capsule of THIS rig — so the label falls back to the
-			// blocker's own namespaced id.
-			fcDetect: () => {
-				const capsules = activeRig ? buildCollisionCapsules(activeRig) : null;
-				if (!capsules) return null;
-				const label = (side) => side?.def?.id ?? side?.id ?? "?";
-				return detectPenetrations(capsules, { blockers: externalBlockers(tlFrame) })
-					.map((p) => ({ pair: `${label(p.a)}×${label(p.b)}`, depth: p.depth }));
-			},
-			// What those `obj:` / `char:` names stand for, as plain numbers: the
-			// boxes and capsules the fixer is being asked to keep the body out of.
-			fcBlockers: () => blockerSummary(externalBlockers(tlFrame)),
-			// AutoPhysics QA surface: the centre of mass of the CURRENT pose, so
-			// a headless check can sample the arc before/after the button press.
-			apCom: () => {
-				const com = activeRig ? computeCenterOfMass(activeRig) : null;
-				return com ? { x: com.x, y: com.y, z: com.z } : null;
-			},
-			apFeet: () => {
-				const points = activeRig ? markerPositions(activeRig) : null;
-				return points ? Object.fromEntries(Object.entries(points).map(([name, point]) => [name, { x: point.x, y: point.y, z: point.z }])) : null;
-			},
-			apRun: runAutoPhysics,
-			physics: { preview: physicsPreview, show: physicsShow, running: autoPhysicsRunning, options: physicsOptions },
-			platformFit: {
-				running: platformFitRunning, applied: platformFitApplied, last: platformFitLast,
-				run: () => Promise.resolve(motionDomain.run('motion.platformFit.run', { characterId: activeChar?.id })).then(receipt => receipt.output),
-				remove: () => Promise.resolve(motionDomain.run('motion.platformFit.remove', { characterId: activeChar?.id })).then(receipt => receipt.output),
-			},
-			apOptions: changePhysicsOptions,
 			preview,
 			pathDraw,
 		};
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-		// sceneObjects/rigs/characters ride the deps because fcDetect/fcBlockers
-		// close over them: a stale closure would report the set as it was two
-		// edits ago — and, after an undo that removes a subject, would keep
-		// reporting the ghost's capsules.
-	}, [activeRig, motion, tlFrame, tlFrameCount, ikMode, ikChains, ikFocus, ikTick, charA, rangePins, rangePinResiduals, committedIkEdits, waypoints, lookThroughShot, selectedSceneObject, sceneObjects, rigs, characters, pathPointIndex, preview, posing, playMode, pathDraw, trailEdit, trailTrackFocus, pendingIkEdit, trailFalloffFrames, trailFalloffS, ikEditTool, showTrails, physicsPreview, physicsShow, physicsOptions, autoPhysicsRunning, platformFitRunning, platformFitLast, platformFitApplied]);
+	}, [activeRig, motion, tlFrame, tlFrameCount, ikMode, ikChains, ikFocus, ikTick, charA, rangePins, rangePinResiduals, committedIkEdits, waypoints, lookThroughShot, selectedSceneObject, sceneObjects, rigs, characters, pathPointIndex, preview, posing, playMode, pathDraw, pendingIkEdit, ikEditTool]);
 	// QA hook (plan §6.5): exposes history depth and the present === objects
 	// invariant so the browser suite can assert undo entry counts directly.
 	// Reads live store state at call time; re-registered after every render.
@@ -4621,16 +4025,7 @@ export default function App() {
 		};
 	});
 
-	// On clear, restore the exact pre-playback bone rotations. This runs in
-	// the parent AFTER Character's pose effect (children flush first), so even
-	// a pose change made during playback cannot leak into the restored rig.
-	useEffect(() => {
-		if (motion) return;
-		const saved = restoreRef.current;
-		if (!saved) return;
-		restoreRef.current = null;
-		restorePlaybackBones(saved.rig, saved.bones);
-	}, [motion]);
+	
 
 	const playbackSceneBase = useMemo(() => ({
 		frameCount: tlFrameCount,
@@ -4677,32 +4072,8 @@ export default function App() {
 	// the follow controller and the Top-View display.
 	const railCurve = useMemo(() => (cameraRail ? buildRail(cameraRail) : null), [cameraRail]);
 
-	const followTrack = useMemo(() => {
-		if (!subjectTrack) return null;
-		const yaw = (charA.rot * Math.PI) / 180;
-		const combined = new Array(subjectTrack.length).fill(null);
-		for (let index = 0; index < shots.length; index += 1) {
-			const shot = shots[index];
-			const camera = createCameraBlock(shot.camera);
-			if (camera.mode === "keys") continue;
-			const start = shot.startFrame;
-			const end = Math.min(subjectTrack.length, shot.endFrame + 1);
-			const subjectSlice = subjectTrack.slice(start, end);
-			const params = { ...camera.followCam, craneHeight: camera.craneHeight, dollyTiming: camera.dollyTiming, initialDir: { x: Math.sin(yaw), z: Math.cos(yaw) } };
-			const rail = camera.mode === "rail" ? buildRail(camera.cameraRail) : null;
-			if (rail) {
-				const schedule = resolveRailSchedule({ railFollow: camera.railFollow, cameraRail: camera.cameraRail, frameCount: subjectSlice.length });
-				if (schedule.kind !== RAIL_SCHEDULE_RANGE && schedule.kind !== RAIL_SCHEDULE_LEGACY) continue;
-				const railSlice = subjectSlice.slice(schedule.startFrame, schedule.endFrame + 1);
-				const track = buildRailFollowTrack(railSlice, tlFps, rail, params);
-				track.forEach((sample, offset) => { combined[start + schedule.startFrame + offset] = sample; });
-			} else {
-				const track = buildFollowTrack(subjectSlice, tlFps, params);
-				track.forEach((sample, offset) => { combined[start + offset] = sample; });
-			}
-		}
-		return combined;
-	}, [shots, subjectTrack, tlFps, charA.rot]);
+	// A rail shot with an aim holds its cast (or a world point) instead of the subject.
+	const followTrack = useShotCameraTracks({ shots, subjectTrack, subjectId: charA.id, fps: tlFps, yawDeg: charA.rot, filmback, characters, objects: sceneObjects, frameCount: tlFrameCount, activeId: activeChar.id, motion });
 
 	const playbackScene = useMemo(() => ({
 		...playbackSceneBase,
@@ -4774,13 +4145,8 @@ export default function App() {
 		return { min, max, warn: min < 0.5 || max > 3 };
 	}, [activeChar.x, activeChar.z, tlFps, waypoints]);
 
-	const stateBadge = ardyRunning
-		? { label: ko("GENERATING", "생성 중"), kind: "generating" }
-		: motion
-			? { label: ko("PLAYBACK", "재생"), kind: "playback" }
-			: waypointMode
-				? { label: ko("ROOT PATH", "루트 경로"), kind: "root" }
-				: null;
+	// A loaded take needs no badge: its clip on the Body lane already says so.
+	const stateBadge = !motion && waypointMode ? { label: ko("ROOT PATH", "루트 경로"), kind: "root" } : null;
 
 	function bufferToPng(buffer, output = shotOutput, decorate = null) {
 		const canvas = document.createElement("canvas");
@@ -5050,1783 +4416,6 @@ export default function App() {
 		return executeExportRequest(frameJob.request);
 	}
 
-	// Keep the optional sidecar live instead of freezing its startup state.
-	// Developers commonly open the studio first and start `npm run bridge`
-	// second; a one-shot failed probe left Generate disabled until reload.
-	useEffect(() => {
-		let alive = true;
-		let inflight = null;
-		// The poll answer is almost always identical to the last one; keeping the
-		// previous object identity skips a full App re-render per poll. Each of
-		// those renders costs ~80ms of main thread on this tree, which read as a
-		// periodic hitch while orbiting/flying the camera.
-		const refreshBridge = () => {
-			if (inflight) return inflight;
-			inflight = checkBridge().then((state) => {
-				if (!alive) return;
-				if (state.ok) trackFeature("mcp_connected");
-				setBridge((previous) => JSON.stringify(previous) === JSON.stringify(state) ? previous : state);
-				setLineEditBackend(hasLineEditCapability(state));
-			}).finally(() => { inflight = null; });
-			return inflight;
-		};
-		bridgeRefreshRef.current = refreshBridge;
-		refreshBridge();
-		const id = window.setInterval(refreshBridge, BRIDGE_RECHECK_MS);
-		window.addEventListener("focus", refreshBridge);
-		return () => {
-			alive = false;
-			window.clearInterval(id);
-			window.removeEventListener("focus", refreshBridge);
-		};
-	}, []);
-
-	// QA/programmatic requests must use the current render's same generation path.
-	appContext.patchLive({ runArdy: runArdy });
-
-	/* ======================= line editing (contract C6) =======================
-	 * Grab the joint's own motion path on the viewport and pull it; the joint
-	 * then follows the pulled path exactly.
-	 *
-	 * Four invariants hold this together and every function below serves one
-	 * of them:
-	 *   1. THE CURVE AND THE CAMERA ARE ONE OBJECT. uv only mean something
-	 *      through the lens they were projected with, so the camera is captured
-	 *      when the curve is built, stored next to it, and the pair is rebuilt
-	 *      together when the view moves. Nothing re-reads old uv through a new
-	 *      lens.
-	 *   2. THE EDIT IS A DEFORMATION OF THE TAKE, NOT A REPLACEMENT OF IT. The
-	 *      curve starts as the joint's current trajectory and the falloff pins
-	 *      its ends there, so the first and last constrained frames always
-	 *      agree with the take. That is the seam fix GP2 measured: 8.0x median
-	 *      frame delta for an arbitrary line, 1.09x when the ends sit on the
-	 *      joint's own path.
-	 *   3. THE OVERLAY NEVER TOUCHES THE SCENE GRAPH. It is a plain 2D canvas
-	 *      stacked on the stage, so an edit cannot disturb playback, picking
-	 *      or the render loop, and it works identically in every view mode.
-	 *   4. THE REQUEST IS ITS OWN RUN. C6 makes lineEdit exclusive with
-	 *      preserve/waypoints/segments/motionEdit, so runLineEdit builds a
-	 *      dedicated body instead of decorating runArdy's. The WIRE SHAPE is
-	 *      untouched by the interaction change: points2d is still a <=64-point
-	 *      viewport-normalized polyline. */
-
-	/** The loaded take's length on the TIMELINE clock — C6's frameRange is in
-	 * app clip frames and, unlike waypoints or motionEdit, is never converted
-	 * to the bridge clock. */
-	const lineClipFrames = motion?.frames ?? 0;
-	/** THE TAKE, as opposed to what is on screen. While a line-edit preview is
-	 * showing, `motion` is the draft and this is still the take the draft was
-	 * drafted FROM — so an edit sources the take, the version strip keeps
-	 * highlighting the take's own chip, and a preview can never quietly become
-	 * the thing everything else is built on. With no preview the two are the
-	 * same url, which is why every call site can read this one unconditionally. */
-	const takeSourceUrl = linePreviewSource?.url ?? motion?.url ?? null;
-	/** The authored range, or the whole clip when the user has not narrowed it.
-	 * Re-derived rather than stored so loading a different take cannot leave a
-	 * range pointing past the end of the new one. */
-	const lineEditRange = useMemo(() => {
-		if (!(lineClipFrames > 1)) return null;
-		const start = Math.max(0, Math.min(lineRange?.startFrame ?? 0, lineClipFrames - 2));
-		const end = Math.max(start + 2, Math.min(lineRange?.endFrame ?? lineClipFrames, lineClipFrames));
-		return { startFrame: start, endFrame: end };
-	}, [lineRange, lineClipFrames]);
-
-	/* ---------------------------- the pins edit -----------------------------
-	 * A pins edit is derived, not stored: the pins ARE the payload and the range
-	 * follows from them (pinsFrameRange), so there is no second copy of either
-	 * to keep in sync. `lineEditPayload` is what every downstream call site
-	 * takes — Generate, the preview, the request builder — and it is the one
-	 * place the two gestures meet. */
-	const linePinRange = useMemo(
-		() => (linePins.length ? pinsFrameRange(linePins, lineClipFrames) : null),
-		[linePins, lineClipFrames],
-	);
-	const linePinEdit = useMemo(
-		() => (linePins.length && linePinRange ? { pins: linePins, frameRange: linePinRange } : null),
-		[linePins, linePinRange],
-	);
-	/** The edit in hand, whichever gesture made it. Null means "nothing to
-	 * send", which is exactly what the Generate gate asks. */
-	const lineEditPayload = lineCurve ?? linePinEdit;
-
-	/** The joint's WORLD position at one frame, from the same trail sampler the
-	 * curve is projected from — so a pin and the curve can never disagree about
-	 * where the joint is. Null when there is no take, no trail or no such
-	 * frame. */
-	function lineJointWorldAt(frame) {
-		const jointName = TRAIL_EFFECTOR_JOINTS[lineTrack];
-		if (!motion || !jointName) return null;
-		const trail = jointTrailPoints(motion, jointName, { baseY: activeChar.y ?? 0, scale: activeChar.scale ?? 1 });
-		const index = Math.max(0, Math.min(Math.trunc(frame) || 0, motion.frames - 1));
-		if (!trail || index * 3 + 2 >= trail.length) return null;
-		return [trail[index * 3], trail[index * 3 + 1], trail[index * 3 + 2]];
-	}
-
-	/** Every pin as a WORLD point, for the overlay. Pins are stored in clip
-	 * space (that is what the wire wants); drawing them means undoing the
-	 * conversion, which is jointTrailPoints' own transform applied to one
-	 * point. Kept here rather than storing both spellings: two stored copies of
-	 * a coordinate is how a pin ends up drawn somewhere it was not placed. */
-	function linePinWorld(pin) {
-		if (!motion) return null;
-		const basis = { baseY: activeChar.y ?? 0, scale: activeChar.scale ?? 1 };
-		// Forward transform, mirroring motion-trail's jointTrailPoints.
-		const clipToWorld = (p) => {
-			const radians = ((Number.isFinite(motion.rotationDeg) ? motion.rotationDeg : 0) * Math.PI) / 180;
-			const cos = Math.cos(radians);
-			const sin = Math.sin(radians);
-			const anchorFrame = Math.max(0, Math.min(motion.anchorFrame || 0, Math.max(0, motion.frames - 1)));
-			const rootX = motion.posedJoints?.[anchorFrame * 27 * 3] ?? 0;
-			const rootZ = motion.posedJoints?.[anchorFrame * 27 * 3 + 2] ?? 0;
-			const anchorX = Number.isFinite(motion.anchorX) ? motion.anchorX : 0;
-			const anchorZ = Number.isFinite(motion.anchorZ) ? motion.anchorZ : 0;
-			const dx = p[0] - rootX;
-			const dz = p[2] - rootZ;
-			return [
-				anchorX + (dx * cos + dz * sin) * basis.scale,
-				basis.baseY + p[1] * basis.scale,
-				anchorZ + (-dx * sin + dz * cos) * basis.scale,
-			];
-		};
-		return clipToWorld(pin.position);
-	}
-
-	/** Drop the pins, and say so. Called when a stroke or a drag commits — the
-	 * two gestures are exclusive, and a silently discarded pin is worse than a
-	 * refused one. */
-	function clearLinePins({ toast = true } = {}) {
-		if (!linePins.length) return;
-		setLinePins([]);
-		if (toast) {
-			setToast(ko(
-				"Pins cleared — one edit is one gesture, and this one is now the path",
-				"찍은 순간을 지웠어요 — 한 번의 편집은 한 가지 방식이라, 지금은 궤적 편집이에요",
-			));
-		}
-	}
-
-	/** Has the user pulled anything yet? The Generate gate, and the reason the
-	 * panel can say "pull first" instead of shipping a no-op edit. It is just
-	 * the state's existence: pointerup installs a curve only when the pull
-	 * actually moved something and clears it otherwise, so "there is a curve
-	 * object" and "there is an edit" are the same fact. */
-	const lineCurveDirty = !!lineEditPayload;
-	/** Frames of the range whose joint has no image (behind the lens or out of
-	 * frame). Those points cannot be grabbed and are dropped from the payload,
-	 * so the count is worth showing rather than leaving as a mystery gap. */
-	const lineCurveHidden = useMemo(
-		() => (lineCurve ? lineCurve.original.reduce((count, point) => count + (isCurvePointOnScreen(point) ? 0 : 1), 0) : 0),
-		[lineCurve],
-	);
-	/** How many points the box will actually receive — the curve is downsampled
-	 * to MAX_LINE_POINTS, and seeing the number keeps "64" from being a
-	 * surprise buried in the contract. */
-	const lineCurvePointCount = useMemo(
-		() => (lineCurve ? Math.min(MAX_LINE_POINTS, lineCurve.original.length - lineCurveHidden) : 0),
-		[lineCurve, lineCurveHidden],
-	);
-	/** The frames the edit in hand actually covers. A DRAWN curve carries the
-	 * window its stroke matched (which is also what goes on the wire); a dragged
-	 * one has always covered the panel's range. Shown rather than left implicit
-	 * because auto-ranging means the artist did not choose these numbers and
-	 * deserves to see what the stroke was read as. endFrame is exclusive on the
-	 * wire and inclusive to a human, hence the -1. */
-	const lineEditFrom = lineCurve?.frameRange?.startFrame ?? lineEditRange?.startFrame ?? 0;
-	const lineEditTo = (lineCurve?.frameRange?.endFrame ?? lineEditRange?.endFrame ?? 0) - 1;
-
-	/** Change the influence radius. A live drag is re-derived from its snapshot
-	 * rather than left showing the old falloff, which is what makes the slider
-	 * legible: drag, then widen, and the same pull spreads under the finger. */
-	function changeLineRadius(next) {
-		const radius = Math.max(DRAG_RADIUS_MIN, Math.min(DRAG_RADIUS_MAX, Math.round(Number(next) || 0)));
-		setLineRadius(radius);
-		const drag = lineDragRef.current;
-		if (!drag) return;
-		// The drag carries its own radius so the window-level pointermove (which
-		// closed over the value at grab time) keeps agreeing with what is drawn.
-		drag.radius = radius;
-		drag.live = dragCurve(drag.snapshot, drag.index, drag.du, drag.dv, radius);
-	}
-
-	/** Which camera actually draws the MAIN pane right now, and the exact
-	 * rectangle it draws into.
-	 *
-	 * This mirrors DualRender's own branch order on purpose: the pane holds
-	 * different cameras in different modes, and the letterboxed shot views draw
-	 * into a fitAspect sub-rect rather than the whole pane. Measuring the curve
-	 * against the pane instead of the IMAGE would shift every point by the
-	 * width of the black bars. Plan and IK views return null — the plan camera
-	 * is orthographic (no pinhole intrinsics to send) and IK mode is mutually
-	 * exclusive with this one anyway. Rects are in CLIENT coordinates, which is
-	 * what pointer events speak. */
-	function lineEditPane() {
-		const pane = mainPaneRef.current;
-		if (!pane) return null;
-		const box = pane.getBoundingClientRect();
-		if (!(box.width >= 2 && box.height >= 2)) return null;
-		const rect = { x: box.left, y: box.top, w: box.width, h: box.height };
-		if (planIsMain || ikMode) return null;
-		if (playMode || lookThroughShot) {
-			const camera = shotCamRef.current;
-			return camera ? { camera, rect: fitAspect(rect, shotOutput.aspect) } : null;
-		}
-		const camera = editorCamRef.current;
-		return camera ? { camera, rect } : null;
-	}
-
-	/** Freeze the pane's camera into the C6 block. Returns null rather than
-	 * throwing when the camera is not a settled perspective camera — a refusal
-	 * here means "do not send", never "send something approximate". */
-	function captureLineCamera(pane) {
-		const camera = pane?.camera;
-		if (!camera?.isPerspectiveCamera) return null;
-		camera.updateMatrixWorld();
-		const inverse = new THREE.Matrix4().copy(camera.matrixWorld).invert();
-		try {
-			return cameraToC6({
-				fovDeg: camera.fov,
-				aspect: camera.aspect,
-				matrixWorldInverse: [...inverse.elements],
-				width: pane.rect.w,
-				height: pane.rect.h,
-			});
-		} catch (err) {
-			// The only way here is a pane whose aspect disagrees with the
-			// projection matrix, i.e. a frame drawn before DualRender settled.
-			// Refusing is correct; the next paint or pointerup retries.
-			console.warn("line edit: camera capture refused —", err.message);
-			return null;
-		}
-	}
-
-	/** Has the live view moved out from under a COMMITTED edit?
-	 *
-	 * The comparison is the same cameraDrifted the old watcher used; what changed
-	 * is what a `true` MEANS. It is not "this edit is invalid" — the edit carries
-	 * the lens it was authored through and goes on the wire with it, so it stays
-	 * exactly as applicable as it was. It is "the painted line can no longer be
-	 * drawn where it belongs", because reprojecting the edited uv through the new
-	 * camera would need a depth that a 2D edit does not have.
-	 *
-	 * Called both from the 4 Hz watcher (which owns the panel's state) and
-	 * synchronously at pointerdown (which cannot afford to be a quarter second
-	 * behind) — one spelling, so the paint, the hint and the refusal can never
-	 * disagree about which state the mode is in. */
-	function lineCurveDrifted(pane, edit = lineCurve) {
-		if (!edit) return false;
-		const live = captureLineCamera(pane);
-		// An unmeasurable pane is not a moved view — a frame drawn before
-		// DualRender settled must not flicker the line out or refuse a press.
-		if (!live) return lineDriftRef.current;
-		return cameraDrifted(live, edit.camera);
-	}
-
-	/** The one sentence the drifted state says — in the panel, and in the toast
-	 * that refuses a new gesture. ONE spelling, because a hint that disagreed
-	 * with the refusal would read as two different problems. */
-	function lineDriftHint() {
-		return ko(
-			"The view moved — the pending edit still applies; the dashed line is that same edit seen from here. Return toward the original view to grab it again, or Generate/undo from here.",
-			"시점이 움직였어요 — 편집한 궤적은 그대로 적용되며, 점선은 같은 궤적을 지금 시점에서 본 모습입니다. 다시 잡으려면 원래 시점 쪽으로 돌아가고, 지금 이 상태에서 생성하거나 되돌려도 됩니다.",
-		);
-	}
-
-	/** The drifted ghost, RE-ANCHORED: lift the committed edit into world space
-	 * with the trail's own per-frame depth and see it through the LIVE lens, so
-	 * the dashed line hugs the trajectory instead of floating wherever the old
-	 * uv happen to land in the new view. Returns null when the trip cannot be
-	 * made (no live lens yet, no motion, a pins-only edit with no curves) — the
-	 * caller then paints the authored uv as before, which is at least honest
-	 * about being stale. Runs per frame like the rest of the painter; it is the
-	 * same few hundred pinhole projections projectLineCurve already pays. */
-	function reprojectDriftedEdit(pane, edit) {
-		const live = captureLineCamera(pane);
-		const jointName = TRAIL_EFFECTOR_JOINTS[lineTrack];
-		if (!live || !jointName || !motion) return null;
-		const trail = jointTrailPoints(motion, jointName, { baseY: activeChar.y ?? 0, scale: activeChar.scale ?? 1 });
-		if (!trail) return null;
-		const original = reprojectCurveWorld(edit.original, trail, edit.camera, live);
-		const edited = reprojectCurveWorld(edit.edited, trail, edit.camera, live);
-		if (!original || !edited) return null;
-		return { original, edited };
-	}
-
-	/** Project the joint's trail for the current track and range through the
-	 * pane's LIVE camera. `{ camera, curve }`, or null when the view cannot
-	 * supply a usable lens right now — a refusal means "no curve", never "a
-	 * curve through some other camera".
-	 *
-	 * Deliberately the same sampler and the same arguments the old ghost line
-	 * used (jointTrailPoints + TRAIL_EFFECTOR_JOINTS), so the curve the user
-	 * grabs is the trajectory they were previously told to trace by hand.
-	 *
-	 * Cheap ON PURPOSE: while nothing has been pulled this runs once per
-	 * animation frame, and that is exactly what lets the path FOLLOW the camera
-	 * instead of fighting it. A few hundred pinhole projections is nothing
-	 * beside the WebGL frame it is drawn over. */
-	function projectLineCurve(pane, { camera: reuseCamera = null, frameRange = null } = {}) {
-		if (!pane || !motion) return null;
-		const range = frameRange ?? lineEditRange;
-		if (!range) return null;
-		const camera = reuseCamera ?? captureLineCamera(pane);
-		const jointName = TRAIL_EFFECTOR_JOINTS[lineTrack];
-		if (!camera || !jointName) return null;
-		const trail = jointTrailPoints(motion, jointName, { baseY: activeChar.y ?? 0, scale: activeChar.scale ?? 1 });
-		if (!trail) return null;
-		const curve = projectTrailCurve({ trail, frameRange: range, camera });
-		if (!curve || curve.length < MIN_LINE_POINTS) return null;
-		return { camera, curve };
-	}
-
-	/** Repaint the whole overlay from scratch: the drawable frame, the joint's
-	 * ORIGINAL trajectory as a faint reference once there is something to
-	 * compare it against, the EDITED (or live) curve as the hero with its
-	 * draggable markers, and — while a grab is live — the span the falloff is
-	 * actually moving. Cheap enough to run per pointermove and stateless, so
-	 * there is no partial-repaint bug class to have.
-	 *
-	 * This is also where the "follow the camera" half of the camera policy
-	 * lives: with no edit in hand the curve is re-projected from the CURRENT
-	 * lens every frame, so orbiting drags the path around with the render. The
-	 * projection is cached in lineLiveRef for the hit test, which therefore
-	 * never has to re-derive what was just drawn. */
-	function paintLineOverlay() {
-		const canvas = lineOverlayRef.current;
-		const stage = stageRef.current;
-		if (!canvas || !stage) return;
-		const stageBox = stage.getBoundingClientRect();
-		const dpr = Math.min(2, window.devicePixelRatio || 1);
-		const width = Math.max(1, Math.round(stageBox.width));
-		const height = Math.max(1, Math.round(stageBox.height));
-		if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) {
-			canvas.width = Math.round(width * dpr);
-			canvas.height = Math.round(height * dpr);
-		}
-		const ctx = canvas.getContext("2d");
-		if (!ctx) return;
-		ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-		ctx.clearRect(0, 0, width, height);
-		const pane = lineEditPane();
-		if (!pane) {
-			lineLiveRef.current = null;
-			return;
-		}
-		// Stage-relative, because the canvas is stretched over the stage while
-		// the pane rect is measured in client coordinates.
-		const ox = pane.rect.x - stageBox.left;
-		const oy = pane.rect.y - stageBox.top;
-
-		// The drawable frame: the letterboxed shot views draw into less than the
-		// full pane, and a curve point outside this box is outside 0..1 and
-		// cannot be sent. Saying so with a border beats clamping silently.
-		ctx.save();
-		ctx.setLineDash([6, 5]);
-		ctx.strokeStyle = "rgba(255, 255, 255, .35)";
-		ctx.lineWidth = 1;
-		ctx.strokeRect(ox + .5, oy + .5, pane.rect.w - 1, pane.rect.h - 1);
-		ctx.restore();
-
-		// Which curve is on screen right now, in priority order: the one under
-		// the finger, the committed edit, or a fresh projection through the live
-		// camera. The live deformation has to win over the committed one because
-		// a pointermove writes only lineDragRef — reading state here would
-		// freeze the curve under the finger until pointerup.
-		const drag = lineDragRef.current;
-		const edit = drag ? { camera: drag.camera, original: drag.snapshot, edited: drag.live } : lineCurve;
-		let original = null;
-		let edited = null;
-		// DETACHED. The committed edit was authored through its own lens; once the
-		// live view has left that lens the same uv name different rays, so the
-		// line is painted as a ghost — dashed, dim, no halo and no grab handles —
-		// rather than drawn confidently in the wrong place or silently reprojected
-		// (there is no depth to reproject it with). Nothing is discarded: the edit,
-		// its preview and the Generate button all still run off the snapshot.
-		// Computed HERE, per frame, rather than read off the 4 Hz watcher's state,
-		// so the line detaches the instant the view moves instead of a quarter
-		// second later. Never while a gesture is live — a drag paints its own
-		// snapshot under the finger and mid-gesture drift is a different rule.
-		let ghost = false;
-		if (edit) {
-			// An edit pins the curve to the lens it was authored through; the
-			// cached live projection would disagree with it, so it is dropped
-			// rather than left to go stale.
-			lineLiveRef.current = null;
-			original = edit.original;
-			edited = edit.edited;
-			ghost = !drag && lineCurveDrifted(pane, edit);
-			// A drifted line is still WORLD-anchored through the trail's depth, so
-			// draw it where the edit actually sits under the live lens rather than
-			// at its stale authored uv. Falls back to the authored uv when the
-			// re-anchoring cannot run (see reprojectDriftedEdit).
-			if (ghost) {
-				const anchored = reprojectDriftedEdit(pane, edit);
-				if (anchored) ({ original, edited } = anchored);
-			}
-		} else {
-			const live = projectLineCurve(pane);
-			lineLiveRef.current = live;
-			if (!live) { delete stage.dataset.lineDrift; return; }
-			edited = live.curve;
-		}
-		// The CDP/e2e-visible handle for "the line is detached from this view".
-		// On the stage rather than in React state because it has to be true on
-		// the frame it becomes true, and this painter is the only thing that runs
-		// on every frame.
-		if (ghost) stage.dataset.lineDrift = "true";
-		else delete stage.dataset.lineDrift;
-		const pointPx = (point) => [ox + point.u * pane.rect.w, oy + point.v * pane.rect.h];
-		/** Trace a frame-indexed curve, breaking the path at every null — a
-		 * frame whose joint is behind the lens has no image, and joining across
-		 * it would draw a straight line through the middle of the screen. */
-		const traceCurve = (curve, from = 0, to = curve.length - 1) => {
-			ctx.beginPath();
-			let started = false;
-			for (let index = Math.max(0, from); index <= Math.min(curve.length - 1, to); index += 1) {
-				const point = curve[index];
-				if (!point) { started = false; continue; }
-				const [px, py] = pointPx(point);
-				if (started) ctx.lineTo(px, py);
-				else ctx.moveTo(px, py);
-				started = true;
-			}
-			ctx.stroke();
-		};
-
-		ctx.save();
-		ctx.lineJoin = "round";
-		ctx.lineCap = "round";
-		// Everything from here down to the pins is the CURVE, and the curve is the
-		// one thing a moved view makes unplaceable, so the whole block fades
-		// together. The pins below deliberately do not: they are world-space and
-		// are re-projected through the live lens on every repaint.
-		if (ghost) ctx.globalAlpha = .3;
-
-		// (1) The ORIGINAL trajectory, faint, and ONLY while there is an edit to
-		// compare it with. It used to be the instruction ("draw something like
-		// this"); now it is a reference — how far the pull has taken the joint
-		// from where the take put it. Unedited it would sit exactly under the
-		// hero and just fatten the line.
-		if (original) {
-			ctx.setLineDash([7, 6]);
-			ctx.strokeStyle = "rgba(0, 20, 40, .45)";
-			ctx.lineWidth = 3;
-			traceCurve(original);
-			ctx.strokeStyle = "rgba(120, 205, 255, .5)";
-			ctx.lineWidth = 1.5;
-			traceCurve(original);
-			ctx.setLineDash([]);
-		}
-
-		// (2) The curve in hand — the hero, and literally what gets sent. Two
-		// passes: a dark halo so it reads on bright floors and skin tones alike,
-		// then the glowing yellow the eye follows. GHOSTED the halo and the glow
-		// both go: a detached line must not look like something you can grab, and
-		// the dash says "this is where it was, not where it is".
-		if (!ghost) {
-			ctx.strokeStyle = "rgba(40, 24, 0, .8)";
-			ctx.lineWidth = 9;
-			traceCurve(edited);
-			ctx.shadowColor = "rgba(255, 210, 61, .9)";
-			ctx.shadowBlur = 10;
-		} else {
-			ctx.setLineDash([3, 7]);
-		}
-		ctx.strokeStyle = "#ffd23d";
-		ctx.lineWidth = ghost ? 2 : 4.5;
-		traceCurve(edited);
-		ctx.shadowBlur = 0;
-		ctx.setLineDash([]);
-
-		// (4) The influenced span, while a grab is live: the stretch the falloff
-		// is actually moving, drawn thicker and hotter. It is the only honest
-		// picture of what the influence slider does, and it walks out with the
-		// SAME dragWeight the deformation used rather than a redrawn guess.
-		if (drag) {
-			let from = drag.index;
-			let to = drag.index;
-			while (from > 0 && dragWeight(from - 1 - drag.index, drag.radius) > DRAG_WEIGHT_EPSILON) from -= 1;
-			while (to < edited.length - 1 && dragWeight(to + 1 - drag.index, drag.radius) > DRAG_WEIGHT_EPSILON) to += 1;
-			ctx.strokeStyle = "rgba(255, 245, 200, .95)";
-			ctx.lineWidth = 6;
-			traceCurve(edited, from, to);
-		}
-
-		// (3) The grab handles. Every 4th frame keeps a 200-frame range from
-		// turning into a solid bead of dots while still leaving a target within
-		// a couple of frames of wherever the pointer lands (the hit test
-		// tolerates 14 px anyway, so the dots are an affordance, not the
-		// geometry). Pinned ends and offscreen frames are deliberately NOT drawn
-		// as handles: nearestCurvePoint refuses them, and a dot that cannot be
-		// grabbed is worse than no dot. The hovered one swells, because the
-		// scene's own cursor is already `grab` and a cursor alone cannot say
-		// "this pointer would pick up the path rather than orbit the view".
-		// GHOSTED THERE ARE NO HANDLES AT ALL. A dot is a promise that pressing it
-		// picks the path up, and while the view has drifted that press is refused
-		// — and would be aiming at a place the point is not, anyway.
-		const hovered = ghost ? null : (drag ? drag.index : lineHoverRef.current);
-		for (let index = 0; !ghost && index < edited.length; index += 1) {
-			const point = edited[index];
-			if (!isCurvePointOnScreen(point)) continue;
-			if (isCurveEndPinned(index, edited.length)) continue;
-			const active = hovered === index;
-			if (!active && index % LINE_CURVE_MARKER_STRIDE !== 0) continue;
-			const [px, py] = pointPx(point);
-			const radius = active ? (drag ? 7 : 5.5) : 3.2;
-			ctx.fillStyle = "rgba(40, 24, 0, .85)";
-			ctx.beginPath();
-			ctx.arc(px, py, radius + 1.6, 0, Math.PI * 2);
-			ctx.fill();
-			ctx.fillStyle = active ? "#fff6d0" : "#ffe27a";
-			ctx.beginPath();
-			ctx.arc(px, py, radius, 0, Math.PI * 2);
-			ctx.fill();
-		}
-
-		// The pinned ends, drawn in the REFERENCE colour rather than the edit
-		// colour, because that is exactly what they are: the frames at each edge
-		// that stay on the original trajectory no matter how hard the middle is
-		// pulled. Seeing them anchored is the whole explanation of why this edit
-		// does not pop at the seams.
-		for (const index of ghost ? [] : [0, edited.length - 1]) {
-			const point = edited[index];
-			if (!isCurvePointOnScreen(point)) continue;
-			const [px, py] = pointPx(point);
-			ctx.fillStyle = "rgba(0, 20, 40, .8)";
-			ctx.beginPath();
-			ctx.arc(px, py, 5.5, 0, Math.PI * 2);
-			ctx.fill();
-			ctx.fillStyle = "#78cdff";
-			ctx.beginPath();
-			ctx.arc(px, py, 3.2, 0, Math.PI * 2);
-			ctx.fill();
-		}
-		// The curve's fade ends here; the pins below are world-space and paint at
-		// full strength through the live lens whatever the curve's lens is doing.
-		ctx.globalAlpha = 1;
-
-		// (4b) THE PINS, and — in pin mode — the joint's own handle at the
-		// playhead. Drawn in the pose-studio's effector green rather than the
-		// path's yellow, because a pin is a different KIND of statement: the path
-		// says "go this way", a pin says "be exactly here at this instant". Each
-		// pin carries a leader line back to where the take put the joint at that
-		// frame, which is the only honest picture of what was asked for; without
-		// it a pin is just a dot floating in space.
-		if (linePinMode || linePins.length) {
-			const pinDrag = linePinDragRef.current;
-			// ONE capture for the whole block: pins are world-space, so unlike the
-			// curve they are re-projected through the LIVE lens on every repaint
-			// and an orbit carries them along, at full strength. The curve above
-			// can only ghost — that is the camera-policy difference between the two
-			// gestures, and it is a difference in what can be DRAWN, not in what
-			// survives: both edits outlive the move.
-			const pinCam = pinDrag?.camera ?? captureLineCamera(pane);
-			const marks = [];
-			for (const pin of linePins) {
-				const world = pinDrag && pinDrag.frame === pin.frame ? pinDrag.world : linePinWorld(pin);
-				if (world) marks.push({ frame: pin.frame, world, placed: true });
-			}
-			if (pinDrag && !linePins.some((pin) => pin.frame === pinDrag.frame)) {
-				marks.push({ frame: pinDrag.frame, world: pinDrag.world, placed: false });
-			}
-			// The grabbable handle: the joint where the take currently puts it at
-			// the playhead. Only in pin mode, and only when that frame is not
-			// already pinned — otherwise the pin IS the handle.
-			const playhead = Math.max(0, Math.min(Math.trunc(tlFrame) || 0, Math.max(0, lineClipFrames - 1)));
-			if (linePinMode && !pinDrag && !linePins.some((pin) => pin.frame === playhead)) {
-				const here = lineJointWorldAt(playhead);
-				if (here) marks.push({ frame: playhead, world: here, placed: false, handle: true });
-			}
-			for (const mark of pinCam ? marks : []) {
-				const uv = projectPointC6(pinCam, mark.world[0], mark.world[1], mark.world[2]);
-				if (!uv) continue;
-				const px = ox + uv[0] * pane.rect.w;
-				const py = oy + uv[1] * pane.rect.h;
-				if (mark.placed) {
-					const origin = lineJointWorldAt(mark.frame);
-					const originUv = origin ? projectPointC6(pinCam, origin[0], origin[1], origin[2]) : null;
-					if (originUv) {
-						ctx.save();
-						ctx.setLineDash([4, 4]);
-						ctx.strokeStyle = "rgba(120, 255, 190, .55)";
-						ctx.lineWidth = 1.5;
-						ctx.beginPath();
-						ctx.moveTo(ox + originUv[0] * pane.rect.w, oy + originUv[1] * pane.rect.h);
-						ctx.lineTo(px, py);
-						ctx.stroke();
-						ctx.restore();
-					}
-				}
-				const radius = mark.handle ? 6 : 7;
-				ctx.fillStyle = "rgba(0, 30, 20, .85)";
-				ctx.beginPath();
-				ctx.arc(px, py, radius + 2, 0, Math.PI * 2);
-				ctx.fill();
-				ctx.fillStyle = mark.placed ? "#5cffb0" : "rgba(92, 255, 176, .5)";
-				ctx.beginPath();
-				ctx.arc(px, py, radius, 0, Math.PI * 2);
-				ctx.fill();
-				if (mark.placed) {
-					ctx.fillStyle = "rgba(0, 30, 20, .9)";
-					ctx.font = "600 10px system-ui, sans-serif";
-					ctx.textAlign = "center";
-					ctx.textBaseline = "middle";
-					ctx.fillText(String(mark.frame), px, py);
-				}
-			}
-		}
-
-		// (5) The stroke under the finger, while one is being drawn. Same family
-		// as the hero curve — dark halo, warm core — but PALE and dashed rather
-		// than the solid yellow, because it is not the curve yet: it is a shape
-		// that becomes the curve's interior on release, and the two ends it will
-		// be pinned to are the blue dots already drawn above. Painted last so it
-		// sits over everything, with a dot at the head so a stroke that is only
-		// beginning is still visible.
-		const draw = lineDrawRef.current;
-		if (draw && draw.points.length) {
-			ctx.save();
-			ctx.lineJoin = "round";
-			ctx.lineCap = "round";
-			ctx.beginPath();
-			draw.points.forEach(([su, sv], index) => {
-				const px = ox + su * pane.rect.w;
-				const py = oy + sv * pane.rect.h;
-				if (index === 0) ctx.moveTo(px, py);
-				else ctx.lineTo(px, py);
-			});
-			ctx.strokeStyle = "rgba(40, 24, 0, .75)";
-			ctx.lineWidth = 8;
-			ctx.stroke();
-			ctx.setLineDash([9, 6]);
-			ctx.shadowColor = "rgba(255, 246, 208, .9)";
-			ctx.shadowBlur = 10;
-			ctx.strokeStyle = "#fff6d0";
-			ctx.lineWidth = 3.5;
-			ctx.stroke();
-			ctx.shadowBlur = 0;
-			ctx.setLineDash([]);
-			const head = draw.points[draw.points.length - 1];
-			const hx = ox + head[0] * pane.rect.w;
-			const hy = oy + head[1] * pane.rect.h;
-			ctx.fillStyle = "rgba(40, 24, 0, .85)";
-			ctx.beginPath();
-			ctx.arc(hx, hy, 6, 0, Math.PI * 2);
-			ctx.fill();
-			ctx.fillStyle = "#fff6d0";
-			ctx.beginPath();
-			ctx.arc(hx, hy, 4, 0, Math.PI * 2);
-			ctx.fill();
-			ctx.restore();
-		}
-		ctx.restore();
-	}
-
-	/** Client pointer -> viewport-normalized uv. Unlike the old freehand path
-	 * this does NOT reject coordinates outside the image: a pull that leaves the
-	 * frame is a real gesture and the deformation it implies is real too. It is
-	 * refused later, at curveToPoints2d, with a message that says which problem
-	 * it is — the bridge rejects points2d outside 0..1. */
-	function lineUvFromPointer(pane, event) {
-		return [
-			(event.clientX - pane.rect.x) / pane.rect.w,
-			(event.clientY - pane.rect.y) / pane.rect.h,
-		];
-	}
-
-	/** The curve a pointer could grab this instant, WITHOUT side effects — the
-	 * committed edit if there is one, otherwise whatever the last repaint
-	 * projected. Used by the hover cursor, which must never change state. */
-	function lineHoverCurve() {
-		// A drifted curve is painted detached and has no handles, so it has no
-		// hover targets either — swelling a marker the press would refuse is the
-		// cursor telling a lie. The ref (rather than a fresh capture) because
-		// hover fires on every pointermove and 250 ms of staleness on a cursor
-		// shape is not worth a matrix inversion per move.
-		if (lineCurve) return lineDriftRef.current ? null : lineCurve.edited;
-		return lineLiveRef.current?.curve ?? null;
-	}
-
-	/** Side-effect-free "does this press belong to line editing?" — handed to
-	 * ObjectGizmo as `claimPointer` so its WINDOW-capture selection handler
-	 * yields the press. Without the yield the gizmo's stopPropagation kills the
-	 * event above the stage and the gesture never reaches the stage listener at
-	 * all; that swallowing is the entire reason claimPointer exists.
-	 *
-	 * IT CLAIMS EVERY PLAIN-LEFT PRESS ON THE IMAGE, not only the ones that hit
-	 * the curve. It has to: a press on EMPTY space is now a freehand stroke, so
-	 * "missed the curve" is no longer "not ours" — it is the other half of the
-	 * mode, and a probe that answered false there would let the gizmo eat exactly
-	 * the presses drawing depends on. The cost is explicit and deliberate: while
-	 * the mode is ON, plain-left no longer picks a cast member on the deck. What
-	 * is NOT claimed is anything the camera owns — alt+left orbits, middle pans,
-	 * right flies (see controls.jsx), so navigation is untouched — nor a press
-	 * outside the drawn image, nor a press on the HUD chrome stacked over the
-	 * stage, nor anything at all outside line-edit mode: App only passes this
-	 * probe to the gizmos while lineEditMode is true.
-	 *
-	 * Must never mutate state, and must agree exactly with what
-	 * onLineStagePointerDown will do with the same event — the two conditions
-	 * below are the same ones that handler opens with. */
-	function lineGrabProbe(event) {
-		if (event.button !== 0 || event.altKey) return false;
-		if (!(event.target instanceof HTMLCanvasElement)) return false;
-		const pane = lineEditPane();
-		if (!pane) return false;
-		// No curve to grab AND nothing to draw onto: without a projected
-		// trajectory there is no base curve for a stroke to replace the interior
-		// of, so the press is not ours and the gizmo keeps it.
-		//
-		// A COMMITTED EDIT CLAIMS THE PRESS EVEN WHILE THE VIEW HAS DRIFTED, which
-		// is why the test is on lineCurve rather than on lineHoverCurve alone
-		// (that one goes null under drift, deliberately — no handles to hover).
-		// The stage handler refuses that press with the drift hint; yielding it
-		// instead would hand it to the gizmo, which would quietly select a cast
-		// member and never say why the gesture did nothing.
-		if (!lineCurve && !lineHoverCurve()) return false;
-		const [u, v] = lineUvFromPointer(pane, event);
-		// Outside the drawable image (the letterbox bars of a shot view) a stroke
-		// could only author points the bridge refuses, so it is not a stroke.
-		return u >= 0 && u <= 1 && v >= 0 && v <= 1;
-	}
-
-	/** What a grab picks up, `{ camera, curve }`, and the ONE place the camera
-	 * is snapshotted: the pair returned here is what the drag deforms and what
-	 * the eventual C6 request is built against, so the uv and the lens can never
-	 * come from different moments.
-	 *
-	 * A committed edit is handed back with ITS OWN lens, and a drifted one is
-	 * never reached at all — onLineStagePointerDown refuses the press above,
-	 * synchronously, before this function is called. That refusal (rather than
-	 * the old discard) is the whole policy change: a second gesture through a
-	 * different lens would mix two cameras into one curve, which is a real
-	 * problem; the edit already in hand is not. */
-	function lineGrabSource(pane) {
-		if (lineCurve) return { camera: lineCurve.camera, curve: lineCurve.edited };
-		const cached = lineLiveRef.current;
-		if (cached) return cached;
-		const fresh = projectLineCurve(pane);
-		lineLiveRef.current = fresh;
-		return fresh;
-	}
-
-	/** The stage's CAPTURE-phase pointerdown: which of the two gestures this is.
-	 *
-	 * The overlay canvas is `pointer-events: none` and only paints; this listener
-	 * sits on the stage container instead, ahead of r3f and the fly controls, and
-	 * asks one question: did the pointer land within CURVE_GRAB_RADIUS_PX of a
-	 * draggable point?
-	 *
-	 *   YES -> a PULL. The curve is snapshotted and deformed under the finger.
-	 *   NO  -> a DRAW. The press starts a freehand stroke on empty space, which
-	 *          on release picks its own frame window and becomes the same kind of
-	 *          curve (drawStrokeEdit), committed through the identical pipeline.
-	 *          This used to be the
-	 *          do-nothing path, and on a take whose trail projects into a few
-	 *          pixels that made the mode feel broken: nothing to grab, nothing
-	 *          happens, no way in.
-	 *
-	 * Either way the event is consumed exclusively (preventDefault +
-	 * stopPropagation) so one gesture cannot also select or orbit. The presses
-	 * this handler deliberately never takes are the camera's — alt+left orbits,
-	 * middle pans, right flies — so judging a correction from another angle
-	 * still works and the mode never takes the viewport hostage. Plain-left
-	 * click-to-select IS given up for as long as the mode is on; that is the
-	 * price of an empty-space gesture, and the mode is modal and escapable.
-	 *
-	 * Capture phase rather than bubble because the decision has to be made before
-	 * the controls start an orbit; a bubble listener would arrive after they had
-	 * already latched on (FlyControls binds pointerdown on gl.domElement, which
-	 * is a descendant of the stage, so stopping here is enough — nothing binds
-	 * this gesture at the window). Nothing is re-dispatched. */
-	function onLineStagePointerDown(event) {
-		// Alt+left is the orbit gesture and belongs to the camera, never to a
-		// stroke — the one plain-left press this mode must still let through.
-		if (event.button !== 0 || event.altKey) return;
-		// Only the render surface itself. The stage also carries HUD chrome — the
-		// inset's drag chip, the plan pane, overlay buttons — and a control that
-		// happens to sit within 14 px of the curve must keep its own click. The
-		// overlay canvas cannot be the target (pointer-events: none), so a canvas
-		// target is always the WebGL one.
-		if (!(event.target instanceof HTMLCanvasElement)) return;
-		const pane = lineEditPane();
-		if (!pane) return;
-		// THE VIEW HAS DRIFTED AWAY FROM THE EDIT IN HAND — refuse the gesture,
-		// keep the edit. A pull, a stroke or a pin started now would be authored
-		// through THIS lens and committed onto a curve authored through another
-		// one, and there is no honest way to merge two cameras into a single set
-		// of uv. So the press is consumed (so it cannot orbit or select behind the
-		// refusal) and answered with the same sentence the panel is showing. Undo,
-		// reset, Generate and Esc all still work — none of them authors anything.
-		//
-		// Checked synchronously rather than off the 4 Hz watcher's state: the
-		// window between polls is exactly where a fly-then-press lands.
-		if (lineCurve && lineCurveDrifted(pane)) {
-			event.preventDefault();
-			event.stopPropagation();
-			setToast(lineDriftHint());
-			return;
-		}
-		// PIN MODE takes the press before the curve does: in this mode the marker
-		// under the pointer is the joint AT THE PLAYHEAD, not a point of a path,
-		// and the two gestures start on the same pixels.
-		if (linePinMode) {
-			if (beginLinePinDrag(event, pane)) return;
-			// A press that missed the handle in pin mode does nothing rather than
-			// falling through to a stroke: the artist asked for pins, and a
-			// surprise reroute is exactly the "I did not mean that" the redesign
-			// is about.
-			return;
-		}
-		const source = lineGrabSource(pane);
-		if (!source) return;
-		const [u, v] = lineUvFromPointer(pane, event);
-		const hit = nearestCurvePoint(source.curve, u, v, CURVE_GRAB_RADIUS_PX, pane.rect.w, pane.rect.h);
-		// MISSED THE CURVE — draw a new path instead of doing nothing.
-		if (!hit) {
-			if (!(u >= 0 && u <= 1 && v >= 0 && v <= 1)) return;
-			beginLineDraw(event, pane, source, u, v);
-			return;
-		}
-		event.preventDefault();
-		event.stopPropagation();
-		const stage = stageRef.current;
-		if (stage) stage.dataset.lineGrab = "drag";
-		lineHoverRef.current = null;
-		// SNAPSHOT. Every pointermove re-derives the deformation from this exact
-		// curve, so one drag is idempotent (return the pointer to the grab point
-		// and the curve is restored) and changing the radius mid-drag re-deforms
-		// rather than compounding. Successive drags stack because each new grab
-		// snapshots what the previous one committed.
-		lineDragRef.current = {
-			index: hit.index,
-			prev: lineCurve,
-			u0: u,
-			v0: v,
-			du: 0,
-			dv: 0,
-			radius: lineRadius,
-			camera: source.camera,
-			snapshot: source.curve,
-			live: source.curve,
-		};
-		// Window-level move/up, the same idiom beginInsetDrag uses above: a pull
-		// that leaves the stage still tracks, and a pointerup anywhere ends it.
-		const onMove = (moveEvent) => {
-			const drag = lineDragRef.current;
-			const livePane = lineEditPane();
-			if (!drag || !livePane) return;
-			const [mu, mv] = lineUvFromPointer(livePane, moveEvent);
-			if (!Number.isFinite(mu) || !Number.isFinite(mv)) return;
-			drag.du = mu - drag.u0;
-			drag.dv = mv - drag.v0;
-			drag.live = dragCurve(drag.snapshot, drag.index, drag.du, drag.dv, drag.radius);
-			paintLineOverlay();
-		};
-		const onUp = () => {
-			window.removeEventListener("pointermove", onMove);
-			window.removeEventListener("pointerup", onUp);
-			window.removeEventListener("pointercancel", onUp);
-			const drag = lineDragRef.current;
-			lineDragRef.current = null;
-			const endStage = stageRef.current;
-			if (endStage) delete endStage.dataset.lineGrab;
-			if (!drag) return;
-			// A pull that went nowhere changes NOTHING — including an edit that
-			// was already there (wiping it on a stray click was a bug). A real
-			// pull commits with the lens it was authored through and records
-			// what it replaced, which is what Ctrl/Cmd+Z restores.
-			const changed = !curvesEqual(drag.live, drag.snapshot);
-			// ONE EDIT IS ONE GESTURE: a real pull makes this a path edit, so any
-			// pins in hand are dropped (with a toast, never silently).
-			if (changed) { clearLinePins(); lineUndoRef.current.push(drag.prev ?? null); }
-			// A FRESH PULL EDITS ONLY THE FRAMES THE FALLOFF TOUCHED. Inheriting
-			// the panel's whole-clip default meant zero preserve rows on the box,
-			// and the sampler re-rolled the entire body of the entire clip — a
-			// 25 px nudge measured 4.6 m of drift eight seconds away. A pull that
-			// refines an existing edit keeps that edit's window instead: shrinking
-			// it would drop the drawn reroute outside the newly touched frames.
-			const inherited = drag.prev?.frameRange ?? null;
-			const pulledRange = changed && !inherited
-				? changedFrameRange(drag.snapshot, drag.live, { clipFrames: lineClipFrames })
-				: null;
-			const committed = changed
-				? {
-					camera: drag.camera,
-					original: drag.snapshot,
-					edited: drag.live,
-					frameRange: inherited ?? pulledRange ?? lineEditRange,
-				}
-				: (drag.prev ?? null);
-			// Same panel feedback as a drawn stroke: the numbers the artist never
-			// typed show up filled in.
-			if (changed && pulledRange && (
-				pulledRange.startFrame !== lineEditRange?.startFrame || pulledRange.endFrame !== lineEditRange?.endFrame
-			)) {
-				lineAutoRangeRef.current = pulledRange;
-				setLineRange(pulledRange);
-			}
-			setLineCurve(committed);
-			// RELEASE FIRES A DRAFT. A pull that changed nothing asks for nothing:
-			// the viewport already shows what it would show.
-			if (changed) scheduleLinePreview(committed);
-			paintLineOverlay();
-		};
-		window.addEventListener("pointermove", onMove);
-		window.addEventListener("pointerup", onUp);
-		window.addEventListener("pointercancel", onUp);
-		paintLineOverlay();
-	}
-
-	/** The DRAW half: a press on empty space collects a freehand stroke and, on
-	 * release, hands it to drawStrokeEdit, which decides WHICH FRAMES the stroke
-	 * was drawn over, replays it with those frames' own timing, and eases it into
-	 * the original trajectory at both ends.
-	 *
-	 * The commit below therefore does one thing the drag's does not: it writes
-	 * the matched window back into the panel's range inputs, so "frames 30-66"
-	 * appears filled in without anyone having typed a number. That is the entire
-	 * fix for the complaint that a short hook became an eight-second crawl — the
-	 * range used to default to the whole clip and nobody ever narrowed it.
-	 *
-	 * Why drawing exists beside dragging at all: the grab is a hit test against
-	 * the joint's PROJECTED trail, and on a take where the joint barely moves
-	 * across the image — the person who backs up and falls, whose hand travels a
-	 * few screen pixels over 192 frames — that trail is a dot. There is nothing
-	 * to grab, so the mode did nothing, so the mode was broken. Drawing needs no
-	 * target.
-	 *
-	 * The commit below is deliberately the SAME six lines the drag's pointerup
-	 * runs: compare against the snapshot, push the replaced curve on the undo
-	 * stack, install `{ camera, original, edited }`, schedule a preview. Every
-	 * downstream behaviour — Ctrl/Cmd+Z, the reset button, the detached paint a
-	 * moved view puts it in, the wire payload — therefore treats a drawn curve as
-	 * an ordinary one, because it IS one. */
-	function beginLineDraw(event, pane, source, u, v) {
-		event.preventDefault();
-		event.stopPropagation();
-		const stage = stageRef.current;
-		if (stage) stage.dataset.lineGrab = "draw";
-		lineHoverRef.current = null;
-		lineDrawRef.current = {
-			prev: lineCurve,
-			camera: source.camera,
-			snapshot: source.curve,
-			// THE WHOLE CLIP'S trail, through the SAME lens the stroke is being
-			// drawn with, captured once at press. This is what the stroke's
-			// endpoints are matched against on release (redesign A), and it has to
-			// be the ORIGINAL trail rather than whatever is currently edited so
-			// that redrawing re-matches against a fixed reference instead of
-			// walking away from it one stroke at a time. Capturing at press rather
-			// than at release means a camera that drifts mid-stroke cannot leave
-			// the match and the stroke measured through different lenses.
-			fullCurve: lineClipFrames > 1
-				? projectLineCurve(pane, { camera: source.camera, frameRange: { startFrame: 0, endFrame: lineClipFrames } })?.curve ?? null
-				: null,
-			// Pixel size of the pane the stroke is being drawn on, captured once:
-			// the "is this a stroke or a click?" threshold is in CSS pixels, where
-			// the hand drew it, and uv distance is anisotropic so it cannot be
-			// judged in uv without this pair.
-			paneW: pane.rect.w,
-			paneH: pane.rect.h,
-			points: [[u, v]],
-			// Running length in PIXELS, accumulated as the stroke is drawn rather
-			// than re-measured at release.
-			lengthPx: 0,
-		};
-		const onMove = (moveEvent) => {
-			const draw = lineDrawRef.current;
-			const livePane = lineEditPane();
-			if (!draw || !livePane) return;
-			const [mu, mv] = lineUvFromPointer(livePane, moveEvent);
-			if (!Number.isFinite(mu) || !Number.isFinite(mv)) return;
-			const last = draw.points[draw.points.length - 1];
-			const stepPx = Math.hypot((mu - last[0]) * draw.paneW, (mv - last[1]) * draw.paneH);
-			// Sub-pixel jitter carries no shape and only costs arc-length samples.
-			if (!(stepPx > 0.5)) return;
-			draw.points.push([mu, mv]);
-			draw.lengthPx += stepPx;
-			paintLineOverlay();
-		};
-		const onUp = () => {
-			window.removeEventListener("pointermove", onMove);
-			window.removeEventListener("pointerup", onUp);
-			window.removeEventListener("pointercancel", onUp);
-			const draw = lineDrawRef.current;
-			lineDrawRef.current = null;
-			const endStage = stageRef.current;
-			if (endStage) delete endStage.dataset.lineGrab;
-			if (!draw) return;
-			// A CLICK IS NOT A STROKE, and a click must change nothing — including
-			// an edit that is already there. Same rule the drag's commit enforces
-			// with curvesEqual; here the test is the length of what was drawn.
-			const edit = draw.points.length >= DRAW_MIN_STROKE_POINTS && draw.lengthPx >= DRAW_MIN_STROKE_PX
-				? drawStrokeEdit(draw.points, {
-					fullCurve: draw.fullCurve,
-					fallbackCurve: draw.snapshot,
-					fallbackRange: lineEditRange,
-					paneW: draw.paneW,
-					paneH: draw.paneH,
-					clipFrames: lineClipFrames,
-				})
-				: null;
-			if (!edit) {
-				paintLineOverlay();
-				return;
-			}
-			const drawn = edit.curve;
-			const changed = !curvesEqual(drawn, edit.base);
-			if (changed) { clearLinePins(); lineUndoRef.current.push(draw.prev ?? null); }
-			// The matched window rides ON the committed curve, not only in
-			// `lineRange` state. setLineRange is asynchronous and the preview below
-			// fires from a timeout that closed over THIS render's lineEditRange, so
-			// a request built from state alone would ship the old range with the
-			// new curve — the exact mismatch that would splice a re-routed stretch
-			// into the wrong frames. buildLineEditRequest reads curve.frameRange.
-			const committed = changed
-				? { camera: draw.camera, original: edit.base, edited: drawn, frameRange: edit.frameRange ?? lineEditRange }
-				: (draw.prev ?? null);
-			// PANEL FEEDBACK (redesign D): the numbers the artist never typed show
-			// up filled in, so "frames 30-66" is visible confirmation of what the
-			// stroke was read as. Only on a real match — a fallback draw is still
-			// in whatever range the panel already showed.
-			if (changed && edit.matched && edit.frameRange && (
-				edit.frameRange.startFrame !== lineEditRange?.startFrame || edit.frameRange.endFrame !== lineEditRange?.endFrame
-			)) {
-				lineAutoRangeRef.current = edit.frameRange;
-				setLineRange(edit.frameRange);
-			}
-			setLineCurve(committed);
-			if (changed) scheduleLinePreview(committed);
-			paintLineOverlay();
-		};
-		window.addEventListener("pointermove", onMove);
-		window.addEventListener("pointerup", onUp);
-		window.addEventListener("pointercancel", onUp);
-		paintLineOverlay();
-	}
-
-	/** THE PIN GESTURE (순간 찍기): grab the joint at the playhead and put it
-	 * where it should be.
-	 *
-	 * Returns true when the press was taken. The handle is the joint's own
-	 * position at the CURRENT FRAME — the artist scrubbed there, so that is the
-	 * moment they are talking about — plus any pin already placed, which can be
-	 * re-grabbed to adjust it (grabbing one moves the playhead to its frame, so
-	 * the viewport shows the pose being pinned).
-	 *
-	 * The 2D-to-3D step is unprojectDeltaC6: the joint slides in the image plane
-	 * at its own depth, which is the effector-drag mechanic the pose studio's
-	 * gizmo uses and the only reading of a screen drag that does not invent a
-	 * depth the artist could not see. THE DEVIATION IS DELIBERATE and worth
-	 * naming: this is not posestudio's TransformControls gizmo, because that one
-	 * requires ikMode, which is mutually exclusive with this mode. What is
-	 * reused is the MECHANIC, not the widget.
-	 *
-	 * On release the world point is converted to the take's own clip space
-	 * (worldPointToClip) and stored — pins go on the wire in the space the npz
-	 * is written in, which is the only space a "within 2 cm of the target" claim
-	 * can be checked in. */
-	function beginLinePinDrag(event, pane) {
-		const camera = captureLineCamera(pane);
-		if (!camera) return false;
-		const frame = Math.max(0, Math.min(Math.trunc(tlFrame) || 0, Math.max(0, lineClipFrames - 1)));
-		const [u, v] = lineUvFromPointer(pane, event);
-		const reach = (candidate) => {
-			const uv = projectPointC6(camera, candidate.world[0], candidate.world[1], candidate.world[2]);
-			if (!uv) return null;
-			const dist = Math.hypot((uv[0] - u) * pane.rect.w, (uv[1] - v) * pane.rect.h);
-			return dist > CURVE_GRAB_RADIUS_PX * 2 ? null : { ...candidate, dist };
-		};
-		// THE PLAYHEAD WINS TIES, and not by accident. The obvious rule — nearest
-		// candidate in pixels — was measured wrong on the take this mode exists
-		// for: the head's whole trail is ~100 px, so a pin already placed at frame
-		// 90 sits within the grab radius of the joint at frame 112, and scrubbing
-		// forward to add a second pin instead re-grabbed the first one and dragged
-		// the playhead back to it. The artist scrubbed somewhere on purpose; that
-		// moment is what the press means. Existing pins are only considered when
-		// the playhead's own handle is out of reach.
-		const here = lineJointWorldAt(frame);
-		let best = here && !linePins.some((pin) => pin.frame === frame)
-			? reach({ frame, world: here })
-			: null;
-		if (!best) {
-			for (const pin of linePins) {
-				const world = linePinWorld(pin);
-				if (!world) continue;
-				const hit = reach({ frame: pin.frame, world });
-				if (hit && (!best || hit.dist < best.dist)) best = hit;
-			}
-		}
-		// A press on the joint at a frame that is ALREADY pinned re-places that
-		// pin, which is the same "the second gesture wins" rule upsertPin applies.
-		if (!best && here) best = reach({ frame, world: here });
-		if (!best) return false;
-		event.preventDefault();
-		event.stopPropagation();
-		const stage = stageRef.current;
-		if (stage) stage.dataset.lineGrab = "pin";
-		// Re-grabbing an existing pin moves the playhead to it, so the body on
-		// screen is the pose the pin belongs to rather than whatever frame the
-		// timeline happened to be parked on.
-		if (best.frame !== frame) setTlFrame(best.frame);
-		linePinDragRef.current = {
-			frame: best.frame,
-			camera,
-			origin: best.world,
-			world: best.world,
-			u0: u,
-			v0: v,
-			moved: false,
-		};
-		const onMove = (moveEvent) => {
-			const drag = linePinDragRef.current;
-			const livePane = lineEditPane();
-			if (!drag || !livePane) return;
-			const [mu, mv] = lineUvFromPointer(livePane, moveEvent);
-			if (!Number.isFinite(mu) || !Number.isFinite(mv)) return;
-			const delta = unprojectDeltaC6(drag.camera, drag.origin, mu - drag.u0, mv - drag.v0);
-			if (!delta) return;
-			drag.world = [drag.origin[0] + delta[0], drag.origin[1] + delta[1], drag.origin[2] + delta[2]];
-			// Sub-pixel tremor is not a placement, exactly as a few pixels of
-			// wobble is not a stroke (DRAW_MIN_STROKE_PX).
-			drag.moved = Math.hypot((mu - drag.u0) * livePane.rect.w, (mv - drag.v0) * livePane.rect.h) >= DRAW_MIN_STROKE_PX;
-			paintLineOverlay();
-		};
-		const onUp = () => {
-			window.removeEventListener("pointermove", onMove);
-			window.removeEventListener("pointerup", onUp);
-			window.removeEventListener("pointercancel", onUp);
-			const drag = linePinDragRef.current;
-			linePinDragRef.current = null;
-			const endStage = stageRef.current;
-			if (endStage) delete endStage.dataset.lineGrab;
-			if (!drag || !drag.moved) { paintLineOverlay(); return; }
-			const clip = worldPointToClip(motion, { x: drag.world[0], y: drag.world[1], z: drag.world[2] }, {
-				baseY: activeChar.y ?? 0,
-				scale: activeChar.scale ?? 1,
-			});
-			const next = upsertPin(linePins, { frame: drag.frame, position: [clip.x, clip.y, clip.z] });
-			if (next === linePins) { paintLineOverlay(); return; }
-			// A pin and a curve cannot coexist (see the linePins comment). The
-			// curve goes on the undo stack first, so Ctrl/Cmd+Z brings it back.
-			if (lineCurve) {
-				lineUndoRef.current.push(lineCurve);
-				setLineCurve(null);
-			}
-			const range = pinsFrameRange(next, lineClipFrames);
-			if (range) {
-				lineAutoRangeRef.current = range;
-				setLineRange(range);
-			}
-			setLinePins(next);
-			// Same debounce, same session seed, same supersede rule as a stroke:
-			// the preview loop does not care which gesture asked for it.
-			if (range) scheduleLinePreview({ pins: next, frameRange: range });
-			paintLineOverlay();
-		};
-		window.addEventListener("pointermove", onMove);
-		window.addEventListener("pointerup", onUp);
-		window.addEventListener("pointercancel", onUp);
-		paintLineOverlay();
-		return true;
-	}
-
-	/** Bubble-phase hover: the cursor and the swollen marker, nothing else. It
-	 * never stops the event and never writes state, so it cannot interfere with
-	 * the orbit the same pointermove is probably driving. */
-	function onLineStageHover(event) {
-		const stage = stageRef.current;
-		if (!stage || lineDragRef.current || lineDrawRef.current || linePinDragRef.current) return;
-		const pane = event.target instanceof HTMLCanvasElement ? lineEditPane() : null;
-		const curve = pane ? lineHoverCurve() : null;
-		let hit = null;
-		if (curve) {
-			const [u, v] = lineUvFromPointer(pane, event);
-			hit = nearestCurvePoint(curve, u, v, CURVE_GRAB_RADIUS_PX, pane.rect.w, pane.rect.h);
-		}
-		lineHoverRef.current = hit ? hit.index : null;
-		if (hit) stage.dataset.lineGrab = "hover";
-		else delete stage.dataset.lineGrab;
-	}
-
-	function onLineStageHoverEnd() {
-		const stage = stageRef.current;
-		if (lineDragRef.current || lineDrawRef.current || linePinDragRef.current) return;
-		lineHoverRef.current = null;
-		if (stage) delete stage.dataset.lineGrab;
-	}
-
-	/** Back to the take's own trajectory — and, because an unedited curve
-	 * follows the live camera, back to a path that tracks the view. */
-	function resetLineCurve() {
-		lineDragRef.current = null;
-		lineDrawRef.current = null;
-		linePinDragRef.current = null;
-		setLinePins([]);
-		// The button is itself undoable: resetting a curve you spent five pulls
-		// on should not be a cliff.
-		if (lineCurve) lineUndoRef.current.push(lineCurve);
-		// The draft on screen was a picture of the pull that is being thrown
-		// away, so it goes with it — but the SESSION does not end, and the seed
-		// survives, because the artist is still editing the same take.
-		cancelLinePreview();
-		setLineCurve(null);
-	}
-
-	/** Internal clear — mode entry/exit and enqueue. (A camera move used to come
-	 * through here too; it no longer clears anything.) Unlike the
-	 * reset BUTTON this also empties the undo stack: those transitions change
-	 * what the stack's entries were authored against. It is also where a
-	 * preview SESSION ends, which is what re-rolls the seed: every one of these
-	 * transitions means the next pull is a different piece of work. */
-	function clearLineEdit() {
-		lineDragRef.current = null;
-		lineDrawRef.current = null;
-		linePinDragRef.current = null;
-		setLinePins([]);
-		setLinePinMode(false);
-		lineUndoRef.current = [];
-		cancelLinePreview();
-		linePreviewSeedRef.current = null;
-		setLineCurve(null);
-	}
-
-	function undoLineCurve() {
-		const previous = lineUndoRef.current.pop();
-		if (previous === undefined) return false;
-		lineDragRef.current = null;
-		lineDrawRef.current = null;
-		linePinDragRef.current = null;
-		// Undo restores a CURVE, so it also un-does whatever pins replaced it —
-		// the two are exclusive and the stack only ever stores curves.
-		setLinePins([]);
-		cancelLinePreview();
-		setLineCurve(previous);
-		return true;
-	}
-
-	/* --------------------- the live preview loop (C10/C11) --------------------
-	 * Everything below is the machinery behind "release the drag, watch it move".
-	 * It is deliberately kept apart from enqueueMotionJob: that queue exists to
-	 * produce TAKES — it delivers to a character layer, commits a recipe and
-	 * pushes a version — and a preview must do none of those things. So a
-	 * preview is its own bare request, its own AbortController, and one
-	 * viewport swap that anything can undo. */
-
-	/** Pin (or release) the take a preview is drafted from. Mirrored into a ref
-	 * because the async completion below reads it after several awaits, where a
-	 * render-time closure would be pointing at the previous take. */
-	function setPreviewSource(next) {
-		linePreviewSourceRef.current = next;
-		setLinePreviewSource(next);
-	}
-
-	/** THE SESSION SEED (rule 2 above). Rolled at most once per editing session
-	 * and handed to every preview AND to the confirming full-quality run, so the
-	 * draft the artist accepted is the draft they get. Returns null when the
-	 * typed seed is invalid — takeSeed has already said so. */
-	function lineSessionSeed() {
-		if (Number.isInteger(linePreviewSeedRef.current)) return linePreviewSeedRef.current;
-		const seed = takeSeed();
-		if (seed === null) return null;
-		linePreviewSeedRef.current = seed;
-		return seed;
-	}
-
-	/** The C6 body for a curve — ONE builder for the preview and the confirm, so
-	 * the only difference between what the artist watched and what they get is
-	 * the step count. Returns `{ ok: false, message }` with copy already
-	 * localized, or `{ ok: true, body, lineEdit, seed }`. */
-	function buildLineEditRequest(curve, { preview = false } = {}) {
-		const refuse = (copy) => ({ ok: false, message: ko(copy[0], copy[1]) });
-		const sourceUrl = takeSourceUrl;
-		if (!sourceUrl) return refuse(LINE_EDIT_REFUSALS.sourceMotion);
-		if (!curve) {
-			return refuse(["Pull the path first — grab a dot on it and drag", "커브를 먼저 잡아당겨 주세요"]);
-		}
-		// PINS take the other branch of C6 entirely: no points2d, no camera. The
-		// prompt and the seed rule below are shared, because those belong to the
-		// RUN, not to the gesture.
-		if (curve.pins) {
-			const prompt = ((linePreviewSource?.prompt ?? motion?.prompt) || "").trim() || "A person continues the motion naturally.";
-			const lineEdit = {
-				sourceMotion: sourceUrl,
-				track: lineTrack,
-				frameRange: curve.frameRange,
-				pins3d: curve.pins.map((pin) => ({ frame: pin.frame, position: [...pin.position] })),
-				prompt,
-			};
-			const refusal = validateLineEdit(lineEdit, { clipFrames: lineClipFrames });
-			if (refusal) return refuse(LINE_EDIT_REFUSALS[refusal.code] ?? LINE_EDIT_REFUSALS.shape);
-			const body = { prompt, duration: lineClipFrames / TIMELINE_FPS, posePin: false, lineEdit };
-			const seed = lineSessionSeed();
-			if (seed === null) return { ok: false, message: "" };
-			body.seed = seed;
-			if (preview) lineEdit.preview = true;
-			return { ok: true, body, lineEdit, seed };
-		}
-		// The wire pairing is positional (driver.py spreads points2d across
-		// frameRange by time), so the points sent are exactly the range's own
-		// slice of the curve — a whole-clip dragged curve paired with a touched-
-		// frames range would compress the full trail into the window.
-		const requestRange = curve.frameRange ?? lineEditRange;
-		const built = curveToPoints2d(sliceCurveToRange(curve.edited, requestRange));
-		if (built.error) return refuse(LINE_CURVE_REFUSALS[built.error] ?? LINE_EDIT_REFUSALS.shape);
-		// The take's own prompt is the text condition: a line edit changes WHERE
-		// a joint goes, not what the shot is about. The fallback keeps the
-		// bridge's non-empty-prompt contract satisfiable for takes imported
-		// without one.
-		const prompt = ((linePreviewSource?.prompt ?? motion?.prompt) || "").trim() || "A person continues the motion naturally.";
-		const lineEdit = {
-			sourceMotion: sourceUrl,
-			track: lineTrack,
-			// THE CURVE'S OWN RANGE FIRST. A drawn stroke picks its window from
-			// where it was drawn (drawStrokeEdit) and a fresh pull from the frames
-			// its falloff touched; the window is stamped on the committed curve
-			// precisely so a request can never pair one gesture's points with
-			// another render's range — `lineEditRange` is re-derived from state a
-			// just-committed gesture has not landed in yet.
-			frameRange: requestRange,
-			points2d: built.points2d,
-			camera: curve.camera,
-			prompt,
-		};
-		const refusal = validateLineEdit(lineEdit, { clipFrames: lineClipFrames });
-		if (refusal) return refuse(LINE_EDIT_REFUSALS[refusal.code] ?? LINE_EDIT_REFUSALS.shape);
-		// posePin:false is mandatory, not decorative: the bridge demands a
-		// `poses` array whenever posePin is not explicitly false, and a line
-		// edit authors no poses at all.
-		const body = { prompt, duration: lineClipFrames / TIMELINE_FPS, posePin: false, lineEdit };
-		// THE SEED RULE (C9). An edit creates a take, so it may not leave the
-		// seed to chance. The seed rides on the BODY, never inside `lineEdit` —
-		// C6 validates that object field by field and an unknown key there is a
-		// 400. `preview` is the one exception the bridge added for this loop.
-		const seed = lineSessionSeed();
-		if (seed === null) return { ok: false, message: "" };
-		body.seed = seed;
-		if (preview) lineEdit.preview = true;
-		return { ok: true, body, lineEdit, seed };
-	}
-
-	/** Put a draft on screen without letting it become the take. */
-	async function showLinePreview(url) {
-		const source = linePreviewSourceRef.current;
-		if (!source) return;
-		try {
-			await loadMotion(url, source.prompt, source.rotationDeg, null, source.charId, null, { preview: true });
-			linePreviewShownRef.current = url;
-			setLinePreviewUrl(url);
-		} catch {
-			setLinePreviewError(ko("The preview could not be read back", "미리보기를 읽지 못했어요"));
-			await revertLinePreview();
-		}
-	}
-
-	/** Back to the take itself. The source stays pinned until the reload lands,
-	 * so there is never an instant where `takeSourceUrl` points at the draft.
-	 * Nothing is reloaded when no draft ever reached the viewport — cancelling
-	 * an in-flight preview (Esc, undo with an empty stack, a joint switch) must
-	 * not cost a re-fetch and re-decode of a take that is already on screen. */
-	async function revertLinePreview() {
-		const source = linePreviewSourceRef.current;
-		const shown = linePreviewShownRef.current;
-		linePreviewShownRef.current = null;
-		setLinePreviewUrl(null);
-		if (!source || !shown) {
-			setPreviewSource(null);
-			return;
-		}
-		try {
-			await loadMotion(source.url, source.prompt, source.rotationDeg, null, source.charId, null, { preview: true });
-		} catch {
-			/* loadMotion already surfaced the decode failure in the panel */
-		}
-		if (linePreviewSourceRef.current === source) setPreviewSource(null);
-	}
-
-	/** Stop the loop. Bumping the token is what makes an in-flight answer
-	 * harmless: it arrives, finds itself stale, and is dropped without ever
-	 * reaching the viewport. `revert:false` is for the callers that are ALREADY
-	 * loading a different take (a version chip) and must not race a reload of
-	 * the take they are leaving. */
-	function cancelLinePreview({ revert = true } = {}) {
-		if (linePreviewTimerRef.current) {
-			window.clearTimeout(linePreviewTimerRef.current);
-			linePreviewTimerRef.current = 0;
-		}
-		linePreviewPendingRef.current = null;
-		linePreviewTokenRef.current += 1;
-		const controller = linePreviewAbortRef.current;
-		linePreviewAbortRef.current = null;
-		if (controller) controller.abort();
-		setLinePreviewBusy(false);
-		setLinePreviewError("");
-		setLinePreviewMs(0);
-		if (revert) {
-			revertLinePreview();
-		} else {
-			linePreviewShownRef.current = null;
-			setLinePreviewUrl(null);
-			setPreviewSource(null);
-		}
-	}
-
-	/** A released drag asks for a draft — after a beat, so drag-drag-drag costs
-	 * one request rather than three. */
-	function scheduleLinePreview(curve) {
-		if (linePreviewTimerRef.current) window.clearTimeout(linePreviewTimerRef.current);
-		linePreviewTimerRef.current = window.setTimeout(() => {
-			linePreviewTimerRef.current = 0;
-			runLinePreview(curve);
-		}, LINE_PREVIEW_DEBOUNCE_MS);
-	}
-
-	/** One preview round trip. Never more than one at a time (rule 3): a curve
-	 * that arrives while a request is out becomes THE pending curve, replacing
-	 * any earlier pending one, and is fired the moment the outstanding answer
-	 * lands — whose result is then thrown away, because it describes a pull the
-	 * artist has already moved past. */
-	async function runLinePreview(curve) {
-		if (!lineEditMode || !curve) return;
-		// A preview is a courtesy, never a blocker: no bridge, no route, or the
-		// box already busy with the real thing means the panel simply keeps the
-		// curve and waits for the artist to press 생성.
-		if (!bridge?.ok || !lineEditBackend || ardyRunning) return;
-		if (linePreviewAbortRef.current) {
-			linePreviewPendingRef.current = curve;
-			return;
-		}
-		const source = linePreviewSourceRef.current ?? (motion?.url
-			? {
-				url: motion.url,
-				prompt: motion.prompt ?? "",
-				rotationDeg: motion.rotationDeg ?? activeChar.rot,
-				charId: activeChar.id,
-			}
-			: null);
-		if (!source) return;
-		// Full quality on release, by request: the warm resident makes the 100-step
-		// run ~2 s, and since the draft shares the session seed the confirm below
-		// reproduces it bit for bit — so what the artist sees IS the final take,
-		// and Generate is a commit, not a second opinion.
-		const request = buildLineEditRequest(curve);
-		if (!request.ok) {
-			if (request.message) setLinePreviewError(request.message);
-			return;
-		}
-		const token = ++linePreviewTokenRef.current;
-		const controller = new AbortController();
-		linePreviewAbortRef.current = controller;
-		linePreviewPendingRef.current = null;
-		setPreviewSource(source);
-		setLinePreviewBusy(true);
-		setLinePreviewError("");
-		const startedAt = Date.now();
-		let result = null;
-		let failure = "";
-		try {
-			// No onEvent work: a preview's status lines belong to nobody. The
-			// console stays the full-quality run's log.
-			result = await ardyGenerate(request.body, () => {}, { signal: controller.signal });
-		} catch (err) {
-			// An abort is this loop's own doing and says nothing to the artist.
-			failure = err?.name === "AbortError" ? "" : (err?.message || String(err));
-		}
-		// Stale: superseded by a newer drag or cancelled outright. Whoever bumped
-		// the token owns the state now.
-		if (linePreviewTokenRef.current !== token) return;
-		linePreviewAbortRef.current = null;
-		const pending = linePreviewPendingRef.current;
-		if (pending) {
-			linePreviewPendingRef.current = null;
-			runLinePreview(pending);
-			return;
-		}
-		setLinePreviewBusy(false);
-		if (failure) {
-			// Non-fatal by design: the curve survives, and 생성 still works.
-			setLinePreviewError(failure);
-			return;
-		}
-		if (!result?.motionUrl) return;
-		setLinePreviewMs(Date.now() - startedAt);
-		await showLinePreview(result.motionUrl);
-	}
-
-	function exitLineEditMode() {
-		clearLineEdit();
-		lineHoverRef.current = null;
-		lineLiveRef.current = null;
-		const stage = stageRef.current;
-		if (stage) delete stage.dataset.lineGrab;
-		setLineEditMode(false);
-	}
-
-	/** Entering is mutually exclusive with every other AUTHORING mode, the same
-	 * way waypoint/IK/pose already are with each other: they all claim the same
-	 * viewport pointer and the same playhead. Camera navigation is deliberately
-	 * NOT in that list — the pointer is shared with it, not taken from it. */
-	function toggleLineEditMode() {
-		if (lineEditMode) {
-			exitLineEditMode();
-			setToast(ko("Line editing off", "라인 편집 꺼짐"));
-			return;
-		}
-		if (!motion?.url) {
-			setToast(ko("The current take has no bridge source — generate it once before editing a path", "현재 테이크에 브리지 원본이 없어요 — 궤적을 편집하기 전에 한 번 생성하세요"));
-			return;
-		}
-		if (waypointMode) setWaypointMode(false);
-		if (ikMode) leaveIkMode();
-		if (posing) setPosing(null);
-		clearLineEdit();
-		setLineEditMode(true);
-		setToast(ko(
-			"Path editing on — draw along the path to reroute that section, or grab a dot and pull; the view still orbits normally",
-			"궤적 편집 켜짐 — 궤적을 따라 그리면 그 구간만 새로 지나가고, 점을 잡아 끌 수도 있어요. 시점은 평소처럼 돌릴 수 있어요",
-		));
-	}
-
-	/* Switching joint, range, take or character drops any pull in hand: it was
-	 * authored against a trajectory that is no longer the one on screen. The
-	 * curve itself needs no rebuilding — with no edit it is re-projected every
-	 * repaint from the live camera.
-	 *
-	 * The one thing worth SAYING here is framing. Part of the range may be
-	 * behind the lens or out of shot; the visible part stays draggable and the
-	 * hit test ignores the rest, but a path that stops halfway looks like a bug,
-	 * and hidden frames cannot be constrained. The retry exists because mode
-	 * entry and a measurable pane are not the same instant — the overlay mounts
-	 * in the commit that turns the mode on and DualRender may not have settled
-	 * the pane's aspect yet, so the projection legitimately refuses for a frame
-	 * or two. Failing silently after that is deliberate: the plan and IK views
-	 * have no pinhole camera at all and are not worth nagging about. */
-	useEffect(() => {
-		if (!lineEditMode || !motion) return undefined;
-		// ...unless the RANGE CHANGED BECAUSE A STROKE SAID SO. A drawn stroke
-		// picks its own window (drawStrokeEdit) and commits the curve for that
-		// window in the same gesture, so this run is reacting to the draw's own
-		// bookkeeping rather than to the artist moving the goalposts. Consumed
-		// once, so a later hand-typed range still drops the edit as before.
-		const auto = lineAutoRangeRef.current;
-		lineAutoRangeRef.current = null;
-		if (auto && auto.startFrame === lineEditRange?.startFrame && auto.endFrame === lineEditRange?.endFrame) return undefined;
-		// Whatever draft is on screen was drafted for the joint/range/take that
-		// just changed, so it goes back to the source take with the pull. Pins go
-		// with it for the same reason and one more: a pin names a JOINT, and the
-		// joint just changed under it.
-		cancelLinePreview();
-		setLineCurve(null);
-		setLinePins([]);
-		let attempts = 0;
-		let timer = 0;
-		const check = () => {
-			const live = projectLineCurve(lineEditPane());
-			if (!live) {
-				if (attempts >= 12) return;
-				attempts += 1;
-				timer = window.setTimeout(check, 120);
-				return;
-			}
-			const hidden = live.curve.reduce((count, point) => count + (isCurvePointOnScreen(point) ? 0 : 1), 0);
-			if (hidden > 0) {
-				setToast(isKo
-					? `이 구간의 ${hidden}프레임이 화면 밖이에요 — 구간 전체가 보이도록 시점을 잡아 주세요`
-					: `${hidden} frame(s) of this range are outside the frame — orbit until the whole range is in view`);
-			}
-		};
-		check();
-		return () => window.clearTimeout(timer);
-		// The range is depended on by VALUE: lineEditRange is a fresh object on
-		// every render that touches lineRange, and depending on its identity
-		// would fire this constantly. activeChar's ground offset and scale are in
-		// here because jointTrailPoints places the trail with them — move or
-		// resize the character and the path really is somewhere else.
-		//
-		// THE TAKE is depended on as takeSourceUrl, not as `motion`: a preview
-		// swaps `motion` for a draft of the same take several times a minute,
-		// and depending on the object would make every landing draft wipe the
-		// very curve it is a picture of. takeSourceUrl only moves when the take
-		// really does.
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [lineEditMode, lineTrack, takeSourceUrl, lineEditRange?.startFrame, lineEditRange?.endFrame, activeChar.y, activeChar.scale]);
-
-	// Repaint on anything that changes what the overlay should show. The window
-	// resize listener is separate from React state because the pane rect can
-	// change without any of it changing.
-	useEffect(() => {
-		if (!lineEditMode) return undefined;
-		paintLineOverlay();
-		const repaint = () => paintLineOverlay();
-		window.addEventListener("resize", repaint);
-		// A gentle rAF loop while the mode is on, and it earns its keep three
-		// times over: the unedited curve is re-projected here so it follows the
-		// camera, a pointermove writes only lineDragRef so this is what shows the
-		// live pull without re-rendering App, and the render moves underneath
-		// regardless (playback, a follow camera). A few hundred 2d-canvas points
-		// per frame is noise next to the WebGL scene already animating behind it.
-		let raf = requestAnimationFrame(function tick() {
-			paintLineOverlay();
-			raf = requestAnimationFrame(tick);
-		});
-		return () => {
-			window.removeEventListener("resize", repaint);
-			cancelAnimationFrame(raf);
-		};
-	});
-
-	// Pointer plumbing. The overlay canvas is `pointer-events: none` — it only
-	// PAINTS — and the listeners live on the stage container instead, so a
-	// pointer that misses the curve reaches the WebGL canvas untouched. See
-	// onLineStagePointerDown for why the down listener is in the capture phase
-	// and what "untouched" buys. No dependency array on purpose: the handlers
-	// close over lineCurve, lineRadius and the live refs, and must always be
-	// this render's.
-	useEffect(() => {
-		if (!lineEditMode) return undefined;
-		const stage = stageRef.current;
-		if (!stage) return undefined;
-		stage.addEventListener("pointerdown", onLineStagePointerDown, true);
-		stage.addEventListener("pointermove", onLineStageHover);
-		stage.addEventListener("pointerleave", onLineStageHoverEnd);
-		return () => {
-			stage.removeEventListener("pointerdown", onLineStagePointerDown, true);
-			stage.removeEventListener("pointermove", onLineStageHover);
-			stage.removeEventListener("pointerleave", onLineStageHoverEnd);
-		};
-	});
-
-	// ESC leaves the mode, matching the shot look-through and the scene-object
-	// selection above.
-	useEffect(() => {
-		if (!lineEditMode) return undefined;
-		const onKey = (event) => {
-			if (event.key === "Escape") {
-				exitLineEditMode();
-				return;
-			}
-			// Ctrl/Cmd+Z inside the mode undoes the last PULL, not the scene.
-			// Capture phase, because the app's scene undo listens on the window
-			// bubble: consuming here keeps one keystroke from doing both. An
-			// empty stack still swallows the key — falling through to a scene
-			// undo the user cannot see happening behind the mode would be worse
-			// than a no-op. Text fields keep the browser's own undo. Shift+Z
-			// (redo) is left alone: there is no line-redo yet, and silently
-			// eating it would just feel broken in a different way.
-			if (event.code === "KeyZ" && (event.ctrlKey || event.metaKey) && !event.shiftKey) {
-				if (/INPUT|TEXTAREA/.test(document.activeElement?.tagName ?? "")) return;
-				event.preventDefault();
-				event.stopPropagation();
-				undoLineCurve();
-			}
-		};
-		window.addEventListener("keydown", onKey, true);
-		return () => window.removeEventListener("keydown", onKey, true);
-	}, [lineEditMode, lineCurve]);
-
-	// Camera-drift watcher — and note what it does NOT do, which is now the
-	// interesting half: it never blocks navigation, and IT NEVER DESTROYS
-	// ANYTHING. It has no job at all while the curve is unedited, because an
-	// unedited curve is re-projected every repaint and simply follows the view.
-	//
-	// Once something has been pulled, that pull is a 2D offset authored through
-	// one specific lens — and the committed curve KEEPS that lens beside the
-	// points, which is what buildLineEditRequest puts on the wire. So moving the
-	// view invalidates the drawing of the line and nothing else: the edit, its
-	// preview and the confirming run are all still exactly what the artist
-	// authored. This watcher therefore only reports, in both directions — come
-	// back toward the snapshot and the line re-attaches, with no state to restore
-	// because none was thrown away. (Before this, it called clearLineEdit(): a
-	// right-drag fly, the app's own navigation gesture, silently wiped a finished
-	// edit. That was the bug.)
-	//
-	// Polling beats hooking every camera mutation: the cameras are moved from a
-	// dozen places (fly controls, shot presets, live control, follow tracks) and
-	// none of them reports to React. The painter re-derives the same answer every
-	// frame for the ghost, and onLineStagePointerDown re-derives it synchronously
-	// to close the 250 ms window between polls; this poll exists to drive the
-	// PANEL, which only re-renders on state.
-	useEffect(() => {
-		if (!lineEditMode || !lineCurve) {
-			// No edit, no drift: whatever the last curve's lens was, the live one
-			// is now the baseline again and gestures are re-enabled. This is what
-			// makes undo/reset back to no-curve hand the mode straight back.
-			lineDriftRef.current = false;
-			setLineDrifted(false);
-			return undefined;
-		}
-		const poll = () => {
-			// Never re-classify under a finger that is holding the curve or drawing
-			// a new one: a live gesture owns its own snapshot, and mid-gesture
-			// drift is the one case that is still a corruption rather than a
-			// misalignment (see the gesture handlers — that path is unchanged).
-			if (lineDragRef.current || lineDrawRef.current || linePinDragRef.current) return;
-			const drifted = lineCurveDrifted(lineEditPane(), lineCurve);
-			if (drifted === lineDriftRef.current) return;
-			lineDriftRef.current = drifted;
-			setLineDrifted(drifted);
-		};
-		// Immediately, then at 4 Hz: a view switch or a fly that finishes just as
-		// this effect re-runs should not leave the panel a quarter second behind
-		// the line it is describing.
-		poll();
-		const id = window.setInterval(poll, 250);
-		return () => window.clearInterval(id);
-		// lookThroughShot / preview / ikMode are dependencies even though the
-		// body never reads them directly: they are what lineEditPane branches on,
-		// so a stale closure would keep measuring the camera the pane used to
-		// hold and a view SWITCH — the most obvious way to invalidate a curve —
-		// would go undetected. Lens and aspect changes need no dependency: they
-		// move fx/fy, which the comparison sees on its own.
-	}, [lineEditMode, lineCurve, lookThroughShot, preview, ikMode]);
-
-	// Use the same bounded, coalesced probe as generation. Capabilities can
-	// disappear under a live bridge too; every health result refreshes them.
-	useEffect(() => {
-		if (lineEditMode) bridgeRefreshRef.current();
-	}, [lineEditMode]);
-
-	const genRunningRef = useRef(false);
-	const genJobSeq = useRef(0);
-
-	useEffect(() => {
-		if (genRunningRef.current) return;
-		const next = genQueue.find((job) => job.status === "queued");
-		if (!next) return;
-		genRunningRef.current = true;
-		setGenQueue((queue) => queue.map((job) => (job.id === next.id ? { ...job, status: "running" } : job)));
-		(async () => {
-			try {
-				await executeMotionJob(next);
-				next.commandCompletion?.resolve();
-				setGenQueue((queue) => queue.map((job) => (job.id === next.id ? { ...job, status: "done" } : job)));
-			} catch (err) {
-				next.commandCompletion?.reject(err);
-				const message = err?.name === "AbortError" ? ko("Cancelled", "취소됨") : err?.message || String(err);
-				setGenQueue((queue) => queue.map((job) => (job.id === next.id ? { ...job, status: "error", error: message } : job)));
-			} finally {
-				genRunningRef.current = false;
-				generationPendingRef.current = false;
-			}
-		})();
-	}, [genQueue]);
-
-	useEffect(() => {
-		// Never for a draft: a preview is not a take and must not mint a chip.
-		if (!motion?.url || linePreviewUrl) return;
-		// Never for a generated take either — its own job is about to commit a
-		// real recipe with a real seed, and this placeholder would beat it to the
-		// strip and label it "불러옴".
-		if (takeRecipeRef.current || ardyRunning || genQueue.length > 0) return;
-		if (takeVersions.some((entry) => entry.motionUrl === motion.url)) return;
-		seedLoadedTake(motion.url, motion.prompt, motion.frames);
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [motion?.url, motion?.frames, linePreviewUrl, ardyRunning, genQueue.length, takeVersions]);
-
-	const readinessState = selectedMotionReadiness();
-	const lineReadinessState = motionReadiness(bridge, { body: { lineEdit: true }, lineEditSupported: lineEditBackend });
-	const trailReadinessState = motionReadiness(bridge, { body: { motionEdit: true } });
-
 	// Studio native ports. Kept together so the binding test executes these exact
 	// publication/history functions, not a substitute editor or parallel journal.
 	function readStudioCamera() {
@@ -6841,11 +4430,11 @@ export default function App() {
 	function readStudioState() {
 		const live = appContext.live.state;
 		const list = appContext.live.characters.map(c => c.id === loadedLayerCharRef.current ? {
-			...c, layer: { ...c.layer, waypoints: bufferRef.current.waypoints, promptClips: bufferRef.current.promptClips }, sessionMotion: bufferRef.current.motion,
+			...c, layer: { ...c.layer, waypoints: bufferRef.current.waypoints }, sessionMotion: bufferRef.current.motion,
 		} : c);
 		const targets = new Map(list.map(c => [c.id, { rig: live.rigs[c.id], motion: c.sessionMotion ?? null,
 			ikState: c.id === loadedLayerCharRef.current ? ikStateRef.current : ikStatesRef.current.get(c.id),
-			calibration: c.sessionMotion?.sceneCalibration, protectedFrames: c.id === loadedLayerCharRef.current ? physicsOptions.protectedFrames : [],
+			calibration: c.sessionMotion?.sceneCalibration, protectedFrames: [],
 			preserveAuthoredMotion: Boolean(c.layer?.waypoints?.length) }]));
 		return { host: { workspaceId: liveWorkspaceIdRef.current, documentEpoch: studioDocumentEpochRef.current,
 				sceneId: activeSceneIdRef.current, sceneEpoch: studioSceneEpochRef.current }, workspaceHandle: liveWorkspaceHandleRef.current,
@@ -6853,8 +4442,8 @@ export default function App() {
 			objects: storeRef.current.objects, characters: list, targets, shots: live.shots, frameCount: live.timeline.frameCount,
 			selection: live.studioSelection, activeCharacterId: live.activeCharacterId, selectedShotId: live.studioShotId,
 			view: live.studioView, camera: live.studioCamera ?? readStudioCamera(), filmback: live.filmback, manual: manualCameraOverrideRef.current,
-			bridgeReady: Boolean(bridge?.ok), busy: storeRef.current.present() !== storeRef.current.objects || Boolean(studioGestureRef.current ||
-				ikBodyDragRef.current || lineDragRef.current || lineDrawRef.current || linePinDragRef.current || live.studioPhysicsRunning || recRef.current) };
+			bridgeReady: false, busy: storeRef.current.present() !== storeRef.current.objects || Boolean(studioGestureRef.current ||
+				ikBodyDragRef.current || recRef.current) };
 	}
 	function sampleStudioStateAt(frame, current = readStudioState()) {
 		const shot = shotAtFrame(current.shots ?? current.shotDocument?.shots ?? [], frame);
@@ -6960,7 +4549,7 @@ export default function App() {
 		}));
 		parent.matrixAutoUpdate = false; parent.matrix.copy(target.rig.parent?.matrixWorld ?? new THREE.Matrix4()); parent.add(rig);
 		try {
-			if (target.motion) applyMotionFrame(rig, target.motion, sampleAt({ frameCount: target.motion.frames, motion: target.motion }, null, frame).motionFrame);
+			if (target.motion) applyTakeFrame(rig, target.motion, sampleAt({ frameCount: target.motion.frames, motion: target.motion }, null, frame).motionFrame);
 			// The clone shares the source rig's bind pose, so its contact radii
 			// and heights are the same numbers: measure the source once and
 			// hand them over instead of re-scanning every vertex per query (#413).
@@ -7004,7 +4593,6 @@ export default function App() {
 		studioSelection: selectedSceneObjectId ? { kind: "object", id: selectedSceneObjectId, hierarchyId: selectedHierarchyId } :
 			selectedStudioChar ? { kind: "character", id: selectedStudioChar, hierarchyId: selectedHierarchyId } : selectedHierarchyId === "camera" ? { kind: "camera", id: "camera" } : { kind: "scene", id: activeSceneId },
 		studioShotId: activeShot?.id ?? null,
-		studioPhysicsRunning: autoPhysicsRunning,
 		// The agent's mode vocabulary is four (studio-agent-protocol.js): the
 		// sculpt turntable is the Stage's scene seen in isolation.
 		studioView: { mode: sculptMode ? "scene" : workflowMode, frame: tlFrame, playing: tlPlaying, lookThrough: lookThroughShot, grid: gridView, autoColor },
@@ -7017,20 +4605,17 @@ export default function App() {
 		stepHistory: stepStudioHistory, capture: () => liveQueries.capture_framing_png({}), capturePlan: () => liveQueries.capture_plan_png({}),
 		// One shot frame as raw read-back pixels (rows bottom-up), from the export
 		// path captureShotFramePng uses; an export in flight renders at its output.
-		renderFrameBuffer: frame => {
-			const output = recRef.current?.capture ? recRef.current.request.context.output : shotOutput, data = withExportFrame(frame);
+		// With a view (verify_result's own cameras) the posed frame is seen by that
+		// camera instead, at view.output; the shot camera is left as it is.
+		renderFrameBuffer: (frame, view = null) => {
+			const output = view?.output ?? (recRef.current?.capture ? recRef.current.request.context.output : shotOutput), data = withExportFrame(frame, view && (() => captureRef.current.renderView(view)));
 			if (!data) throw new Error("The shot renderer is not ready");
 			return { data, width: output.width, height: output.height };
 		},
 		encodePng: (buffer, output) => bufferToPng(buffer, output),
 		// The pose library a character.pose patch resolves its id against.
 		poses: () => [DEFAULT_POSE, ...customPoses],
-		loadArtifact: (artifact, options) => {
-			// Keep the server-pinned URL. Stripping the origin would silently fetch
-			// from a different bridge after a reconnect. The bridge owner must allow
-			// CORS or supply a pinned same-origin artifact proxy; never use load_motion.
-			return loadMotionFromUrl(artifact.url, options);
-		},
+		
 		ikRevision: (id, stamp) => {
 			const prior = studioIkStampsRef.current.get(id);
 			if (!prior || prior.stamp !== stamp) studioIkStampsRef.current.set(id, { stamp, revision: (prior?.revision ?? 0) + 1 });
@@ -7049,9 +4634,9 @@ export default function App() {
 		state: () => ({
 			shots: appContext.live.state.shots, objects: storeRef.current.objects, characters: appContext.live.characters, frame: tlFrame, frameCount: tlFrameCount,
 			selectedObjectId: selectedSceneObjectId, activeCharacterId: activeChar?.id ?? null,
-			promptBlockCount: promptClips.filter((clip) => clip.text.trim()).length,
-			generating: Boolean(generationPendingRef.current || genRunningRef.current || generationBusy),
-			motionReady: bridge !== null && !bridgeChecking,
+			
+			generating: false,
+			motionReady: false,
 			// The Export menu offers Video (mp4) on exactly these conditions.
 			exporting: Boolean(recRef.current), canExportVideo: shots.length > 0 || hasCameraKeys || Boolean(motion),
 			// The scene refs move synchronously with every scene handler.
@@ -7064,10 +4649,8 @@ export default function App() {
 			aiShot: { mode, imageModel },
 			// AI-video motion: the account's Fal access, the card's job state and
 			// the daily generations left (null until the server says).
-			i2vMotion: { enabled: i2vMotionEnabled, status: i2vMotion.status, dailyRemaining: i2vMotion.dailyRemaining ?? null },
 		}),
 		addTimelineShot, splitTimelineShot, duplicateTimelineShot, removeTimelineShot, setTimelineShotRange, moveTimelineShot,
-		runAllPromptBlocks,
 		duplicateSelectedSceneObject,
 		addCharacterWaypoint, moveCharacterWaypoint, removeCharacterWaypoint, clearCharacterWaypoints, setWaypointMode,
 		setCharacterIkKey, removeCharacterIkKey, clearCharacterIkKeys, attachSceneObject, setShotCameraRail, clearShotCameraRail,
@@ -7077,7 +4660,7 @@ export default function App() {
 		afterRender: () => new Promise(resolve => renderWaitersRef.current.push(resolve)),
 		saveProject, projectFileGranted: async () => (await queryHandlePermission(projectHandleRef.current)) === "granted",
 		importAsset: (args, context) => objectsDomain.importAsset(args, context), fetchImportSource,
-		setAiShotMode: setMode, setAiImageModel: setImageModel, generate, generateI2vMotion,
+		setAiShotMode: setMode, setAiImageModel: setImageModel, generate,
 	});
 	if (!studioActionsRef.current) studioActionsRef.current = createStudioAppActions(appContext.actionPorts);
 	/** UI door into the shared registry. Refusal messages are written for the
@@ -7105,7 +4688,7 @@ export default function App() {
 		studioBindingRef.current.publishSemantic = (domain, after) => {
 			if (domain === "characters" && Array.isArray(after)) { appContext.publishCharacters(after); appContext.patchLive({ characters: after }); }
 			if (domain === "shots") appContext.patchLive({ shots: after });
-			if (domain === "promptClips") bufferRef.current.promptClips = after;
+			
 		};
 	}
 	useEffect(() => () => studioBindingRef.current?.dispose(), []);
@@ -7180,42 +4763,25 @@ export default function App() {
 		deleteSceneDocumentFromUi, addSceneObject, renameSceneObject, deleteSceneObject, frameSelection, groupObjectUnderNewEmpty, renameRequest,
 		toggleHierarchyHidden, propsDrop, hierarchyReparent, agentTouchedRows, workflowMode,
 		selectWorkflowMode, gizmoMode, setGizmoMode, snapEnabled, setSnapEnabled, sculptView, requestSculptView,
-		preset, applyPreset, cameraPresetId, i2vMotionCameraLocked, shotAspectKey,
+		preset, applyPreset, cameraPresetId, shotAspectKey,
 		fovDeg, shotsDomain, shot, setNonce, workspaceLayout,
 		viewMenuTriggerRef, viewMenuOpen, setViewMenuAnchor, setViewMenuOpen, viewLooksActive,
 		viewMenuAnchor, gridView, setGridView, autoColor, setAutoColor,
 		guideMode,
 		isCharacterSelection, partColoursChoice, embedMode, agentCollapsed, sceneSaveError,
 		studioAgentError, studioAgentMode, setStudioAgentMode, AgentPanel, setAgentCollapsed,
-		buildStudioAgentContext, highlightAgentTargets, generateI2vMotionFromUi, selectedSceneObject, rigSelection,
+		buildStudioAgentContext, highlightAgentTargets, selectedSceneObject, rigSelection,
 		inspectorActionsOpen, setInspectorActionsOpen, deleteSelectedSceneObject, inspectorHasContent, keyLightSelected,
-		keyLight, changeKeyLight, resetKeyLight, isCameraSelection, moveSequence,
+		keyLight, lighting, changeKeyLight, resetKeyLight, isCameraSelection, moveSequence,
 		cameraKeys, activeShot, changeShotTargetModel, updateCharacterAt, openStudio,
 		posing, removeCharacter, setShowB, activeChar, changeInspectorCharacter,
-		i2vMotionModel, i2vMotionActions, setI2vMotionStudioOpen, selectablePoses, ikApplyPoseAsKey,
-		setStudioPick, appContext, removePose, setPhotoPoseError, photoPoseFileRef,
-		photoPoseState, photoPoseError, activeRig, saveCurrentPose, multiModelStatus,
-		multiModelStage, multiModelFileRef, chooseMultiModelFile, multiModelSource, multiModelUrl,
-		setMultiModelUrl, useMultiModelUrl, pasteMultiModelUrl, multiModelProgress, multiModelError,
-		multiModelFootage, extractMultiModelMotion, multiModelExtract, multiModelTake, multiModelExtractProgress,
-		multiModelExtractError, bridge, promptBlocksReveal, promptClips, selectedPromptId,
-		setSelectedPromptId, setArdyPrompt, setTlFrame, tlFrameCount, changePromptClip,
-		ardySeed, changeArdySeed, lineEditMode, toggleLineEditMode, linePreviewUrl,
-		lineCurve, lineDrifted, lineTrack, setLineTrack, linePinMode,
-		setLinePinMode, linePins, lineClipFrames, lineEditRange, setLineRange,
-		lineRadius, changeLineRadius, lineCurveDirty, lineEditFrom, lineEditTo,
-		lineCurvePointCount, lineDriftHint, lineCurveHidden, linePreviewBusy, linePreviewMs,
-		linePreviewError, generationBusy, bridgeChecking, lineReadinessState, runLineEdit,
-		openMotionSetup, recheckMotionHealth, resetLineCurve, exitLineEditMode, readinessState,
-		ardyRunning, cancelArdy, ardyStatus, ardyOutcome, addPromptClip,
+		selectablePoses, ikApplyPoseAsKey,
+		setStudioPick, appContext, removePose, activeRig, saveCurrentPose,
+		setTlFrame, tlFrameCount,
 		tlFrame, isRigSelection, ikChains, ikFocus, footSnap, poseObjectOpacity, setPoseObjectOpacity, capturePoseImage,
-		collisionCleanupSupported, runFixCollisions, runFixCollisionsRange, autoPhysicsRunning, physicsProgress,
-		physicsPreview, physicsShow, physicsOptions, platformFitRunning, platformFitProgress,
-		platformFitLast, platformFitApplied, changePhysicsOptions, runAutoPhysics, showPhysicsPreview,
-		applyPhysicsPreview, cancelPhysicsPreview, ikEditTool, setIkEditTool, showTrails,
-		setShowTrails, trailFalloffS, setTrailFalloffS, trailEdit, trailTrackFocus, selectTrailTrack, clearTrailTrackFocus, runTrailRegeneration,
+		ikEditTool, setIkEditTool,
 		pendingIkEdit, applyPendingIkEdit, cancelPendingIkEdit,
-		trailReadinessState, rangePins, rangePinResiduals, rangePinSelection, rangePinPartPick,
+		rangePins, rangePinResiduals, rangePinSelection, rangePinPartPick,
 		rangePinPreview, setRangePinSelection, setRangePinPartPick, previewRangePinDraft, applyRangePinDraft,
 		deleteRangePin, hasEnvSheet, environment, style, environmentImage,
 		inspectorDrop, cutoutInputRef, meshInputRef, importCutout, importMesh,
@@ -7223,31 +4789,27 @@ export default function App() {
 		matteCanvasRef, matteStats, matteMode, setMatteMode, matteEditorRef,
 		matteTolerance, setMatteTolerance, matteBrush, setMatteBrush, matteShrink,
 		setMatteShrink, matteFeather, setMatteFeather, matteBusy, applyMatte,
-		recentObjectColors, rememberSceneObjectColor, objectColorDraft, setObjectColorDraft, posePhotoFile,
+		recentObjectColors, rememberSceneObjectColor, objectColorDraft, setObjectColorDraft,
 		posingIndex, posingChar, charA, allPoses, studioPick,
 		posingClosing, closeStudio, castDomain, setToast, savePose,
 		bottomTab, setBottomTab, beginAssetDrag, shelfImageIds, shelfMeshIds,
 		manageAssetStorage, setManageAssetStorage, unusedAssetIds, usedAssetIds, usageCounts,
 		projectAssetGraphSignature, assetTrash, deleteUnusedAsset, undoDeletedAsset, deletingAssetId,
-		takeSourceUrl, sceneDisabledReason, sceneMenuOpen, setSceneMenuOpen, refineDisabledReason,
-		enterRefineMode, sceneGenerateDisabledReason, runArdy, sceneAgainDisabledReason, runSceneAgain,
-		addSceneBlock, preserveStrength, setPreserveStrength, waypointMode, preserveTracksLine,
-		takeRecipe, takeVersions, loadTakeVersion, replayNotices, craneSelectedIndex,
+		waypointMode,
+		craneSelectedIndex,
 		addActiveCranePoint, deleteSelectedCranePoint, setCraneSelectedIndex, tlFps, ghostLayers,
-		pathSpeed, tlPlaying, pendingWaypointFrame, stateBadge, applyMotionTrim,
-		resetMotionTrim, cutMotionAtPlayhead, changeMotionSegmentSpeed, removeMotionSegmentById, bodyContact,
+		pathSpeed, tlPlaying, pendingWaypointFrame, stateBadge, bodyContact,
 		activeShotIdx, railDraw, pathDraw, pathTarget, setPathDraw, setRailDraw,
 		setWorkspaceLayout, timingTokenRef, railCurve, ikAddKeyframe, ikDeleteKeyframe, pathPointIndex, setPathPointIndex,
 		setBodyContact, setFootSnap, advanceFrame, stepFrame, cameraPreviewEndRef,
 		manualCameraOverrideRef, setTlPlaying, setWaypointMode, selectActiveCharacterInHierarchy,
 		toggleWaypointMode: storyboardProject ? undefined : toggleWaypointMode,
-		setActiveWaypointId, setPendingWaypointFrame, removeWaypoint, queueRootWaypointFrame, revealPromptBlocks,
-		resizePromptClip, movePromptClip, removePromptClip, setSelectedHierarchyId, addCameraKeyframe,
+		setActiveWaypointId, setPendingWaypointFrame, removeWaypoint, queueRootWaypointFrame, setSelectedHierarchyId, addCameraKeyframe,
 		moveCameraKeyframe, removeCameraKeyframe, syncActiveCameraFraming, activeCamera, activeShotDuration,
 		changeActiveCamera, cameraRail, previewCameraShot, toggleCameraRailDraw, deleteCameraRail,
 		selectTimelineShot, clearMotion,
 		spawnCharacter, exportShotVideo, stopShotRecording, retryExport, poseRefusal,
-		beginWorkspaceResize, motionSetupReveal, motionSetupKind,
+		beginWorkspaceResize,
 		preferencesOpen, setPreferencesOpen, statusText, setStatusText, previewRanges, setPreviewRanges,
 		flySpeed, liveHubStatus: liveWorkspaceHandle ? "connected" : "disconnected",
 		agentOpen: !agentCollapsed,
@@ -7343,16 +4905,9 @@ export default function App() {
 								timelineHeight={workspaceLayout.timelineHeight}
 								planZoom={workspaceLayout.planZoom}
 							/>
-							<color attach="background" args={[gridView ? GRID_BACKGROUND : stageBackground(uiTheme)]} />
-							{/* The open stage runs 500 m; without a falloff the whole deck
-							    reads at once and the horizon sits a kilometre away. Blender's
-							    viewport answer is a clip distance that lets the neutral void
-							    show through; the fog below is the seamless version of the
-							    same idea — it fades the floor INTO the background colour, so
-							    past ~120 m the deck simply ceases to exist with no horizon
-							    line, no clip edge and no tone break. */}
-							<fog attach="fog" args={gridView ? [GRID_FOG.color, GRID_FOG.near, GRID_FOG.far] : [stageBackground(uiTheme), 18, 54]} />
-							<StageLights keyLight={keyLight} neutral={gridView} light={uiTheme === "light"} />
+							{/* Sky, fog and exposure of the stage look (stage-sky.jsx), for every pane and export. */}
+							<StageAtmosphere lighting={lighting} keyLight={keyLight} theme={uiTheme} grid={gridView} />
+							<StageLights keyLight={keyLight} lighting={lighting} neutral={gridView} light={uiTheme === "light"} />
 							<KeyLightPuck
 								keyLight={keyLight}
 								selected={keyLightSelected}
@@ -7365,13 +4920,13 @@ export default function App() {
 								onChange={(patch) => changeKeyLight("puck", patch)}
 								onDragEnd={endGestureUndo}
 							/>
-							{gridView ? <GridFloor layer={GIZMO_LAYER} /> : <Room light={uiTheme === "light"} />}
+							{gridView ? <GridFloor layer={GIZMO_LAYER} /> : <Room light={uiTheme === "light" && !lighting.sky && !(lighting.hdr && lighting.hdrBackground)} />}
 							<SetProps
 								objects={stageSceneObjects}
 								authoredObjects={sceneObjects}
 								selectedId={selectedSceneObjectId}
 								frameRef={propFrameRef}
-								take={{ frameCount: tlFrameCount, fps: tlFps }}
+								take={{ frameCount: tlFrameCount, fps: tlFps, objectTracks }}
 								attachFrameRef={attachFrameRef}
 								syncRef={propSyncRef}
 								worldRef={propWorldRef}
@@ -7440,7 +4995,7 @@ export default function App() {
 									objectId={view.parent}
 									objectsRef={sceneObjectLookupRef}
 									frameRef={propFrameRef}
-									take={{ frameCount: tlFrameCount, fps: tlFps }}
+									take={{ frameCount: tlFrameCount, fps: tlFps, objectTracks }}
 									registryRef={carrierRegistryRef}
 								>
 									<Character
@@ -7453,18 +5008,17 @@ export default function App() {
 										partColoursMode={view.partColoursMode}
 										pose={view.pose}
 										scale={view.scale}
-										onRig={view.onRig}
-										pickId={view.pickId}
+										onRig={view.onRig} pickId={view.pickId}
 									/>
 								</ObjectCarrier>
 							))}
+							<ViewGhosts rig={rigs[activeChar.id]} take={motion} frame={tlFrame} objects={sceneObjects} propTake={{ frameCount: tlFrameCount, fps: tlFps, objectTracks }} /><DraftGhost rigs={rigs} objects={sceneObjects} />
 
 							{/* Selection marker: XYZ tripod + ring on the picked cast
 							    member; the X/Z arrows drag it across the deck. */}
 							{gizmoView && !playMode && !posing && !ikMode && (
 								<ObjectGizmo
 									pickOnly
-									claimPointer={lineEditMode ? lineGrabProbe : undefined}
 									object={characterGizmoObject}
 									objects={characterGizmoObject ? [characterGizmoObject] : []}
 									mode={gizmoMode}
@@ -7554,7 +5108,6 @@ export default function App() {
 							    and the wheel dollies without wrecking the framing. */}
 							<FlyControls
 								enabled={!posing && !playMode && !sculptMode}
-								cameraLocked={lookThroughShot && i2vMotionCameraLocked}
 								camRef={ikMode ? poserCamRef : lookThroughShot ? shotCamRef : editorCamRef}
 								look={ikMode ? poserLook : lookThroughShot ? look : editorLook}
 								getPivot={() => {
@@ -7696,6 +5249,7 @@ export default function App() {
 							<ObjectGizmo
 								object={cameraGizmoObject ?? lightGizmoObject ?? (selectedSceneObject && !isEffectivelyHidden(selectedSceneObject, sceneObjects, characters) ? gizmoSceneObject : null)}
 								objects={sceneObjects}
+								held={cameraGizmoObject || lightGizmoObject ? null : heldEdit.gizmo}
 								mode={lightGizmoObject ? "move" : cameraGizmoObject ? (gizmoMode === "scale" ? "move" : gizmoMode) : gizmoMode}
 								snap={snapEnabled}
 								enabled={!planIsMain && !posing && !ikMode && !playMode && !sculptMode}
@@ -7717,7 +5271,6 @@ export default function App() {
 									)
 								}
 								onGroundClick={waypointMode && !planIsMain ? addFloorWaypoint : undefined}
-								claimPointer={lineEditMode ? lineGrabProbe : undefined}
 							/>
 							{!preview && railCurve && (
 								<CameraRailScenePreview
@@ -7782,26 +5335,7 @@ export default function App() {
 								height={shotOutput.height}
 							/>
 							<CaptureRig apiRef={mcpCaptureRef} camRef={shotCamRef} width={MCP_CAPTURE_W} height={MCP_CAPTURE_H} />
-							{/* IK-mode motion trails: the root path plus the focused effector's
-							    trajectory, grabbable to deform the take with falloff. */}
-							{ikMode && motion && (
-								<MotionTrails
-									motion={motion}
-									rig={activeRig}
-									baseY={activeChar.y ?? 0}
-									charScale={activeChar.scale ?? 1}
-									ikFocus={ikFocus}
-									activeTrackId={trailTrackFocus}
-									falloffFrames={trailFalloffFrames}
-									playheadFrame={tlFrame}
-									pendingEdit={trailEdit}
-									enabled={ikMode && ikEditTool === "trail" && showTrails && !posing && !playMode}
-									visible={showTrails}
-									onDragStart={onTrailDragStart}
-									onDragPreview={onTrailDragPreview}
-									onDragEnd={onTrailDragEnd}
-								/>
-							)}
+							
 							<DualRender
 								stageRef={stageRef}
 								mainRef={mainPaneRef}
@@ -7839,13 +5373,6 @@ export default function App() {
 						    pointer only when it actually grabs the curve. Everything else
 						    — orbit, pan, click-to-select — reaches the WebGL canvas
 						    untouched while the mode is on. */}
-						{lineEditMode && (
-							<canvas
-								ref={lineOverlayRef}
-								className="line-edit-overlay"
-								aria-hidden="true"
-							/>
-						)}
 
 						{!(globalThis.__cozyclayWebGLAvailable ??= (() => {
 							if (typeof document === "undefined") return true;
@@ -7982,7 +5509,6 @@ export default function App() {
 			}
 		>
 
-			{i2vMotionStudioOpen && <I2vMotionModal model={i2vMotionModel} actions={i2vMotionActions} onClose={() => setI2vMotionStudioOpen(false)} />}
 			{result && resultOpen && (
 				<ResultModal
 					result={result}

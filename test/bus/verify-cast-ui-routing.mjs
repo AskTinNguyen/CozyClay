@@ -5,7 +5,7 @@ import { castFixture } from './cast-fixture.mjs';
 
 const ok = receipt => { assert.equal(receipt.ok, true, JSON.stringify(receipt)); return receipt; };
 test('cast panels route their authored handlers through run rather than native snapshot callbacks', () => {
-  const panels = ['SubjectsPanel', 'CharacterTransformPanel', 'RigPanel', 'PosePanel', 'PromptBlocksPanel'];
+  const panels = ['SubjectsPanel', 'CharacterTransformPanel', 'RigPanel', 'PosePanel'];
   let sites = 0;
   for (const name of panels) {
     const source = readFileSync(new URL(`../../src/panels/${name}.jsx`, import.meta.url), 'utf8');

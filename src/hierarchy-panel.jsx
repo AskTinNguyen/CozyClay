@@ -123,7 +123,7 @@ const OUTLINER_TYPES = {
 
 function outlinerTypeFor(node) {
 	const key = node.kind === "object"
-		? node.renderer === "empty" ? "empty" : "mesh"
+		? node.renderer === "empty" ? "empty" : node.renderer === "light" ? "light" : "mesh"
 		: node.kind === "character" || node.kind === "bone"
 			? "cast"
 			: node.kind === "camera"

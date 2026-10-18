@@ -1,16 +1,16 @@
 # CozyClay MCP server
 
 Lets an AI assistant (Claude Desktop, Cursor, any MCP client) block a scene, place the camera,
-generate character motion and read the shot back as film vocabulary — then turn it into an AI
+compile character motion and read the shot back as film vocabulary — then turn it into an AI
 image/video prompt.
 
 Works two ways, with one tool catalog:
 
-- **Editor open** — tool calls drive the visible viewport live: camera, cast, set, motion,
-  prompt blocks on the timeline.
+- **Editor open** — tool calls drive the visible viewport live: camera, cast, set and the
+  compiled motion on the timeline (`studio_run` with `motion.compile`).
 - **No editor** — scene, camera, prompt and project-file tools run in memory with no browser,
-  GPU or build step. `capture_frame`, `set_prompt_blocks`, `generate_motion`, `apply_batch`,
-  and `import_mesh` explicitly require a live editor.
+  GPU or build step. `capture_frame`, `apply_batch` and `import_mesh` explicitly require a
+  live editor.
 
 ## Run it locally
 
@@ -77,7 +77,6 @@ generated frame matches the blocking instead of drifting off into a generic shot
 | `group_objects` | attach children to a parent so they move as one; pass `parent: null` to detach |
 | `apply_batch` | execute up to 100 object mutations as one user-visible undo transaction |
 | `render_prompt` | the shot as an AI image or video prompt |
-| `generate_motion` | multi-phase character motion through the ARDY bridge — phases land as prompt blocks |
 | `mark_camera_move` / `describe_camera_move` | name a move between two camera positions |
 | `add_scene` / `switch_scene` | multiple scenes per project |
 | `open_project` / `save_project` | read and write `.cclayproject` files |
@@ -116,38 +115,29 @@ thin terminal front end over this hub, not a parallel surface, so anything true 
 above (admission envelopes, receipts, per-workspace exclusion) is true of it too. The
 terminal-agent guide for it is [`../docs/agent-cli.md`](../docs/agent-cli.md).
 
-## Motion generation
+## Motion
 
-`generate_motion` takes plain-language beats and a length:
-
-```
-phases: ["seated on a chair, slowly stands up",
-         "breaks into a sprint",
-         "trips and falls hard to the ground"]
-seconds: 10
-```
-
-It tiles them into contiguous ARDY segments, streams the generation through the local bridge
-(`127.0.0.1:5181`, started by `npm run dev`), and — when an editor is connected — loads the
-result onto the active character with prompt blocks on the timeline. Beats longer than the
-per-block limit are split into consecutive blocks, so one phase can produce multiple blocks.
-Pass a previous `motion_url` to reload a clip without generating again.
+Motion is compiled, not generated: run `motion.compile` through `studio_run` with a motion
+spec (key poses, anchors, props, walks, hinged objects, task checks). The Studio bakes every
+frame on the rig, answers the QA groups, and installs the take; `motion.sample` and
+`motion.qa` read it back. The spec format and the loop are in
+[`../docs/motion3-agent-guide.md`](../docs/motion3-agent-guide.md).
 
 ## Storyboard projects and capsule figures
 
-The tool list is fixed when the server starts, so it is the same 28 tools in every project. A
+The tool list is fixed when the server starts, so it is the same 27 tools in every project. A
 tool that does not apply to the project or to its target answers a structured refusal instead
 of acting; nothing is sent to the editor and nothing changes. The refusal is the tool's only
 text content, with `isError: true`:
 
 ```json
-{ "ok": false, "code": "NOT_IN_MODE", "reason": "This project is a Storyboard - generate_motion is available in Animation projects." }
+{ "ok": false, "code": "NOT_IN_MODE", "reason": "This project is a Storyboard - mark_camera_move is available in Animation projects." }
 ```
 
 | code | when | tools |
 | --- | --- | --- |
-| `NOT_IN_MODE` | the project's `previsMode` is `storyboard` | `generate_motion`, `set_prompt_blocks`, `load_motion`, `mark_camera_move` |
-| `TARGET_NOT_READY` | the target character is a capsule figure (`model: "proxy-figure"`) | `generate_motion` (the editor's active character), `load_motion` (its `character`, else the active one) |
+| `NOT_IN_MODE` | the project's `previsMode` is `storyboard` | `mark_camera_move` |
+| `TARGET_NOT_READY` | the target character is a capsule figure (`model: "proxy-figure"`) | `studio_run` motion, take, IK and pose actions |
 
 `describe_scene` reports `previsMode: storyboard` or `previsMode: animation` (the connected
 editor's project; `open_project` sets it without one) and marks each cast member
@@ -156,7 +146,7 @@ editor's project; `open_project` sets it without one) and marks each cast member
 A **storyboard project** is a sequence of still shots: one picture per panel, held for a
 number of frames, with a caption. Block it with the camera, cast and set tools, and run the
 still-shot commands (`shot.createStill`, `shot.setCaption`, `shot.setHold`, ...) through
-`studio_run`. Motion, prompt blocks and named camera moves belong to Animation projects.
+`studio_run`. Motion and named camera moves belong to Animation projects.
 
 A **capsule figure** is a rigless stand-in for blocking: `add_character { subject, model:
 "proxy-figure", posture: "sit" }`. It places, turns and frames like any cast member and holds a

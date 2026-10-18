@@ -1,13 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { FiAlertTriangle, FiArrowUp, FiCheck, FiChevronRight, FiClock, FiDownload, FiFilm, FiImage, FiMoreHorizontal, FiPaperclip, FiPlus, FiRotateCw, FiX } from "react-icons/fi";
-import {
-	ATTACHMENT_FAILED_NOTICE,
-	ATTACHMENT_LIMIT_NOTICE,
-	ATTACHMENT_TYPE_NOTICE,
-	attachmentFilesFromTransfer,
-	attachmentFromFile,
-	transferCarriesFiles,
-} from "./attachment-image.js";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { FiAlertTriangle, FiArrowUp, FiCheck, FiChevronRight, FiClock, FiDownload, FiImage, FiMoreHorizontal, FiPaperclip, FiPlus, FiRotateCw, FiX } from "react-icons/fi";
+import { ATTACHMENT_FAILED_NOTICE, ATTACHMENT_LIMIT_NOTICE, ATTACHMENT_TYPE_NOTICE, attachmentFilesFromTransfer, attachmentFromFile, transferCarriesFiles } from "./attachment-image.js";
 import { isImeComposing } from "../ime.js";
 import { useStudioShell } from "../shell/studio-shell-context.js";
 import { ko } from "../locale.js";
@@ -31,10 +24,8 @@ import {
 	clampPanelWidth,
 	createAgentTransport,
 	panelPresentation,
-	providerEnvLabel,
 	requestHostImageAction,
-	resolveToolLabel,
-	formatElapsed,
+	formatTurnClock,
 	formatResetIn,
 	readStoredPanelWidth,
 	readStoredSupervisor,
@@ -47,6 +38,11 @@ import {
 	supervisorFollowUp,
 } from "./agent-client.js";
 import "./agent-panel.css";
+import { AgentProgressCard } from "./AgentProgressCard.jsx";
+import { LoginPanel } from "./LoginPanel.jsx";
+import { TurnSteps } from "./AgentTurnSteps.jsx";
+import { ReplyText } from "./AgentReplyText.jsx";
+import { stepLabel, turnLayout } from "./agent-turn.js";
 
 function relativeTime(value, now = Date.now()) {
 	const at = Date.parse(value || "");
@@ -63,32 +59,6 @@ function relativeTime(value, now = Date.now()) {
 
 function StatusDot({ tone, title }) {
 	return <span className={`agent-status-dot ${tone}`} title={title} aria-hidden="true" />;
-}
-
-function ToolCallCard({ call, presentation, onRetry }) {
-	const tone = call.status === "running" ? "busy" : ["failed", "cancelled"].includes(call.status) ? "alert" : "ok";
-	// The badge marks a call that edits the host surface, so it is drawn exactly
-	// for the families that surface names.
-	const hostTool = Object.hasOwn(presentation.toolLabels, call.name);
-	const detail = call.error ? `error: ${call.error}` : JSON.stringify(call.result ?? call.args ?? {}, null, 2);
-	return <div className={`agent-card agent-tool-card${call.status === "failed" ? " failed" : ""}`} data-tool-status={call.status} data-tool-name={call.name}>
-		<details>
-			<summary>
-				<StatusDot tone={tone} title={call.status} />
-				<span className="agent-tool-label">{resolveToolLabel(call, presentation.toolLabels)}</span>{hostTool && <span className="agent-tool-badge">{presentation.toolBadge}</span>}
-				<span className="agent-tool-elapsed">{call.status === "running" ? "running…" : call.status === "cancelled" ? (call.result?.status === "not_applied" ? "not applied" : "result unknown") : formatElapsed(call.elapsedMs)}</span>
-				<FiChevronRight size={12} aria-hidden="true" />
-			</summary>
-			<pre className="agent-tool-detail">{detail}</pre>
-		</details>
-		{call.failure && <div className="agent-error" role="alert">
-			<span>{call.failure.message || ERROR_COPY[call.failure.code] || "The turn failed."}</span>
-			<div className="agent-error-actions">
-				<button type="button" className="agent-ghost-button agent-error-retry" onClick={onRetry}>Retry</button>
-				<button type="button" className="agent-ghost-button agent-error-details" onClick={(event) => { const card = event.currentTarget.closest(".agent-tool-card"); const details = card?.querySelector("details"); if (details) details.open = !details.open; }}>Details</button>
-			</div>
-		</div>}
-	</div>;
 }
 
 function ImageResultCard({ image, onUse, onUndo, onRegenerate, onOpen }) {
@@ -250,69 +220,15 @@ const RECOVERY_COPY = {
 	new_intent: "Tell the agent what to do with the changed target.",
 	reconcile: "The result is unknown; reconcile before changing this target.",
 	sign_in: "Sign in again to continue.",
+	fix_key: "Log in again under Connect a model, then retry.",
 };
 
-function FailureCard({ failure, onRetry }) {
+function FailureCard({ failure, onRetry, onFixKey }) {
 	return <div className="agent-card agent-failure-card" data-failure-code={failure.code} role="alert">
 		<div className="agent-failure-head"><FiAlertTriangle size={12} aria-hidden="true" /><span className="agent-failure-code">{failure.code}</span></div>
 		<p className="agent-failure-message">{failure.message || "The command did not complete."}</p>
 		<p className="agent-failure-recovery">{RECOVERY_COPY[failure.recovery?.action] || RECOVERY_COPY.none}{failure.preserved?.authoredState === "unchanged" ? " Nothing in the scene changed." : failure.preserved?.authoredState === "unknown" ? " Whether the scene changed is unknown." : ""}</p>
-		{failure.recovery?.retryAllowed && <div className="agent-error-actions"><button type="button" className="agent-ghost-button agent-error-retry" onClick={onRetry}>Retry</button></div>}
-	</div>;
-}
-
-// One provider's credential row. The key lives in this component and nowhere
-// else: it is typed into a password field, handed to the transport once and
-// dropped the moment the sidecar accepts it, so no store, no transcript and no
-// screenshot can ever carry it. The sidecar answers with the SOURCE of a key
-// (env / file), never with a key, which is what the row reports.
-function ProviderKeyRow({ provider, onSave, onRemove }) {
-	const [draft, setDraft] = useState("");
-	const [busy, setBusy] = useState(false);
-	const [error, setError] = useState("");
-	const fromEnv = provider.authSource === "env";
-	const fromFile = provider.authSource === "file";
-	const envLabel = `set by ${providerEnvLabel(provider.id)}`;
-	const inputId = `agent-key-${provider.id}`;
-	const run = async (action) => {
-		setBusy(true);
-		setError("");
-		try {
-			await action();
-			// The key is gone from the page the instant it is stored.
-			setDraft("");
-		} catch (failure) {
-			// The sidecar's own refusal, which never quotes key material.
-			setError(failure?.message || "The sidecar refused that key.");
-		} finally {
-			setBusy(false);
-		}
-	};
-	return <div className="agent-key-row" data-provider={provider.id} data-provider-source={provider.authSource || "none"} data-provider-signed-in={provider.signedIn ? "true" : "false"}>
-		<div className="agent-key-head">
-			<StatusDot tone={provider.signedIn ? "ok" : ""} title={provider.signedIn ? "key configured" : "no key"} />
-			<label className="agent-key-label" htmlFor={inputId}>{provider.label}</label>
-			{/* The head states WHERE the key lives in two words; the variable's own
-			    name belongs on the input it replaces, where there is room for it. */}
-			<span className="agent-key-source">{fromEnv ? "environment" : fromFile ? "saved on this machine" : "no key"}</span>
-		</div>
-		<div className="agent-key-controls">
-			<input
-				id={inputId}
-				className="agent-key-input"
-				type="password"
-				autoComplete="off"
-				spellCheck="false"
-				aria-label={`${provider.label} API key`}
-				placeholder={fromEnv ? envLabel : provider.signedIn ? "Replace key" : "Paste API key"}
-				disabled={fromEnv || busy}
-				value={draft}
-				onChange={(event) => { setDraft(event.target.value); setError(""); }}
-			/>
-			<button type="button" className="agent-key-save" disabled={fromEnv || busy || !draft.trim()} onClick={() => run(() => onSave(provider.id, draft))}>Save</button>
-			{fromFile && <button type="button" className="agent-ghost-button agent-key-remove" disabled={busy} onClick={() => run(() => onRemove(provider.id))}>Remove</button>}
-		</div>
-		{error && <p className="agent-key-error" role="alert">{error}</p>}
+		{failure.recovery?.retryAllowed && <div className="agent-error-actions">{failure.recovery.action === "fix_key" && onFixKey && <button type="button" className="agent-ghost-button agent-error-keys" onClick={onFixKey}>Log in again</button>}<button type="button" className="agent-ghost-button agent-error-retry" onClick={onRetry}>Retry</button></div>}
 	</div>;
 }
 
@@ -336,7 +252,6 @@ export default function AgentPanel({
 	surface = "workflow",
 	buildContext = null,
 	onImageAction = null,
-	onI2vAction = null,
 	onReceipt = null,
 }) {
 	// What this host shows around the shared conversation: labels, chips, the
@@ -405,10 +320,8 @@ export default function AgentPanel({
 	const [lightbox, setLightbox] = useState(null);
 	const [overlay, setOverlay] = useState(() => !embedded && (globalThis.innerWidth || 1440) < AGENT_PANEL_OVERLAY_BREAKPOINT);
 	const [historyOpen, setHistoryOpen] = useState(false);
-	// Provider credentials, read from the sidecar only while the section is open.
+	// Connect a model (pi's login list, LoginPanel.jsx) reads its own list from the sidecar while it is open.
 	const [keysOpen, setKeysOpen] = useState(false);
-	const [providers, setProviders] = useState([]);
-	const [providersState, setProvidersState] = useState("loading");
 	const [historySessions, setHistorySessions] = useState([]);
 	const [restoreNotice, setRestoreNotice] = useState("");
 	// Why the last steer did not reach the running turn. It reads in the same
@@ -427,8 +340,6 @@ export default function AgentPanel({
 	buildContextRef.current = buildContext;
 	const imageActionRef = useRef(onImageAction);
 	imageActionRef.current = onImageAction;
-	const i2vActionRef = useRef(onI2vAction);
-	i2vActionRef.current = onI2vAction;
 	const receiptRef = useRef(onReceipt);
 	receiptRef.current = onReceipt;
 
@@ -479,10 +390,15 @@ export default function AgentPanel({
 	// is live and holding the turn's outcome for a few seconds after it ends.
 	const [activityNow, setActivityNow] = useState(() => Date.now());
 	const activity = model
-		? describeActivity(chat, { now: activityNow, toolLabel: (call) => resolveToolLabel(call, presentation.toolLabels) })
+		? describeActivity(chat, { now: activityNow, toolLabel: (call) => stepLabel(call, presentation.toolLabels) })
 		: modelsState === "failed"
 			? { phase: "no-model", kind: "terminal", tone: "alert", text: "No model available — the agent service did not answer with one", ticking: false }
 			: { phase: "models", kind: "live", tone: "busy", text: "Loading models…", ticking: false };
+	// The transcript grouped per turn, and the motion progress card (above the latest turn's steps, so the live
+	// step stays at the bottom where the transcript scrolls) limited to that turn's drafts.
+	const layout = useMemo(() => turnLayout(items, { streaming }), [items, streaming]);
+	const turnSince = streaming ? chat.turnStartedAt : chat.lastTurn ? chat.lastTurn.endedAt - chat.lastTurn.durationMs : null;
+	const progressCard = <AgentProgressCard items={items} since={turnSince} live={streaming} />;
 	useEffect(() => {
 		if (!activity.ticking) return;
 		const timer = setInterval(() => setActivityNow(Date.now()), 500);
@@ -510,21 +426,6 @@ export default function AgentPanel({
 			return null;
 		}
 	}, [sessionState, transport]);
-	// The sidecar owns the credentials; this reads which providers have one and
-	// where it came from. The list is read when the keys section opens and again
-	// after every write — a key that just landed (or left) changes which models
-	// the composer may offer, so the model list is re-read with it.
-	const readProviders = useCallback(async () => {
-		try {
-			const list = await transport.providers?.();
-			if (!Array.isArray(list)) throw new Error("no provider list");
-			setProviders(list);
-			setProvidersState("ready");
-		} catch {
-			setProviders([]);
-			setProvidersState("failed");
-		}
-	}, [transport]);
 	// Everything an authentication change moves, read back once: WHO the session
 	// is (readiness is `signedIn || providersConfigured > 0`), which providers
 	// hold a credential, and WHICH models this session may therefore send to. A
@@ -535,13 +436,11 @@ export default function AgentPanel({
 	// into a composer without reloading the page, and what takes it away again
 	// when the last way in goes. No timer is involved.
 	const refreshProviderState = useCallback(async () => {
-		const session = readAccount();
-		await readProviders();
-		await session;
+		await readAccount();
 		try {
 			applyModelList(await transport.models());
 		} catch { /* the composer keeps the list it was last advertised */ }
-	}, [applyModelList, readAccount, readProviders, transport]);
+	}, [applyModelList, readAccount, transport]);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -798,20 +697,13 @@ export default function AgentPanel({
 	// refresh above, because a key changes the session, not just a row.
 	const toggleProviderKeys = useCallback(() => {
 		setMenuOpen(false);
-		const next = !keysOpen;
-		setKeysOpen(next);
-		if (!next) return;
-		setProvidersState("loading");
-		readProviders();
-	}, [keysOpen, readProviders]);
-	const saveProviderKey = useCallback(async (id, key) => {
-		await transport.setProviderKey(id, key);
-		await refreshProviderState();
-	}, [refreshProviderState, transport]);
-	const removeProviderKey = useCallback(async (id) => {
-		await transport.removeProviderKey(id);
-		await refreshProviderState();
-	}, [refreshProviderState, transport]);
+		setKeysOpen(!keysOpen);
+	}, [keysOpen]);
+	// Opens (never toggles) Connect a model, pi's login list: the signed-out card and a refused key both lead here.
+	const openProviderKeys = useCallback(() => {
+		setMenuOpen(false);
+		setKeysOpen(true);
+	}, []);
 
 	// Clearing the transcript also retires the session, so what the author sees
 	// and what the model remembers cannot diverge.
@@ -927,8 +819,8 @@ export default function AgentPanel({
 						{resetLabel && <span className="agent-account-reset">resets in {resetLabel}</span>}
 					</div>}
 					<button type="button" role="menuitem" onClick={clearContext}>Clear context</button>
-					<button type="button" role="menuitem" className="agent-menu-keys" aria-expanded={keysOpen} onClick={toggleProviderKeys}>Provider keys…</button>
-					<button type="button" role="menuitem" onClick={signOut}>Sign out</button>
+					<button type="button" role="menuitem" className="agent-menu-keys" aria-expanded={keysOpen} onClick={toggleProviderKeys}>Connect a model…</button>
+					{account?.signedIn && <button type="button" role="menuitem" onClick={signOut}>Sign out</button>}
 				</div>}
 			</span>
 			{!embedded && <button type="button" className="agent-icon-button agent-collapse" onClick={() => setCollapsed(true)} aria-label="Collapse agent panel" title="Collapse agent panel (Cmd/Ctrl+B)"><FiChevronRight size={13} /></button>}
@@ -939,28 +831,21 @@ export default function AgentPanel({
 
 		{/* An inline section, not a modal: the panel stays the one place the
 		    conversation and the credentials it runs on are managed. */}
-		{keysOpen && <section className="agent-keys" aria-label="Provider keys" data-agent-keys="true">
-			<div className="agent-keys-head">
-				<h3 className="agent-keys-title">Provider keys</h3>
-				<button type="button" className="agent-icon-button agent-keys-close" aria-label="Close provider keys" onClick={() => setKeysOpen(false)}><FiX size={11} aria-hidden="true" /></button>
-			</div>
-			<p className="agent-keys-hint">Keys are stored by the local CozyClay service and are never shown again.</p>
-			{providersState === "loading" && <p className="agent-keys-note">Loading providers…</p>}
-			{providersState === "failed" && <p className="agent-keys-note alert" role="alert">The provider list is unavailable.</p>}
-			{providers.filter((entry) => entry.id !== "openai-codex").map((entry) => <ProviderKeyRow key={entry.id} provider={entry} onSave={saveProviderKey} onRemove={removeProviderKey} />)}
-		</section>}
+		{keysOpen && <LoginPanel onClose={() => setKeysOpen(false)} onChatGPT={signIn} onChanged={refreshProviderState} />}
 
 		<div className="agent-transcript" ref={transcriptRef} aria-live="polite" aria-label="Conversation" data-agent-transcript="true">
 			{authState === "signed-out" && <div className="agent-state-card" data-agent-card="signed-out">
-				<h3>Sign in with ChatGPT</h3>
-				<p>The agent runs against your ChatGPT plan. Sign-in happens in your browser — no token is ever stored in this page.</p>
+				<h3>Connect a model</h3>
+				<p>Sign in with ChatGPT, or log in to another provider with a subscription, an API key, or your own proxy server. Sign-in happens in your browser — no token is ever stored in this page.</p>
 				<button type="button" className="agent-primary-button agent-signin" onClick={signIn}>Sign in with ChatGPT</button>
+				<button type="button" className="agent-ghost-button agent-use-key" onClick={openProviderKeys}>Log in with another provider</button>
 			</div>}
 
 			{authState === "signing-in" && <div className="agent-state-card" data-agent-card="signing-in">
 				<span className="agent-spinner" aria-hidden="true" />
 				<h3>Waiting for your browser…</h3>
-				<p>Finish the ChatGPT sign-in in the tab that just opened. This panel picks up the session when you come back.</p>
+				<p>Finish the ChatGPT sign-in in the browser page that just opened. This panel picks up the session when you come back.</p>
+				{account?.authorizeUrl && <a className="agent-ghost-button agent-signin-link" href={account.authorizeUrl} target="_blank" rel="noopener noreferrer">Open the sign-in page again</a>}
 			</div>}
 
 			{authState === "no-entitlement" && <div className="agent-state-card" data-agent-card="no-entitlement">
@@ -977,22 +862,28 @@ export default function AgentPanel({
 				</div>
 			</div>}
 
-			{items.map((item) => {
+			{/* One step list per turn (AgentTurnSteps.jsx); the motion progress card sits just above the latest one. */}
+			{layout.map((entry) => {
+				if (entry.type === "steps") return <Fragment key={entry.id}>
+					{entry.last && progressCard}
+					<div className="agent-row"><TurnSteps block={entry} now={activityNow} toolLabels={presentation.toolLabels} formatClock={formatTurnClock} onRetry={() => runTurn(chat.lastPrompt)} /></div>
+				</Fragment>;
+				const { item } = entry;
 				if (item.kind === "user") return <div className="agent-row user" key={item.id}>
 					{item.attachments?.length > 0 && <div className="agent-bubble-attachments">
 						{item.attachments.map((attachment, index) => <img key={`${item.id}-${index}`} src={attachment.dataUrl} alt={attachment.name || "Attached image"} onClick={() => setLightbox({ dataUrl: attachment.dataUrl, prompt: attachment.name })} />)}
 					</div>}
 					<div className="agent-bubble">{item.text}</div>
 				</div>;
-				if (item.kind === "assistant") return <div className="agent-row assistant" key={item.id}><div className="agent-assistant-text">{item.text}{streaming && <span className="agent-caret">▌</span>}</div></div>;
-				if (item.kind === "tool") return <div className="agent-row" key={item.id}><ToolCallCard call={item} presentation={presentation} onRetry={() => runTurn(chat.lastPrompt)} /></div>;
+				if (item.kind === "assistant") return <div className="agent-row assistant" key={item.id}><div className="agent-assistant-text"><ReplyText text={item.text} tail={streaming && <span className="agent-caret">▌</span>} /></div></div>;
 				if (item.kind === "job") return <div className="agent-row" key={item.id}><JobCard job={item} onStop={stopTurn} onAccept={(job) => store.acceptJob(job.jobId)} /></div>;
 				if (item.kind === "receipt") return <div className="agent-row" key={item.id}><ReceiptCard item={item} /></div>;
-				if (item.kind === "failure") return <div className="agent-row" key={item.id}><FailureCard failure={item.failure} onRetry={() => runTurn(chat.lastPrompt)} /></div>;
+				if (item.kind === "failure") return <div className="agent-row" key={item.id}><FailureCard failure={item.failure} onRetry={() => runTurn(chat.lastPrompt)} onFixKey={openProviderKeys} /></div>;
 				if (item.kind === "supervisor") return <div className="agent-row" key={item.id}><SupervisorCard note={item} onSend={(text) => { store.setDraft(text); runTurn(text); }} /></div>;
 				return <div className="agent-row" key={item.id}><ImageResultCard image={item} onUse={(image) => store.applyImage(image.id)} onUndo={(image) => store.undoImage(image.id)} onRegenerate={() => runTurn(chat.lastPrompt)} onOpen={setLightbox} /></div>;
 			})}
 
+			{!layout.some((entry) => entry.type === "steps" && entry.last) && progressCard}
 			{rateLimit && <PausedCard resetAt={rateLimit.resetAt} onRetry={() => { store.clearRateLimit(); runTurn(chat.lastPrompt); }} onSwitchModel={switchModel} />}
 		</div>
 
@@ -1001,6 +892,7 @@ export default function AgentPanel({
 		{authenticated && <div className="agent-activity" data-agent-activity={activity.phase} data-agent-activity-kind={activity.kind} role="status" aria-live="polite">
 			<span className={`agent-activity-indicator ${activity.tone}`} aria-hidden="true" />
 			<span className="agent-activity-text">{activity.text}</span>
+			{activity.detail && <span className="agent-activity-detail">{activity.detail}</span>}
 		</div>}
 
 		{authenticated && <div
@@ -1062,17 +954,6 @@ export default function AgentPanel({
 						</button>
 					)}
 					<span className="agent-composer-spacer" aria-hidden="true" />
-					{surface === "studio" && i2vActionRef.current && <button
-						type="button"
-						className="agent-attach-chip agent-i2v-action"
-						data-testid="i2v-agent-action"
-						aria-label="Generate motion"
-						title="Generate motion from this message"
-						disabled={composerDisabled || !draft.trim() || streaming}
-						onClick={() => { const instruction = draft.trim(); store.setDraft(""); i2vActionRef.current?.(instruction); }}
-					>
-						<FiFilm size={13} aria-hidden="true" />
-					</button>}
 					{/* While a turn runs, Stop is still the way out of it; on a surface
 					    that can be steered, Send becomes the way INTO it. */}
 					{streaming

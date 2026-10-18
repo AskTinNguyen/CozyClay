@@ -8,6 +8,9 @@ import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 
 const panel = readFileSync(new URL("../src/workflow/AgentPanel.jsx", import.meta.url), "utf8");
+// Connect a model is pi's own login (#pi-login): the list and the flow live in LoginPanel.jsx and login-client.js.
+const login = readFileSync(new URL("../src/workflow/LoginPanel.jsx", import.meta.url), "utf8");
+const loginClient = readFileSync(new URL("../src/workflow/login-client.js", import.meta.url), "utf8");
 const client = readFileSync(new URL("../src/workflow/agent-client.js", import.meta.url), "utf8");
 const css = readFileSync(new URL("../src/workflow/agent-panel.css", import.meta.url), "utf8");
 const builder = readFileSync(new URL("../src/workflow/WorkflowBuilder.jsx", import.meta.url), "utf8");
@@ -98,7 +101,7 @@ for (const state of ["signed-out", "signing-in", "no-entitlement", "ready", "str
 }
 
 // --- SSE event types -----------------------------------------------------
-for (const type of ["text.delta", "tool.start", "tool.done", "image", "quota", "error", "done"]) {
+for (const type of ["text.delta", "tool.start", "tool.done", "thinking.delta", "tool.compose", "tool.progress", "image", "quota", "error", "done"]) {
 	expect(`the panel or client handles the "${type}" event`, client.includes(`"${type}"`) || panel.includes(`"${type}"`));
 }
 // The turn now lives in the shared chat store, so cancellation identity is
@@ -116,9 +119,8 @@ const controls = [
 	["History placeholder", "agent-history"],
 	["overflow menu", "agent-overflow-toggle"],
 	["Clear context action", "Clear context"],
-	["Provider keys action", "Provider keys…"],
-	["provider keys section", "agent-keys"],
-	["provider key row", "ProviderKeyRow"],
+	["Connect a model action", "Connect a model…"],
+	["login list", "<LoginPanel"],
 	["Sign out action", "Sign out"],
 	["collapse control", "agent-collapse"],
 	["account strip", "agent-account"],
@@ -126,7 +128,7 @@ const controls = [
 	["resets-in label", "resets in "],
 	["aria-live transcript", 'aria-live="polite"'],
 	["user bubble", "agent-bubble"],
-	["tool call card", "ToolCallCard"],
+	["turn step list", "<TurnSteps"],
 	["image result card", "ImageResultCard"],
 	["Use in scene", "Use in scene"],
 	["Download", "Download"],
@@ -141,7 +143,7 @@ const controls = [
 	["Wait & retry", "Wait &amp; retry"],
 	["Switch model", "Switch model"],
 	["error Retry", ">Retry<"],
-	["error Details", ">Details<"],
+	["step list Retry", "onRetry={() => runTurn(chat.lastPrompt)} />"],
 ];
 for (const [name, needle] of controls) expect(`composer/transcript exposes the ${name}`, panel.includes(needle), needle);
 
@@ -345,20 +347,18 @@ expect("the error mock fails a tool call", failed.some((event) => event.type ===
 // The overflow menu opens an INLINE section that states which providers have a
 // key and where it came from. A key is typed into a password field, handed to
 // the sidecar once and dropped: no store, no transcript, no DOM node keeps it.
-expect("the overflow menu offers Provider keys…", panel.includes('className="agent-menu-keys"') && panel.includes("Provider keys…"));
-expect("the menu item opens an inline section, never a modal", panel.includes('<section className="agent-keys"') && !/role="dialog"/.test(panel));
-expect("the section opens from the menu and closes in place", panel.includes("toggleProviderKeys") && panel.includes("agent-keys-close"));
-expect("every listed provider gets a status dot and the source of its key", panel.includes("function ProviderKeyRow")
-	&& panel.includes('<StatusDot tone={provider.signedIn ? "ok" : ""}') && panel.includes('className="agent-key-source"'));
-expect("ChatGPT is never offered as an API-key provider", panel.includes('providers.filter((entry) => entry.id !== "openai-codex")'));
-expect("the key input is a password field", /className="agent-key-input"[\s\S]{0,240}type="password"/.test(panel) && !/agent-key-input[\s\S]{0,240}type="text"/.test(panel));
-expect("an env-backed provider names the variable on the input it refuses", panel.includes("set by ${providerEnvLabel(provider.id)}")
-	&& panel.includes("placeholder={fromEnv ? envLabel") && panel.includes("disabled={fromEnv || busy}"));
-expect("Remove exists only for a key this machine stores", panel.includes("{fromFile && <button") && panel.includes("agent-key-remove"));
-expect("a refused write is reported under the input it belongs to", /setError\(failure\?\.message/.test(panel) && panel.includes('className="agent-key-error"'));
-expect("the key leaves the page the moment the sidecar accepts it", /await action\(\);[\s\S]{0,160}setDraft\(""\)/.test(panel));
-expect("a saved or removed key re-reads the providers AND the models", /const refreshProviderState = useCallback\(async \(\) => \{[\s\S]{0,200}await readProviders\(\);[\s\S]{0,200}transport\.models\(\)/.test(panel)
-	&& /setProviderKey\(id, key\);\n\t\tawait refreshProviderState\(\)/.test(panel) && /removeProviderKey\(id\);\n\t\tawait refreshProviderState\(\)/.test(panel));
+expect("the overflow menu offers Connect a model…", panel.includes('className="agent-menu-keys"') && panel.includes("Connect a model…"));
+expect("Connect a model is an inline section, never a modal", login.includes('<section className="agent-keys agent-login"') && !/role="dialog"/.test(login));
+expect("it opens from the menu and the signed-out card, and closes in place", panel.includes("toggleProviderKeys") && panel.includes("openProviderKeys") && login.includes("agent-keys-close"));
+expect("it lists pi's login methods: connected, subscriptions, api keys", login.includes("fetchLogins") && ["Connected", "Subscriptions", "API keys"].every((title) => login.includes(`["${title}"`)));
+expect("a login runs pi's flow in the sidecar: start, read prompts and events, answer, cancel", ["startLogin", "readLogin", "answerLogin", "cancelLogin"].every((name) => login.includes(`${name}(`))
+	&& loginClient.includes('"/agent/logins"') && loginClient.includes("/answer"));
+expect("a secret pi asks for is a password field, and nothing typed is kept", login.includes('type={ask.type === "secret" ? "password" : "text"}') && login.includes('onSubmit(value); setValue("")'));
+expect("ChatGPT keeps CozyClay's own sign-in", login.includes('method.type === "chatgpt"') && panel.includes("onChatGPT={signIn}"));
+expect("a sign-in page and a device code are shown as pi sends them", login.includes('event.type === "auth_url"') && login.includes('event.type === "device_code"') && login.includes("Open the sign-in page"));
+expect("a connected provider can log out through pi", login.includes("logoutProvider(provider.id)") && loginClient.includes("/agent/logout/"));
+expect("a finished login re-reads the session AND the models", /const refreshProviderState = useCallback\(async \(\) => \{[\s\S]{0,120}await readAccount\(\);[\s\S]{0,200}transport\.models\(\)/.test(panel)
+	&& panel.includes("onChanged={refreshProviderState}") && /entry\.type === "done" && entry\.ok\) \{ await onChanged\?\.\(\)/.test(login));
 expect("the transport owns the three provider routes", client.includes("async providers()") && client.includes("async setProviderKey(id, key)") && client.includes("async removeProviderKey(id)"));
 expect("the key is sent once as a PUT body and never in a URL", client.includes('{ method: "PUT", body: JSON.stringify({ key }) }') && !/providers\/[^\n]*key=/.test(client));
 for (const [name, rule] of [
@@ -421,8 +421,8 @@ const refreshBody = (() => {
 	if (start === -1) return "";
 	return panel.slice(start, panel.indexOf("\n\tconst ", start + 1));
 })();
-expect("a saved or removed key re-reads the session the readiness gate depends on",
-	(refreshBody.match(/readAccount\(\)/g) || []).length === 1 && refreshBody.includes("await readProviders();") && refreshBody.includes("transport.models()"), refreshBody);
+expect("a finished login or logout re-reads the session the readiness gate depends on",
+	(refreshBody.match(/readAccount\(\)/g) || []).length === 1 && refreshBody.includes("transport.models()"), refreshBody);
 expect("readiness is refreshed through the existing status call, not a new one", (panel.match(/transport\.status\(\)/g) || []).length === 2
 	&& panel.includes("const status = await transport.status();") && !/setInterval\([^)]*(status|readAccount|refreshProviderState)/.test(panel),
 	String((panel.match(/transport\.status\(\)/g) || []).length));
@@ -518,10 +518,14 @@ const activityState = (patch) => ({ items: [], streaming: false, turnStartedAt: 
 const phase = (patch, now = 4000) => module_.describeActivity(activityState(patch), { now });
 const prompt = { kind: "user", id: "u1", text: "frame a two-shot" };
 
-const sending = phase({ streaming: true, turnStartedAt: 1000, items: [prompt] });
-expect('a request in flight reads "Sending… · 3 s"', sending.phase === "sending" && sending.text === "Sending… · 3 s" && sending.ticking, sending.text);
-const thinking = phase({ streaming: true, turnStartedAt: 1000, items: [prompt, { kind: "assistant", id: "a1", text: "Framing" }] });
-expect('a streaming model reads "Thinking… · 3 s"', thinking.phase === "thinking" && thinking.text === "Thinking… · 3 s", thinking.text);
+const sending = phase({ streaming: true, turnStartedAt: 1000, items: [prompt] }, 2000);
+expect('a request in flight reads "Sending… · 1 s"', sending.phase === "sending" && sending.text === "Sending… · 1 s" && sending.ticking, sending.text);
+const unanswered = phase({ streaming: true, turnStartedAt: 1000, items: [prompt] });
+expect('a request the model has not answered yet reads "Waiting for the model… · 3 s"', unanswered.text === "Waiting for the model… · 3 s", unanswered.text);
+const thinking = phase({ streaming: true, turnStartedAt: 1000, items: [prompt, { kind: "tool", id: "t0", name: "inspect_studio", status: "done" }] });
+expect('a model deciding its next step reads "Thinking… · 3 s"', thinking.phase === "thinking" && thinking.text === "Thinking… · 3 s", thinking.text);
+const replying = phase({ streaming: true, turnStartedAt: 1000, items: [prompt, { kind: "assistant", id: "a1", text: "Framing" }] });
+expect('a streaming reply reads "Writing the reply… · 3 s"', replying.phase === "reply" && replying.text === "Writing the reply… · 3 s", replying.text);
 const runningTool = phase({ streaming: true, turnStartedAt: 1000, items: [prompt, { kind: "tool", id: "t1", name: "capture_blocking_frame", status: "running" }] });
 expect('an open tool call names the tool it is running', runningTool.phase === "tool" && runningTool.text === "Running Capture blocking frame… · 3 s", runningTool.text);
 const generating = phase({ streaming: true, turnStartedAt: 1000, items: [prompt, { kind: "tool", id: "t1", name: "generate_motion", status: "running" }, { kind: "job", id: "j1", jobId: "job-1", state: "generating", progress: 0.25 }] });
@@ -994,24 +998,51 @@ expect("no timer drives the auth transition", !/set(Interval|Timeout)\([^)]*(sig
 	expect("the client asks the supervisor route", client.includes("/supervisor`") && client.includes("requestSupervisorNote(turnId)"));
 	expect("the send label goes through ko()", panel.includes('ko("Send as next prompt", "다음 턴으로 보내기")'));
 	expect("the supervisor card is token-driven and muted", /\.agent-supervisor-card\s*\{[^}]*color: var\(--agent-text-muted\)/.test(css));
-	const drive = async (frames) => {
-		const asked = [];
+	// The review is off by default (plan 7.3): the stored switch reads true only
+	// for "on", and false when storage is missing or throws.
+	const memory = (value) => ({ getItem: () => value, setItem(key, next) { value = next; } });
+	expect("the supervisor switch defaults off", module_.readStoredSupervisor(memory(null)) === false && module_.readStoredSupervisor(null) === false && module_.readStoredSupervisor(memory("off")) === false);
+	expect("a storage error reads as off", module_.readStoredSupervisor({ getItem() { throw new Error("denied"); } }) === false);
+	const toggled = memory(null);
+	module_.storeSupervisor(true, toggled);
+	expect("the toggle can still switch the review on", module_.readStoredSupervisor(toggled) === true);
+	module_.storeSupervisor(false, toggled);
+	expect("and off again", module_.readStoredSupervisor(toggled) === false);
+	const drive = async (frames, options = { supervisor: true }) => {
+		const asked = [], requests = [];
 		let store;
 		const transport = {
-			async turn(_request, onEvent) { for (const frame of frames) onEvent(frame); onEvent({ type: "done" }); },
+			async turn(request, onEvent) { requests.push(request); for (const frame of frames) onEvent(frame); onEvent({ type: "done" }); },
 			async supervisor(turnId) { asked.push({ turnId, streaming: store.getState().streaming, status: store.getState().lastTurn?.status }); return note; },
 		};
 		store = createAgentChatStore({ transport, surface: "studio", buildContext: () => ({ schema: "studio-context-v1" }) });
 		const arrived = new Promise((resolve) => { const off = store.subscribe((state) => { if (state.items.some((item) => item.kind === "supervisor")) { off(); resolve(); } }); });
-		await store.send("put a chair left of her");
-		return { store, asked, arrived, turnId: store.getState().turnId };
+		await store.send("put a chair left of her", options);
+		return { store, asked, requests, arrived, turnId: store.getState().turnId };
 	};
-	const authored = await drive([{ type: "tool.start", callId: "c1", name: "arrange_objects" }, { type: "tool.done", callId: "c1", ok: true, result: { ok: true, authored: true, receiptId: "receipt-1", affectedIds: ["chair"] } }, { type: "text.delta", text: "Placed." }]);
+	const authoredFrames = [{ type: "tool.start", callId: "c1", name: "arrange_objects" }, { type: "tool.done", callId: "c1", ok: true, result: { ok: true, authored: true, receiptId: "receipt-1", affectedIds: ["chair"] } }, { type: "text.delta", text: "Placed." }];
+	const unasked = await drive(authoredFrames, {});
+	await new Promise((resolve) => setImmediate(resolve));
+	expect("an authored turn sent without the switch never asks for a note", unasked.asked.length === 0 && !("supervisor" in unasked.requests[0]), JSON.stringify(unasked.asked));
+	const switchedOff = await drive(authoredFrames, { supervisor: false });
+	await new Promise((resolve) => setImmediate(resolve));
+	expect("a turn sent with the switch off never asks and says so", switchedOff.asked.length === 0 && switchedOff.requests[0].supervisor === false);
+	const authored = await drive(authoredFrames);
+	expect("a turn sent with the switch on carries supervisor: true", authored.requests[0].supervisor === true);
 	let deadline;
 	await Promise.race([authored.arrived, new Promise((_, reject) => { deadline = setTimeout(() => reject(new Error("supervisor note never arrived")), 5000); })]).finally(() => clearTimeout(deadline));
 	expect("an authored Studio turn asks for its note once, after it is Ready", authored.asked.length === 1 && authored.asked[0].turnId === authored.turnId && authored.asked[0].streaming === false && authored.asked[0].status === "done", JSON.stringify(authored.asked));
 	const card = authored.store.getState().items.find((item) => item.kind === "supervisor");
 	expect("the note joins the transcript as a supervisor item", card?.id === `supervisor:${authored.turnId}` && card.summary === note.summary && card.counts.blocker === 1, JSON.stringify(card));
+	expect("an explicit-on turn gets exactly one supervisor item", authored.store.getState().items.filter((item) => item.kind === "supervisor").length === 1);
+	// The wire body: the sidecar reviews only a turn that says supervisor: true.
+	const bodies = [];
+	const wire = module_.createHttpTransport({ fetchImpl: async (_url, init) => { bodies.push(JSON.parse(init.body)); return new Response('data: {"type":"done"}\n\n', { status: 200, headers: { "content-type": "text/event-stream" } }); } });
+	const studioTurn = (extra) => wire.turn({ surface: "studio", sessionId: "s", turnId: "t", text: "x", context: {}, ...extra }, () => {}, new AbortController().signal);
+	await studioTurn({});
+	await studioTurn({ supervisor: true });
+	await studioTurn({ supervisor: false });
+	expect("the Studio body sends the switch only when set", !("supervisor" in bodies[0]) && bodies[1].supervisor === true && bodies[2].supervisor === false, JSON.stringify(bodies));
 	const readOnly = await drive([{ type: "tool.start", callId: "c1", name: "inspect_studio" }, { type: "tool.done", callId: "c1", ok: true, result: { entities: [] } }, { type: "text.delta", text: "One character." }]);
 	await new Promise((resolve) => setImmediate(resolve));
 	expect("a read-only turn never asks for a note", readOnly.asked.length === 0, JSON.stringify(readOnly.asked));

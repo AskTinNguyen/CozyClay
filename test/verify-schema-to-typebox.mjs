@@ -37,7 +37,6 @@ const GOOD_FIXTURES = {
 	arrange_characters: { ops: [{ op: "remove", characterId: "char-alex" }] },
 	patch_elements: { ops: [{ target: { kind: "stage" }, set: {} }] },
 	frame_shot: { subjectIds: ["char-alex"], framing: { intent: { size: "close-up", view: "front", level: "eye", side: "left" } } },
-	generate_motion: { characterId: "char-alex", source: { kind: "generate", beats: [{ text: "walk" }] } },
 	verify_result: { checks: ["framing"] },
 	undo_edit: { receiptId: "receipt-1" },
 };
@@ -81,7 +80,7 @@ for (const [name, args, reason] of BAD_CASES) {
 // unmodified, since `rest` passes non-structural keywords straight through.
 {
 	const objectScale = toTypeBox(STUDIO_TOOL_SCHEMAS.patch_elements.properties.ops.items.oneOf[1].properties.set.properties.scale);
-	for (const axis of ["x", "y", "z"]) { assert.equal(objectScale.properties[axis].minimum, 0.1); assert.equal(objectScale.properties[axis].maximum, 100); }
+	for (const axis of ["x", "y", "z"]) { assert.equal(objectScale.properties[axis].minimum, 0.01); assert.equal(objectScale.properties[axis].maximum, 100); }
 	assert.equal(Value.Check(objectScale, { x: 1, y: 1, z: 1 }), true, "a within-range vec3 patch still validates");
 	assert.equal(Value.Check(objectScale, { x: 1, y: 1, z: 999 }), false, "an out-of-range vec3 axis fails Value.Check");
 	console.log("PASS the TypeBox bridge preserves per-axis vec3 minimum/maximum");

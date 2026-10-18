@@ -66,8 +66,67 @@ export function travelPose(object, at) {
 	};
 }
 
-/** The record's own route sample as a matrix, or null when it does not travel. */
+const trackFrame = (track, frame) => Math.max(0, Math.min(track.frameCount - 1, Math.round(frame) || 0));
+
+// A compiled take's per-frame pose for the record (a hinged door), as a matrix, or null. A
+// switch track (vis/lvl only, no pos/quat: C15) is no motion of its own, so a parent's carry still applies.
+function trackMatrix(object, frame, take, out) {
+	const track = take?.objectTracks?.get?.(object.id);
+	if (!track?.pos) return null;
+	const f = trackFrame(track, frame);
+	scratchPos.set(track.pos[f * 3], track.pos[f * 3 + 1], track.pos[f * 3 + 2]);
+	scratchQuat.set(track.quat[f * 4], track.quat[f * 4 + 1], track.quat[f * 4 + 2], track.quat[f * 4 + 3]);
+	scratchScale.set(object.scaleX ?? 1, object.scaleY ?? 1, object.scaleZ ?? 1);
+	return out.compose(scratchPos, scratchQuat, scratchScale);
+}
+
+// The record's own vis track at `frame`: true or false, null when the take has none for it.
+const visAt = (id, frame, take) => {
+	const track = take?.objectTracks?.get?.(id);
+	return track?.vis ? track.vis[trackFrame(track, frame)] === 1 : null;
+};
+
+// False while a compiled take carries the record out of sight (a cigarette still in the pocket),
+// or hides a record it is grouped under: with `objects` (the authored records, a Map by id or the
+// list) every ancestor's vis track counts too, so a group's visible channel hides its parts.
+// A record marked showOnlyInTake (a kit's flame, ember, tip smoke, exhale puff or muzzle flash, and
+// their lights) is hidden unless a vis track drives it: its own or, with `objects`, a group's above it
+// (the exhale kit's root shows its puff). A static scene never draws it.
+export function trackShown(id, frame, take, objects = null) {
+	const lookup = objects && asLookup(objects), own = visAt(id, frame, take);
+	if (own === false) return false;
+	let driven = own === true;
+	if (lookup && take?.objectTracks?.size) {
+		const seen = new Set([id]);
+		for (let parent = lookup.get(id)?.parent; typeof parent === "string" && !seen.has(parent); parent = lookup.get(parent)?.parent) {
+			seen.add(parent);
+			const shown = visAt(parent, frame, take);
+			if (shown === false || (shown === null && lookup.get(parent)?.showOnlyInTake === true)) return false;
+			driven ||= shown === true;
+		}
+	}
+	return driven || lookup?.get(id)?.showOnlyInTake !== true;
+}
+
+// The take's level of the record at `frame` (its lvl track: 0 dark, 1 as authored, up to 4; C15), else 1.
+export function trackLevel(id, frame, take) {
+	const track = take?.objectTracks?.get?.(id), value = track?.lvl ? Number(track.lvl[trackFrame(track, frame)]) : 1;
+	return Number.isFinite(value) ? Math.min(4, Math.max(0, value)) : 1;
+}
+
+/**
+ * True while a compiled take holds the record in a hand (a grabbed cup): its track is in world
+ * space then, so the carry from its own parents (the table it stood on) is cut, like `attach`.
+ */
+function held(id, frame, take) {
+	const track = take?.objectTracks?.get?.(id);
+	return !!track?.hold && track.hold[trackFrame(track, frame)] === 1;
+}
+
+/** The record's own route sample (or compiled track) as a matrix, or null when it does not travel. */
 function ownTravelMatrix(object, frame, take, out) {
+	const tracked = trackMatrix(object, frame, take, out);
+	if (tracked) return tracked;
 	if (!object.path) return null;
 	const at = objectTransformAt(object, frame, take);
 	if (!at) return null;
@@ -129,11 +188,13 @@ export function sceneObjectTravelMatrixAt(objects, id, frame, take = {}, out = n
 	for (let index = chain.length - 1; index >= 0; index -= 1) {
 		const ancestor = chain[index];
 		if (!ownTravelMatrix(ancestor, frame, take, scratchOwn)) continue;
+		if (held(ancestor.id, frame, take)) scratchMotion.identity();
 		scratchMotion.multiply(scratchOwn).multiply(authoredMatrix(ancestor, scratchAuthored).invert());
 		moved = true;
 	}
 	const own = ownTravelMatrix(object, frame, take, scratchOwn);
 	if (!moved && !own) return null;
+	if (own && held(object.id, frame, take)) return out.copy(own);
 	return out.multiplyMatrices(scratchMotion, own ?? authoredMatrix(object, scratchAuthored));
 }
 
@@ -177,11 +238,12 @@ const wrapDegrees = (value) => {
 
 /**
  * The records as they stand at `frame`: x/y/z and rotation replaced for every
- * record that travels on its own route or under a routed ancestor. Untouched
+ * record that travels on its own route or compiled track, or under an ancestor
+ * that does. Untouched
  * records are returned as-is, and so is the list when nothing moves.
  */
 export function sceneObjectsAt(objects, frame, take = {}) {
-	if (!objects.some((object) => object.path)) return objects;
+	if (!objects.some((object) => object.path || object.showOnlyInTake || take?.objectTracks?.has?.(object.id))) return objects;
 	const lookup = asLookup(objects);
 	const matrix = new Matrix4();
 	const position = new Vector3();
@@ -205,8 +267,11 @@ export function sceneObjectsAt(objects, frame, take = {}) {
 		}
 		return next;
 	};
-	return objects.map((object) => {
-		if (object.attach || (!ancestorsOf(lookup, object).some((ancestor) => ancestor.path) && !ridden(lookup, object))) {
+	return objects.map((object) => { const record = placedAt(object); return trackShown(record.id, frame, take, lookup) ? record : { ...record, hidden: true }; });
+	function placedAt(object) {
+		// A compiled track (a hinged door, a carried cup) on the record or above it places it too; a switch track moves nothing.
+		const tracked = (record) => !!take?.objectTracks?.get?.(record.id)?.pos;
+		if (object.attach || (!tracked(object) && !ancestorsOf(lookup, object).some((ancestor) => ancestor.path || tracked(ancestor)) && !ridden(lookup, object))) {
 			// Nothing above it travels (and nothing below carries it): the route
 			// sample alone, exactly as before the hierarchy carry — for a carried
 			// prop, in the frame its numbers already live in.
@@ -220,5 +285,5 @@ export function sceneObjectsAt(objects, frame, take = {}) {
 		}
 		if (!sceneObjectTravelMatrixAt(lookup, object.id, frame, take, matrix)) return object;
 		return recordAt(object, matrix);
-	});
+	}
 }

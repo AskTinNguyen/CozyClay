@@ -12,16 +12,15 @@ function expect(name, condition) {
 import { readStudioSource } from "./bus/verify-domain-modules.mjs";
 const app = readStudioSource()
 	+ readFileSync(new URL("../src/app-stage.jsx", import.meta.url), "utf8")
-	+ readFileSync(new URL("../src/ardy-bridge-contract.js", import.meta.url), "utf8")
+	+ readFileSync(new URL("../src/timeline-defaults.js", import.meta.url), "utf8")
 	+ readFileSync(new URL("../src/stage-startup-defaults.js", import.meta.url), "utf8")
 	+ readFileSync(new URL("../src/stage-characters.jsx", import.meta.url), "utf8")
 	+ readFileSync(new URL("../src/stage-canvas-rigs.jsx", import.meta.url), "utf8")
-	+ readFileSync(new URL("../src/motion/generation.js", import.meta.url), "utf8");
-const extract = readFileSync(new URL("../tools/ardy/extract.mjs", import.meta.url), "utf8");
-const bridge = readFileSync(new URL("../tools/ardy/bridge.mjs", import.meta.url), "utf8");
+	+ readFileSync(new URL("../src/document-mirrors.js", import.meta.url), "utf8");
 const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
 const planview = readFileSync(new URL("../src/planview.jsx", import.meta.url), "utf8");
-const timeline = readFileSync(new URL("../src/ardy/timeline.jsx", import.meta.url), "utf8");
+const timeline = readFileSync(new URL("../src/motion/timeline.jsx", import.meta.url), "utf8");
+const takeSegments = readFileSync(new URL("../src/motion/take-segments.jsx", import.meta.url), "utf8");
 const dualview = readFileSync(new URL("../src/dualview.jsx", import.meta.url), "utf8");
 const offscreenExport = readFileSync(new URL("../src/offscreen-export.js", import.meta.url), "utf8");
 const ui = readFileSync(new URL("../src/ui.jsx", import.meta.url), "utf8");
@@ -118,7 +117,6 @@ expect("the dock switches between Animation and Assets", app.includes('data-test
 expect("inspector is always visible beside the scene", app.includes("inspector-sidebar") && !app.includes("rightPanelTab"));
 expect("legacy hierarchy/inspector splitter is removed", !app.includes("hierarchy-splitter"));
 expect("bottom dock drops the Animation/Assets tab strip for the Content pane", !app.includes("bottom-window-tabs") && app.includes('setBottomTab(visible ? "assets" : "timeline")') && !app.includes("console-pane") && !app.includes('bottomTab === "console"'));
-expect("ARDY status stays inline without a console history surface", app.includes("reportArdyStatus") && !app.includes("consoleLines"));
 // The sidebar has no tabs: one Inspector, driven by the hierarchy selection,
 // so every panel is reached by selecting the thing that owns it.
 expect("the sidebar has no mode tabs left", !app.includes("sidebarTab") && !app.includes("inspector-tabs") && !css.includes(".inspector-tabs"));
@@ -135,9 +133,6 @@ expect(
 expect("selection routing is derived once, not repeated per foldout", app.includes("const isCharacterSelection = selectedHierarchyId ===") && app.includes("const inspectorHasContent ="));
 expect("an unowned selection explains itself instead of showing a blank column", app.includes("data-inspector-empty") && css.includes(".inspector-empty"));
 expect("the heavy motion pipeline starts collapsed", app.includes("function Foldout({ title, hidden, defaultOpen = true, openSignal = 0, children })") && app.includes("useState(defaultOpen)"));
-expect("the top bar is the one batch generation action", app.includes('data-testid="topbar-generate"') && !app.includes("prompt-block-generate") && !app.includes("Generate all ${promptClips.length} blocks"));
-expect("new sessions start without prompt blocks", app.includes("const DEFAULT_PROMPT_CLIPS = [];") && app.includes("useState(null)"));
-expect("new sessions start with an empty motion prompt", app.includes('const [ardyPrompt, setArdyPrompt] = useState("");'));
 expect(
 	"recording captures the clean render without a frame stamp",
 	app.includes("capture: (frame, kind) => withExportFrame(frame, kind") &&
@@ -160,25 +155,9 @@ expect("pre-motion timeline initializes to 15 seconds", app.includes("const DEFA
 expect("motion preview stays at native 1x speed", app.includes("const DEFAULT_PLAYBACK_SPEED = 1") && app.includes("playbackSpeed={DEFAULT_PLAYBACK_SPEED}"));
 expect("timeline cadence and v2 readout expose native preview speed", timeline.includes("fps * playbackSpeed") && timeline.includes('data-testid="sequencer-frame-readout"') && timeline.includes('padStart(4, "0")'));
 expect("legacy greeting demo migration is removed", !app.includes("GREETING_DEMO_MIGRATION_KEY") && !app.includes('id: "demo-rise"'));
-expect("batch generation spans through the final block frame", app.includes("Math.ceil(Math.max(...blocks.map(clip => clip.endFrame)) / TIMELINE_FPS)"));
-expect("batch generation forwards all prompt clips", app.includes("const input = { character, prompt, blocks, seed,") && app.includes("hasPromptSchedule"));
 // v2 removed the Details "Generate all blocks" button, so the top bar is the only generate home and runs the blocks when any has text.
-expect("normal motion generation excludes the prompt block schedule unless the top bar runs the authored blocks", app.includes("promptClipsOverride = []") && app.includes('hasBlocks ? runStudioAction("motion.generateAllBlocks") : runArdy()'));
 // The pin decision moved into ardy/pose-pin.js so it can be tested directly
 // (test/ardy/verify-pose-pin.mjs); the call site only has to route it.
-expect(
-	"unedited batch blocks use one unpinned autoregressive schedule",
-	app.includes("const plan = planPosePin({") && app.includes("else if (hasPromptSchedule) body.segments = segments"),
-);
-expect(
-	"the pose pin is an explicit, off-by-default choice",
-	app.includes("const [ardyStartFromPose, setArdyStartFromPose] = useState(false);") &&
-	app.includes("startFromPose: ardyStartFromPose"),
-);
-expect(
-	"the pinned pose can be placed anywhere in the clip",
-	app.includes("posePlacement: ardyPosePlacement") && app.includes("posePlacement === 'end'"),
-);
 // Prompt Blocks starts collapsed and can sit below the fold, so selecting a
 // block on the timeline has to open it AND bring it on screen — otherwise the
 // click reads as doing nothing at all.
@@ -186,48 +165,14 @@ expect(
 	"a collapsed panel can be revealed from outside the Inspector",
 	app.includes("openSignal = 0") && app.includes("if (openSignal <= 0) return undefined;") && app.includes('scrollIntoView({ block: "nearest" })'),
 );
+// A compiled take is installed by motion.compile through the motion owner's
+// replace(); no npz loader, prompt schedule or async completion is left.
 expect(
-	"selecting or adding a prompt block reveals the panel that edits it",
-	app.includes("const revealPromptBlocks = () => setPromptBlocksReveal((n) => n + 1);") &&
-	app.includes("openSignal={promptBlocksReveal}") &&
-	(app.match(/revealPromptBlocks\(\);/g) ?? []).length >= 2,
-);
-expect(
-	"a schedule conflict is reported instead of silently dropping the pose",
-	app.includes("plan.blockedBy === PIN_BLOCKED.SCHEDULE"),
-);
-expect("IK-edited blocks use the motion edit session", app.includes("const editedSegments") && app.includes("body.motionEdit = {") && app.includes("sourceMotion: motion.url"));
-expect("IK regeneration inherits loaded clip duration", app.includes("motion && ikFrames.length ? motion.frames / motion.fps"));
-expect("motion edits send only tracked pending joints", app.includes("ikKeys.get(at)?.keys()") && app.includes("tracks:"));
-expect("successful motion edits commit and clear pending IK", app.includes("setCommittedIkEdits") && app.includes("job.ikState.keys.clear()") && app.includes("job.ikState.tracked.clear()"));
-expect("pending IK clears only after exact commit verification", app.includes("editCommitReport?.commit_verified !== true") && app.includes("The generated motion came back without verified authored pose keys"));
-expect("failed key verification leaves pending IK intact", app.indexOf("The generated motion came back without verified authored pose keys") < app.indexOf("job.ikState.keys.clear()"));
-expect(
-	"inactive live motion and its prompt clips commit in one character update",
-	app.includes('commitLoadedTake(targetCharacter.id, loaded, { recipe, job, promptClips: targetPromptClips, scale })') &&
-		app.includes('owned.replace(characterId, take, { recipe: imported, versions })') &&
-		app.includes('layer: promptClips ? { ...row.layer, promptClips } : row.layer'),
-);
-expect(
-	"a deleted inactive motion target cannot clear the active editing motion",
-	app.includes('if (!targetStillExists) throw new Error(`Motion target ${targetCharacterId} no longer exists.`)') && !/\bsetMotion\(/.test(app),
-);
-// Given B owns a completed motion while A becomes the editing buffer during
-// decode or the B-rig wait, when completion resumes, then B keeps both its
-// take and prompt schedule without installing either into A.
-expect(
-	"a B completion after selection changes retains B ownership through decode and rig waits",
-	app.includes("const targetCharacter = appContext.live.characters.find((entry) => entry.id === targetCharacterId);") && app.includes("const targetStillExists = appContext.live.characters.some((entry) => entry.id === targetCharacter.id);") && app.includes("const bufferOwnsTarget = targetCharacter.id === appContext.shared.loadedLayerCharRef.current;") && app.includes("if (bufferOwnsTarget) {") && app.includes('commitLoadedTake(targetCharacter.id, loaded, { recipe, job, promptClips: targetPromptClips, scale })'),
-);
-// Given A starts a completion and B becomes active before it settles, when
-// the target-owned completion resumes, then B's editing buffer receives B's
-// clip and prompts and an A failure cannot clear B's motion.
-expect(
-	"an active B receives its own completion after an A to B selection interleaving",
-	app.includes("domain.loadRemote = async (args, context) => {") && app.includes("args.drop ?? null, args.characterId, clips, { commandContext, recipe: entry?.recipe }") && !/\bsetMotion\(/.test(app),
+	"motion installs only through the motion owner, never a raw setter",
+	app.includes("function replace(id, take, { ikKeys = [], ikPins = [], ikPinResiduals = [] } = {})") && !/\bsetMotion\(/.test(app)
+		&& !app.includes("loadMotion(") && !app.includes("commitLoadedTake"),
 );
 expect("individual block generation action is removed", !app.includes("Generate selected block"));
-expect("Prompt Block edits stay synced with ARDY input", app.includes("run('character.changePromptBlock', { characterId, id: selectedPromptId, text: event.target.value })") && app.includes("setArdyPrompt(event.target.value)"));
 expect("desktop stage fills the remaining viewport", css.includes("aspect-ratio: auto") && css.includes("height: 100%"));
 expect("sidebar width is bounded", css.includes("min-width: 280px") && css.includes("max-width: 50vw"));
 expect("timeline height is bounded", css.includes("min-height: 110px") && css.includes("max-height: 58vh"));
@@ -235,32 +180,6 @@ expect("timeline IK text controls size to their labels", css.includes(".tl-btn.i
 // Floor-click authoring: waypoints are placed by clicking the set floor, so
 // frame 0 is owned implicitly — the request prepends Subject 1's position and
 // authored pins can never claim frame 0 or earlier.
-expect("the active character exclusively owns the frame zero root start", app.includes("{ frame: 0, x: character.x, z: character.z, heading: null }") && app.includes("point.frame <= 0") && !app.includes("Frame 0 is the start of the root path — it can't be removed"));
-expect("root guidance sends the aligned, densified path to ARDY", app.includes("alignArdyPath(rootPath, character.rot") && app.includes("waypoints: aligned.waypoints"));
-expect(
-	"a root path and a prompt schedule are sent together, judged per block",
-	app.includes("if (hasPromptSchedule && !hasBlockEdits) body.segments = segments;") &&
-	app.includes("judgeAuthoredPath(rootPath, FPS, clipFrames, { chained: hasPromptSchedule })") &&
-	app.includes("segment.endFrame - segment.startFrame > 5 * FPS"),
-);
-expect(
-	"ARDY bridge health recovers after the sidecar starts late",
-	app.includes("const BRIDGE_RECHECK_MS = 3000;") &&
-	app.includes("if (inflight) return inflight;") &&
-	app.includes("inflight = checkBridge().then") &&
-	app.includes("const id = window.setInterval(refreshBridge, BRIDGE_RECHECK_MS);") &&
-	app.includes('window.addEventListener("focus", refreshBridge);') &&
-	app.includes('window.removeEventListener("focus", refreshBridge);') &&
-	app.includes("window.clearInterval(id);"),
-);
-expect(
-	"top-bar generation says its refusal, and Prompt Blocks keeps readiness and a nearby recovery path",
-	app.includes("onClick={() => (reason ? setToast(reason) : hasBlocks ? ") &&
-	app.includes("<MotionReadiness state={readinessState}") &&
-	app.includes("onSetup={openMotionSetup} onRetry={recheckMotionHealth}") &&
-	app.includes("appContext.shared.promptClips.some((clip) => clip.text.trim())"),
-);
-expect("generated motion anchors frame zero at the target character", app.includes("anchorX: targetCharacter.x") && app.includes("anchorZ: targetCharacter.z") && app.includes("anchorFrame: 0"));
 expect("returned playback has no CozyClay root coordinate warp", !app.includes("warpMotionRootToPath"));
 expect("Top-View root path draws from Subject 1 without a duplicate marker", planview.includes("[{ x: start.x, z: start.z }, ...waypoints]") && planview.includes("waypoints.map((w, i)"));
 expect(
@@ -358,11 +277,6 @@ expect("resize handles opt out on compact layouts", css.includes(".workspace-spl
 // extracted take play at the right size, on the right layer, at the right
 // place — each of them was a bug in the two-character prototype.
 expect(
-	"a character owns a Video capture foldout without a legacy ARDY card",
-	app.includes('title={ko("Video capture", "영상 모캡")}') &&
-	!app.includes('title={ko("ARDY motion", "ARDY 모션")}'),
-);
-expect(
 	"the Studio has no Advanced mode toggle",
 	!app.includes("advanced-toggle") && !app.includes("cozyclay.advanced"),
 );
@@ -374,95 +288,19 @@ expect(
 	"expert foldouts stay enabled in the always-advanced Studio",
 	app.includes('hidden={!isCharacterSelection}'),
 );
+// A take v3 persists as its source: the baked arrays are stripped from the
+// stage, and the motion layer compiles the saved source again on load.
 expect(
-	"ingest and extraction reach the ported ingest module",
-	app.includes('from "../multimodel-ingest.js"') &&
-	app.includes("probeFootage(objectUrl") &&
-	app.includes("knownFps: Number.isFinite(source.fps) ? source.fps : null"),
+	"the save keeps the layer's IK edits and the take v3 source, never the baked arrays",
+	app.includes("cast().map(({ sessionMotion, ...entry }) => {") && app.includes("ikEdits: ikEditsOf(row), motionTake: savedTakeSource(row?.take)") && app.includes("characters: stageCharacters() }") &&
+	app.includes("const saved = normalizeTakeSource(entry.motionTake), take = saved ? restoredTake(entry.id, saved) : null;") &&
+	app.includes("compileTakeSource(take.source)"),
 );
 expect(
-	"extraction requires a GVHMR bridge and rejects every other route",
-	app.includes('MULTIMODEL_REASONS["extract-bridge-required"]') &&
-	app.includes('bridge.extractionBackend !== "gvhmr"') &&
-	app.includes('MULTIMODEL_REASONS["extract-backend-unsupported"]') &&
-	app.includes("return extractMultiModelMotionGpu();") &&
-	!app.includes("return extractMultiModelMotionBrowser();") &&
-	app.includes("requestBridgeExtract("),
-);
-expect(
-	"the bridge advertises GVHMR as the only extraction backend",
-	extract.includes('|| "gvhmr").toLowerCase()') &&
-	extract.includes('EXTRACT_BACKEND_SUPPORTED = EXTRACT_BACKEND === "gvhmr" && !EXTRACT_CMD') &&
-	extract.includes('reason: "extract-backend-unsupported"') &&
-	/extractionBackend:\s*EXTRACT_BACKEND_SUPPORTED\s*\?\s*EXTRACT_BACKEND\s*:\s*"unsupported"/.test(bridge),
-);
-expect("every named ingest failure is a message in both locales", app.includes("const MULTIMODEL_REASONS = {") && app.includes('MULTIMODEL_REASONS[code]?.[isKo ? 1 : 0] ?? code'));
-// THE INVARIANT: extraction divided root travel by the filmed person's
-// stature, so the clip and the scale must be applied together.
-expect(
-	"a character's stature comes from its own take and is applied on the world transform",
-	app.includes("const scale = characterScaleFor(decoded);") &&
-	app.includes("clone.scale.setScalar(0.01 * scale)") &&
-	app.includes("scale: entry.scale ?? 1") &&
-	app.includes("scale={view.scale}"),
-);
-expect(
-	"each extra take carries its own stature, never the active character's",
-	app.includes("scale: characterScaleFor(clip, take.personScale),") &&
-	app.includes("scale: take.scale,"),
-);
-expect(
-	"the response person scale is only a fallback for an npz that stores none",
-	app.includes("if (personScale === 1 && Number.isFinite(declared)) {") &&
-	app.includes("personScale = characterScaleFor(null, declared);"),
-);
-expect(
-	"stature survives the save: only the session clip is stripped from the stage, and the layer's IK edits ride along",
-	app.includes("characters.map(({ sessionMotion, ...entry }) => ({ ...entry, ikEdits: ikEditsOf(entry.id) }))") && app.includes("characters: stageCharacters,") &&
-	app.includes("appContext.storeDomain('motion').hydrate(entry.id, clip, entry.motionRef)"),
-);
-expect(
-	"extra takes land on their OWN layer, not through the editing buffer",
-	app.includes("async function deliverExtraTakes(") &&
-	app.includes("takeAnchor(active, take.offsetX, take.offsetZ)") &&
-	app.includes("sessionMotion: {") &&
-	app.includes("!entry.sessionMotion && !entry.motionRef"),
-);
-expect(
-	"trim composes from the per-character full-take map",
-	app.includes("const motionFullRef = useRef(new Map());") &&
-	app.includes("const full = fullMotionFor(id), take = motionFor(id);") &&
-	app.includes("const previous = take.editSegments, rendered = { ...renderMotionEdit(full, segments), url: null };") &&
-	app.includes("edit('motion.trim', { characterId: appContext.shared.activeChar.id, start, end })"),
-);
-expect(
-	"a cut take drops its source url and migrates retained IK keys",
-	app.includes("rendered = { ...renderMotionEdit(full, segments), url: null }") &&
-	app.includes("remapFrameKeyMap(decodeMotionKeys(layer(id).ikKeys), previous, segments)"),
-);
-expect(
-	"an extracted take is trimmable too",
-	app.includes('function replace(id, take, { fullTake = take') &&
-	app.includes('take: snapshotTake(take), fullTake: snapshotTake(fullTake)') &&
-	app.includes('owned.replace(characterId, take, { recipe: imported, versions })'),
-);
-expect(
-	"the timeline receives the active take, both trim handlers, and the department it draws for",
-	app.includes("onMotionTrim={applyMotionTrim}") &&
-	app.includes("onMotionTrimReset={resetMotionTrim}") &&
-	app.includes("motion={motion ? {") &&
-	app.includes("frames: motion.frames,") &&
-	app.includes("segments: motionEditLayout(") &&
-	app.includes("workflowMode={workflowMode}"),
-);
-// Trim, retime and Cut edit the take: Scene and Camera never draw them, and
-// inside Motion they belong to the segment the playhead selects (#191).
-expect(
-	"take trim, retime and Cut render only in Motion mode on the selected segment",
-	timeline.includes('const motionTools = workflowMode === "motion";') &&
-	timeline.includes("segmentTools = (segment) => motionTools && (segment.preview === true || selectedMotionSegment?.id === segment.id)") &&
-	timeline.includes("segmentTools(segment) && <button") &&
-	timeline.includes("name === IK_LANE && motion && motionTools && selectedMotionSegment && ("),
+	"the timeline draws the active take as timing segments: Cut, an amber retime grip, trim grips and right-click remove",
+	app.includes('motion={timelineTake(motion, characters[activeCharIndex]?.id, runStudioAction)}') &&
+	timeline.includes("<TakeSegmentClips") && timeline.includes("<TakeSegmentTools") && takeSegments.includes('className={"tl-motion-clip"') &&
+	takeSegments.includes('grip("speed"') && takeSegments.includes('grip("start"') && takeSegments.includes('grip("end"') && takeSegments.includes("motion.remove(segment.id)"),
 );
 // Foot snap and Body contact only reinterpret an IK drag (R7).
 expect(
@@ -523,7 +361,6 @@ expect("the studio root carries data-previs-mode beside data-workflow-mode", app
 expect("the mode pill drops Motion in a storyboard", viewportToolbar.includes('previsMode === "storyboard" ? MODES.filter((mode) => mode.id !== "motion") : MODES') && viewportToolbar.includes("modesFor(previsMode).map("));
 expect("key 4 is ignored in a storyboard", appSource.includes('if (modeKey === "motion" && storyboardProject) return;'));
 expect("selectWorkflowMode refuses Motion in a storyboard with the shared toast", appSource.includes('if (next === "motion" && storyboardProject) {') && appSource.includes("setToast(ko(STORYBOARD_MOTION_REFUSAL.en, STORYBOARD_MOTION_REFUSAL.ko))"));
-expect("the Generate Motion group is not rendered in a storyboard", topBar.includes('{previsMode !== "storyboard" && <GenerateMotion />}'));
 expect("the project head always shows the mode badge", topBar.includes('data-testid="topbar-previs-mode"') && topBar.includes("<PrevisModeBadge mode={previsMode} />") && !topBar.includes("previsEnabled"));
 expect("waypoint authoring and Top-View path drawing stay off in a storyboard", appSource.includes("toggleWaypointMode: storyboardProject ? undefined : toggleWaypointMode") && appSource.includes("if (waypointMode) setWaypointMode(false);") && appSource.includes("if (pathDraw) setPathDraw(false);"));
 expect(

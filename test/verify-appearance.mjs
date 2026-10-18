@@ -13,7 +13,16 @@ const room = readFileSync(new URL("../src/room.jsx", import.meta.url), "utf8");
 const dualview = readFileSync(new URL("../src/dualview.jsx", import.meta.url), "utf8");
 const posestudio = readFileSync(new URL("../src/posestudio.jsx", import.meta.url), "utf8");
 const ikHandlesSource = posestudio.slice(posestudio.indexOf("export function IkHandles"));
+const stageCharacters = readFileSync(new URL("../src/stage-characters.jsx", import.meta.url), "utf8");
 
+// A colour picker streams a tint every drag frame: rebuilding the clone for each one re-bound the rig (playback,
+// IK, contact radii) and froze the Studio for ~190 ms a value.
+const cloneDeps = stageCharacters.match(/\}, \[fbx[^\]]*\]\);/)?.[0] ?? "";
+expect("a new character tint does not rebuild the rig clone", cloneDeps !== "" && !cloneDeps.includes("tint"), cloneDeps || "clone memo not found");
+expect(
+	"the tint recolours the clay materials in place and asks for a frame",
+	stageCharacters.includes("child.material.color.copy(") && stageCharacters.includes("[model, tint, partColoursEnabled, invalidate]"),
+);
 expect(
 	"legacy per-mesh outline modules are removed",
 	!existsSync(new URL("../src/cozy-clay-appearance.jsx", import.meta.url)) &&
@@ -54,7 +63,7 @@ expect(
 		dualview.includes("mix(0.42, 1.0") &&
 		dualview.includes("3.0 / max(centerZ, 0.001)") &&
 		dualview.includes("texel.x * 0.8") &&
-		dualview.includes("edge * 0.76 * distanceFade"),
+		dualview.includes("edge * 0.38 * distanceFade"),
 );
 expect(
 	"each pane renders into its own local edge target",

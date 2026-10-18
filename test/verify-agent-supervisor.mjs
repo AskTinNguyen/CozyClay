@@ -190,7 +190,7 @@ const frameTypes = frames => frames.filter(frame => !["execution_telemetry", "ex
 let authoredTypes;
 {
 	const f = await fixture();
-	const { turnId, cookie, frames } = await f.turn();
+	const { turnId, cookie, frames } = await f.turn(undefined, { supervisor: true });
 	authoredTypes = frameTypes(frames);
 	assert.equal(authoredTypes.at(-1), "done", "the turn stream still ends with done");
 	assert.ok(!authoredTypes.includes("supervisor"), "the turn stream never carries the review");
@@ -228,6 +228,8 @@ let authoredTypes;
 	const replay = await (await f.get(`/agent/turn/${encodeURIComponent(turnId)}/events?after=0`, cookie)).text();
 	const replayed = frameTypes([...replay.matchAll(/^data: (.+)$/gm)].map(match => JSON.parse(match[1])));
 	assert.ok(replayed.indexOf("supervisor") > replayed.indexOf("done") && replayed.indexOf("done") >= 0, "the events replay carries the note after done");
+	assert.equal(replayed.filter(type => type === "supervisor").length, 1, "an explicit supervisor:true turn carries exactly one supervisor event");
+	assert.equal(f.modelCalls.filter(call => call.supervisor).length, 1, "exactly one review call");
 	const again = await f.get(`/agent/turn/${encodeURIComponent(turnId)}/supervisor`, cookie);
 	assert.equal(again.status, 200, "a finished review answers at once");
 	assert.equal((await again.json()).eventSeq, note.eventSeq);
@@ -242,7 +244,7 @@ let authoredTypes;
 	process.env.COZYCLAY_SUPERVISOR = "off";
 	const f = await fixture();
 	f.gate.resolve();
-	const { turnId, cookie, frames } = await f.turn();
+	const { turnId, cookie, frames } = await f.turn(undefined, { supervisor: true });
 	assert.deepEqual(frameTypes(frames), authoredTypes, "the turn stream is identical with the review off");
 	const response = await f.get(`/agent/turn/${encodeURIComponent(turnId)}/supervisor`, cookie);
 	assert.equal(response.status, 204);
@@ -253,9 +255,23 @@ let authoredTypes;
 	console.log("PASS COZYCLAY_SUPERVISOR=off answers 204 and spends no provider call");
 }
 
+// Off by default: a turn that omits the field is not reviewed, from any surface.
+{
+	const f = await fixture();
+	f.gate.resolve();
+	const { turnId, cookie, frames } = await f.turn();
+	assert.deepEqual(frameTypes(frames), authoredTypes, "the turn stream is identical without the field");
+	assert.equal((await f.get(`/agent/turn/${encodeURIComponent(turnId)}/supervisor`, cookie)).status, 204, "no field, no review");
+	assert.equal(f.modelCalls.length, 2, "no extra provider call for a turn that did not ask");
+	assert.ok(!f.commands.some(command => ["verify_result", "capture_framing_png", "capture_plan_png"].includes(command.name)), "no editor reads for a review");
+	const replay = await (await f.get(`/agent/turn/${encodeURIComponent(turnId)}/events?after=0`, cookie)).text();
+	assert.ok(!replay.includes('"type":"supervisor"'), "the replay carries no supervisor event");
+	await f.close();
+	console.log("PASS a turn without the supervisor field is not reviewed (default off)");
+}
+
 // The author's own switch: a turn sent with supervisor:false is accepted and
-// skips the review exactly like the env switch, while the next turn without
-// the flag is reviewed again.
+// skips the review exactly like the env switch.
 {
 	const f = await fixture();
 	f.gate.resolve();
@@ -272,7 +288,7 @@ let authoredTypes;
 {
 	const f = await fixture({ readOnly: true });
 	f.gate.resolve();
-	const { turnId, cookie } = await f.turn("what is in the scene?");
+	const { turnId, cookie } = await f.turn("what is in the scene?", { supervisor: true });
 	assert.equal((await f.get(`/agent/turn/${encodeURIComponent(turnId)}/supervisor`, cookie)).status, 204);
 	assert.equal(f.modelCalls.filter(call => call.supervisor).length, 0);
 	await f.close();
@@ -283,7 +299,7 @@ let authoredTypes;
 {
 	const f = await fixture({ supervisorReply: "Looks good to me!" });
 	f.gate.resolve();
-	const { turnId, cookie } = await f.turn();
+	const { turnId, cookie } = await f.turn(undefined, { supervisor: true });
 	const response = await bounded(f.get(`/agent/turn/${encodeURIComponent(turnId)}/supervisor`, cookie), "supervisor long-poll");
 	assert.equal(response.status, 200);
 	const note = await response.json();
@@ -303,7 +319,7 @@ let authoredTypes;
 	const reply = { ...VERDICT, issues: [{ ...VERDICT.issues[0], kind: "spatial", fix }, { ...VERDICT.issues[1], fix: { action: "chair.teleport", args: { id: "chair" } } }] };
 	const f = await fixture({ supervisorReply: `Verdict:\n${JSON.stringify(reply)}`, actionIndex: ACTION_INDEX });
 	f.gate.resolve();
-	const { turnId, cookie } = await f.turn();
+	const { turnId, cookie } = await f.turn(undefined, { supervisor: true });
 	const response = await bounded(f.get(`/agent/turn/${encodeURIComponent(turnId)}/supervisor`, cookie), "supervisor long-poll");
 	assert.equal(response.status, 200);
 	const note = await response.json();

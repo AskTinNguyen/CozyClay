@@ -29,6 +29,7 @@ import { ko } from "../locale.js";
 import { AGENT_TOOL_CATEGORIES, EXECUTION_TELEMETRY_VALUES } from "../execution-telemetry.js";
 import { STUDIO_VARIANTS, validateReceipt } from "../studio-agent-protocol.js";
 import { requestAgentImage, sidecarRequest, sidecarUrl } from "../agent-image-client.js";
+import { actionLabelsOf, changedLine, scriptNow, stepFields, thinkingLine, withCompose, withThinking, withToolStart, withTurnEnd } from "./agent-turn.js";
 
 const AGENT_PANEL_WIDTH_KEY = "cozyclay.workflow.agentPanel.width";
 export const AGENT_PANEL_WIDTH_DEFAULT = 360;
@@ -92,7 +93,7 @@ export const jobStateTone = (state) => {
 export const formatJobProgress = (progress) => Number.isFinite(progress) ? `${Math.round(progress * 100)}%` : "";
 
 /** One line of plain product copy for a validated receipt. */
-export function receiptSummary(receipt) {
+export function receiptSummary(receipt, context = null) {
 	if (receipt?.status === "installed") {
 		const { installed, verification } = receipt;
 		const coverage = verification.status === "verified"
@@ -103,7 +104,7 @@ export function receiptSummary(receipt) {
 	if (receipt?.status === "undone") return `Undid ${receipt.undoneReceiptId}`;
 	if (receipt?.status === "noop") return "Nothing to change";
 	if (receipt?.status === "transient") return "Changed the view only";
-	return `Applied to ${receipt?.affectedIds?.join(", ") || "the scene"}`;
+	return context ? changedLine(receipt?.affectedIds ?? [], context) : `Applied to ${receipt?.affectedIds?.join(", ") || "the scene"}`;
 }
 
 /** Effort options for a model entry from /agent/models; the backend default comes first. */
@@ -265,16 +266,16 @@ export function storeModel(key, storage = globalThis.localStorage) {
 	}
 }
 
-/** The supervisor switch (#728): on unless the author turned it off. It rides
- * on every Studio turn as `supervisor: false` so the sidecar skips the review
- * for that turn; the sidecar's own COZYCLAY_SUPERVISOR=off still wins. */
+/** The supervisor switch (#728): off unless the author turned it on. It rides
+ * on every Studio turn as `supervisor: true|false`; the sidecar reviews only a
+ * turn sent with `true`, and its own COZYCLAY_SUPERVISOR=off still wins. */
 const AGENT_SUPERVISOR_KEY = "cozyclay.agent.supervisor";
 
 export function readStoredSupervisor(storage = globalThis.localStorage) {
 	try {
-		return storage?.getItem(AGENT_SUPERVISOR_KEY) !== "off";
+		return storage?.getItem(AGENT_SUPERVISOR_KEY) === "on";
 	} catch {
-		return true;
+		return false;
 	}
 }
 
@@ -442,12 +443,14 @@ export function formatTurnClock(ms) {
 	return `${Math.floor(total / 60)} m ${String(total % 60).padStart(2, "0")} s`;
 }
 
-const liveActivity = (phase, label, elapsedMs) => ({
+// `detail`: what the step is about (a spec's label, the script's current call, the latest line of reasoning).
+const liveActivity = (phase, label, elapsedMs, detail = "") => ({
 	phase,
 	kind: "live",
 	tone: "busy",
 	text: `${label} · ${formatTurnClock(elapsedMs)}`,
 	ticking: true,
+	...(detail ? { detail } : {}),
 });
 
 /** What the panel says it is doing, in plain words. Pure: the component only
@@ -466,11 +469,15 @@ export function describeActivity(state, { now = Date.now(), toolLabel = toolCall
 			return liveActivity("job", `${JOB_STATE_COPY[job.state] || job.state} motion${percent ? ` ${percent}` : ""}`, elapsed);
 		}
 		const tool = items.findLast((item) => item.kind === "tool" && item.status === "running");
-		if (tool) return liveActivity("tool", `Running ${toolLabel(tool)}…`, elapsed);
-		// Nothing has come back yet: the request itself is the only thing happening.
-		const prompt = items.findLastIndex((item) => item.kind === "user");
-		return prompt === items.length - 1
-			? liveActivity("sending", "Sending…", elapsed)
+		if (tool) return liveActivity("tool", `Running ${toolLabel(tool)}…`, elapsed, tool.progress ? scriptNow(tool) : tool.subject);
+		// The newest frame says what the model is doing now: writing a call, its reply, or reasoning.
+		const latest = items.at(-1);
+		if (latest?.kind === "compose") return liveActivity("compose", `Preparing ${toolLabel(latest)}…`, elapsed, latest.subject);
+		if (latest?.kind === "thinking") return liveActivity("thinking", "Thinking…", elapsed, thinkingLine(latest.text));
+		if (latest?.kind === "assistant") return liveActivity("reply", "Writing the reply…", elapsed);
+		// Nothing has come back yet: the request, then the model's first token, is all that is happening.
+		return latest?.kind === "user"
+			? liveActivity("sending", elapsed < 2000 ? "Sending…" : "Waiting for the model…", elapsed)
 			: liveActivity("thinking", "Thinking…", elapsed);
 	}
 	const last = state?.lastTurn;
@@ -637,6 +644,15 @@ export function providerEnvLabel(id) {
 	return names?.length ? names.join(" or ") : "an environment variable";
 }
 
+/** The failure a provider's 401/403 turns into: the refusal, plus the provider's own reason when the raw
+ * error carries one ("invalid x-api-key"), instead of the raw status and JSON body. */
+export function keyRefusedMessage(raw) {
+	const reason = /"message"\s*:\s*"([^"]{1,160})"/.exec(String(raw || ""))?.[1];
+	const status = /\b(401|403)\b/.exec(String(raw || ""))?.[1];
+	// What to do next is the failure card's recovery line, said once there.
+	return `The model provider refused the credentials${status || reason ? ` (${[status, reason].filter(Boolean).join(": ")})` : ""}.`;
+}
+
 export function createHttpTransport({ fetchImpl = globalThis.fetch?.bind(globalThis), surface, capture = track, now = () => performance.now() } = {}) {
 	const activeTurns = new Map();
 	const request = (path, init) => sidecarRequest(fetchImpl, path, init);
@@ -646,10 +662,9 @@ export function createHttpTransport({ fetchImpl = globalThis.fetch?.bind(globalT
 			return request("/oauth/status");
 		},
 		async signIn() {
-			const result = await request("/oauth/start", { method: "POST", body: "{}" });
-			// The sidecar owns the code exchange; the browser only opens the page.
-			if (result?.authorizeUrl) globalThis.open?.(result.authorizeUrl, "_blank", "noopener,noreferrer");
-			return result;
+			// The sidecar owns the code exchange and opens the sign-in page itself; opening it here
+			// too showed the page twice. The waiting card links the page from /oauth/status.
+			return request("/oauth/start", { method: "POST", body: "{}" });
 		},
 		async signOut() {
 			return request("/oauth/logout", { method: "POST", body: "{}" });
@@ -680,16 +695,9 @@ export function createHttpTransport({ fetchImpl = globalThis.fetch?.bind(globalT
 		// Provider credentials live in the sidecar's 0600 store. The browser sends
 		// a key once and never reads one back: the status route answers with the
 		// source of a key, never with key material.
-		async providers() {
-			const result = await request("/agent/providers");
-			return Array.isArray(result?.providers) ? result.providers : [];
-		},
-		async setProviderKey(id, key) {
-			return request(`/agent/providers/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify({ key }) });
-		},
-		async removeProviderKey(id) {
-			return request(`/agent/providers/${encodeURIComponent(id)}`, { method: "DELETE" });
-		},
+		async providers() { const result = await request("/agent/providers"); return Array.isArray(result?.providers) ? result.providers : []; },
+		async setProviderKey(id, key) { return request(`/agent/providers/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify({ key }) }); },
+		async removeProviderKey(id) { return request(`/agent/providers/${encodeURIComponent(id)}`, { method: "DELETE" }); },
 		async listSessions() {
 			const result = await request(`/agent/sessions?surface=${encodeURIComponent(surface || "studio")}`);
 			return Array.isArray(result?.sessions) ? result.sessions : [];
@@ -791,7 +799,7 @@ export function createHttpTransport({ fetchImpl = globalThis.fetch?.bind(globalT
 			const body = studio
 				? JSON.stringify({
 					surface: "studio", sessionId, turnId, text, context: turnRequest.context,
-					...(model ? { model } : {}), ...(effort ? { effort } : {}), ...(attachFrame === undefined ? {} : { attachFrame: Boolean(attachFrame) }), ...(supervisor === false ? { supervisor: false } : {}), ...attached,
+					...(model ? { model } : {}), ...(effort ? { effort } : {}), ...(attachFrame === undefined ? {} : { attachFrame: Boolean(attachFrame) }), ...(typeof supervisor === "boolean" ? { supervisor } : {}), ...attached,
 				})
 				: JSON.stringify({ sessionId, text, attachFrame, model, ...(effort ? { effort } : {}), ...attached, ...(telemetry.turnId ? { turn_id: telemetry.turnId } : {}) });
 			try {
@@ -1018,9 +1026,7 @@ export function createMockTransport(config = { state: "ready" }) {
 			});
 			return { providers, models: providers.flatMap((provider) => provider.models.map((model) => ({ ...model, id: model.key }))) };
 		},
-		async providers() {
-			return providerStatus();
-		},
+		async providers() { return providerStatus(); },
 		async setProviderKey(id, key) {
 			if (id === "openai-codex") throw Object.assign(new Error("Use ChatGPT sign-in for OpenAI Codex."), { status: 400 });
 			if (typeof key !== "string" || key.trim().length < MOCK_PROVIDER_KEY_MIN) {
@@ -1030,10 +1036,7 @@ export function createMockTransport(config = { state: "ready" }) {
 			storedProviders.add(id);
 			return { ok: true };
 		},
-		async removeProviderKey(id) {
-			storedProviders.delete(id);
-			return { ok: true };
-		},
+		async removeProviderKey(id) { storedProviders.delete(id); return { ok: true }; },
 		async stop() {
 			liveTurn = null;
 			return { ok: true };
@@ -1214,6 +1217,8 @@ export function createAgentChatStore({
 	// Supervisor note requests still waiting on the sidecar; a cleared or
 	// replaced conversation abandons them.
 	const supervisorRequests = new Set();
+	// The running turn's action labels (its context's actionIndex), for the step list (agent-turn.js).
+	let actionLabels = new Map();
 	let state = {
 		sessionId: newId(),
 		turnId: null,
@@ -1298,7 +1303,7 @@ export function createAgentChatStore({
 					acceptance: receipt.explicitUnverifiedAcceptance ? { status: "accepted" } : null,
 				}
 				: item),
-			{ kind: "receipt", id: `receipt:${receipt.receiptId}`, receiptId: receipt.receiptId, receipt, summary: receiptSummary(receipt) },
+			{ kind: "receipt", id: `receipt:${receipt.receiptId}`, receiptId: receipt.receiptId, receipt, summary: receiptSummary(receipt, studio ? advisory(() => buildContext?.() ?? null, null) : null) },
 		]);
 		// A host that throws (or has nowhere to put the highlight) cannot cost the
 		// author the receipt they already earned.
@@ -1337,9 +1342,13 @@ export function createAgentChatStore({
 			return;
 		}
 		if (event?.type === "tool.start") {
-			setItems((items) => [...items, { kind: "tool", id: event.callId || newId(), callId: event.callId, name: event.name, label: event.label, args: event.args, status: "running" }]);
+			setItems((items) => withToolStart(items, { kind: "tool", id: event.callId || newId(), callId: event.callId, name: event.name, label: event.label, args: event.args, status: "running", startedAt: clock(), ...stepFields(event.name, event.args, actionLabels) }));
 			return;
 		}
+		// What the model does between calls and what a script runs inside one (bin/agent/turn-frames.mjs, script-tool.mjs).
+		if (event?.type === "thinking.delta") { setItems((items) => withThinking(items, String(event.text ?? ""), clock(), newId)); return; }
+		if (event?.type === "tool.compose") { setItems((items) => withCompose(items, event, clock(), newId, actionLabels)); return; }
+		if (event?.type === "tool.progress") { patchItem((item) => item.kind === "tool" && item.callId === event.callId && item.status === "running", { progress: { index: event.index, name: event.name, label: actionLabels.get(event.action), action: event.action, status: event.status, summary: event.summary } }); return; }
 		if (event?.type === "tool.done") {
 			patchItem((item) => item.kind === "tool" && item.callId === event.callId, { status: event.ok ? "done" : "failed", elapsedMs: event.elapsedMs, result: event.result, error: event.error });
 			// Synchronous Studio families (arrange_*, frame_shot, patch_elements,
@@ -1363,7 +1372,7 @@ export function createAgentChatStore({
 			return;
 		}
 		if (event?.type !== "error") return;
-		const failure = { code: event.code || "upstream", message: event.message || ERROR_COPY[event.code] || "The turn failed.", ...(Number.isFinite(event.status) ? { status: event.status } : {}) };
+		const failure = { code: event.code || "upstream", message: event.code === "unauthorized" ? keyRefusedMessage(event.message) : event.message || ERROR_COPY[event.code] || "The turn failed.", ...(Number.isFinite(event.status) ? { status: event.status } : {}) };
 		if (activeTurn) activeTurn.failure = failure;
 		if (event.code === "rate_limit") { set({ rateLimit: { resetAt: event.resetAt || null, message: event.message || ERROR_COPY.rate_limit } }); return; }
 		if (event.code === "auth") { onAuthLost?.(); return; }
@@ -1372,7 +1381,7 @@ export function createAgentChatStore({
 			// an older card would hide the new failure inside finished history.
 			const prompt = items.findLastIndex((item) => item.kind === "user");
 			const position = items.findLastIndex((item, at) => at > prompt && item.kind === "tool" && item.status === "failed");
-			if (position === -1) return [...items, { kind: "failure", id: newId(), failure: { ...failure, recovery: { action: "retry", retryAllowed: true } } }];
+			if (position === -1) return [...items, { kind: "failure", id: newId(), failure: { ...failure, recovery: { action: failure.code === "unauthorized" ? "fix_key" : "retry", retryAllowed: true } } }];
 			return items.map((item, at) => at === position ? { ...item, failure } : item);
 		});
 	}
@@ -1465,6 +1474,7 @@ export function createAgentChatStore({
 			const turnId = newId();
 			// Context is read at Send, from the host's current authoritative refs.
 			const context = studio ? buildContext?.() ?? null : null;
+			actionLabels = actionLabelsOf(context);
 			if (studio && !context) {
 				applyEvent({ type: "error", code: "upstream", message: "The editor is not ready to describe the scene yet." });
 				return;
@@ -1501,7 +1511,7 @@ export function createAgentChatStore({
 					attachFrame: Boolean(options.attachFrame),
 					model: options.model,
 					effort: options.effort ?? undefined,
-					...(options.supervisor === false ? { supervisor: false } : {}),
+					...(typeof options.supervisor === "boolean" ? { supervisor: options.supervisor } : {}),
 				}, applyEvent, signal);
 			} catch (error) {
 				if (!signal.aborted) applyEvent({ type: "error", code: "upstream", message: String(error?.message || error) });
@@ -1517,17 +1527,10 @@ export function createAgentChatStore({
 					}
 					const endedAt = clock();
 					activeTurn = null;
-					set({
-						streaming: false,
-						turnStartedAt: null,
-						lastTurn: {
-							status: signal.aborted ? "stopped" : turn.failure ? "failed" : "done",
-							endedAt,
-							durationMs: endedAt - startedAt,
-							failure: turn.failure,
-						},
-					});
-					if (studio && turn.reviewable && options.supervisor !== false && !signal.aborted) requestSupervisorNote(turnId);
+					// The end state stays in the transcript with the turn's steps (agent-turn.js withTurnEnd).
+					const lastTurn = { status: signal.aborted ? "stopped" : turn.failure ? "failed" : "done", endedAt, durationMs: endedAt - startedAt, failure: turn.failure };
+					set({ streaming: false, turnStartedAt: null, lastTurn, items: withTurnEnd(state.items, lastTurn, newId) });
+					if (studio && turn.reviewable && options.supervisor === true && !signal.aborted) requestSupervisorNote(turnId);
 				}
 			}
 		},

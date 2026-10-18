@@ -13,7 +13,7 @@ const normalizers = {
 	normalizeSceneObject,
 	repairCamera: (camera) => createShotAuthoringDocument({ frameCount: 96, shots: [{ id: "shot-test", startFrame: 0, endFrame: 95, camera }] }).shots[0].camera,
 };
-const allowedTypes = new Set(["number", "string", "boolean", "vec3", "color", "enum", "id", "image", "array"]);
+const allowedTypes = new Set(["number", "string", "boolean", "vec3", "color", "enum", "id", "image", "array", "object"]);
 const allowedDomains = new Set(["cast", "objects", "shot", "stage", null]);
 const allowedNormalizers = new Set([...Object.keys(normalizers), null]);
 
@@ -63,7 +63,7 @@ const exposedThroughActions = {
 	"character.ikKeys": ["character.clearIkKeys", "character.removeIkKey", "character.setIkKey"],
 	"object.attach": ["object.attach", "object.detach"],
 	"shot.cameraRail": ["shot.clearCameraRail", "shot.setCameraRail"],
-	"view.partColoursGuideModeInset": ["view.setGuideMode", "view.setInset", "view.setPartColours"],
+	"view.partColoursGuideModeInset": ["view.setGhosts", "view.setGuideMode", "view.setInset", "view.setPartColours"],
 	scenes: ["scene.create", "scene.delete", "scene.duplicate", "scene.rename", "scene.switch"],
 	project: ["project.save"],
 	"object.cutout": ["asset.import"],
@@ -127,8 +127,9 @@ function makeCase(entry) {
 		if (field === "environment") input.environment = "a rainy rooftop at dusk";
 		if (field === "style") input.style = "handheld 16mm, sodium streetlight";
 		if (field === "hasEnvSheet") input.hasEnvSheet = true;
-		if (field.startsWith("keyLight.")) input.keyLight = { x: -1.5, y: 7.25, z: 2.5, intensity: 2.75, warmth: 0.25 };
-		return { input, output: createSceneStage(input), read: (output) => field.startsWith("keyLight.") ? output.keyLight[field.slice("keyLight.".length)] : field === "camera" ? output.shotAspect : output[field] };
+		if (field.startsWith("keyLight.")) input.keyLight = { x: -1.5, y: 7.25, z: 2.5, intensity: 2.75, warmth: 0.25, color: "#9db6e6" };
+		if (field.startsWith("lighting.")) input.lighting = { preset: "night", sky: "#0b1426", skyTop: "#020408", ambient: 0.6, hemiSky: "#34507f", hemiGround: "#0a0c12", fill: 0.25, fog: 0.45, exposure: 1.4, shadowSoftness: 0.75, envLight: 1.3, ao: 0.8, hdr: "builtin:night-street", hdrRotation: 30, hdrIntensity: 1.5, hdrBackground: false };
+		return { input, output: createSceneStage(input), read: (output) => field.includes(".") ? get(output, field) : field === "camera" ? output.shotAspect : output[field] };
 	}
 	if (entry.normalizer === "normalizeSceneObject") {
 		const field = entry.path.slice("object.".length);
@@ -144,13 +145,17 @@ function makeCase(entry) {
 		if (field === "attach") input.attach = { characterId: "char-test", bone: "rightHand" };
 		if (field === "path") input.path = { points: [{ x: 1, y: 0, z: 2 }, { x: 4, y: 1, z: 5 }] };
 		if (field === "cutout") Object.assign(input, { renderer: "cutout", assetId: "image-authored", aspect: 1.5, height: 2 });
+		if (field === "light") Object.assign(input, { renderer: "light", light: { type: "spot", color: "#FFAA00", intensity: 40, range: 12, angle: 35, softness: 0.5, shadow: true, flicker: 0.2, aim: { x: 0, y: 0, z: 1 } } });
+		if (field === "glow") input.glow = { color: "#ff5a1f", intensity: 6, halo: 2 };
+		if (field === "effect") Object.assign(input, { renderer: "effect", effect: { preset: "fire", rate: 12 } });
 		return {
 			input,
 			output: normalizeSceneObject(input),
 			read: (output) => field === "position" ? [output.x, output.y, output.z]
 				: field === "rotation" ? [output.rot, output.rotX, output.rotZ]
 				: field === "scale" ? [output.scaleX, output.scaleY, output.scaleZ]
-				: field === "cutout" ? output.assetId : get(output, field),
+				: field === "cutout" ? output.assetId
+				: field === "effect" ? [output.effect.preset, output.effect.rate, output.effect.additive] : get(output, field),
 		};
 	}
 	if (entry.normalizer === "repairCamera") {
@@ -184,6 +189,23 @@ const expected = new Map([
 	["stage.keyLight.z", 2.5],
 	["stage.keyLight.intensity", 2.75],
 	["stage.keyLight.warmth", 0.25],
+	["stage.keyLight.color", "#9db6e6"],
+	["stage.lighting.preset", "night"],
+	["stage.lighting.sky", "#0b1426"],
+	["stage.lighting.skyTop", "#020408"],
+	["stage.lighting.ambient", 0.6],
+	["stage.lighting.hemiSky", "#34507f"],
+	["stage.lighting.hemiGround", "#0a0c12"],
+	["stage.lighting.fill", 0.25],
+	["stage.lighting.fog", 0.45],
+	["stage.lighting.exposure", 1.4],
+	["stage.lighting.shadowSoftness", 0.75],
+	["stage.lighting.envLight", 1.3],
+	["stage.lighting.ao", 0.8],
+	["stage.lighting.hdr", "builtin:night-street"],
+	["stage.lighting.hdrRotation", 30],
+	["stage.lighting.hdrIntensity", 1.5],
+	["stage.lighting.hdrBackground", false],
 	["stage.environmentImage", "data:image/png;base64,BBBB"],
 	["stage.environment", "a rainy rooftop at dusk"],
 	["stage.style", "handheld 16mm, sodium streetlight"],
@@ -201,6 +223,9 @@ const expected = new Map([
 	["object.attach", { characterId: "char-test", bone: "rightHand" }],
 	["object.path", { points: [{ x: 1, y: 0, z: 2 }, { x: 4, y: 1, z: 5 }], marks: [], timing: null, speed: 0, faceTravel: true, loop: false, extend: false }],
 	["object.cutout", "image-authored"],
+	["object.light", { type: "spot", color: "#ffaa00", intensity: 40, range: 12, angle: 35, softness: 0.5, shadow: true, flicker: 0.2, aim: { x: 0, y: 0, z: 1 } }],
+	["object.glow", { color: "#ff5a1f", intensity: 6, halo: 2 }],
+	["object.effect", ["fire", 12, true]],
 ]);
 
 let verified = 0;
@@ -226,6 +251,8 @@ const sample = {
 	image: () => "data:image/png;base64,AAAA",
 	vec3: () => ({ x: 1, y: 2, z: 3 }),
 	string: () => "sample text",
+	object: (entry) => (entry.path === "object.light" ? { type: "point", intensity: 0.45, flicker: 0.6, aim: null }
+		: entry.path === "object.effect" ? { preset: "smoke", rate: 30, wind: { x: 0.1 } } : { color: "#ff5a1f", intensity: 6, halo: 2 }),
 	array: (entry) => (entry.path === "object.path"
 		? { points: [{ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 1 }] }
 		: entry.path === "shot.cameraKeys"
@@ -366,6 +393,10 @@ for (const path of ["stage.keyLight.x", "stage.keyLight.y", "stage.keyLight.z", 
 	const entry = elementByPath(path);
 	const axis = path.slice("stage.keyLight.".length);
 	assertScalarBounds(entry, (value) => createSceneStage({ keyLight: { ...stageDefaults, [axis]: value } }).keyLight[axis]);
+}
+// The stage look's numbers clamp to their declared ranges in the same normalizer.
+for (const key of ["ambient", "fill", "fog", "exposure", "shadowSoftness", "envLight", "ao"]) {
+	assertScalarBounds(elementByPath(`stage.lighting.${key}`), (value) => createSceneStage({ lighting: { [key]: value } }).lighting[key]);
 }
 
 const cameraKeyEntry = elementByPath("shot.cameraKeys");

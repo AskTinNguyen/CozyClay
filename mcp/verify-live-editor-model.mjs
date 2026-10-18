@@ -153,22 +153,13 @@ try {
 		if (frame.method === "Fetch.requestPaused") heldModelRequests.push(frame.params.requestId);
 	});
 	await send("Page.enable");
-	// Subscribe before navigation: the fixture installs a real startup take
-	// asynchronously, and that authored publication must precede admission.
 	await send('Page.addScriptToEvaluateOnNewDocument', { source: `
 		// This suite owns the scene-loading race it is testing. A fresh profile
 		// would otherwise auto-open the first-run camera tutorial (#586), whose
 		// asynchronous starter remounts the canvas underneath these commands.
 		localStorage.setItem("cozyclay.camera-tutorial-terminal.v1", JSON.stringify({ dismissed: true }));
-		window.__initialTakeReady = new Promise(resolve => {
-			let state;
-			Object.defineProperty(window, '__cozyclay', { configurable: true,
-				get: () => state,
-				set: value => { state = value; if (value?.motion?.frames > 0) resolve(true); },
-			});
-		});
 	` });
-	await send("Page.navigate", { url: `http://127.0.0.1:${vitePort}/app/?motion=/demo/walk-then-stop.npz` });
+	await send("Page.navigate", { url: `http://127.0.0.1:${vitePort}/app/` });
 
 	client = new Client({ name: "cozyclay-live-editor-model-verify", version: "1.0.0" });
 	await client.connect(new StdioClientTransport({ command: process.execPath, args: [serverPath, "--live-port", String(livePort)] }));
@@ -196,7 +187,10 @@ try {
 		"initial character rig readiness",
 	);
 
-	await evaluate('window.__initialTakeReady', 'initial authored take publication');
+	// Author a shot camera while the canvas is mounted, so framing has a camera to
+	// read while the held x-bot download suspends the canvas below.
+	const camera = await client.callTool({ name: "set_camera", arguments: { x: 0, y: 1.6, z: 6, focal_mm: 35, look_at_x: 0, look_at_y: 1.3, look_at_z: 0 } });
+	assert.equal(camera.isError, undefined, JSON.stringify(camera));
 
 	// From here the x-bot mesh is held at the network layer until this suite
 	// releases it. A cast model that is still downloading suspends the R3F
@@ -255,9 +249,20 @@ try {
 	for (const requestId of heldModelRequests) await send("Fetch.continueRequest", { requestId });
 	await send("Fetch.disable");
 	await withTimeout(lateRigReady, "x-bot rig mount", 20_000);
-	// Two more frames so every effect the remount scheduled has run, and the QA
-	// snapshot publishes the remounted camera object.
-	await evaluate(`new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(true))))`, "post-remount frame");
+	// Then until the shot camera holds still for two frames (at most a second): the
+	// remount's effects run, the QA snapshot publishes the remounted camera, and the
+	// camera keys frame_shot wrote reach it one render after the rig is ready.
+	await evaluate(`new Promise((resolve) => {
+		let last = null, still = 0, frames = 0;
+		const step = () => {
+			const cam = window.__cozyclay?.shotCam, now = cam ? cam.position.toArray().join(",") : null;
+			still = now !== null && now === last ? still + 1 : 0;
+			last = now;
+			if (still >= 2 || ++frames > 60) resolve(true);
+			else requestAnimationFrame(step);
+		};
+		requestAnimationFrame(step);
+	})`, "post-remount settle");
 	const aim = await evaluate(
 		`(() => {
 			const cam = window.__cozyclay.shotCam;

@@ -98,14 +98,6 @@ const handle = (name, args) => {
 				expectedTargets: [], currentTargets: [], mutated: false, preserved: { authoredState: "unchanged" },
 				recovery: { action: "inspect", retryAllowed: false }, message: `Character not found: ${input.characterId}`,
 			};
-			if (action === 'motion.replace') {
-				assert.equal(input.characterId, 'char-a');
-				editor.characters[0].motionRef = { url: input.url };
-				const before = revision++;
-				return { ok: true, status: 'completed', kind: 'job', action, commandId: args.commandId, receiptId: `receipt-${revision}`, host,
-					authored: true, revision: { before, after: revision }, affectedIds: ['char-a'], delta: [{ id: 'char-a', after: { takeId: input.url } }],
-					checks: { coverage: 'studio-action:motion.replace' }, warnings: [], undo: { historyEntryId: `history-${revision}`, entries: 1, canUndoDirect: true } };
-			}
 			assert.equal(action, "character.add");
 			if (rejectAfterMutation) { rejectDescribe = true; rejectAfterMutation = false; }
 			const character = input.character;
@@ -160,8 +152,7 @@ try {
 	editor.characters[0] = {
 		id: "char-a", model: "x-bot-tpose", subject: "a prior performer", x: 1, y: 0, z: 2, rot: 30, hidden: false,
 		tint: "#123456", pose: { label: "Walking", bones: { hips: [1, 2, 3] } }, scale: 1.4,
-		layer: { waypoints: [{ frame: 12, x: 1, z: 2 }], promptClips: [{ startFrame: 0, endFrame: 24, text: "Walk." }] },
-		motionRef: { url: "/ardy/motions/123456-abcdef", prompt: "Walk.", rotationDeg: 30, anchorX: 1, anchorZ: 2 },
+		layer: { waypoints: [{ frame: 12, x: 1, z: 2 }] },
 	};
 	editor.objects = [{
 		id: "cube-1", name: "Cube", renderer: "cube", x: 1, y: 0, z: -2, rot: 15,
@@ -172,14 +163,14 @@ try {
 	assert.equal(seededReport.isError, undefined, JSON.stringify(seededReport));
 	assert.match(
 		seededReport.content[0].text,
-		/"label":"Walking"[\s\S]*tint: #123456[\s\S]*scale: 1\.4[\s\S]*"url":"\/ardy\/motions\/123456-abcdef"[\s\S]*"waypoints":\[\{"frame":12,"x":1,"z":2(?:,"id":"[^"]+")?}\][\s\S]*"promptClips":\[\{"startFrame":0,"endFrame":24,"text":"Walk\."(?:,"id":"[^"]+")?}\][\s\S]*rotX: 12[\s\S]*rotZ: -8[\s\S]*color: #d9b18c[\s\S]*shotAspect: 2\.39:1[\s\S]*sensorId: super35[\s\S]*hasCharSheet: true[\s\S]*currentFrame: 17[\s\S]*frameCount: 240[\s\S]*fps: 24/,
-		"describe missing fields: pose, tint, scale, motionRef, layer.waypoints, layer.promptClips, object.rotX, object.rotZ, object.color, stage.shotAspect, stage.sensorId, stage.hasCharSheet, timeline.currentFrame, timeline.frameCount, timeline.fps",
+		/"label":"Walking"[\s\S]*tint: #123456[\s\S]*scale: 1\.4[\s\S]*"waypoints":\[\{"frame":12,"x":1,"z":2(?:,"id":"[^"]+")?}\][\s\S]*rotX: 12[\s\S]*rotZ: -8[\s\S]*color: #d9b18c[\s\S]*shotAspect: 2\.39:1[\s\S]*sensorId: super35[\s\S]*hasCharSheet: true[\s\S]*currentFrame: 17[\s\S]*frameCount: 240[\s\S]*fps: 24/,
+		"describe missing fields: pose, tint, scale, layer.waypoints, object.rotX, object.rotZ, object.color, stage.shotAspect, stage.sensorId, stage.hasCharSheet, timeline.currentFrame, timeline.frameCount, timeline.fps",
 	);
 
 	// Given fields that are honestly absent, describe must keep their explicit null or empty shape.
 	editor.characters[0] = {
 		id: "char-a", model: "y-bot-tpose", subject: "an unposed performer", x: 0, y: 0, z: 0, rot: 0, hidden: false,
-		tint: null, pose: null, scale: 1, layer: { waypoints: [], promptClips: [] }, motionRef: null,
+		tint: null, pose: null, scale: 1, layer: { waypoints: [] },
 	};
 	editor.objects = [{
 		id: "cube-1", name: "Cube", renderer: "cube", x: 0, y: 0, z: 0, rot: 0,
@@ -188,7 +179,7 @@ try {
 	}];
 	const absentReport = await call("describe_scene");
 	assert.equal(absentReport.isError, undefined, JSON.stringify(absentReport));
-	assert.match(absentReport.content[0].text, /pose: null[\s\S]*tint: null[\s\S]*scale: 1[\s\S]*motionRef: null[\s\S]*"waypoints":\[\][\s\S]*"promptClips":\[\][\s\S]*rotX: 0[\s\S]*rotZ: 0[\s\S]*color: null/);
+	assert.match(absentReport.content[0].text, /pose: null[\s\S]*tint: null[\s\S]*scale: 1[\s\S]*"waypoints":\[\][\s\S]*rotX: 0[\s\S]*rotZ: 0[\s\S]*color: null/);
 
 	// Given an empty scene, camera, stage and timeline sections remain well formed.
 	editor.characters = [];
@@ -202,8 +193,7 @@ try {
 	editor.characters = [{
 		id: "char-a", model: "x-bot-tpose", subject: "a prior performer", x: 1, y: 0, z: 2, rot: 30, hidden: false,
 		tint: "#123456", pose: { label: "Walking", bones: { hips: [1, 2, 3] } }, scale: 1.4,
-		layer: { waypoints: [{ frame: 12, x: 1, z: 2 }], promptClips: [{ startFrame: 0, endFrame: 24, text: "Walk." }] },
-		motionRef: { url: "/ardy/motions/123456-abcdef", prompt: "Walk.", rotationDeg: 30, anchorX: 1, anchorZ: 2 },
+		layer: { waypoints: [{ frame: 12, x: 1, z: 2 }] },
 	}];
 	await call("describe_scene");
 	editor.characters = [{ id: "char-a", subject: "the described performer", x: 7 }];
@@ -221,8 +211,6 @@ try {
 	assert.equal(mergedCharacter.x, 7);
 	assert.equal(mergedCharacter.model, "x-bot-tpose");
 	assert.equal(mergedCharacter.layer.waypoints[0].frame, 12);
-	assert.equal(mergedCharacter.layer.promptClips[0].text, "Walk.");
-	assert.equal(mergedCharacter.motionRef.url, "/ardy/motions/123456-abcdef");
 	omitCharacterFields = false;
 
 	// Given a requested non-default mannequin
@@ -261,19 +249,6 @@ try {
 	assert.deepEqual(lifecycle.map(({ event }) => event), ["mcp:tool_requested", "mcp:tool_executed", "mcp:result_applied"]);
 	assert.equal(lifecycle[1].props.outcome, "succeeded");
 
-	// Given an already-generated take
-	// When generate_motion aliases the registered replacement command
-	const motionJob = await call("generate_motion", {
-		phases: ["A person walks forward.", "A person stops."],
-		motion_url: "/ardy/motions/123456-abcdef",
-	});
-	// Then the server returns the editor's bus receipt, not its retired task id.
-	assert.equal(motionJob.isError, undefined, JSON.stringify(motionJob));
-	const motionReceipt = JSON.parse(motionJob.content[0].text);
-	assert.equal(motionReceipt.action, 'motion.replace'); assert.equal(motionReceipt.status, 'completed');
-	assert.equal(motionReceipt.undo.entries, 1);
-	assert.equal(editor.characters[0].motionRef.url, '/ardy/motions/123456-abcdef');
-
 	// Losing the command receipt is still uncertain even if the editor applied
 	// the mutation. Do not substitute a retry or a legacy describe handshake.
 	disconnectBeforeReceipt = true;
@@ -283,10 +258,6 @@ try {
 	assert.match(disconnected.content[0].text, /may have been applied/i, disconnected.content[0].text);
 	assert.match(disconnected.content[0].text, /do not retry/i, disconnected.content[0].text);
 
-	// Given the editor-side load path can decode and install a generated take
-	// When its timeout policy is selected
-	// Then it receives the dedicated processing timeout, not the generic command timeout.
-	assert.equal(LiveHub.commandTimeoutMs("load_motion"), 30_000);
 	assert.equal(LiveHub.commandTimeoutMs("capture_frame"), 30_000);
 	assert.equal(LiveHub.commandTimeoutMs("import_asset"), 30_000);
 	for (const name of [
@@ -304,14 +275,13 @@ try {
 		rejected: { isError: rejected.isError === true },
 		committedDespiteLaterReadFailure: { isError: acknowledged.isError ?? false, laterReadFailed: failedRead.isError === true },
 		uncertainAfterDisconnect: { isError: disconnected.isError === true, doNotRetry: /do not retry/i.test(disconnected.content[0].text) },
-		loadMotion: { isError: motionJob.isError ?? false, timeoutMs: LiveHub.commandTimeoutMs("load_motion") },
 		defaultCommandTimeoutMs: LiveHub.commandTimeoutMs("describe"),
 		seededDescribe: seededReport,
 		emptyDescribe: emptyReport,
 		descriptionMerge: {
-			before: { model: "x-bot-tpose", pose: "Walking", tint: "#123456", scale: 1.4, layer: true, motionRef: "/ardy/motions/123456-abcdef" },
+			before: { model: "x-bot-tpose", pose: "Walking", tint: "#123456", scale: 1.4, layer: true },
 			describe: { subject: "the described performer", x: 7 },
-			after: { model: mergedCharacter.model, pose: mergedCharacter.pose?.label, tint: mergedCharacter.tint, scale: mergedCharacter.scale, layer: mergedCharacter.layer.promptClips.length, motionRef: mergedCharacter.motionRef?.url, subject: mergedCharacter.subject, x: mergedCharacter.x },
+			after: { model: mergedCharacter.model, pose: mergedCharacter.pose?.label, tint: mergedCharacter.tint, scale: mergedCharacter.scale, layer: mergedCharacter.layer.waypoints.length, subject: mergedCharacter.subject, x: mergedCharacter.x },
 		},
 	}));
 } finally {

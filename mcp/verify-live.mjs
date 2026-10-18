@@ -329,31 +329,12 @@ cases.cast = async () => {
 		const missing = await s.call("place_character", { character: "missing", x: 1 });
 		assert.equal(JSON.parse(missing.content[0].text).code, "STALE_TARGET");
 
-		// Prompt authoring follows the EDITOR's active actor, not MCP focus.
-		await s.call("focus_character", { character: "A" });
-		assert.equal((await s.f.call("operate_studio", s.f.request("operate_studio", { selection: { kind: "character", id: "actor-b" } }))).ok, true);
-		s.f.cast.switchActiveCharacterLayer();
-		assert.equal((await s.f.run("character.addWaypoint", { characterId: "actor-b", frame: 24, position: { x: 4.5, z: 0 } })).ok, true);
-		const beforeBlocks = snapshot();
-		const beats = [{ text: "A person walks forward.", seconds: 6 }, { text: "A person stops.", seconds: 2 }];
-		const promptArgs = { beats, commandId: crypto.randomUUID(), expectedRevision: s.f.binding.refresh().revision };
-		const scheduled = receipt(await s.call("set_prompt_blocks", promptArgs), "character.setPromptBlocks");
-		assert.equal(scheduled.undo.entries, 1);
-		const actorB = s.f.cast.read().find(row => row.id === "actor-b");
-		const clips = actorB.layer.promptClips;
-		assert.equal(clips.length, 3); assert.equal(clips[0].startFrame, 0); assert.equal(clips.at(-1).endFrame, 192);
-		assert.ok(clips.every((clip, i) => clip.endFrame > clip.startFrame && clip.endFrame - clip.startFrame <= 120 && (i === 0 || clip.startFrame === clips[i - 1].endFrame)));
-		assert.deepEqual(actorB.layer.waypoints, beforeBlocks.characters.find(row => row.id === "actor-b").layer.waypoints);
-		assert.deepEqual(s.f.cast.read().filter(row => row.id !== "actor-b"), beforeBlocks.characters.filter(row => row.id !== "actor-b"));
-		assert.deepEqual(receipt(await s.call("set_prompt_blocks", promptArgs), "character.setPromptBlocks"), scheduled);
-		await undo(scheduled); assert.deepEqual(snapshot(), beforeBlocks);
-
 		const beforeRemove = snapshot();
 		const removed = receipt(await s.call("remove_character", { character: newId }), "character.remove");
 		assert.equal(s.f.cast.read().some(row => row.id === newId), false);
 		await undo(removed); assert.deepEqual(snapshot(), beforeRemove);
 		for (const [name, args] of [["add_character", { subject: "Stale actor" }], ["place_character", { character: "A", x: 8 }],
-			["remove_character", { character: newId }], ["set_prompt_blocks", { beats }]]) {
+			["remove_character", { character: newId }]]) {
 			const prior = snapshot();
 			const result = await s.call(name, { ...args, expectedRevision: s.f.binding.refresh().revision + 99 });
 			assert.equal(result.isError, true, `${name} accepted a stale revision`);
@@ -391,8 +372,8 @@ cases.cast = async () => {
 // #652: the tool list is fixed at server start, so refusals replace removals.
 const RECORDED_TOOLS = [
 	"describe_scene", "live_status", "describe_shot", "capture_frame", "set_camera", "frame_shot", "add_character", "place_character",
-	"remove_character", "focus_character", "place_object", "import_mesh", "sculpt_object", "compare_sculpt", "group_objects", "set_prompt_blocks", "load_motion",
-	"generate_motion", "update_object", "remove_object", "apply_batch", "render_prompt", "mark_camera_move", "describe_camera_move",
+	"remove_character", "focus_character", "place_object", "import_mesh", "sculpt_object", "compare_sculpt", "group_objects",
+	"update_object", "remove_object", "apply_batch", "render_prompt", "mark_camera_move", "describe_camera_move",
 	"add_scene", "switch_scene", "open_project", "save_project", "studio_commands", "studio_run",
 ];
 const refusalOf = result => {
@@ -421,37 +402,10 @@ cases.refusals = async () => {
 		assert.deepEqual(s.tools.map(row => row.name), RECORDED_TOOLS, "no tool is added, removed or renamed");
 		console.log(`tool list: ${s.tools.length} tools, identical to the recorded list`);
 
-		// Animation: a capsule figure refuses motion and takes by its kind.
-		reportedMode = "animation";
-		const added = receipt(await s.call("add_character", { subject: "A stand-in", model: "proxy-figure", posture: "sit", x: 1, z: 1 }), "character.add");
-		const proxyId = added.affectedIds.find(id => s.f.cast.read().find(row => row.id === id)?.model === "proxy-figure");
-		assert.ok(proxyId, JSON.stringify(added));
-		assert.equal((await s.f.call("operate_studio", s.f.request("operate_studio", { selection: { kind: "character", id: proxyId } }))).ok, true);
-		s.f.cast.switchActiveCharacterLayer();
-		const before = structuredClone(s.f.cast.read()), sent = actions().length;
-		const motion = refusalOf(await s.call("generate_motion", { phases: ["A person walks forward."] }));
-		assert.deepEqual(motion, { ok: false, code: "TARGET_NOT_READY", reason: "Capsule figures have no rig - Motion generation works on rigged characters only." });
-		console.log(`generate_motion on a capsule figure: ${JSON.stringify(motion)}`);
-		const take = refusalOf(await s.call("load_motion", { url: "/ardy/motions/123456-abcdef", character: proxyId }));
-		assert.deepEqual(take, { ok: false, code: "TARGET_NOT_READY", reason: "Capsule figures have no rig - Loading a take works on rigged characters only." });
-		assert.equal(actions().length, sent, "a refusal sends no command to the editor");
-		assert.deepEqual(s.f.cast.read(), before);
-
-		// A rigged target is not refused here: it reaches the editor's own readiness
-		// path (this fixture has no motion owner; verify-live-motion-job runs that path).
-		assert.equal((await s.f.call("operate_studio", s.f.request("operate_studio", { selection: { kind: "character", id: "actor-a" } }))).ok, true);
-		s.f.cast.switchActiveCharacterLayer();
-		const rigged = JSON.parse((await s.call("generate_motion", { phases: ["A person walks forward."] })).content[0].text);
-		validateReceipt(rigged);
-		assert.equal(rigged.reason, undefined, "the editor's receipt, not an MCP refusal");
-		assert.deepEqual(actions().slice(sent), ["motion.generate"]);
-		console.log(`generate_motion on a rig: sent motion.generate to the editor, receipt ok=${rigged.ok} code=${rigged.code ?? "none"}`);
-
-		// Storyboard: the four animation-only tools refuse by mode, whatever the target.
+		// Storyboard: the animation-only tool refuses by mode, whatever the target.
 		reportedMode = "storyboard";
 		const storyboardSent = actions().length;
-		for (const [name, args] of [["generate_motion", { phases: ["A person walks forward."] }], ["set_prompt_blocks", { beats: [{ text: "A person walks forward." }] }],
-			["load_motion", { url: "/ardy/motions/123456-abcdef" }], ["mark_camera_move", {}]]) {
+		for (const [name, args] of [["mark_camera_move", {}]]) {
 			const refused = refusalOf(await s.call(name, args));
 			assert.deepEqual(refused, { ok: false, code: "NOT_IN_MODE", reason: `This project is a Storyboard - ${name} is available in Animation projects.` });
 			console.log(`${name} in a storyboard: ${JSON.stringify(refused)}`);
