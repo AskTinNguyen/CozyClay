@@ -127,7 +127,7 @@ export function rootPoseAt(out, id, f, now = null) {
 	if (isCarried(o) && (rest || !keepsOffset(scene, id, o))) {
 		const [grab, release] = spanOf(out, o), g = Math.max(grab, Math.min(f, release));
 		if (f < grab && rest) return restingAt(out, id, f);
-		const after = f > release ? afterRelease(freeCtx(out), id, o, f, release, carriedAt(out, id, o, release)) : null;
+		const after = f > release ? afterRelease(freeCtx(out), id, o, f, release, carriedAt(out, id, o, release), release > 0 ? carriedAt(out, id, o, release - 1) : null) : null;
 		if (after) return after;
 		return now && g === f ? carriedOn(out, id, o, f, now.s) : carriedAt(out, id, o, g);
 	}

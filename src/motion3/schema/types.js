@@ -85,7 +85,7 @@ export const FIT_TYPES = {
 const OBJECT_KEY_TYPES = { f: int(), pos: ref("vec3"), rot: { type: "array", items: { type: "number" }, minItems: 4, maxItems: 4, description: "quat x, y, z, w" },
 	aim: ref("vec3", "or rot: +Y dir"), roll: num("deg about aim"), lean: num("aim tilt", { minimum: 0, maximum: 45 }) };
 
-const FALL = { type: "object", properties: { at: int(), onto: str(), bounce: num(null, { default: 0.25, minimum: 0, maximum: 0.6 }) }, required: ["at"], additionalProperties: false };
+const FALL = { type: "object", properties: { at: int(), onto: str(), bounce: num(null, { default: 0.25, minimum: 0, maximum: 0.6 }), tumble: { type: "boolean" } }, required: ["at"], additionalProperties: false };
 /** A free entry's keys and fall (C17) are a carry's, at any frame: said once, not twice. */
 const AS_CARRY = { description: "as carry; keys at any frame" };
 export const FREE_TYPES = { keys: AS_CARRY, fall: AS_CARRY };

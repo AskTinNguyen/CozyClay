@@ -4,10 +4,13 @@
 //         origin) at frame f, on the curve held keys use (object-keys.js keyedPose, C14). aim turns the
 //         scene pose's +Y onto aim, then roll degrees about it. Before the first key of a run it stays
 //         where it was (its scene pose, or where it landed), after the last it holds the last key.
-//   fall  { at, onto?, bounce? } or a list   from where it is at frame `at` it drops straight down
-//         under gravity (G m/s^2, no tumbling) onto the top of the highest still body under the centre of
-//         its parts (onto: that object's top; nothing below: the floor, y 0), bounces at most once (bounce:
-//         the restitution 0..0.6, default 0.25, never higher than BOUNCE_MAX m) and rests there.
+//   fall  { at, onto?, bounce?, tumble? } or a list   from where it is at frame `at` it falls under gravity
+//         (G m/s^2) onto the top of the highest still body under the centre of its parts (onto: that object's
+//         top; nothing below: the floor, y 0) and comes to rest on a stable face (settle.js): it lands on its
+//         lowest point, turning at the spin it was let go with, rolls flat and over an edge onto a lower face
+//         while the drop has the energy (a phone falls flat, a can lies down). tumble: false drops it straight
+//         down as it was, bouncing at most once (bounce: the restitution 0..0.6, default 0.25, never higher
+//         than BOUNCE_MAX m); one that lands on a stable face as it falls bounces the same way.
 // Keys and falls chain in frame order: a fall starts from the pose the keys before it leave (a key on the
 // fall's own frame comes first), keys after a fall take over at their first frame.
 // A carry (C3) takes fall too: before its grab (the hand finds it where it landed) or from its release on.
@@ -18,7 +21,8 @@
 import { isCarried, compose, relative, movesRecord } from "./carried.js";
 import { groupsOf } from "./scene.js";
 import { curveOf, keyedPose } from "./object-keys.js";
-import { add, apply, sub, T, quatFromMat } from "./compiler/math.js";
+import { add, apply, sub, T, quatFromMat, I3 } from "./compiler/math.js";
+import { shapeOf, airPath, settlePath, settledAt, spinOf, spinEnergy, TIP } from "./settle.js";
 
 /** Gravity, m/s^2. */
 export const G = 9.8;
@@ -76,9 +80,31 @@ export function landingOf(spec, scene, id, start, onto = null) {
 	return { ...best, h: Math.max(0, low - best.top) };
 }
 
-/** A fall from root pose `start` at (mapped) frame t0: its timing, its pose at a frame, where it rests. */
-function fallPlan(spec, scene, id, start, t0, fall, fps) {
-	const land = landingOf(spec, scene, id, start, fall.onto ?? null), h = land.h, tl = Math.sqrt(2 * h / G);
+const shapes = new WeakMap();
+/** The shape of `id` in its root frame (settle.js), once per scene. */
+function shapeIn(scene, id) {
+	if (!shapes.has(scene)) shapes.set(scene, new Map());
+	const cache = shapes.get(scene);
+	if (!cache.has(id)) cache.set(id, shapeOf(boxesAtRoot(scene, id, { pos: [0, 0, 0], R: I3() })));
+	return cache.get(id);
+}
+
+/**
+ * A fall from root pose `start` at (mapped) frame t0: its timing, its pose at a frame, where it rests. `before` is its pose
+ * a frame earlier (a release from the hand), for the spin it is let go with.
+ */
+function fallPlan(spec, scene, id, start, t0, fall, fps, before = null) {
+	const land = landingOf(spec, scene, id, start, fall.onto ?? null), shape = fall.tumble === false ? null : shapeIn(scene, id);
+	if (shape) {
+		const spin = before ? spinOf(before.R, start.R, fps) : [0, 0, 0], air = airPath(shape, start, spin, land.top, fps);
+		// a spin tips it the way its top moves (spin x up); a spin about the vertical tips nothing
+		const path = settlePath(shape, air.at(air.tl), land.top, TIP * land.h + spinEnergy(shape, spin), [-spin[2], 0, spin[0]]);
+		if (path.steps.length || spin.some(v => v)) {
+			const at = f => { const t = (f - t0) / fps; return t <= 0 ? start : t <= air.tl ? air.at(t) : settledAt(path, t - air.tl); };
+			return { t0, land: t0 + air.tl * fps, end: t0 + (air.tl + path.time) * fps, h: land.h, support: land.support, top: land.top, at, rest: path.rest };
+		}
+	}
+	const h = land.h, tl = Math.sqrt(2 * h / G);
 	const e = Math.min(0.6, Math.max(0, fall.bounce ?? BOUNCE)), vb = Math.min(e * G * tl, Math.sqrt(2 * G * BOUNCE_MAX)), tb = 2 * vb / G;
 	const rest = { pos: [start.pos[0], start.pos[1] - h, start.pos[2]], R: start.R };
 	const at = f => {
@@ -157,11 +183,15 @@ export function beforeGrab(ctx, id, o, f, grab) {
 	return walk(timelineOf({ ...ctx, grab }, id, o, ctx.timeMap, "before"), f, { pos: rest.pos, R: rest.R }, planner(ctx, id));
 }
 
-/** Where carry `id` (entry o) is at absolute f after its release, from its release pose; null without a fall from the release on. */
-export function afterRelease(ctx, id, o, f, release, releasePose) {
+/**
+ * Where carry `id` (entry o) is at absolute f after its release, from its release pose; null without a fall from the release on.
+ * `beforePose` (a frame before the release) gives the spin it is let go with to a fall that starts right at the release.
+ */
+export function afterRelease(ctx, id, o, f, release, releasePose, beforePose = null) {
 	const events = fallsOf(o).length ? timelineOf({ ...ctx, release }, id, o, ctx.timeMap, "after") : [];
 	// the release pose comes from the solved body, which a rebake changes: plan these falls afresh
-	return events.length ? walk(events, f, releasePose, planner(ctx, id), false) : null;
+	const plan = (start, fall) => fallPlan(ctx.spec, ctx.scene, id, start, fall.t, fall, ctx.spec.fps ?? 30, fall.t <= release + 1 ? beforePose : null);
+	return events.length ? walk(events, f, releasePose, plan, false) : null;
 }
 
 /** The falls of entry `id` as planned under the current time map, for readers (timeline, tests): [{ t0, land, end, h, support, top }]. */
