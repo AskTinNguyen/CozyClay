@@ -87,8 +87,9 @@ const xb = skeletonFor("x-bot-tpose"), car = compileSpec(exitcar, { sk: xb, scen
 // its walk has a smaller heel strike and stride length variation (walk.js, gait-rhythm.js; was 9230a88561f639ab),
 // its walk is hips-first (walk-pelvis.js, walk.js; was f0428b2edc4870f1),
 // and its walk has the narrower foot width, flat-ish heel strike and less stride-time noise (walk.js, gait-rhythm.js; was d1e1f37c072d3d94; QA 0 before and after)
-expect("the exitcar take from skills bakes bit for bit as before", hashOf(bakeTake(xb, car.out)) === "70ba590870218ea2" && !car.observations.paced, hashOf(bakeTake(xb, car.out)));
-const HASHES = { "y-bot-tpose": "00ca3255cfb92447", "x-bot-tpose": "58d3a897e5cbb330" };
+expect("the exitcar take from skills bakes bit for bit as before", hashOf(bakeTake(xb, car.out)) === "76db856fa910b0c0" && !car.observations.paced, hashOf(bakeTake(xb, car.out)));
+// re-pinned when standIdle and walks began keying arm_hang (compiler/pose.js: a free forearm hangs plumb); QA unchanged
+const HASHES = { "y-bot-tpose": "f112eb57c6181e3b", "x-bot-tpose": "23dd79abf2dea3e6" };
 for (const [rig, hash] of Object.entries(HASHES)) {
 	const r = compile(rig, smoke(266, STAND, false), false), got = hashOf(bakeTake(skeletonFor(rig), r.out));
 	expect(`${rig}: the standing smoke at its own length bakes bit for bit as before`, got === hash && !r.observations.paced && !("paced" in r.used[1]), got);

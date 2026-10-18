@@ -137,5 +137,15 @@ const lit = compileMotion(one({ armw_r: 1, armw_l: 1, hand_r: [0, 1.25, 0.3], w_
 	fits: [{ side: "l", anchor: "under", effector: { prop: "lighter", point: "flame" } }] }), { sk, scene: { objects: {} } }).frames[0].diag.props;
 expect("a prop anchor offset puts the flame 2 cm under the tip", dist(lit.lighter.flame, [lit.cig.tip[0], lit.cig.tip[1] - 0.02, lit.cig.tip[2]]) < 1e-3, dist(lit.lighter.flame, lit.cig.tip));
 
+// arm_hang (pose.js): a free FK forearm hangs plumb from the elbow where standIdle and walks key it, as far as the rig's
+// thigh allows (the narrower X Bot keeps some slant), and arm_hang 0 keeps the forearm on the upper arm's slant
+{
+	const { skeletonFor } = await import("../../src/motion3/rigs/index.js");
+	const slant = (sk, c) => { const { s } = pose(sk, c), I = sk.index, v = sub(s.P[I.LeftHand], s.P[I.LeftForeArm]); return Math.abs(Math.atan2(v[0], -v[1]) * 180 / Math.PI); };
+	const y = skeletonFor("y-bot-tpose"), x = skeletonFor("x-bot-tpose");
+	const got = { yHang: slant(y, { arm_hang: 1 }), yOld: slant(y, {}), xHang: slant(x, { arm_hang: 1 }), xOld: slant(x, {}) };
+	expect("arm_hang 1 hangs the Y Bot's free forearm plumb, the X Bot's as far as its thigh allows; arm_hang 0 keeps the slant",
+		got.yHang < 1 && got.yOld > 15 && got.xHang > 4 && got.xHang < got.xOld - 6, JSON.stringify(got));
+}
 if (failures) { console.error(`${failures} motion3 core check(s) failed`); process.exit(1); }
 console.log("motion3 core: all checks passed");

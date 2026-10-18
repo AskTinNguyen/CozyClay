@@ -8,6 +8,7 @@ import { twoBone, orientFoot, wrist, fingers, limitFold, askedFold, swivelElbow,
 import { holdHand } from "./hold.js";
 import { clampWrist } from "./wrist-clamp.js";
 import { ELBOW_REST } from "./arm-orient.js";
+import { wristBody, bodyDistance } from "../body.js";
 
 export const SIDES = { l: "Left", r: "Right" };
 /** How much of an auto-fix elbow turn an arm at IK weight w takes (fix/self.js plans with the same). */
@@ -53,14 +54,43 @@ function softReach(sk, s, a, fa, h, target, diag, k) {
  * diag.arm_fold_<k>: the flexion (deg) the wrist target asked when past ELBOW_FOLD (arm_miss_<k> is then how far inside).
  * diag.leg_fold_<k>: the knee flexion (deg) the ankle target asked when past KNEE_FOLD (leg_miss_<k> is then how far inside).
  */
+// arm_hang (keyed by standIdle and the walk): a free FK forearm hangs plumb from the elbow, as a person's does,
+// instead of carrying on the upper arm's slant out from the body (the hands sat about 9 cm wider than a person's);
+// a working arm (on IK, or a hand that holds something: compile.js hangoff, idle.js busyHands) takes none of it. A rig whose thigh comes near (the X Bot) stops HANG_BACK
+// degrees short of the first angle that brings its forearm or hand within HANG_CLEAR of the skin standing, so the
+// walk's sway does not carry it into the thigh. Faded out as arm_rest raises the arms (none at 45); once per rig and rest.
+const HANG_CLEAR = 0.095, HANG_BACK = 2, hangs = new Map();
+function hangOf(sk, down) {
+	const key = `${sk.model}|${down}`;
+	if (hangs.has(key)) return hangs.get(key);
+	const full = (90 - down) * Math.min(1, Math.max(0, (down - 45) / 27)), wb = wristBody(sk);
+	const clearAt = h => {
+		const s = restState(sk);
+		return [["Left", -1], ["Right", 1]].every(([side, sg]) => {
+			const a = sk.index[`${side}Arm`], fa = sk.index[`${side}ForeArm`], hd = sk.index[`${side}Hand`], tip = sk.index[`${side}HandMiddle1`];
+			rotateSubtree(sk, s, a, s.P[a].slice(), rz(sg * down));
+			rotateSubtree(sk, s, fa, s.P[fa].slice(), rz(sg * h));
+			const pts = [0.5, 0.75, 1].map(t => add(s.P[fa], scale(sub(s.P[hd], s.P[fa]), t))).concat([s.P[tip]]);
+			return pts.every(p => bodyDistance(wb.body, s, p, wb.skip).d >= HANG_CLEAR);
+		});
+	};
+	let hang = full;
+	if (wb && full > 0) {
+		for (let h = 0; h <= full; h += 0.5) if (!clearAt(h)) { hang = Math.max(0, h - HANG_BACK); break; }
+	}
+	hangs.set(key, hang);
+	return hang;
+}
+
 export function pose(sk, c, hooks = {}) {
 	const s = restState(sk);
 	const diag = {};
 	// Base: arms down from the bind T-pose (body frame, before everything else).
-	const down = num(c.arm_rest, 72);
-	for (const [side, sg] of [["Left", -1], ["Right", 1]]) {
-		const a = sk.index[`${side}Arm`];
+	const down = num(c.arm_rest, 72), hang = num(c.arm_hang) && num(c.arm_hang) * hangOf(sk, down);
+	for (const [side, sg, k] of [["Left", -1, "l"], ["Right", 1, "r"]]) {
+		const a = sk.index[`${side}Arm`], fa = sk.index[`${side}ForeArm`], h = hang * (1 - Math.min(1, Math.max(0, num(c[`armw_${k}`]) + num(c[`hangoff_${k}`]))));
 		rotateSubtree(sk, s, a, s.P[a].slice(), rz(sg * down));
+		if (h) rotateSubtree(sk, s, fa, s.P[fa].slice(), rz(sg * h));
 	}
 	// FK arm swing (forward +) and elbow bend, body frame.
 	for (const [k, side] of Object.entries(SIDES)) {

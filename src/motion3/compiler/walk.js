@@ -24,7 +24,7 @@ import { add, sub, scale, len, apply, ry, clamp } from "./math.js";
 import { walkRhythm } from "./gait-rhythm.js";
 import { fitPelvis, fitTrail, fitSwing, pivot } from "./walk-pelvis.js";
 
-const STRIKE_DF = 4, TOE_OFF = 50, STRIDE_REF = 1.1, ELBOW = [24, 4], ELBOW_SWING = [6, 3], WRIST = 8;
+const STRIKE_DF = 4, TOE_OFF = 50, STRIDE_REF = 1.1, ELBOW = [18, 3], ELBOW_SWING = [6, 3], WRIST = 8;
 // The trunk over the stepping hips (degrees at a full stride, less for a shorter one): the pelvis drops on the
 // swing side in single support (LIST) with the trunk held upright over it and swaying SWAY of that toward the
 // stance foot; the pelvis turns with the leading leg (PELVIS_TURN) and the chest the other way (CHEST_TURN);
@@ -97,6 +97,7 @@ export function walk(gen, keys, sk, tag = "walk") {
 		if (i === 0) {
 			const pre = add(C(stance[other]), scale(leftOf(h0), (other === "l" ? 1 : -1) * W.halfWidth * 0.75)); pre[1] = st.root[1];
 			at(ts - 4, { root: pre, yaw: h0 });
+			at(ts, { arm_hang: 1 });
 		}
 		// a longer stride pushes off more; the closing step pushes and strikes less
 		const size = clamp(Math.abs(sNew - stance[k]) / STRIDE_REF, 0.3, 1.15), toeOff = TOE_OFF * (0.55 + 0.45 * size) * (last ? 0.8 : 1);

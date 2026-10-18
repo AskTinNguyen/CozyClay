@@ -116,8 +116,9 @@ const lifted = [{ x: 0.25, y: 0.3, z: 0.1 }, { x: -0.25, y: 0.3, z: 0.1 }];
 // flat-ish heel strike (STRIKE_DF 4, no slant term) and less stride-time noise (gait-rhythm.js TIME.noise 0.02); their QA
 // did not change (0 before and after); the walk's knee peak moved 85.29 -> 85.62 deg.
 const TAKES = [
-	["exitcar", xb, { fps: 24, ...EXITCAR_SPEC }, motionScene(CAR), 129.71, "b92cd023adae6108", null],
-	["walk", yb, { ...spec0, frames: 160, use: [...STAND, { skill: "walkTo", f0: 1, args: { to: [0, 2.4], steps: 6, heading: 0 } }] }, { objects: {} }, 85.62, "a56e0116f5b839fa", null],
+// re-pinned when standIdle and walks began keying arm_hang (compiler/pose.js: a free forearm hangs plumb); QA unchanged
+	["exitcar", xb, { fps: 24, ...EXITCAR_SPEC }, motionScene(CAR), 129.71, "26f5a39906c9f432", null],
+	["walk", yb, { ...spec0, frames: 160, use: [...STAND, { skill: "walkTo", f0: 1, args: { to: [0, 2.4], steps: 6, heading: 0 } }] }, { objects: {} }, 85.62, "32923b50e3fe2bd3", null],
 	["smoke squat (Y Bot)", yb, smoke(240, { keys: [{ f: 0, set: SQUAT }] }, false), { objects: {} }, 133.46, "38c6581740baf1fd", 2.081],
 	["smoke squat (X Bot)", xb, smoke(240, { keys: [{ f: 0, set: SQUAT }] }, false), { objects: {} }, 134.67, "59389508b5bbd838", 0.29],
 	["smoke squat, kits (Y Bot)", yb, smoke(240, { keys: [{ f: 0, set: SQUAT }] }, true), kitScene, 133.46, "2be7e02a30c4290f", 2.081],

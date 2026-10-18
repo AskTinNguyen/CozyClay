@@ -25,7 +25,7 @@ import { groupsOf } from "../scene.js";
 import { pose, SIDES } from "./pose.js";
 import { gripHand } from "./grip.js";
 import { bakeChannels, channelsAt, flowOptions } from "./channels.js";
-import { idleLayer, withIdle } from "./idle.js";
+import { idleLayer, withIdle, busyHands } from "./idle.js";
 import { resolveAnchor, measureProps } from "./anchors.js";
 import { expandGenerators } from "./walk.js";
 import { steadyHead } from "./head-steady.js";
@@ -139,6 +139,8 @@ function hooksFor(ctx, c, f, inFit = false, lead = true, fitSide = null) {
 /** One frame with every active fit solved (fits run in spec order); lead false leaves the object keys out. */
 export function solveFrame(ctx, c0, f, lead = true) {
 	const c = { ...withIdle(c0, ctx.idle, f) };
+	// a working hand keeps its forearm's slant (pose.js arm_hang)
+	for (const k of ["l", "r"]) if (ctx.busy?.[k]) c[`hangoff_${k}`] = ctx.busy[k][f];
 	for (const fit of ctx.spec.fits ?? []) {
 		const wch = `w_${fit.anchor}_${fit.side}`;
 		if (!(c[wch] > 1e-4)) continue;
@@ -185,6 +187,7 @@ export function compileMotion(spec, { sk, scene }, opts = {}) {
 			steadyHead(out.baked, keys, frameCount);
 			// a held pose breathes and shifts its weight (idle.js): offsets solveFrame adds, contacts and out.baked stay as keyed
 			ctx.idle = idleLayer(out.baked, { spec, sk, frameCount });
+			ctx.busy = busyHands(out.baked, spec, frameCount, out.fps);
 			const tracks = objectTracks(spec, scene, out.baked, () => out.timeMap);
 			ctx.objectsAt = tracks.all;
 			out.objectsAt = a ? f => tracks.obstacles(f + a) : tracks.obstacles;

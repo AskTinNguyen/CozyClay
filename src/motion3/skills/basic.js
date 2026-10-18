@@ -13,7 +13,7 @@ export function standIdle(ctx) {
 	const c = [base[0], 0, base[base.length - 1]], R = ry(h), foot = v => { const p = add(c, apply(R, v)); p[1] = ank; return p; };
 	const set = { root: [c[0], P[I.Hips][1] - 0.01, c[2]], yaw: h, pitch: 0, roll: 0, spine_yaw: 0, spine_pitch: 0, spine_roll: 0, head_yaw: 0, head_pitch: 0,
 		foot_l: foot([0.09, 0, -0.03]), foot_r: foot([-0.09, 0, 0.03]), fyaw_l: h, fyaw_r: h, fpitch_l: 0, fpitch_r: 0, knee_l: [0.05, 0, 1], knee_r: [-0.05, 0, 1],
-		armw_l: 0, armw_r: 0, aswing_l: 0, aswing_r: 0, abend_l: 0, abend_r: 0 };
+		armw_l: 0, armw_r: 0, aswing_l: 0, aswing_r: 0, abend_l: 0, abend_r: 0, arm_hang: 1 };
 	const keys = [{ f: ctx.f0, set }];
 	if (args.until !== undefined) keys.push({ f: args.until, set: structuredClone(set) });
 	return { keys, end: args.until ?? ctx.f0 };

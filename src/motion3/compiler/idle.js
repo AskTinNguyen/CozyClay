@@ -53,6 +53,29 @@ function holdWeights(baked, spec, frameCount, fps) {
 	return d.map(x => smoothstep(Math.min(1, x / ramp)));
 }
 
+/**
+ * Per hand, how much it works at each frame: 1 while its arm is on IK, a hand target or fit weight of that hand is
+ * on, or it carries an object from its grab on; easing to 0 over RAMP s away from that. pose.js keeps a working
+ * hand's forearm on its slant (arm_hang), eased so the arm does not jump as it goes onto IK. null for an idle hand.
+ */
+export function busyHands(baked, spec, frameCount, fps) {
+	const out = {}, ramp = Math.max(1, Math.round(RAMP * fps));
+	for (const k of ["l", "r"]) {
+		const own = Object.keys(baked).filter(ch => ch === `armw_${k}` || new RegExp(`^w_.+_${k}$`).test(ch));
+		const busy = Array.from({ length: frameCount }, (_, f) => own.some(ch => baked[ch][f] > 1e-3));
+		for (const o of Object.values(spec.objects ?? {})) {
+			if (!Number.isFinite(o?.grab) || spec.props?.[o.prop]?.hand !== k) continue;
+			for (let f = Math.max(0, o.grab); f < Math.min(frameCount, Number.isFinite(o.release) ? o.release : frameCount); f++) busy[f] = true;
+		}
+		if (!busy.some(Boolean)) { out[k] = null; continue; }
+		const d = new Array(frameCount).fill(Infinity);
+		for (let f = 0, last = -Infinity; f < frameCount; f++) { if (busy[f]) last = f; d[f] = f - last; }
+		for (let f = frameCount - 1, next = Infinity; f >= 0; f--) { if (busy[f]) next = f; d[f] = Math.min(d[f], next - f); }
+		out[k] = d.map(x => 1 - smoothstep(Math.min(1, x / ramp)));
+	}
+	return out;
+}
+
 /** The idle offsets per frame ({ channel: delta }, root a world [dx, 0, dz]) for the baked channels, or null (compile.js rebake). */
 export function idleLayer(baked, { spec, sk, frameCount }) {
 	if (spec.idle === false || !baked.root || !baked.foot_l || !baked.foot_r) return null;

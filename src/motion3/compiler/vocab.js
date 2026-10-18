@@ -5,14 +5,17 @@ const sided = names => names.flatMap(n => [`${n}_l`, `${n}_r`]);
 
 export const VEC_CHANNELS = new Set(["root", ...sided(["foot", "knee", "hand", "elbow"])]);
 export const POLE_CHANNELS = new Set(sided(["knee", "elbow"]));
-export const NUM_CHANNELS = new Set(["yaw", "pitch", "roll", "spine_yaw", "spine_pitch", "spine_roll", "head_yaw", "head_pitch", "head_roll", "arm_rest",
+export const NUM_CHANNELS = new Set(["yaw", "pitch", "roll", "spine_yaw", "spine_pitch", "spine_roll", "head_yaw", "head_pitch", "head_roll", "arm_rest", "arm_hang",
 	...sided(["fyaw", "fpitch", "armw", "wtwist", "wflex", "aswing", "abend"])]);
 export const MAP_CHANNELS = new Set(sided(["fingers"]));
+// Channels the skills key (standIdle, walks): valid in a spec, left out of motion.describe so a first spec need not read them.
+export const SKILL_CHANNELS = new Set(["arm_hang"]);
 export const FINGER_PRESETS = ["relaxed", "fist", "grip", "cigarette", "point"];
 
 // [min, max, convention] for numeric channels whose values have a hard range.
 const RANGES = [
 	[/^(armw)_[lr]$/, 0, 1, "0 = FK arm, 1 = IK to the hand target"],
+	[/^arm_hang$/, 0, 1, "1 = a free FK forearm hangs plumb"],
 	[/^w_.+_[lr]$/, 0, 1, "a hand-target weight; the weights of one hand add up to at most 1"],
 	[/^wtwist_[lr]$/, -85, 85, "wrist twist about the forearm in degrees"],
 	[/^wflex_[lr]$/, -70, 70, "wrist flex about the knuckle line in degrees"],
@@ -35,7 +38,7 @@ export const CONVENTIONS = {
 export const CHANNEL_DOCS = {
 	root: CONVENTIONS.root, yaw: `degrees; ${CONVENTIONS.yaw}`, pitch: "whole-body pitch, degrees", roll: "whole-body roll, degrees",
 	spine_yaw: "degrees", spine_pitch: "degrees, + bends forward", spine_roll: "degrees", head_yaw: "degrees", head_pitch: "degrees, + looks down", head_roll: "degrees",
-	arm_rest: "FK arms down from the T-pose (default 72)", foot: CONVENTIONS.foot, fyaw: CONVENTIONS.fyaw, fpitch: "toe-down pitch, degrees, + heel up",
+	arm_rest: "FK arms down from the T-pose (default 72)", arm_hang: "1 = a free FK forearm hangs plumb (standIdle and walks key it)", foot: CONVENTIONS.foot, fyaw: CONVENTIONS.fyaw, fpitch: "toe-down pitch, degrees, + heel up",
 	knee: `knee pole, ${CONVENTIONS.pole}`, armw: "0 = FK arm, 1 = IK to hand_* / the anchors", hand: CONVENTIONS.hand, elbow: `elbow pole, ${CONVENTIONS.pole}`,
 	wtwist: "wrist twist, degrees", wflex: "wrist flex, degrees", aswing: "FK arm swing, degrees, + forward", abend: "FK elbow bend, degrees",
 	fingers: "{ preset: weight 0..1 }",

@@ -119,14 +119,15 @@ const foldScene = motionScene(buildKit("bat", [], { position: { x: FOLD_KIT_AT[0
 // flat-ish heel strike (STRIKE_DF 4, no slant term) and less stride-time noise (gait-rhythm.js TIME.noise 0.02); their QA
 // did not change (0 before and after).
 const TAKES = [
-	["exitcar", "x-bot-tpose", { fps: 24, ...EXITCAR_SPEC }, motionScene(CAR), 137.07, "b92cd023adae6108", null],
-	["smoke stand (Y Bot)", "y-bot-tpose", smoke(266, { use: STAND }, false), { objects: {} }, 134.57, "00ca3255cfb92447", null],
-	["smoke stand (X Bot)", "x-bot-tpose", smoke(266, { use: STAND }, false), { objects: {} }, 137.07, "58d3a897e5cbb330", null],
+// re-pinned when standIdle and walks began keying arm_hang (compiler/pose.js: a free forearm hangs plumb); QA unchanged
+	["exitcar", "x-bot-tpose", { fps: 24, ...EXITCAR_SPEC }, motionScene(CAR), 137.07, "26f5a39906c9f432", null],
+	["smoke stand (Y Bot)", "y-bot-tpose", smoke(266, { use: STAND }, false), { objects: {} }, 134.57, "f112eb57c6181e3b", null],
+	["smoke stand (X Bot)", "x-bot-tpose", smoke(266, { use: STAND }, false), { objects: {} }, 137.07, "23dd79abf2dea3e6", null],
 	["smoke squat, kits (Y Bot)", "y-bot-tpose", smoke(240, { keys: [{ f: 0, set: SQUAT }] }, true), kitScene, 132.24, "2be7e02a30c4290f", null],
 	["smoke squat, kits (X Bot)", "x-bot-tpose", smoke(240, { keys: [{ f: 0, set: SQUAT }] }, true), kitScene, 134.53, "bff1a9c3ec10ad34", null],
 	["squat smoke cea7fa46", "y-bot-tpose", G.SQUAT_SPEC, motionScene(G.smokeScene()), 131.75, "096cf692ba1a2cbf", null],
-	["walk", "y-bot-tpose", { ...spec0, frames: 160, use: [...STAND, { skill: "walkTo", f0: 1, args: { to: [0, 2.4], steps: 6, heading: 0 } }] }, { objects: {} }, 9.51, "a56e0116f5b839fa", null],
-	["cup run3", "y-bot-tpose", RUN3_SPEC, motionScene(CUP_SCENE), 133.27, "b4bff4b3999cd5c5", null],
+	["walk", "y-bot-tpose", { ...spec0, frames: 160, use: [...STAND, { skill: "walkTo", f0: 1, args: { to: [0, 2.4], steps: 6, heading: 0 } }] }, { objects: {} }, 9.51, "32923b50e3fe2bd3", null],
+	["cup run3", "y-bot-tpose", RUN3_SPEC, motionScene(CUP_SCENE), 133.27, "dd0056c91a720ce6", null],
 	["J2 bat, no keys", "y-bot-tpose", J2.SWING_SPEC, motionScene(J2.SCENE_OBJECTS), 141.52, "0ac49bec6e194bac", null],
 	["J2 bat, keys", "y-bot-tpose", j2keyed, motionScene(J2.SCENE_OBJECTS), 140.96, "94db1cc27a325334", null],
 	["K8 16d12ba9", "y-bot-tpose", K8.SWING_SPEC, motionScene(K8.batKit(K8.SWING_KIT_AT)), 143.57, "775b0255507bb9dc", null],

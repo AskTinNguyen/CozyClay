@@ -43,9 +43,10 @@ const Y = [0, 1, 0], col = (R, i) => [R[0][i], R[1][i], R[2][i]];
 // with lane Q1's flat feet (a foot flat on the floor keeps its heading until its heel lifts: it turned 7.2 deg flat)
 const plain = compileSpec(SWING_SPEC, { sk, scene }), keyed = compile(SWING_KEYS), dsk = skeletonFor(DRIVER.model);
 const car = compileSpec({ fps: 24, ...EXITCAR_SPEC }, { sk: dsk, scene: motionScene(CAR_OBJECTS) });
+// re-pinned when standIdle and walks began keying arm_hang (compiler/pose.js: a free forearm hangs plumb); QA unchanged
 const hashes = { plain: hashOf(bakeTake(sk, plain.out)), keyed: hashOf(bakeTake(sk, keyed.out)), exitcar: hashOf(bakeTake(dsk, car.out)) };
 expect("the car exit bakes the take of the grip turn on its door handle (compiler/grip.js), bit for bit; the swing without keys bakes the take of lane Q1, with the J2 rot keys the take of lane Q1",
-	hashes.plain === "0ac49bec6e194bac" && hashes.keyed === "94db1cc27a325334" && hashes.exitcar === "b92cd023adae6108", JSON.stringify(hashes));
+	hashes.plain === "0ac49bec6e194bac" && hashes.keyed === "94db1cc27a325334" && hashes.exitcar === "26f5a39906c9f432", JSON.stringify(hashes));
 
 // 2. the same keys as aims: +Y of each rot; roll = its turn about aim from where the plain carry holds the bat at that frame
 const rollFrom = (q, from, aim) => {

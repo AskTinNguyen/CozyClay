@@ -9,7 +9,7 @@ import { describe, DESCRIBE_BUDGET } from "../../src/motion3/describe.js";
 import { literal } from "../../src/motion3/schema/brief.js";
 import { DESCRIBE_TOPICS, PROBE_FIELDS, SPEC_FIELDS, KEY_FIELDS, USE_FIELDS, ANCHOR_FIELDS, PROP_FIELDS, FIT_FIELDS, OBJECT_FIELDS, WALK_FIELDS, CHECK_FIELDS,
 	CHECK_ENTRY_FIELDS, GOAL_FIELDS, REF_KINDS } from "../../src/motion3/schema/fields.js";
-import { VEC_CHANNELS, NUM_CHANNELS, MAP_CHANNELS } from "../../src/motion3/compiler/vocab.js";
+import { VEC_CHANNELS, NUM_CHANNELS, MAP_CHANNELS, SKILL_CHANNELS } from "../../src/motion3/compiler/vocab.js";
 import { fixture } from "../bus/fixture.mjs";
 import { SKILL_NAMES, expandUse } from "../../src/motion3/skills/index.js";
 import { SKILL_INFO } from "../../src/motion3/skills/info.js";
@@ -98,8 +98,10 @@ const missing = Object.entries(tables).flatMap(([table, fields]) => fields.filte
 expect("essentials names every field of every field table with its type (checks entries: topic checks)", missing.length === 0, missing.join());
 expect("essentials: checks names every check list; topic checks still types every entry field", CHECK_FIELDS.every(f => named(f, ess.types.checks))
 	&& Object.values(CHECK_ENTRY_FIELDS).flat().every(f => JSON.stringify(describe("checks").schema).includes(`"${f}":`)), ess.types.checks);
-const channels = [...VEC_CHANNELS, ...NUM_CHANNELS, ...MAP_CHANNELS].filter(ch => !named(ch.replace(/_r$/, "_l"), ess.types.channels));
-expect("essentials names every channel (a left/right pair as x_l|r)", channels.length === 0, channels.join());
+// the channels only skills key (vocab.js SKILL_CHANNELS, e.g. arm_hang) stay out, so a first spec need not read them
+const channels = [...VEC_CHANNELS, ...NUM_CHANNELS, ...MAP_CHANNELS].filter(ch => !SKILL_CHANNELS.has(ch) && !named(ch.replace(/_r$/, "_l"), ess.types.channels));
+const skillOnly = [...SKILL_CHANNELS].filter(ch => named(ch, ess.types.channels));
+expect("essentials names every channel (a left/right pair as x_l|r) but the skill-keyed ones", channels.length === 0 && skillOnly.length === 0, [...channels, ...skillOnly].join());
 expect("essentials names every ref kind", REF_KINDS.every(k => ess.types.refs.includes(`${k}:`)), ess.types.refs);
 expect("essentials lists exactly SKILL_NAMES, each with needs, frames, adds and every arg typed", JSON.stringify(ess.skills.map(s => s.name)) === JSON.stringify(SKILL_NAMES)
 	&& ess.skills.every(s => s.needs === SKILL_INFO[s.name].needs && s.frames === SKILL_INFO[s.name].frames && s.adds === SKILL_INFO[s.name].adds

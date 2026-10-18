@@ -17,7 +17,7 @@ import { DEFS, SPEC_TYPES, KEY_TYPES, USE_TYPES, WALK_TYPES, ANCHOR_TYPES, ANCHO
 import { EXAMPLES, NOTES } from "./schema/topics.js";
 import { SPEC_EXAMPLES, EXAMPLE_NOTES } from "./schema/spec-examples.js";
 import { briefType } from "./schema/brief.js";
-import { VEC_CHANNELS, NUM_CHANNELS, MAP_CHANNELS, FINGER_PRESETS, CHANNEL_DOCS, channelFamily, rangeOf, didYouMean } from "./compiler/vocab.js";
+import { VEC_CHANNELS, NUM_CHANNELS, MAP_CHANNELS, SKILL_CHANNELS, FINGER_PRESETS, CHANNEL_DOCS, channelFamily, rangeOf, didYouMean } from "./compiler/vocab.js";
 import { FIX_KEYS } from "./fix/index.js";
 import { SKILL_NAMES } from "./skills/index.js";
 import { SKILL_INFO } from "./skills/info.js";
@@ -80,7 +80,7 @@ const SCHEMAS = {
 	goals: () => listOf({ ...objectOf(GOAL_FIELDS, GOAL_TYPES, "goals", ["name", "at"]), ...oneOfRequired(["near", "above", "moved", "still", "speed"]) }),
 	probes: () => listOf({ ...objectOf(PROBE_FIELDS, PROBE_TYPES, "probes", ["name"]), ...oneOfRequired(["distance", "position"]) }, { maxItems: 16 }),
 	channels: () => ({ type: "object", description: "key.set: channel -> value",
-		properties: Object.fromEntries([...VEC_CHANNELS, ...NUM_CHANNELS, ...MAP_CHANNELS].map(ch => [ch, channelSchema(ch)])),
+		properties: Object.fromEntries([...VEC_CHANNELS, ...NUM_CHANNELS, ...MAP_CHANNELS].filter(ch => !SKILL_CHANNELS.has(ch)).map(ch => [ch, channelSchema(ch)])),
 		patternProperties: { "^w_.+_[lr]$": { type: "number", minimum: 0, maximum: 1, description: rangeOf("w_a_l")[3] }, "_vis$": { type: "number", description: "shown above 0.5" } },
 		additionalProperties: { type: "number", description: "spec.channels, an object's or a check's when" } }),
 	refs: () => ({ type: "string", oneOf: REF_KINDS.map(k => ({ pattern: `^${k}:`, description: typeOf(REF_DOCS, k, "refs") })) }),
