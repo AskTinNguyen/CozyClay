@@ -4,16 +4,15 @@
 // (gait-rhythm.js): period, swing, step, lift and armSwing are the averages, vary: 0 makes every
 // step exactly those.
 //
-// { type: "walk", f0, steps: 8, step: 0.5, period: 20, swing: 14, halfWidth: 0.1, lift: 0.08,
+// { type: "walk", f0, steps: 8, step: 0.5, period: 20, swing: 14, halfWidth: 0.08, lift: 0.08,
 //   heading: [h0, h1], turnDistance: 0.4, pelvisHigh: dy, pelvisLow: dy, firstStep: 0.4, armSwing: 14, vary: 1 }
 // heading in degrees (yaw convention); pelvis heights are offsets from the standing hips height.
 // The feet roll as a person's do, heel first (the three rockers of gait): the heel strikes with the
 // toes up and the foot rolls down about the heel to flat; it stays flat while the shin passes over
 // it; the heel comes up well before lift-off and the foot rolls over the ball, toes flat, to toe-off;
 // in the air the toes trail down, level out at mid-swing and come up again for the next strike.
-// The heel strikes at the leg's slant (a person's ankle is near neutral at contact, so the toes come
-// up as far as the shin leans back: SHIN of the hip-to-ankle slant, the knee taking the rest, plus
-// STRIKE_DF); TOE_OFF is the push-off pitch at a full stride (STRIDE_REF m of foot travel), less for
+// The heel strikes with the toes up STRIKE_DF, half that on the closing step (a walk generated from motion
+// capture lands with the foot nearly flat: the heel touches a frame or two before the sole); TOE_OFF is the push-off pitch at a full stride (STRIDE_REF m of foot travel), less for
 // a shorter one. A pivot is the very point QA reads (qa/geometry.js solePoints), so a rolling foot
 // never counts as sliding.
 // The arms swing wider the faster the walk (armSwing, when not given, from the speed against the default
@@ -25,7 +24,7 @@ import { add, sub, scale, len, apply, ry, clamp } from "./math.js";
 import { walkRhythm } from "./gait-rhythm.js";
 import { fitPelvis, fitTrail, fitSwing, pivot } from "./walk-pelvis.js";
 
-const SHIN = 0.12, STRIKE_DF = 3, TOE_OFF = 50, STRIDE_REF = 1.1, ELBOW = [24, 4], ELBOW_SWING = [6, 3], WRIST = 8;
+const STRIKE_DF = 4, TOE_OFF = 50, STRIDE_REF = 1.1, ELBOW = [24, 4], ELBOW_SWING = [6, 3], WRIST = 8;
 // The trunk over the stepping hips (degrees at a full stride, less for a shorter one): the pelvis drops on the
 // swing side in single support (LIST) with the trunk held upright over it and swaying SWAY of that toward the
 // stance foot; the pelvis turns with the leading leg (PELVIS_TURN) and the chest the other way (CHEST_TURN);
@@ -65,7 +64,7 @@ export function walk(gen, keys, sk, tag = "walk") {
 	// Pelvis heights from the leg length: straight-ish over the stance foot, low enough at
 	// double support that the trailing leg still reaches (2% knee slack).
 	const leg = len(sub(P[I.LeftLeg], P[I.LeftUpLeg])) + len(sub(P[I.LeftFoot], P[I.LeftLeg]));
-	const hipDrop = P[I.Hips][1] - P[I.LeftUpLeg][1], step0 = gen.step ?? 0.5, hw = gen.halfWidth ?? 0.1;
+	const hipDrop = P[I.Hips][1] - P[I.LeftUpLeg][1], step0 = gen.step ?? 0.5, hw = gen.halfWidth ?? 0.08;
 	const hipsAt = horiz => Math.sqrt(Math.max(0, (0.98 * leg) ** 2 - horiz ** 2)) + ank + hipDrop - standY;
 	const W = { steps: 8, step: step0, period: 20, swing: 14, halfWidth: hw, lift: 0.08, turnDistance: 0.4, firstStep: 0.4,
 		pelvisHigh: Math.min(-0.005, hipsAt(Math.hypot(0.03, hw - 0.035))), pelvisLow: hipsAt(Math.hypot(step0 / 2, hw)), vary: 1, ...gen };
@@ -137,8 +136,7 @@ export function walk(gen, keys, sk, tag = "walk") {
 		prev = { f: tl, s: sLand };
 		// heel rocker: the toes come up before the strike, then the foot rolls down about the heel to flat
 		const land = footAt(sNew, k), lyaw = hs(sNew), heel = add(land, apply(ry(lyaw), heelOff));
-		const slant = Math.atan2(Math.abs(sNew - sLand), pl[1] - land[1]) * 180 / Math.PI;
-		const strike = -(SHIN * slant + STRIKE_DF) * (last ? 0.5 : 1), nFlat = Math.max(2, Math.round(0.2 * W.period));
+		const strike = -STRIKE_DF * (last ? 0.5 : 1), nFlat = Math.max(2, Math.round(0.2 * W.period));
 		const touch = pivot(heel, lyaw, strike, land), above = add(touch, scale(fwd(lyaw), -LAND_BACK * Math.abs(sNew - stance[k])));
 		above[1] += LAND_ABOVE;
 		if (!last && lead > 1 && tl - lead > tm + 1) at(tl - lead, { [`foot_${k}`]: above, [`fpitch_${k}`]: 0.6 * strike });

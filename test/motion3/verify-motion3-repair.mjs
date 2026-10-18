@@ -107,7 +107,7 @@ const thigh = { kind: "COLLIDE", subject: "thigh_l x cube", count: 1, worst: 0.0
 	cause: "use[1] walkTo step 2 f53 root", hint: "walk path: root needs [0, 0, -0.004] m at f53 (out of cube); change that walk's heading/turnDistance/step (or give one a { range: [lo, hi] })" };
 expect("tune: the walkTo args one step either way first, as add or replace on use[1].args",
 	json(tuneCandidates(thigh, RUN3_SPEC).slice(0, 8).map(p => `${p[0].op} ${p[0].path} ${p[0].value}`)) === json(["add /use/1/args/lift 0.07", "add /use/1/args/lift 0.09",
-		"add /use/1/args/halfWidth 0.09", "add /use/1/args/halfWidth 0.11", "replace /use/1/args/firstStep 0.39", "replace /use/1/args/firstStep 0.41", "replace /use/1/args/step 0.39", "replace /use/1/args/step 0.41"]),
+		"add /use/1/args/halfWidth 0.07", "add /use/1/args/halfWidth 0.09", "replace /use/1/args/firstStep 0.39", "replace /use/1/args/firstStep 0.41", "replace /use/1/args/step 0.39", "replace /use/1/args/step 0.41"]),
 	json(tuneCandidates(thigh, RUN3_SPEC)));
 expect("tune: nothing for a group far past its limit or one that has a patch", !tuneCandidates({ ...thigh, worst: 0.03 }, RUN3_SPEC).length && !tuneCandidates({ ...thigh, patch: [] }, RUN3_SPEC).length);
 r = cupRepair(RUN3_SPEC);
@@ -118,8 +118,12 @@ expect("run3: twice the same answer", json(cupRepair(RUN3_SPEC).spec) === json(r
 expect("run3: rounds 1, as the agent sent it, is enough", cupRepair(RUN3_SPEC, 1).result.qa.ok);
 // The forearm's 4.95 cm/f^2 acceleration is smooth (C13): measured, not an error, unless the
 // spec opts into accLimb; then it is an ACC group the key-pair tune clears (5.04 before the walk's hips
-// followed its legs, compiler/walk-pelvis.js, against an accLimb of 0.05).
-const popped = ids["spec-2f5debe72b57"], smooth = cupCompile(popped);
+// followed its legs, compiler/walk-pelvis.js, against an accLimb of 0.05). The session ran when the walk's
+// default half foot width was 0.1 (now 0.08, toward the Kimodo walk); at the new width the forearm peaks
+// lower and the case is gone, so these checks replay the session at the width it had (atRecording). The
+// fixture itself stays byte for byte the session's spec (its specIds above).
+const atRecording = spec => applyPatch(spec, [{ op: "add", path: "/use/1/args/halfWidth", value: 0.1 }]);
+const popped = atRecording(ids["spec-2f5debe72b57"]), smooth = cupCompile(popped);
 expect("run3, after the agent's firstStep edit: qa.ok, the forearm's 4.95 cm/f^2 (28.5 m/s^2) is an observation", smooth.qa.ok
 	&& Math.abs(smooth.observations.peaks.LeftForeArm.accel[0] - 0.0495 * 576) < 0.5, json(smooth.observations.peaks.LeftForeArm));
 const optedAcc = { ...popped, checks: { ...popped.checks, limits: { ...popped.checks?.limits, accLimb: 0.049 } } }, pop = cupCompile(optedAcc).qa;
@@ -144,12 +148,14 @@ expect("guard: a change that meets one goal but fails another that held is rejec
 
 // 9. Live round 2, turn 1 of sessions f275fda4 and c8f2018b: stuck 6-9 cm off "fingers on cup
 //    handle at grab" for 8 and 5 compiles. The spec each agent sent with repair at its first
-//    stuck compile (fixture), its specIds, why it is stuck, and repair now.
+//    stuck compile (fixture), its specIds, why it is stuck, and repair now. Both replay at the half
+//    foot width the walk had then (atRecording, 0.1): at the new 0.08 f275 first meets a REACH on the
+//    approach anchor and takes 4 rounds, a different case from the stuck grab these checks are about.
 const e3d7 = applyPatch(F275_FULL, F275_REPAIR8), f275 = applyPatch(e3d7, F275_PATCH9);
 expect("stuck fixtures: the session's specIds (f275 compile 8 and 9 stored, c8f2 compile 7 stored with frames resolved)",
 	specIdOf(e3d7) === "spec-e3d720274680" && specIdOf(applyPatch(f275, F275_REPAIR9)) === "spec-34a2b58fe6b9" && specIdOf(cupCompile({ fps: 24, ...C8F2_FULL }).spec) === "spec-f0d208a2cb6d",
 	json([specIdOf(e3d7), specIdOf(applyPatch(f275, F275_REPAIR9)), specIdOf(cupCompile({ fps: 24, ...C8F2_FULL }).spec)]));
-for (const [name, spec, f, leak, value] of [["f275", f275, 114, "w_raise_l", 0.073], ["c8f2", C8F2_FULL, 106, "w_lift_l", 0.09]]) {
+for (const [name, spec, f, leak, value] of [["f275", atRecording(f275), 114, "w_raise_l", 0.073], ["c8f2", atRecording(C8F2_FULL), 106, "w_lift_l", 0.09]]) {
 	const c = cupCompile(spec), g = c.qa.groups[0], fr = c.out.frames[f];
 	expect(`${name} stuck: the grab goal misses (${value} m) with the arm inside its reach; ${leak} ramps through f${f}`, g.kind === "GOAL" && g.worstFrame === f && c.qa.goals[0].value === value
 		&& !(fr.diag.reach_over_l > 0) && fr.diag.arm_miss_l < 1e-3 && fr.c[leak] > 0.3 && fr.c.w_handle_l === 1, json({ g, diag: fr.diag, w: fr.c[leak] }));

@@ -36,7 +36,7 @@ export const USE_TYPES = { skill: str("a skill name (topic skills)"), args: { ty
 export const WALK_TYPES = {
 	type: { const: "walk" }, f0: int("first frame; needs a standing pose keyed before it", { minimum: 0 }), steps: int("footsteps", { minimum: 1, default: 8 }),
 	step: num("stride, m", { default: 0.5 }), period: int("frames per step", { default: 20 }), swing: int("frames a foot is in the air", { default: 14 }),
-	halfWidth: num("feet half-width, m", { default: 0.1 }), lift: num("foot lift, m", { default: 0.08 }), heading: pair({ type: "number" }, `[h0, h1] degrees; ${CONVENTIONS.yaw}`),
+	halfWidth: num("feet half-width, m", { default: 0.08 }), lift: num("foot lift, m", { default: 0.08 }), heading: pair({ type: "number" }, `[h0, h1] degrees; ${CONVENTIONS.yaw}`),
 	turnDistance: num("m walked while the heading turns h0 -> h1", { default: 0.4 }), pelvisHigh: num("hips offset over the stance foot, m"),
 	pelvisLow: num("hips offset at double support, m"), firstStep: num("first stride, m", { default: 0.4 }), armSwing: num("degrees", { default: 14 }),
 	vary: num("0..2, uneven steps as people walk (build-up, slow stop, left/right, turns) around the averages above; 0 = every step period frames, step m", { default: 1, minimum: 0, maximum: 2 }),

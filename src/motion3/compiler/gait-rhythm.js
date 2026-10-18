@@ -28,7 +28,7 @@ function noiseOf(text) {
 }
 
 // Sizes at vary 1, as fractions of the step's time or length.
-const TIME = { noise: 0.04, side: 0.03, first: 0.22, second: 0.08, last: 0.22, beforeLast: 0.08, turn: 0 };
+const TIME = { noise: 0.02, side: 0.03, first: 0.22, second: 0.08, last: 0.22, beforeLast: 0.08, turn: 0 };
 const LENGTH = { noise: 0.025, side: 0.012, stride: 0.035, second: 0.05, beforeLast: 0.06, turn: 0.06 };
 const LIFT = { noise: 0.1, first: 0.1, last: 0.25 }, ARM = 0.1;
 const CLOSE = 3; // frames the closing step may swing longer than swing
