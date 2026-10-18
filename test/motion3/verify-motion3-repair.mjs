@@ -100,11 +100,11 @@ const ids = { "spec-440c4b69334b": RUN3_SPEC };
 for (const m of RUN3_MANUAL) ids[m.specId] = applyPatch(ids[m.base], m.patch);
 expect("run3 fixture: the session's specIds", Object.entries(ids).every(([id, s]) => specIdOf(s) === id), json(Object.entries(ids).map(([id, s]) => [id, specIdOf(s)])));
 const stuck = cupCompile(RUN3_SPEC).qa;
-// (the even walk left both thighs just past the limit; with the walk's natural rhythm only the left one is)
-expect("run3 fixture: goals met, only thigh_r/thigh_l x cube just past the limit, caused by use[1] walkTo, no patch",
-	stuck.goals.every(g => g.ok) && stuck.groups.length > 0 && stuck.groups.every(g => ["thigh_l x cube", "thigh_r x cube"].includes(g.subject))
-	&& stuck.groups.every(g => g.excess < 0.002 && /use\[1\] walkTo/.test(g.cause) && !g.patch), json(stuck.groups));
-const thigh = stuck.groups[0];
+// The even walk left both thighs just past the limit, the walk's natural rhythm only the left one; since the walk's hips follow
+// its legs (compiler/walk-pelvis.js) the take is clean. The tune below reads that last residual group as it was.
+expect("run3 fixture: goals met and QA clean, the walk's thighs clear of the cube", stuck.goals.every(g => g.ok) && stuck.groups.length === 0, json(stuck.groups));
+const thigh = { kind: "COLLIDE", subject: "thigh_l x cube", count: 1, worst: 0.0059, worstFrame: 53, first: 53, last: 53, limit: 0.005, excess: 0.0009, severity: 1.09,
+	cause: "use[1] walkTo step 2 f53 root", hint: "walk path: root needs [0, 0, -0.004] m at f53 (out of cube); change that walk's heading/turnDistance/step (or give one a { range: [lo, hi] })" };
 expect("tune: the walkTo args one step either way first, as add or replace on use[1].args",
 	json(tuneCandidates(thigh, RUN3_SPEC).slice(0, 8).map(p => `${p[0].op} ${p[0].path} ${p[0].value}`)) === json(["add /use/1/args/lift 0.07", "add /use/1/args/lift 0.09",
 		"add /use/1/args/halfWidth 0.09", "add /use/1/args/halfWidth 0.11", "replace /use/1/args/firstStep 0.39", "replace /use/1/args/firstStep 0.41", "replace /use/1/args/step 0.39", "replace /use/1/args/step 0.41"]),
@@ -116,13 +116,14 @@ expect("run3: repair { rounds: 4 } reaches qa.ok with every goal met, by a walkT
 expect("run3: under the 20 s cap (and 10 s here); compiles = 1 + applied + rejected", r.ms < 10000 && r.repair.compiles === 1 + r.repair.applied.length + r.repair.rejected, `${r.ms} ms ${json(r.repair)}`);
 expect("run3: twice the same answer", json(cupRepair(RUN3_SPEC).spec) === json(run3.spec) && json(cupRepair(RUN3_SPEC).repair) === json(run3.repair));
 expect("run3: rounds 1, as the agent sent it, is enough", cupRepair(RUN3_SPEC, 1).result.qa.ok);
-// The 5.04 cm/f^2 forearm acceleration is smooth (C13): measured, not an error, unless the
-// spec opts into accLimb; then it is an ACC group the key-pair tune clears.
+// The forearm's 4.95 cm/f^2 acceleration is smooth (C13): measured, not an error, unless the
+// spec opts into accLimb; then it is an ACC group the key-pair tune clears (5.04 before the walk's hips
+// followed its legs, compiler/walk-pelvis.js, against an accLimb of 0.05).
 const popped = ids["spec-2f5debe72b57"], smooth = cupCompile(popped);
-expect("run3, after the agent's firstStep edit: qa.ok, the forearm's 5.04 cm/f^2 (29 m/s^2) is an observation", smooth.qa.ok
-	&& Math.abs(smooth.observations.peaks.LeftForeArm.accel[0] - 0.0504 * 576) < 0.5, json(smooth.observations.peaks.LeftForeArm));
-const optedAcc = { ...popped, checks: { ...popped.checks, limits: { ...popped.checks?.limits, accLimb: 0.05 } } }, pop = cupCompile(optedAcc).qa;
-expect("run3 + checks.limits.accLimb: only ACC LeftForeArm 5.04, between keys[0] and keys[2], no patch", pop.groups.length === 1 && pop.groups[0].kind === "ACC"
+expect("run3, after the agent's firstStep edit: qa.ok, the forearm's 4.95 cm/f^2 (28.5 m/s^2) is an observation", smooth.qa.ok
+	&& Math.abs(smooth.observations.peaks.LeftForeArm.accel[0] - 0.0495 * 576) < 0.5, json(smooth.observations.peaks.LeftForeArm));
+const optedAcc = { ...popped, checks: { ...popped.checks, limits: { ...popped.checks?.limits, accLimb: 0.049 } } }, pop = cupCompile(optedAcc).qa;
+expect("run3 + checks.limits.accLimb: only ACC LeftForeArm 4.95, between keys[0] and keys[2], no patch", pop.groups.length === 1 && pop.groups[0].kind === "ACC"
 	&& /between keys\[0\] f86 and keys\[2\] f110/.test(pop.groups[0].cause) && !pop.groups[0].patch, json(pop.groups));
 r = cupRepair(optedAcc);
 expect("ACC near the limit: repair moves a key of the pair one frame apart and reaches qa.ok", r.result.qa.ok && json(r.repair.applied[0]?.patch) === json([{ op: "replace", path: "/keys/0/f", value: 85 }]), json(r.repair));

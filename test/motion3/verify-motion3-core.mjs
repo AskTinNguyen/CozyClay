@@ -73,7 +73,9 @@ for (const side of ["Left", "Right"]) {
 	const swayed = compileMotion({ ...walkSpec, keys: [...walkSpec.keys, ...sway] }, { sk, scene: { objects: {} } });
 	const looked = compileMotion({ ...walkSpec, keys: [...walkSpec.keys, ...sway, { f: 100, set: { head_roll: 0 } }] }, { sk, scene: { objects: {} } });
 	const chest = spanOf(swayed, I.Spine2, I.Neck), head = spanOf(swayed, I.Neck, I.HeadTop_End), keyed = spanOf(looked, I.Neck, I.HeadTop_End);
-	expect("a walking head sways less than the trunk under it, and a keyed head is left alone", head < 0.6 * chest && Math.abs(keyed - chest) < 0.5, JSON.stringify({ chest, head, keyed }));
+	// (the walk sways the trunk itself, once a stride (walk.js LIST, SWAY), about the head's averaging window, so a little more of
+	// that slow sway stays in the head: 0.61 of the chest here, 0.6 before)
+	expect("a walking head sways less than the trunk under it, and a keyed head is left alone", head < 0.65 * chest && Math.abs(keyed - chest) < 0.5, JSON.stringify({ chest, head, keyed }));
 }
 const take = bakeTake(sk, walk, { position: [0, 0, 0], yaw: 0 });
 const f = 120, q = Array.from({ length: 65 }, (_, b) => takeQuat(take, f, b)), back = fk(sk, q, takeHips(take, f));

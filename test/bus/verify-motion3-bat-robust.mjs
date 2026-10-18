@@ -109,10 +109,10 @@ const j2keyed = structuredClone(J2.SWING_SPEC);
 j2keyed.objects[J2.BAT].keys = J2.SWING_KEYS;
 // [name, rig, spec, scene, hash before (v3@4087806b), hash after (null: the same), why]
 const TAKES = [
-	["exitcar", "x-bot-tpose", { fps: 24, ...EXITCAR_SPEC }, motionScene(CAR), "9e35eb6aa9a2c9f8", "07014c1ade89ec1c", "the walk's natural rhythm (compiler/gait-rhythm.js) and foot rockers and arms (compiler/walk.js), and the left hand's grip turn on the door handle (compiler/grip.js)"],
+	["exitcar", "x-bot-tpose", { fps: 24, ...EXITCAR_SPEC }, motionScene(CAR), "9e35eb6aa9a2c9f8", "873bde7849fb86a9", "the walk's natural rhythm (compiler/gait-rhythm.js) and foot rockers and arms (compiler/walk.js), and the left hand's grip turn on the door handle (compiler/grip.js) and hips (compiler/walk-pelvis.js)"],
 	["smoke squat cea7fa46", "y-bot-tpose", G.SQUAT_SPEC, motionScene(G.smokeScene()), "096cf692ba1a2cbf", null],
-	["walk", "y-bot-tpose", { ...spec0, frames: 160, use: [...STAND, { skill: "walkTo", f0: 1, args: { to: [0, 2.4], steps: 6, heading: 0 } }] }, { objects: {} }, "6a6295472b4a4781", "a2ddb8b236646881", "the walk's natural rhythm (compiler/gait-rhythm.js) and foot rockers and arms (compiler/walk.js)"],
-	["cup run3", "y-bot-tpose", RUN3_SPEC, motionScene(CUP_SCENE), "b2e90da88e394432", "e626133d17f0fe27", "the walk's natural rhythm (compiler/gait-rhythm.js) and foot rockers and arms (compiler/walk.js)"],
+	["walk", "y-bot-tpose", { ...spec0, frames: 160, use: [...STAND, { skill: "walkTo", f0: 1, args: { to: [0, 2.4], steps: 6, heading: 0 } }] }, { objects: {} }, "6a6295472b4a4781", "3b371dedbcc7f700", "the walk's natural rhythm (compiler/gait-rhythm.js) and foot rockers and arms (compiler/walk.js) and hips (compiler/walk-pelvis.js)"],
+	["cup run3", "y-bot-tpose", RUN3_SPEC, motionScene(CUP_SCENE), "b2e90da88e394432", "2a464d69f7ff6c64", "the walk's natural rhythm (compiler/gait-rhythm.js) and foot rockers and arms (compiler/walk.js) and hips (compiler/walk-pelvis.js)"],
 	["K8 6912547c", "y-bot-tpose", K8.EARLIER_SPEC, motionScene(K8.batKit(K8.EARLIER_KIT_AT)), "75c54a3970cf8ff0", null],
 	["N1 f0f2be59", "y-bot-tpose", N1.CLEAN_SPEC, motionScene(K8.batKit(N1.CLEAN_KIT_AT)), "aa132d1a9429a769", null],
 	["J2 bat, no keys", "y-bot-tpose", J2.SWING_SPEC, motionScene(J2.SCENE_OBJECTS), "681b862de6399b43", "0ac49bec6e194bac", "the flat back foot turned 7.2 deg (turn.js)"],

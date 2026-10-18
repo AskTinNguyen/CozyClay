@@ -23,8 +23,14 @@
 // the first steps and back out on the closing one.
 import { add, sub, scale, len, apply, ry, rx, clamp } from "./math.js";
 import { walkRhythm } from "./gait-rhythm.js";
+import { fitPelvis } from "./walk-pelvis.js";
 
 const SHIN = 0.45, STRIKE_DF = 3, TOE_OFF = 50, STRIDE_REF = 1.1, ELBOW = [24, 4], ELBOW_SWING = [6, 3], WRIST = 8;
+// The trunk over the stepping hips (degrees at a full stride, less for a shorter one): the pelvis drops on the
+// swing side in single support (LIST) with the trunk held upright over it and swaying SWAY of that toward the
+// stance foot; the pelvis turns with the leading leg (PELVIS_TURN) and the chest the other way (CHEST_TURN);
+// the trunk dips forward at each strike and back up in single support (LEAN).
+const LIST = 4.5, SWAY = 0.35, PELVIS_TURN = 4.5, CHEST_TURN = 4, LEAN = 1.8;
 const fwd = h => apply(ry(h), [0, 0, 1]);
 const leftOf = h => apply(ry(h), [1, 0, 0]);
 const smoothstep = x => { const t = Math.min(1, Math.max(0, x)); return t * t * (3 - 2 * t); };
@@ -39,7 +45,7 @@ export function stateAt(keys, f) {
 /** gen -> keys; every key carries src (tag + step number) so QA can name the step it came from. */
 export function walk(gen, keys, sk, tag = "walk") {
 	let src = `${tag} start`;
-	const out = [], at = (f, set) => out.push({ f, set, src });
+	const out = [], at = (f, set) => { const key = { f, set, src }; out.push(key); return key; };
 	const st = stateAt(keys, gen.f0);
 	if (!st.foot_l || !st.foot_r || !st.root) throw new Error("MOTION_SPEC_INVALID: walk needs foot_l, foot_r and root keyed before f0");
 	if (gen.vary !== undefined && !(Number.isFinite(gen.vary) && gen.vary >= 0 && gen.vary <= 2)) throw new Error(`MOTION_SPEC_INVALID: ${tag} vary must be a number from 0 (every step the same) to 2, got ${JSON.stringify(gen.vary)}`);
@@ -68,7 +74,11 @@ export function walk(gen, keys, sk, tag = "walk") {
 	const C = s => path[Math.max(0, Math.min(path.length - 1, Math.round(s / 0.01)))];
 	const footAt = (s, k) => { const p = add(C(s), scale(leftOf(hs(s)), (k === "l" ? 1 : -1) * W.halfWidth)); p[1] = ank; return p; };
 	const stance = { l: -0.07, r: 0.07 }, state = { foot_l: st.foot_l, foot_r: st.foot_r, fyaw_l: st.fyaw_l ?? h0, fyaw_r: st.fyaw_r ?? h0 };
-	const holdAll = ["root", "yaw", "foot_l", "foot_r", "fyaw_l", "fyaw_r", "spine_yaw", "aswing_l", "aswing_r", "abend_l", "abend_r", "wflex_l", "wflex_r", "head_yaw"];
+	const holdAll = ["root", "yaw", "roll", "foot_l", "foot_r", "fyaw_l", "fyaw_r", "spine_yaw", "spine_roll", "spine_pitch", "aswing_l", "aswing_r", "abend_l", "abend_r",
+		"wflex_l", "wflex_r", "head_yaw"];
+	const r0 = st.roll ?? 0, sr0 = st.spine_roll ?? 0, sp0 = st.spine_pitch ?? 0;
+	// each foot's spans on the ground (fitPelvis): from a heel strike (or f0) to its lift-off, heel the frame its heel comes up
+	const ground = { l: [{ a: gen.f0, b: Infinity, strike: false }], r: [{ a: gen.f0, b: Infinity, strike: false }] };
 	at(gen.f0, Object.fromEntries(holdAll.map(ch => [ch, st[ch] ?? state[ch] ?? (ch === "yaw" ? h0 : 0)])));
 	let sLast = stance.r;
 	const R = walkRhythm(W, { s0: sLast, turn: (a, b) => hs(b) - hs(a),
@@ -90,6 +100,7 @@ export function walk(gen, keys, sk, tag = "walk") {
 		// while the other foot is still in the air, then fast to toe-off
 		const ankle = state[`foot_${k}`], yw = state[`fyaw_${k}`], ball = add(ankle, apply(ry(yw), footRest[k]));
 		const tHeel = Math.max(ts - Math.round((i === 0 ? 0.35 : 0.55) * W.period), flatAt[k] + 1, gen.f0 + 1);
+		Object.assign(ground[k].at(-1), { b: ts, heel: tHeel });
 		for (let f = tHeel; f <= ts; f++) {
 			const d = toeOff * ((f - tHeel) / Math.max(1, ts - tHeel)) ** 1.8;
 			at(f, { [`foot_${k}`]: pivot(ball, yw, d, ankle), [`fpitch_${k}`]: d, [`fyaw_${k}`]: yw });
@@ -99,7 +110,7 @@ export function walk(gen, keys, sk, tag = "walk") {
 		if (ts + lead < tm) at(ts + lead, { [`fpitch_${k}`]: 0.4 * toeOff });
 		const mid = footAt((stance[k] + sNew) / 2, k); mid[1] += R.height[i];
 		at(tm, { [`foot_${k}`]: mid, [`fyaw_${k}`]: hs((stance[k] + sNew) / 2), [`fpitch_${k}`]: 0 });
-		const sMid = stance[other] + 0.03, shift = i === 0 ? 0.015 : 0.035;
+		const sMid = stance[other] + 0.03, shift = i === 0 ? 0.015 : 0.025;
 		const pm = add(C(sMid), scale(leftOf(hs(sMid)), (other === "l" ? 1 : -1) * shift)); pm[1] = standY + W.pelvisHigh;
 		// a stride longer than the nominal one drops the hips a little more at double support, so the trailing leg still reaches
 		const low = gen.pelvisLow ?? (R.inc[i] > step0 ? Math.min(W.pelvisLow, hipsAt(Math.hypot(R.inc[i] / 2, hw))) : W.pelvisLow);
@@ -114,16 +125,23 @@ export function walk(gen, keys, sk, tag = "walk") {
 			at(tl + j, { [`foot_${k}`]: pivot(heel, lyaw, d, land), [`fpitch_${k}`]: d, [`fyaw_${k}`]: lyaw });
 		}
 		flatAt[k] = tl + nFlat;
+		ground[k].push({ a: tl, b: Infinity, strike: true });
 		state[`foot_${k}`] = land; state[`fyaw_${k}`] = lyaw; stance[k] = sNew;
 		const swing = (last ? 0 : i < 3 ? [0, 0.3, 0.7][i] : 1) * R.arm[i], sg = k === "l" ? 1 : -1;
-		at(tm, { root: pm, yaw: hs(sMid) });
+		const sp = clamp(size, 0.4, 1.1), ramp = last ? 0 : i === 0 ? 0.5 : 1, list = LIST * sp * ramp * (other === "l" ? 1 : -1);
+		at(tm, { root: pm, yaw: hs(sMid), roll: r0 + list, spine_roll: sr0 - list * (1 + SWAY), spine_pitch: sp0 - 0.6 * LEAN * sp * ramp });
 		// the arm opposite the landing foot is forward: its elbow bends most, the other's least
-		at(tl, { root: pl, yaw: hs(sLand) - 3 * sg * swing, spine_yaw: 3 * sg * swing, aswing_l: -0.85 * W.armSwing * sg * swing,
+		at(tl, { root: pl, yaw: hs(sLand) - PELVIS_TURN * sp * sg * swing, roll: r0, spine_roll: sr0, spine_yaw: (PELVIS_TURN + CHEST_TURN) * sp * sg * swing,
+			spine_pitch: sp0 + LEAN * sp * ramp, aswing_l: -0.85 * W.armSwing * sg * swing,
 			aswing_r: W.armSwing * sg * swing, abend_l: swing * (elbow - sg * elbowSwing), abend_r: swing * (elbow + sg * elbowSwing),
 			wflex_l: WRIST * swing, wflex_r: WRIST * swing, head_yaw: 0 });
 		sLast = sNew;
 	}
 	const tend = gen.f0 + 16 + W.steps * W.period + 18;
+	// the hips' height from the legs on the ground, unless the walk gives its own pelvis heights
+	// (only up to the walk's last key: after it the settle just holds, and a take may end there, walkTo)
+	const settle = Math.max(...out.map(k => k.f));
+	if (gen.pelvisHigh === undefined && gen.pelvisLow === undefined) fitPelvis(sk, out, { f0: gen.f0, end: settle, period: W.period, ground, start: `${tag} start` });
 	src = `${tag} end`;
 	at(tend, stateAt(out, tend));
 	return out;
