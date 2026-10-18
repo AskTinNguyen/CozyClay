@@ -1,7 +1,8 @@
 // Motion QA entry: general checks on every take, the checks the spec declares, the objects it
 // moves (object-checks.js), its goals (goals.js) and the style checks it opted into by naming
 // their limit (style.js; otherwise style is measured, not judged: observeMotion). Groups are
-// ranked by severity.js.
+// ranked by severity.js. total counts frame-level issues (a goal held on "all" frames adds one per failing frame); problems
+// counts the groups, which is what a person reads (src/qa-label.js).
 import { generalChecks, QA_LIMITS } from "./checks.js";
 import { styleChecks, floatChecks } from "./style.js";
 import { specChecks } from "./spec-checks.js";
@@ -38,5 +39,5 @@ export function runMotionQa(sk, out, spec, opts = {}) {
 	if (out.f0) for (const i of issues) i.frame += out.f0;
 	const groups = summarizeIssues(issues);
 	if (opts.explain !== false) explainGroups(sk, out, spec, groups, { userSpec: opts.userSpec });
-	return { ok: issues.length === 0, total: issues.length, ...(spec.goals ? { goals: goals.results } : {}), groups };
+	return { ok: issues.length === 0, total: issues.length, problems: groups.length, ...(spec.goals ? { goals: goals.results } : {}), groups };
 }

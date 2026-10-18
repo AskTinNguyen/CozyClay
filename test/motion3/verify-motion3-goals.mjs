@@ -66,6 +66,8 @@ r = run([{ name: "cup tipped", moved: "object:cylinder", at: [10, 20] }]);
 g = r.qa.groups[0];
 expect("moved fails before the hinge turns (default by 0.05), one issue per failing frame", !r.qa.ok && r.qa.goals[0].need === 0.05 && r.qa.goals[0].value === 0 && g.count === 11 && g.first === 10 && g.last === 20
 	&& g.subject.startsWith("cup tipped: moved 0 m at f") && close(g.worst, 0.05), JSON.stringify(g));
+// qa.total counts those frame-level issues; qa.problems counts groups, what a person reads (src/qa-label.js)
+expect("a goal missed on 11 frames is 11 frame issues but one problem", r.qa.total === 11 && r.qa.problems === 1 && r.qa.problems === r.qa.groups.length, JSON.stringify({ total: r.qa.total, problems: r.qa.problems }));
 r = run([{ name: "handle moved", moved: `object:${CUP.group}`, at: 47 }]);
 const groupTravel = len(sub(refPoint(out, 47, `object:${CUP.group}.base`), refPoint(out, 0, `object:${CUP.group}.base`)));
 expect("a group (object:<group>) is measured as a whole: the cylinder tipping moves the base of its parts' AABB",

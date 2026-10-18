@@ -18,6 +18,7 @@ import { fitOutput, reportPage } from "../motion3/report.js";
 import { keyObject } from "../motion3/key-edit.js";
 import { expandUse } from "../motion3/skills/index.js";
 import { publishDraft } from "../agent-progress.js";
+import { qaSay } from "../qa-label.js";
 import { carryEdit } from "../motion3/edit-carry.js";
 import { normalizeCompileArgs } from "../motion3/lenient.js";
 import { createCompileRunner } from "./motion3-compile.js";
@@ -153,12 +154,12 @@ export function register(registry, ports) {
 			const output = report(r, { frames: r.frameCount, fps: TIMELINE_FPS, installed: wanted, ...adjustedOf(notes) }, { ...delta, ...(r.repair ? { repair: r.repair } : {}), ...(timing ? { timing } : {}) });
 			// agent-progress.js: viewport ghost, timeline beats, agent panel
 			publishDraft(characterId, { take, installed: installs || kept, specId: output.specId, label: r.label, qa, timeline: r.timeline });
-			return { affectedIds: installs ? [characterId] : [], summary: `Compiled ${r.frameCount} frames; QA ${qa.ok ? "clean" : `${qa.total} issues`}${how}${adjustedSay(notes)}.`, output, ...workerWarning() };
+			return { affectedIds: installs ? [characterId] : [], summary: `Compiled ${r.frameCount} frames; QA ${qaSay(qa)}${how}${adjustedSay(notes)}.`, output, ...workerWarning() };
 		});
 	} });
 	registry.register({ ...declarations[1], available: mounted, run({ characterId, checks }) {
 		const character = characterOf(ports, characterId), take = installed(characterId);
-		return after(compile(character, take.spec, { checks }), r => ({ affectedIds: [], summary: `QA ${r.qa.ok ? "clean" : `${r.qa.total} issues`}${adjustedSay(r.notes ?? [])}.`,
+		return after(compile(character, take.spec, { checks }), r => ({ affectedIds: [], summary: `QA ${qaSay(r.qa)}${adjustedSay(r.notes ?? [])}.`,
 			output: report(r, adjustedOf(r.notes ?? [])), ...workerWarning() }));
 	} });
 	registry.register({ ...declarations[2], available: mounted, run({ characterId, frames, bones = DEFAULT_BONES }) {
@@ -200,7 +201,7 @@ export function register(registry, ports) {
 		const { spec, keyed } = asArgument(() => keyObject(take.spec, scene, args, expandUse(take.spec, { sk: rigOf(character), scene, lenient: true }).spec.objects));
 		return after(compile(character, spec, { lenient: true }, { prompt: take.prompt }), r => {
 			const timing = put(character, r.take, context);
-			return { affectedIds: [characterId], summary: `${keyed.removed ? "Removed the key of" : "Keyed"} ${keyed.objectId} at f${keyed.f}; QA ${r.qa.ok ? "clean" : `${r.qa.total} issues`}; installed.`,
+			return { affectedIds: [characterId], summary: `${keyed.removed ? "Removed the key of" : "Keyed"} ${keyed.objectId} at f${keyed.f}; QA ${qaSay(r.qa)}; installed.`,
 				output: report(r, { frames: r.frameCount, fps: TIMELINE_FPS, installed: true, keyed }, timing ? { timing } : {}), ...workerWarning() };
 		});
 	} });

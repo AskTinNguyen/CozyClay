@@ -6,6 +6,7 @@
 // GIZMO_LAYER, so captures, contact sheets and exports never see it.
 import { useSyncExternalStore } from "react";
 import { ko } from "./locale.js";
+import { qaLabel } from "./qa-label.js";
 
 /** Teal: apart from the onion skin's blue (before) and orange (after). */
 export const DRAFT_GHOST_COLOR = "#2fc79a";
@@ -28,8 +29,8 @@ export function draftGhostState(draft, now) {
 	return { shown: true, opacity: +opacity.toFixed(3), frame: Math.floor((age / 1000) * fps) % take.frameCount };
 }
 
-/** "Draft 3 · QA 31" ("초안 3 · QA 31"). */
-export const draftLabel = draft => `${ko("Draft", "초안")} ${draft?.n ?? 0} · QA ${draft?.qa?.total ?? 0}`;
+/** "Draft 3 · 2 problems" ("초안 3 · 문제 2개"), "Draft 7 · QA clean": problems, not frame-level issues (qa-label.js). */
+export const draftLabel = draft => `${ko("Draft", "초안")} ${draft?.n ?? 0} · ${qaLabel(draft?.qa)}`;
 
 let shown = true;
 const listeners = new Set();

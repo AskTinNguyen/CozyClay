@@ -63,7 +63,7 @@ export function beatBoardModel(draft, motion) {
 	for (const block of blocks) block.rows = rows;
 	const spans = groups.map(g => ({ f0: g.first ?? 0, f1: g.last ?? g.first ?? 0, text: `${g.kind} ${g.subject}` })).sort((a, b) => a.f0 - b.f0);
 	const marks = goals.map(g => ({ f: g.at, ok: !!g.ok, text: goalText(g) })).sort((a, b) => a.f - b.f);
-	return { mode, n: draft.n, total: draft.qa?.total ?? 0, ok: !!draft.qa?.ok, blocks, spans, marks };
+	return { mode, n: draft.n, total: draft.qa?.total ?? 0, ok: !!draft.qa?.ok, qa: draft.qa ?? null, blocks, spans, marks };
 }
 
 /** One goal as a line: "✓ name 1.2 cm (≤ 2 cm)"; a distance in metres reads in cm. */

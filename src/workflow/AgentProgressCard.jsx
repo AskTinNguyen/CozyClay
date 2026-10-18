@@ -8,6 +8,8 @@ import { createPortal } from "react-dom";
 import { FiCheck, FiX } from "react-icons/fi";
 import { clearProgress, draftsOf, latestDraft, progressSheets, progressVersion, subscribeProgress } from "../agent-progress.js";
 import { ko } from "../locale.js";
+import { draftLabel } from "../draft-ghost.js";
+import { qaProblems } from "../qa-label.js";
 import { goalRows, issueRows, trendPoints, turnCount } from "./agent-progress-view.js";
 import "./agent-progress-card.css";
 
@@ -17,7 +19,7 @@ function Trend({ totals }) {
 	const { points, first, last } = trendPoints(totals, { width: W, height: H });
 	if (!points.length) return null;
 	const [lx, ly] = points[points.length - 1];
-	const label = ko(`QA issues by draft: ${totals.join(", ")}`, `초안별 QA 문제 수: ${totals.join(", ")}`);
+	const label = ko(`Problems by draft: ${totals.join(", ")}`, `초안별 문제 수: ${totals.join(", ")}`);
 	return <div className="agent-progress-trend">
 		<svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={label} preserveAspectRatio="none">
 			<line className="base" x1={4} y1={H - 4} x2={W - 4} y2={H - 4} />
@@ -65,13 +67,13 @@ export function AgentProgressCard({ items, since = null, live = false }) {
 	return <div className="agent-row">
 		<div className="agent-card agent-progress-card" data-agent-card="progress" data-drafts={drafts.length} data-installed={latest?.installed ? "true" : "false"} role="status" aria-live="polite">
 			{latest && <div className="agent-progress-head">
-				<span className="agent-progress-title">{ko("Draft", "초안")} {latest.n} · QA {latest.qa.total}</span>
+				<span className="agent-progress-title" title={ko(`${latest.qa.total} frame-level issues`, `프레임 단위 문제 ${latest.qa.total}건`)}>{draftLabel(latest)}</span>
 				<span className={`agent-progress-chip ${latest.installed ? "installed" : "draft"}`}>{latest.installed ? ko("Installed", "설치됨") : live ? ko("Not installed yet", "아직 설치 전") : ko("Not installed", "설치 안 됨")}</span>
 			</div>}
 			{latest?.label && <p className="agent-progress-label">{latest.label}</p>}
 			{drafts.length > 0 && <section className="agent-progress-section">
-				<h4>{ko(`QA issues across ${drafts.length} draft${drafts.length === 1 ? "" : "s"}`, `초안 ${drafts.length}개의 QA 문제 수`)}</h4>
-				<Trend totals={drafts.map(d => d.qa.total)} />
+				<h4>{ko(`Problems across ${drafts.length} draft${drafts.length === 1 ? "" : "s"}`, `초안 ${drafts.length}개의 문제 수`)}</h4>
+				<Trend totals={drafts.map(d => qaProblems(d.qa))} />
 			</section>}
 			{goals.length > 0 && <section className="agent-progress-section">
 				<button type="button" className="agent-progress-fold" aria-expanded={!!shown.goals} onClick={() => toggle("goals")}>
