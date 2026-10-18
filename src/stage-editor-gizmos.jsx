@@ -4,6 +4,7 @@ import { Line, Text } from "@react-three/drei";
 import * as THREE from "three";
 import { GIZMO_LAYER } from "./dualview.jsx";
 import { craneHeightAt, prepareRailBend, railPoint } from "./camera-follow.js";
+import { floorDragStart } from "./rail-dot-drag.js";
 import { insertPathMark, MARK_GAP, MAX_PATH_LEAN, MAX_PATH_MARKS, MAX_PATH_POINTS, nearestPathFraction, pathCurve, pathMarkFractions, pathMarks, pathPointAtFraction } from "./object-path.js";
 
 /**
@@ -261,8 +262,7 @@ export function CameraRailScenePreview({ points, cumLen, length, crane }) {
  * The crane's height marks as grabbable dots on the lifted curve. Click a
  * dot to select it; the selected dot grows a 3-axis gizmo — Y sets the
  * mark's height, X/Z bend the camera path itself by moving the drawn rail
- * control point nearest the mark. A free drag on the dot rides a
- * camera-facing vertical plane (height, plus arc slide for interior marks),
+ * control point nearest the mark. A free drag moves the dot over the floor, bending the rail (rail-dot-drag.js);
  * Shift-drag slides along the arc at a fixed height, double-click the curve
  * adds a mark and Delete removes a non-endpoint. Dots live on GIZMO_LAYER, so the
  * recording never sees them.
@@ -958,8 +958,8 @@ export function CraneHandles({ rail, crane, controlPoints, selectedIndex, enable
 			event.preventDefault();
 			const index = hit.object.userData.craneIndex;
 			s.onSelect(index);
-			dragRef.current = { index, slide: event.shiftKey, recorded: false };
-			setDragInfo({ kind: event.shiftKey ? "slide" : "free" });
+			dragRef.current = floorDragStart(s, index, raycaster.ray, event.shiftKey) ?? { index, slide: event.shiftKey, recorded: false };
+			setDragInfo(dragRef.current.axis ? { kind: "bend", t0: dragRef.current.t0, radius: dragRef.current.radius } : { kind: event.shiftKey ? "slide" : "free" });
 			invalidate();
 		};
 		const onMove = (event) => {
@@ -982,8 +982,8 @@ export function CraneHandles({ rail, crane, controlPoints, selectedIndex, enable
 					const height = Math.max(0.1, Math.min(12, drag.startHeight + travel));
 					s.onChangePoints(points.map((entry, i) => (i === drag.index ? { ...entry, height } : entry)), { dragging: true });
 				} else if (drag.startControls && drag.bendWeights && s.onChangeRail) {
-					const dx = drag.axis === "x" ? travel : 0;
-					const dz = drag.axis === "z" ? travel : 0;
+					const dx = drag.axis === "x" ? travel : drag.axis === "floor" ? world.x : 0;
+					const dz = drag.axis === "z" ? travel : drag.axis === "floor" ? world.z : 0;
 					const moved = drag.startControls.map((entry, i) => (drag.bendWeights[i] > 0
 						? { ...entry, x: entry.x + dx * drag.bendWeights[i], z: entry.z + dz * drag.bendWeights[i] }
 						: entry));
