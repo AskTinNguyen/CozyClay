@@ -25,7 +25,7 @@ import { add, sub, scale, len, apply, ry, rx, clamp } from "./math.js";
 import { walkRhythm } from "./gait-rhythm.js";
 import { fitPelvis } from "./walk-pelvis.js";
 
-const SHIN = 0.45, STRIKE_DF = 3, TOE_OFF = 50, STRIDE_REF = 1.1, ELBOW = [24, 4], ELBOW_SWING = [6, 3], WRIST = 8;
+const SHIN = 0.12, STRIKE_DF = 3, TOE_OFF = 50, STRIDE_REF = 1.1, ELBOW = [24, 4], ELBOW_SWING = [6, 3], WRIST = 8;
 // The trunk over the stepping hips (degrees at a full stride, less for a shorter one): the pelvis drops on the
 // swing side in single support (LIST) with the trunk held upright over it and swaying SWAY of that toward the
 // stance foot; the pelvis turns with the leading leg (PELVIS_TURN) and the chest the other way (CHEST_TURN);

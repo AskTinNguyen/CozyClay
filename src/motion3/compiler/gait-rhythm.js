@@ -6,6 +6,10 @@
 // the lift-offs are moved inside the walk's span (the walk still ends 16 + steps * period + 18
 // frames after f0) and the middle strides keep their sum (the walk ends where it did). The first
 // stride stays firstStep and the last step still brings the feet together.
+// A person's strides also differ in length from one another as wholes (both steps a little longer or shorter),
+// which the step-to-step terms alone do not show: their left/right part cancels over a stride. LENGTH.stride gives
+// each middle stride its own length. (A stride time term is left out: any more time variation lowers the hips'
+// rise and fall that walk-pelvis.js fits under the legs below a person's ~5 cm.)
 // vary scales every term: 0 is the metronome (every step period frames apart, swing frames in the
 // air, step metres long), 1 the default, 2 twice as uneven.
 const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
@@ -25,7 +29,7 @@ function noiseOf(text) {
 
 // Sizes at vary 1, as fractions of the step's time or length.
 const TIME = { noise: 0.04, side: 0.03, first: 0.22, second: 0.08, last: 0.22, beforeLast: 0.08, turn: 0 };
-const LENGTH = { noise: 0.025, side: 0.012, second: 0.05, beforeLast: 0.06, turn: 0.06 };
+const LENGTH = { noise: 0.025, side: 0.012, stride: 0.035, second: 0.05, beforeLast: 0.06, turn: 0.06 };
 const LIFT = { noise: 0.1, first: 0.1, last: 0.25 }, ARM = 0.1;
 const CLOSE = 3; // frames the closing step may swing longer than swing
 const TURN_FULL = 60; // degrees turned in one step at which a step is as slow and short as a turn makes it
@@ -43,6 +47,8 @@ export function walkRhythm(W, { s0, turn, seed }) {
 	const n = W.steps, v = clamp(W.vary ?? 1, 0, 2), next = noiseOf(seed);
 	const rows = Array.from({ length: n }, () => ({ time: next(), length: next(), lift: next(), arm: next() }));
 	const quick = next() < 0 ? 1 : -1, side = i => (i % 2 === 0 ? quick : -quick);
+	// one draw per stride (steps 1-2, 3-4, ...), after the step draws so those stay as they were
+	const strides = Array.from({ length: Math.ceil(n / 2) }, () => next()), strideOf = i => strides[Math.floor((i - 1) / 2)];
 	const inc0 = Array.from({ length: n }, (_, i) => (i === n - 1 ? 0 : i === 0 ? W.firstStep : W.step));
 	let s = s0;
 	const turned = inc0.map(d => { const deg = Math.abs(turn(s, s + d)); s += d; return Math.min(1, deg / TURN_FULL); });
@@ -78,7 +84,7 @@ export function walkRhythm(W, { s0, turn, seed }) {
 	const mid = inc0.map((_, i) => i > 0 && i < n - 1);
 	const g = rows.map((r, i) => {
 		if (!mid[i]) return 1;
-		let x = LENGTH.noise * (0.7 * r.length + 0.3 * r.time) + LENGTH.side * side(i) - LENGTH.turn * turned[i];
+		let x = LENGTH.noise * (0.7 * r.length + 0.3 * r.time) + LENGTH.side * side(i) + LENGTH.stride * strideOf(i) - LENGTH.turn * turned[i];
 		if (i === 1 && long) x -= LENGTH.second;
 		if (i === n - 2 && long) x -= LENGTH.beforeLast;
 		return 1 + v * x;
