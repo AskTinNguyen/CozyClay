@@ -71,7 +71,8 @@ export function reachGrip(ctx) {
 	if (!cut) b.at(reach + hold + release, { [w]: 0, [fg]: { ...state[fg], [preset]: 0 }, ...(wasFk ? { [armw]: 0 } : {}) });
 	const S = k === "l" ? "Left" : "Right", prop = `${name}Grip`;
 	const def = args.define ? { [name]: args.define } : {};
-	const obj = args.define?.kind === "object" ? args.define.object : ctx.anchors?.[name]?.kind === "object" ? ctx.anchors[name].object : null;
+	// the hand may touch what it grips: an object, or the other person (people.js) whose joint the anchor is on
+	const a = args.define ?? ctx.anchors?.[name], obj = a?.kind === "object" ? a.object : a?.kind === "person" ? `person:${a.person}` : null;
 	return {
 		keys: b.keys, end: cut ? last : ctx.f0 + reach + hold + release, ...(cut ? { cut: `release cut at f${last} (hold to the end)` } : {}), anchors: def,
 		props: { [prop]: { hand: k, origin: [`${S}HandIndex2`, `${S}HandMiddle2`], points: { fingers: [0, 0, 0] } } },

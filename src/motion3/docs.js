@@ -6,7 +6,7 @@ export const MOTION_ACTION_HELP = {
 		+ "Send spec, or base (an answered specId) + optional patch (JSON Patch); base alone or patch: [] re-measures (new probes). "
 		+ "spec = { schema: \"cozyclay.motion-spec.v1\", fps: 24, frames (number or \"auto\"), ... } (parts: motion.describe); any number may be { range: [lo, hi] } (searched). "
 		+ "probes (at most 16, request level; spec.probes: measured, not stored): { name, distance: [ref, ref] | position: ref, frames, every? }. "
-		+ "Refs need a prefix (joint: prop: anchor: landmark: object:; goals[].moved: a bare id too) and take loose bone names (any case); spec.checks need exact ones. "
+		+ "Refs need a prefix (joint: prop: anchor: landmark: object: person:; goals[].moved: a bare id too) and take loose bone names (any case); spec.checks need exact ones. "
 		+ "repair: { rounds } (1-8, default 4) applies group patches while severity drops. "
 		+ "qa judges only what is broken; speed, acceleration, balance, knee bend are observations unless checks.limits names them. "
 		+ "Answers frames, installed, specId, qa { ok, total, goals, groups (GOAL first, then severity; cause, hint, patch?) }, observations, delta (with base), repair, probes, timeline, fixed, search, skills. output.more: motion.report pages the rest.",

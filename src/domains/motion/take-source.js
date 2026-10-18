@@ -22,7 +22,7 @@ const finite3 = value => Array.isArray(value) && value.length === 3 && value.eve
 export function takeSource(take, sceneObjects = []) {
 	if (!isTakeV3(take) || !plain(take.spec)) return null;
 	return structuredClone({ schema: TAKE_SCHEMA, rig: take.rig, spec: take.spec,
-		placement: { position: take.placement?.position ?? [0, 0, 0], yaw: take.placement?.yaw ?? 0 }, scene: motionScene(sceneObjects) });
+		placement: { position: take.placement?.position ?? [0, 0, 0], yaw: take.placement?.yaw ?? 0 }, scene: { ...motionScene(sceneObjects), ...(plain(take.people) ? { people: take.people } : {}) } });
 }
 
 /** A saved source (with the Studio take id it carried), checked and owned by the caller; null when it is not one. */
@@ -31,8 +31,10 @@ export function normalizeTakeSource(value) {
 	if (!plain(value.spec) || value.spec.schema !== SPEC_SCHEMA || !Number.isFinite(value.spec.frames)) return null;
 	if (!plain(value.placement) || !finite3(value.placement.position) || !Number.isFinite(value.placement.yaw)) return null;
 	const objects = plain(value.scene?.objects) ? value.scene.objects : {}, others = plain(value.scene?.others) ? { others: value.scene.others } : {};
+	// the joints a person anchor named when it was compiled (people.js keptPeople)
+	const people = plain(value.scene?.people) && Object.values(value.scene.people).every(p => plain(p) && Array.isArray(p.names) && Array.isArray(p.P) && p.P.length === p.frames * p.names.length * 3) ? { people: value.scene.people } : {};
 	return structuredClone({ schema: TAKE_SCHEMA, rig: value.rig, spec: value.spec,
-		placement: { position: value.placement.position, yaw: value.placement.yaw }, scene: { objects, ...others },
+		placement: { position: value.placement.position, yaw: value.placement.yaw }, scene: { objects, ...others, ...people },
 		...(typeof value.takeId === "string" && value.takeId ? { takeId: value.takeId } : {}),
 		...(normalizeTakeEdit(value.edit, value.spec.frames) ? { edit: normalizeTakeEdit(value.edit, value.spec.frames) } : {}) });
 }

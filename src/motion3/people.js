@@ -1,0 +1,76 @@
+// The other people in a compile: every other character with an installed take v3, sampled once per take frame into
+// world joint positions (the take's local rotations by FK, at the character's stage placement, as playback draws it).
+// scene.people[id] = { name, rig, frames, names, P: Float64Array(frames * names.length * 3) } (scene.js motionScene
+// leaves it out; commands/motion3.js adds it). QA measures the compiled body against theirs (qa/people-checks.js,
+// PERSON), an anchor can sit on one of their bones ({ kind: "person" }, compiler/anchors.js) and a ref can name one
+// (person:<id>.<Bone>, refs.js). Frames are timeline frames; past a take's end its last frame holds.
+import { skeletonFor } from "./rigs/index.js";
+import { fk } from "./compiler/skeleton.js";
+import { add, apply, ry } from "./compiler/math.js";
+import { resolveBone } from "./bones.js";
+
+const sampled = new WeakMap();
+// joints are kept to 1e-5 m: what a saved take keeps of them (keptPeople) is then exactly what its compile read
+const keep = v => Math.round(v * 1e5) / 1e5;
+
+/** World joints of an installed take at a placement { position, yaw }, every frame (cached per take and placement). */
+function sampleTake(take, placement) {
+	const key = JSON.stringify(placement), hit = sampled.get(take);
+	if (hit?.key === key) return hit.value;
+	const sk = skeletonFor(take.rig), B = take.bones.length, n = take.frameCount, names = sk.names, J = names.length;
+	const order = names.map(name => take.bones.indexOf(name)), R = ry(placement.yaw), P = new Float64Array(n * J * 3);
+	for (let f = 0; f < n; f++) {
+		const quats = order.map(b => (b < 0 ? [0, 0, 0, 1] : Array.from(take.rot.subarray((f * B + b) * 4, (f * B + b) * 4 + 4))));
+		const s = fk(sk, quats, Array.from(take.hips.subarray(f * 3, f * 3 + 3)));
+		for (let j = 0; j < J; j++) P.set(add(placement.position, apply(R, s.P[j])).map(keep), (f * J + j) * 3);
+	}
+	const value = { rig: take.rig, frames: n, names, P };
+	sampled.set(take, { key, value });
+	return value;
+}
+
+/**
+ * scene.people for a compile of character `selfId`: characters = the cast ({ id, subject, model, x, y, z, rot, hidden }),
+ * takeOf(id) = its installed take v3 or nothing. Hidden characters and ones without a take are left out.
+ */
+export function peopleOf(characters, selfId, takeOf) {
+	const out = {};
+	for (const c of characters ?? []) {
+		if (!c || c.id === selfId || c.hidden) continue;
+		const take = takeOf(c.id);
+		if (take?.schema !== "cozyclay.take.v3" || !take.frameCount || !skeletonFor(take.rig)) continue;
+		out[c.id] = { name: c.subject || c.name || c.id, ...sampleTake(take, { position: [c.x ?? 0, c.y ?? 0, c.z ?? 0], yaw: c.rot ?? 0 }) };
+	}
+	return out;
+}
+
+/** The person's joint `bone` at timeline frame f as [x, y, z], or null (unknown person or bone). */
+export function personJoint(scene, id, bone, f) {
+	const p = scene?.people?.[id];
+	if (!p) return null;
+	const j = p.names.indexOf(resolveBone(skeletonFor(p.rig), bone).bone ?? "");
+	if (j < 0) return null;
+	const at = (Math.max(0, Math.min(p.frames - 1, Math.round(f))) * p.names.length + j) * 3;
+	return [p.P[at], p.P[at + 1], p.P[at + 2]];
+}
+
+/** The ids and names a person ref or anchor may name, for an error. */
+export const peopleList = scene => Object.entries(scene?.people ?? {}).map(([id, p]) => `${id} (${p.name})`).join(", ") || "none: no other character has an installed take";
+
+/**
+ * What a take keeps of the people so that its saved source compiles the same again without the others' takes
+ * (take-source.js): only the joints its person anchors name, as plain arrays (a saved project is JSON), or null.
+ */
+export function keptPeople(scene, spec) {
+	const want = new Map();
+	for (const a of Object.values(spec?.anchors ?? {})) {
+		const p = a?.kind === "person" && scene?.people?.[a.person], bone = p && resolveBone(skeletonFor(p.rig), a.bone).bone;
+		if (bone) want.set(a.person, new Set([...(want.get(a.person) ?? []), bone]));
+	}
+	if (!want.size) return null;
+	return Object.fromEntries([...want].map(([id, bones]) => {
+		const p = scene.people[id], names = [...bones], J = p.names.length, P = [];
+		for (let f = 0; f < p.frames; f++) for (const b of names) { const i = (f * J + p.names.indexOf(b)) * 3; P.push(p.P[i], p.P[i + 1], p.P[i + 2]); }
+		return [id, { name: p.name, rig: p.rig, frames: p.frames, names, P }];
+	}));
+}

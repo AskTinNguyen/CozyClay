@@ -4,6 +4,7 @@
 //   prop:<prop>.<point>                 a point of a held prop (spec.props; "origin" always exists)
 //   anchor:<name>                       a spec anchor, resolved as the compiler resolves it
 //   landmark:mouth                      the measured face landmark
+//   person:<id>.<Bone>                  another character's joint where its installed take has it (people.js)
 //   object:<id>[.center|.top|.base]     a body or a group (object-pose.js objectBoxesAt): the centre,
 //                                       top-face centre or bottom-face centre of the AABB of its
 //                                       part boxes' corners (default center)
@@ -17,8 +18,9 @@ import { bonePoint } from "./compiler/skeleton.js";
 import { didYouMean } from "./compiler/vocab.js";
 import { add, apply, sub, len } from "./compiler/math.js";
 import { sdBox } from "./qa/geometry.js";
+import { personJoint, peopleList } from "./people.js";
 
-const SYNTAX = { joint: "joint:<Bone>", bone: "bone:<Bone>", prop: "prop:<prop>.<point>", anchor: "anchor:<name>", landmark: "landmark:mouth", object: "object:<id>[.center|.top|.base]" };
+const SYNTAX = { joint: "joint:<Bone>", bone: "bone:<Bone>", prop: "prop:<prop>.<point>", anchor: "anchor:<name>", landmark: "landmark:mouth", object: "object:<id>[.center|.top|.base]", person: "person:<id>.<Bone>" };
 
 function parse(ref) {
 	const m = /^([a-z]+):(.+)$/s.exec(String(ref));
@@ -26,6 +28,7 @@ function parse(ref) {
 	const [, kind, rest] = m;
 	if (kind === "prop") { const [name, point] = rest.split("."); return { kind, name, point: point ?? "" }; }
 	if (kind === "object") { const o = /^(.+)\.(center|top|base)$/s.exec(rest); return { kind, name: o ? o[1] : rest, point: o ? o[2] : null }; }
+	if (kind === "person") { const dot = rest.lastIndexOf("."); return { kind, name: dot > 0 ? rest.slice(0, dot) : rest, point: dot > 0 ? rest.slice(dot + 1) : "" }; }
 	return { kind, name: rest, point: null };
 }
 
@@ -50,6 +53,7 @@ export function refPoint(out, f, ref) {
 		case "anchor": return out.ctx.spec.anchors?.[r.name] ? resolveAnchor(out.ctx, r.name, s, { ...diag, frame: f }, c) : null;
 		case "landmark": return sk.landmarks?.[r.name] ? bonePoint(s, sk.index.Head, sk.landmarks[r.name]) : null;
 		case "object": { const boxes = objectBoxesAt(out, r.name, f); return boxes ? boxesPoint(boxes, r.point) : null; }
+		case "person": return personJoint(out.ctx.scene, r.name, r.point, f);
 		default: return null;
 	}
 }
@@ -115,6 +119,11 @@ export function checkRef(spec, err, { sk, scene }, at, ref, kinds = REF_KINDS) {
 	if (r.kind === "landmark") {
 		if (r.name !== "mouth") err(`${tag}: the only landmark is "mouth"`);
 		return r.name === "mouth";
+	}
+	if (r.kind === "person") {
+		const ok = Boolean(personJoint(scene, r.name, r.point, 0));
+		if (!ok) err(`${tag}: no person "${r.name}" with joint "${r.point}" (people with an installed take: ${peopleList(scene)})`);
+		return ok;
 	}
 	return objectOk(err, scene, tag, r.name, { groups: true });
 }

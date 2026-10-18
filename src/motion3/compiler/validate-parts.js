@@ -8,6 +8,7 @@ import { ANCHOR_FIELDS, PROP_FIELDS, FIT_FIELDS, WALK_FIELDS, CHECK_FIELDS, CHEC
 import { boneOk, objectOk, refOk } from "./validate-common.js";
 import { validateObjects } from "./validate-objects.js";
 import { validateGoals } from "./validate-goals.js";
+import { personJoint, peopleList } from "../people.js";
 
 const SIDE = new Set(["l", "r"]);
 const isObject = v => Boolean(v) && typeof v === "object" && !Array.isArray(v);
@@ -29,6 +30,7 @@ function validateAnchors(spec, err, { sk, scene, unknown = err }) {
 		if (a.kind === "bone") boneOk(err, sk, at, a.bone);
 		if (a.kind === "segment") { boneOk(err, sk, `${at}.from`, a.from); boneOk(err, sk, `${at}.to`, a.to); if (a.reach !== undefined && !SIDE.has(a.reach)) err(`${at}.reach must be "l" or "r"`); }
 		if (a.kind === "object") objectOk(err, scene, at, a.object, { groups: true });
+		if (a.kind === "person" && !personJoint(scene, a.person, a.bone ?? "", 0)) err(`${at} (person) needs person: the id of another character with an installed take (people: ${peopleList(scene)}) and bone: one of its joints, got ${fmt(a.person)} ${fmt(a.bone)}`);
 		if (a.kind === "landmark" && a.name !== "mouth") err(`${at}: the only landmark is "mouth", got ${fmt(a.name)}`);
 		if (a.kind === "prop" && !spec.props?.[a.prop]?.points?.[a.point] && a.point !== "origin") err(`${at} needs prop point ${a.prop}.${a.point}, which spec.props does not define`);
 	}
