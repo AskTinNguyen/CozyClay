@@ -7,9 +7,19 @@
 // { type: "walk", f0, steps: 8, step: 0.5, period: 20, swing: 14, halfWidth: 0.1, lift: 0.08,
 //   heading: [h0, h1], turnDistance: 0.4, pelvisHigh: dy, pelvisLow: dy, firstStep: 0.4, armSwing: 14, vary: 1 }
 // heading in degrees (yaw convention); pelvis heights are offsets from the standing hips height.
-import { add, sub, scale, len, apply, ry, rx } from "./math.js";
+// The feet roll as a person's do, heel first (the three rockers of gait): the heel strikes with the
+// toes up and the foot rolls down about the heel to flat; it stays flat while the shin passes over
+// it; the heel comes up well before lift-off and the foot rolls over the ball, toes flat, to toe-off;
+// in the air the toes trail down, level out at mid-swing and come up again for the next strike.
+// The heel strikes at the leg's slant (a person's ankle is near neutral at contact, so the toes come
+// up as far as the shin leans back: SHIN of the hip-to-ankle slant, the knee taking the rest, plus
+// STRIKE_DF); TOE_OFF is the push-off pitch at a full stride (STRIDE_REF m of foot travel), less for
+// a shorter one. A pivot is the very point QA reads (qa/geometry.js solePoints), so a rolling foot
+// never counts as sliding.
+import { add, sub, scale, len, apply, ry, rx, clamp } from "./math.js";
 import { walkRhythm } from "./gait-rhythm.js";
 
+const SHIN = 0.45, STRIKE_DF = 3, TOE_OFF = 50, STRIDE_REF = 1.1;
 const fwd = h => apply(ry(h), [0, 0, 1]);
 const leftOf = h => apply(ry(h), [1, 0, 0]);
 const smoothstep = x => { const t = Math.min(1, Math.max(0, x)); return t * t * (3 - 2 * t); };
@@ -31,6 +41,10 @@ export function walk(gen, keys, sk, tag = "walk") {
 	const I = sk.index, P = sk.restWorldPos;
 	const ank = P[I.LeftFoot][1], standY = P[I.Hips][1];
 	const footRest = { l: sub(P[I.LeftToeBase], P[I.LeftFoot]), r: sub(P[I.RightToeBase], P[I.RightFoot]) };
+	// QA's heel point from the ankle of a flat foot at yaw 0; a foot pitched `deg` about a point on the ground
+	const heelOff = [0, 0.005 - ank, -0.045];
+	const pivot = (p, yw, deg, from) => add(p, apply(ry(yw), apply(rx(deg), apply(ry(-yw), sub(from, p)))));
+	const flatAt = { l: -Infinity, r: -Infinity };
 	// Pelvis heights from the leg length: straight-ish over the stance foot, low enough at
 	// double support that the trailing leg still reaches (2% knee slack).
 	const leg = len(sub(P[I.LeftLeg], P[I.LeftUpLeg])) + len(sub(P[I.LeftFoot], P[I.LeftLeg]));
@@ -61,22 +75,38 @@ export function walk(gen, keys, sk, tag = "walk") {
 			const pre = add(C(stance[other]), scale(leftOf(h0), (other === "l" ? 1 : -1) * W.halfWidth * 0.75)); pre[1] = st.root[1];
 			at(ts - 4, { root: pre, yaw: h0 });
 		}
-		// toe-off: flat until just before lift, then roll the heel up about the toe
-		const ankle = state[`foot_${k}`], yw = state[`fyaw_${k}`];
-		const v = apply(ry(yw), footRest[k]), toe = add(ankle, v);
-		const roll = deg => add(toe, apply(ry(yw), apply(rx(deg), apply(ry(-yw), scale(v, -1)))));
-		at(ts - 5, { [`foot_${k}`]: ankle, [`fyaw_${k}`]: yw, [`fpitch_${k}`]: 0 });
-		for (const [df, d] of [[-3, 8], [-1, 18], [0, 28]]) at(ts + df, { [`foot_${k}`]: roll(d), [`fpitch_${k}`]: d, [`fyaw_${k}`]: yw });
+		// a longer stride pushes off more; the closing step pushes and strikes less
+		const size = clamp(Math.abs(sNew - stance[k]) / STRIDE_REF, 0.3, 1.15), toeOff = TOE_OFF * (0.55 + 0.45 * size) * (last ? 0.8 : 1);
+		// forefoot rocker: the heel comes up about half a step before lift-off (sooner on the first
+		// step, the weight only just over the other foot) and the foot rolls over the ball, slowly
+		// while the other foot is still in the air, then fast to toe-off
+		const ankle = state[`foot_${k}`], yw = state[`fyaw_${k}`], ball = add(ankle, apply(ry(yw), footRest[k]));
+		const tHeel = Math.max(ts - Math.round((i === 0 ? 0.35 : 0.55) * W.period), flatAt[k] + 1, gen.f0 + 1);
+		for (let f = tHeel; f <= ts; f++) {
+			const d = toeOff * ((f - tHeel) / Math.max(1, ts - tHeel)) ** 1.8;
+			at(f, { [`foot_${k}`]: pivot(ball, yw, d, ankle), [`fpitch_${k}`]: d, [`fyaw_${k}`]: yw });
+		}
+		// swing: the toes trail down after toe-off, level at mid-swing, come up before the strike
+		const lead = Math.max(1, Math.round(0.3 * R.air[i]));
+		if (ts + lead < tm) at(ts + lead, { [`fpitch_${k}`]: 0.4 * toeOff });
 		const mid = footAt((stance[k] + sNew) / 2, k); mid[1] += R.height[i];
 		at(tm, { [`foot_${k}`]: mid, [`fyaw_${k}`]: hs((stance[k] + sNew) / 2), [`fpitch_${k}`]: 0 });
-		const land = footAt(sNew, k);
-		at(tl, { [`foot_${k}`]: land, [`fyaw_${k}`]: hs(sNew) });
-		state[`foot_${k}`] = land; state[`fyaw_${k}`] = hs(sNew); stance[k] = sNew;
 		const sMid = stance[other] + 0.03, shift = i === 0 ? 0.015 : 0.035;
 		const pm = add(C(sMid), scale(leftOf(hs(sMid)), (other === "l" ? 1 : -1) * shift)); pm[1] = standY + W.pelvisHigh;
 		// a stride longer than the nominal one drops the hips a little more at double support, so the trailing leg still reaches
 		const low = gen.pelvisLow ?? (R.inc[i] > step0 ? Math.min(W.pelvisLow, hipsAt(Math.hypot(R.inc[i] / 2, hw))) : W.pelvisLow);
 		const sLand = (stance[other] + sNew) / 2, pl = C(sLand).slice(); pl[1] = standY + (last ? W.pelvisHigh : low);
+		// heel rocker: the toes come up before the strike, then the foot rolls down about the heel to flat
+		const land = footAt(sNew, k), lyaw = hs(sNew), heel = add(land, apply(ry(lyaw), heelOff));
+		const slant = Math.atan2(Math.abs(sNew - sLand), pl[1] - land[1]) * 180 / Math.PI;
+		const strike = -(SHIN * slant + STRIKE_DF) * (last ? 0.5 : 1), nFlat = Math.max(2, Math.round(0.2 * W.period));
+		if (tl - lead > tm) at(tl - lead, { [`fpitch_${k}`]: 0.6 * strike });
+		for (let j = 0; j <= nFlat; j++) {
+			const d = strike * (1 - smoothstep(j / nFlat));
+			at(tl + j, { [`foot_${k}`]: pivot(heel, lyaw, d, land), [`fpitch_${k}`]: d, [`fyaw_${k}`]: lyaw });
+		}
+		flatAt[k] = tl + nFlat;
+		state[`foot_${k}`] = land; state[`fyaw_${k}`] = lyaw; stance[k] = sNew;
 		const swing = (last ? 0 : i < 3 ? [0, 0.3, 0.7][i] : 1) * R.arm[i], sg = k === "l" ? 1 : -1;
 		at(tm, { root: pm, yaw: hs(sMid) });
 		at(tl, { root: pl, yaw: hs(sLand) - 3 * sg * swing, spine_yaw: 3 * sg * swing, aswing_l: -0.85 * W.armSwing * sg * swing,

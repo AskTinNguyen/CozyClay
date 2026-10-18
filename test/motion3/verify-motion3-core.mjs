@@ -7,6 +7,7 @@ import { pose } from "../../src/motion3/compiler/pose.js";
 import { bakeChannels } from "../../src/motion3/compiler/channels.js";
 import { compileMotion } from "../../src/motion3/compiler/compile.js";
 import { runMotionQa } from "../../src/motion3/qa/index.js";
+import { solePoints } from "../../src/motion3/qa/geometry.js";
 import { bakeTake, takeQuat, takeHips } from "../../src/motion3/take.js";
 import { dist, I3 } from "../../src/motion3/compiler/math.js";
 
@@ -45,6 +46,20 @@ const walkSpec = { schema: "cozyclay.motion-spec.v1", fps: 30, frames: 220,
 const walk = compileMotion(walkSpec, { sk, scene: { objects: {} } });
 const walkQa = runMotionQa(sk, walk, walkSpec);
 expect("an 8-step curving walk passes QA with 0 issues", walkQa.ok, JSON.stringify(walkQa.groups.slice(0, 3)));
+// The feet roll heel first (compiler/walk.js): the heel touches with the ball still up, stays put while the foot rolls
+// down onto it; the ball stays put while the heel comes up; the foot leaves the floor pitched well over.
+for (const side of ["Left", "Right"]) {
+	const sole = walk.frames.map(fr => solePoints(sk, fr.s, side)), k = side[0].toLowerCase(), down = 0.0065;
+	const moved = (key, a, b) => Math.hypot(sole[b][key][0] - sole[a][key][0], sole[b][key][2] - sole[a][key][2]);
+	const strikes = sole.map((p, f) => f > 0 && p.heel[1] < down && sole[f - 1].heel[1] >= down ? f : -1).filter(f => f > 0);
+	const heelFirst = strikes.filter(f => sole[f].ball[1] > 0.01 && moved("heel", f, f + 3) < 5e-4);
+	const lifts = sole.map((p, f) => f > 0 && p.ball[1] >= 0.001 && sole[f - 1].ball[1] < 0.001 ? f : -1).filter(f => f > 0);
+	const rolled = lifts.filter(f => moved("ball", f - 6, f - 1) < 5e-4 && sole[f - 6].heel[1] < sole[f - 1].heel[1] - 0.03);
+	const push = Math.max(...walk.frames.map(fr => fr.c[`fpitch_${k}`] ?? 0));
+	expect(`${side}: the heel strikes before the ball and holds while the foot rolls down; the heel rises on a still ball before lift-off`,
+		strikes.length >= 3 && heelFirst.length >= strikes.length - 1 && lifts.length >= 3 && rolled.length === lifts.length && push >= 35,
+		JSON.stringify({ strikes, heelFirst, lifts, rolled, push }));
+}
 const take = bakeTake(sk, walk, { position: [0, 0, 0], yaw: 0 });
 const f = 120, q = Array.from({ length: 65 }, (_, b) => takeQuat(take, f, b)), back = fk(sk, q, takeHips(take, f));
 expect("take v3 replays the compiled frame", Math.max(...walk.frames[f].s.P.map((p, j) => dist(p, back.P[j]))) < 1e-4);

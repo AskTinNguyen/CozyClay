@@ -19,8 +19,15 @@ function expect(name, condition, detail = "") {
 const json = JSON.stringify, sk = skeletonFor("y-bot-tpose"), scene = motionScene([]);
 const spec = (args, f0 = 10) => ({ schema: "cozyclay.motion-spec.v1", fps: 24, frames: "auto",
 	use: [{ skill: "standIdle", f0: 0, args: { at: [0.3, -0.2], heading: 15 } }, { skill: "walkTo", f0, args }] });
-// the frame each step's heel is fully rolled for toe-off (fpitch 28) and the frame its foot lands (the next key of that foot)
-const toeOffs = r => r.expanded.keys.filter(k => / step \d+$/.test(k.src ?? "") && Object.entries(k.set).some(([c, v]) => /^fpitch_/.test(c) && v === 28)).map(k => k.f);
+// the frame each step's heel is fully rolled for toe-off: its largest fpitch key (compiler/walk.js rolls the heel up to it)
+const toeOffs = r => {
+	const top = new Map();
+	for (const k of r.expanded.keys) {
+		if (!/ step \d+$/.test(k.src ?? "")) continue;
+		for (const [c, v] of Object.entries(k.set)) if (/^fpitch_/.test(c) && !(top.get(k.src)?.v >= v)) top.set(k.src, { v, f: k.f });
+	}
+	return [...top.values()].map(t => t.f).sort((x, y) => x - y);
+};
 const gaps = fs => fs.slice(1).map((f, i) => f - fs[i]);
 const median = xs => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];
 const restFeet = r => ["Left", "Right"].map(S => { const sp = solePoints(sk, r.out.frames.at(-1).s, S); return [sp.heel, sp.ball].map(p => p.map(v => +v.toFixed(4))); });
