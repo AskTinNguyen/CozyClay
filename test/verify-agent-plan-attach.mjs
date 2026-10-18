@@ -1,5 +1,5 @@
-// #742: a Studio turn for a staging/coverage request carries the top-view plan
-// as its one observation image; a plain single-character turn carries none, and
+// #742: a Studio turn for a staging/coverage request, or a staged scene's first turn in a session, carries the
+// top-view plan as its one observation image; a plain single-character turn carries none, and
 // an explicit attachFrame keeps the frame instead of the plan.
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
@@ -31,14 +31,14 @@ await once(server, "listening");
 const origin = `http://127.0.0.1:${server.address().port}`;
 
 let turn = 0;
-async function studioTurn({ characterCount, text = "inspect selection", attachFrame }) {
+async function studioTurn({ characterCount, text = "inspect selection", attachFrame, sessionId }) {
   turn += 1;
   context = contextFixture();
   context.scene.characterCount = characterCount;
   commands.length = 0;
   faux.script([{ type: "text", text: "ok" }]);
   const before = faux.calls.length;
-  const body = { ...envelopeFixture(), sessionId: `00000000-0000-4000-8000-0000000007${String(turn).padStart(2, "0")}`, text, context, ...(attachFrame === undefined ? {} : { attachFrame }) };
+  const body = { ...envelopeFixture(), sessionId: sessionId ?? `00000000-0000-4000-8000-0000000007${String(turn).padStart(2, "0")}`, turnId: `00000000-0000-4000-8000-0000000008${String(turn).padStart(2, "0")}`, text, context, ...(attachFrame === undefined ? {} : { attachFrame }) };
   const response = await fetch(`${origin}/agent/turn`, { method: "POST", headers: { "content-type": "application/json", origin }, body: JSON.stringify(body), signal: AbortSignal.timeout(10000) });
   const frames = [...(await response.text()).matchAll(/^data: (.+)$/gm)].map((match) => JSON.parse(match[1]));
   assert.equal(response.status, 200);
@@ -52,9 +52,17 @@ try {
   const two = await studioTurn({ characterCount: 2 });
   assert.deepEqual(two.captures.filter((name) => name.startsWith("capture_")), ["capture_plan_png"], "two characters: the plan is captured once");
   assert.equal(two.images.length, 1, "exactly one image reaches the provider");
-  assert.match(two.images[0].label, /^Studio plan observation \(top view\) revision 41 /, two.images[0].label);
+  assert.equal(two.images[0].label, "Studio plan observation (top view) at scene revision 41", "the label names the revision and no missing receipt");
   assert.equal(two.frames.some((frame) => frame.type === "error"), false);
   console.log("PASS a two-character Studio turn carries the top-view plan as its one image");
+
+  // The plan rode every turn of a staged scene, re-sent each time; now it comes once per session unless asked for.
+  const again = await studioTurn({ characterCount: 2, sessionId: "00000000-0000-4000-8000-000000000701" });
+  assert.deepEqual(again.captures.filter((name) => name.startsWith("capture_")), [], "the same session's next plain turn captures no plan");
+  assert.equal(again.images.length, 1, "the request holds only the first turn's plan, still in the conversation");
+  const asked = await studioTurn({ characterCount: 2, text: "카메라를 레일로 바꿔줘", sessionId: "00000000-0000-4000-8000-000000000701" });
+  assert.deepEqual(asked.captures.filter((name) => name.startsWith("capture_")), ["capture_plan_png"], "a camera request in that session gets the plan again");
+  console.log("PASS a staged scene's plan comes once per session, and again on a staging request");
 
   const worded = await studioTurn({ characterCount: 1, text: "투샷으로 잡아줘" });
   assert.deepEqual(worded.captures.filter((name) => name.startsWith("capture_")), ["capture_plan_png"], "a coverage word asks for the plan too");

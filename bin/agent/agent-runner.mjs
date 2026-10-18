@@ -1,6 +1,7 @@
 import { summariseCanvasResult } from "./agent-tools.mjs";
 import { createReasoningFrames } from "./turn-frames.mjs";
 import { sanitizeUpstreamDetail } from "./agent-routes.mjs";
+import { budgetStudioRequest } from "./studio-context-budget.mjs";
 
 const DEFAULT_MODEL = "gpt-6-astra";
 
@@ -229,7 +230,7 @@ function studioObservationMessage(observation) {
 	return {
 		role: "user",
 		content: [
-			{ type: "text", text: `Studio ${observation?.kind === "plan" ? "plan observation (top view)" : "frame observation"} revision ${JSON.stringify(observation?.revision ?? null)} receipt ${observation?.receiptId ?? "unavailable"}` },
+			{ type: "text", text: `Studio ${observation?.kind === "plan" ? "plan observation (top view)" : "frame observation"} at scene revision ${JSON.stringify(observation?.revision ?? null)}${observation?.receiptId ? `, receipt ${observation.receiptId}` : ""}` },
 			{ type: "image", data: observation.data, mimeType: observation.mimeType },
 		],
 	};
@@ -397,7 +398,7 @@ export function createAgentRunner({ models: suppliedModels, sessionStore, tools 
 					usage.requests += 1;
 					for (const key of ["input", "output", "cacheRead", "cacheWrite"]) if (Number.isFinite(message?.usage?.[key])) usage[key] += message.usage[key];
 				});
-				state.harness.hooks.on("transform_context", (event) => state.lastInput?.surface === "studio" ? studioContextDiet(event) : undefined);
+				state.harness.hooks.on("transform_context", (event) => state.lastInput?.surface === "studio" ? budgetStudioRequest(studioContextDiet(event)) : undefined);
 				state.harness.hooks.on("before_payload", ({ model, payload }) => {
 					if (model?.api !== "anthropic-messages") return undefined;
 					const next = withAnthropicCacheBreakpoints(payload, model);
@@ -419,9 +420,8 @@ export function createAgentRunner({ models: suppliedModels, sessionStore, tools 
 					for (const message of restored.history) await state.lane.appendMessage(message, state.context);
 					state.persisted = restored.history.length;
 				}
-				// Studio only: older turns' full contexts are stale and large, so each request
-				// carries the newest one whole and a stub for the rest. The stored lane and
-				// the persisted history keep every context.
+				// Studio only, on the provider view (studioContextDiet, then studio-context-budget.mjs): the stored
+				// lane and the persisted history keep every context, result, script and image whole.
 				state.unsubscribers.push(state.harness.events.on("turn_end", persist));
 				state.unsubscribers.push(state.harness.events.on("run_end", persist));
 			}
