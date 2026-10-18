@@ -396,9 +396,9 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 	const studioOwnerTokens = new Map();
 	const parseCookies = req => Object.fromEntries(String(req.headers.cookie || "").split(";").map(part => part.trim().split("=")).filter(([key, value]) => key && value).map(([key, value]) => [key, decodeURIComponent(value)]));
 	const pruneStudioSessions = () => {
-		const now = clock();
-		for (const [id, session] of studioSessions) if (now - session.updatedAt > 600_000) { studioSessions.delete(id); studioOwnerTokens.delete(id); for (const turn of session.turns.keys()) studioEvents.delete(turn); }
-		const retired = [...studioSessions.entries()].sort((a, b) => a[1].updatedAt - b[1].updatedAt);
+		const now = clock(), idle = session => !(session.activeTurnId && session.controller && !session.controller.signal.aborted); // a running turn keeps its session
+		for (const [id, session] of studioSessions) if (idle(session) && now - session.updatedAt > 600_000) { studioSessions.delete(id); studioOwnerTokens.delete(id); for (const turn of session.turns.keys()) studioEvents.delete(turn); }
+		const retired = [...studioSessions.entries()].filter(([, session]) => idle(session)).sort((a, b) => a[1].updatedAt - b[1].updatedAt);
 		while (studioSessions.size > 256 && retired.length) { const [id, session] = retired.shift(); studioSessions.delete(id); studioOwnerTokens.delete(id); for (const turn of session.turns.keys()) studioEvents.delete(turn); }
 	};
 	const studioOwner = (req, sessionId, create = false) => {

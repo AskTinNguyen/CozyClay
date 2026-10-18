@@ -163,6 +163,35 @@ async function startServer(options) {
 	console.log("PASS a Studio turn is steerable by its owner, 403 without the cookie, 409 after it ended");
 }
 
+// --- a Studio turn running past the 10-minute idle window keeps its session ---
+// Pruning (on any new Studio turn) used to drop a session by its age alone, so a turn still running lost its owner
+// token and event history and its steer answered 404. A session with a running turn is never pruned.
+{
+	const { envelopeFixture, contextFixture } = await import("./verify-studio-agent-protocol.mjs");
+	const slow = deferred();
+	let now = 1_000_000;
+	const fauxStudio = createFakeModel();
+	fauxStudio.script([{ type: "toolCall", id: "p1", name: "inspect_studio", arguments: { scope: "scene" } }, "other session done", "long turn done"]);
+	const fakeLive = { command: async (name) => { if (name === "inspect_studio") { await slow.promise; return { context: { revision: { scene: 41 } } }; } return { assetId: "a1", objectId: "o1" }; } };
+	const { server, origin } = await startServer({ codex: { parseQuotaHeaders: () => ({ primary: {}, credits: {} }) }, models: fauxStudio.models, fauxProvider: fauxStudio.fauxProvider, liveHub: fakeLive, studioRuntime: { readContext: async () => contextFixture() }, clock: () => now });
+	const envelope = envelopeFixture(), other = { ...envelopeFixture(), sessionId: "00000000-0000-4000-8000-000000000003", turnId: "00000000-0000-4000-8000-000000000004", text: "another session" };
+	const post = (body) => fetch(`${origin}/agent/turn`, { method: "POST", headers: { "content-type": "application/json", origin }, body: JSON.stringify(body) });
+	const turnResponse = await post(envelope);
+	const cookie = turnResponse.headers.get("set-cookie")?.split(";")[0];
+	let steered = null;
+	const events = await readSseEvents(turnResponse, async (event) => {
+		if (event.type !== "tool.start" || steered !== null) return;
+		now += 11 * 60_000;
+		await (await post(other)).text();
+		steered = await fetch(`${origin}/agent/turn/${envelope.turnId}/steer`, { method: "POST", headers: { "content-type": "application/json", origin, cookie }, body: JSON.stringify({ text: "still here" }) });
+		slow.resolve();
+	});
+	expect("a Studio turn running 11 minutes is still steerable by its owner after another turn prunes", steered?.status === 200, `status ${steered?.status}`);
+	expect("the long Studio turn completes", events.some((event) => event.type === "done"));
+	await new Promise((resolve) => server.close(resolve));
+	console.log("PASS a session with a running Studio turn survives pruning");
+}
+
 // --- unit: the compaction option plumbs through to the harness options, default off ---
 async function harnessCompactionSeenFor(compactionOption) {
 	const seen = [];
