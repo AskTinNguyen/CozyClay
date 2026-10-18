@@ -4,7 +4,8 @@
 // baseball swing of session 294ac65a (the J2 fixture): its four rot keys written as aims compile to
 // the same take, bit for bit; roll turns the object about aim; both rot and aim is refused; the
 // compile output measures every key as drawn (observations.held); motion.keyObject writes aim keys.
-// The car exit's take hash changed with the walk's smaller heel strike and stride length term (walk.js, gait-rhythm.js;
+// The car exit's take hash changed with the hips-first walk (walk-pelvis.js, walk.js; QA 0 before and after), and with
+// the walk's smaller heel strike and stride length term (walk.js, gait-rhythm.js;
 // QA 0 before and after), and before that with the walk's foot rockers (compiler/walk.js: its walk strikes with the heel and
 // pushes off the ball), its arms (the elbows bend with the swing), its hips (compiler/walk-pelvis.js) and the idle layer of its
 // holds (compiler/idle.js); the swing's changed with lane L2 (its sunk Y Bot soles lift onto the floor and the
@@ -43,7 +44,7 @@ const plain = compileSpec(SWING_SPEC, { sk, scene }), keyed = compile(SWING_KEYS
 const car = compileSpec({ fps: 24, ...EXITCAR_SPEC }, { sk: dsk, scene: motionScene(CAR_OBJECTS) });
 const hashes = { plain: hashOf(bakeTake(sk, plain.out)), keyed: hashOf(bakeTake(sk, keyed.out)), exitcar: hashOf(bakeTake(dsk, car.out)) };
 expect("the car exit bakes the take of the grip turn on its door handle (compiler/grip.js), bit for bit; the swing without keys bakes the take of lane Q1, with the J2 rot keys the take of lane Q1",
-	hashes.plain === "0ac49bec6e194bac" && hashes.keyed === "94db1cc27a325334" && hashes.exitcar === "b7c2776b8cbe60e1", JSON.stringify(hashes));
+	hashes.plain === "0ac49bec6e194bac" && hashes.keyed === "94db1cc27a325334" && hashes.exitcar === "98245c328cce196f", JSON.stringify(hashes));
 
 // 2. the same keys as aims: +Y of each rot; roll = its turn about aim from where the plain carry holds the bat at that frame
 const rollFrom = (q, from, aim) => {

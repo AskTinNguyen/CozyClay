@@ -19,7 +19,7 @@
 import { expandUse } from "./skills/index.js";
 import { stateAt } from "./compiler/walk.js";
 
-const WALK_RATIO = 9.7, STRIDE_MIN = 0.25, STRIDE_MAX = 0.75, SWING = 0.72, SLOW = 0.5, TRIALS = 22, LATE = 4, FPS = 24;
+const WALK_RATIO = 9.7, STRIDE_MIN = 0.25, STRIDE_MAX = 0.75, SWING = 0.88, SLOW = 0.5, TRIALS = 22, LATE = 4, FPS = 24;
 const PERIODS = Array.from({ length: 16 }, (_, i) => 9 + i);
 const PLANNED = ["steps", "period", "step", "swing"];
 const WALK_KINDS = new Set(["POP", "REACH", "SLIDE", "FLOAT", "FLIP", "KNEE"]);

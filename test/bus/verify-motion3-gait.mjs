@@ -19,12 +19,16 @@ function expect(name, condition, detail = "") {
 const json = JSON.stringify, sk = skeletonFor("y-bot-tpose"), scene = motionScene([]);
 const spec = (args, f0 = 10) => ({ schema: "cozyclay.motion-spec.v1", fps: 24, frames: "auto",
 	use: [{ skill: "standIdle", f0: 0, args: { at: [0.3, -0.2], heading: 15 } }, { skill: "walkTo", f0, args }] });
-// the frame each step's heel is fully rolled for toe-off: its largest fpitch key (compiler/walk.js rolls the heel up to it)
+// the frame each step's heel is fully rolled for toe-off: its largest fpitch key, the last of them where the roll reaches
+// its limit before the lift (compiler/walk.js rolls the heel up to it; walk-pelvis.js may hold PITCH_MAX a frame or two)
 const toeOffs = r => {
 	const top = new Map();
 	for (const k of r.expanded.keys) {
 		if (!/ step \d+$/.test(k.src ?? "")) continue;
-		for (const [c, v] of Object.entries(k.set)) if (/^fpitch_/.test(c) && !(top.get(k.src)?.v >= v)) top.set(k.src, { v, f: k.f });
+		for (const [c, v] of Object.entries(k.set)) {
+			const t = top.get(k.src);
+			if (/^fpitch_/.test(c) && (!t || v > t.v || (v === t.v && k.f > t.f))) top.set(k.src, { v, f: k.f });
+		}
 	}
 	return [...top.values()].map(t => t.f).sort((x, y) => x - y);
 };
