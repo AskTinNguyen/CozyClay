@@ -10,8 +10,8 @@
 // The feet roll as a person's do, heel first (the three rockers of gait): the heel strikes with the
 // toes up and the foot rolls down about the heel to flat; it stays flat while the shin passes over
 // it; the heel comes up well before lift-off and the foot rolls over the ball, toes flat, to toe-off;
-// in the air the toes trail down, level out at mid-swing and come up again for the next strike.
-// The heel strikes with the toes up STRIKE_DF, half that on the closing step (a walk generated from motion
+// in the air the foot follows the shin, the ankle near neutral (walk-pelvis.js fitSwing), into the next strike.
+// The heel strikes with the toes up STRIKE_DF (a stroll's, then a brisk walk's), half that on the closing step (a walk generated from motion
 // capture lands with the foot nearly flat: the heel touches a frame or two before the sole); TOE_OFF is the push-off pitch at a full stride (STRIDE_REF m of foot travel), less for
 // a shorter one. A pivot is the very point QA reads (qa/geometry.js solePoints), so a rolling foot
 // never counts as sliding.
@@ -22,21 +22,22 @@
 // the first steps and back out on the closing one.
 import { add, sub, scale, len, apply, ry, clamp } from "./math.js";
 import { walkRhythm } from "./gait-rhythm.js";
-import { fitPelvis, fitTrail, fitSwing, pivot } from "./walk-pelvis.js";
+import { fitPelvis, fitTrail, fitSwing, pivot, brisk } from "./walk-pelvis.js";
 
-const STRIKE_DF = 4, TOE_OFF = 50, STRIDE_REF = 1.1, ELBOW = [18, 3], ELBOW_SWING = [6, 3], WRIST = 8;
+const STRIKE_DF = [6, 4], TOE_OFF = 50, STRIDE_REF = 1.1, ELBOW = [18, 3], ELBOW_SWING = [6, 3], WRIST = 8;
 // The trunk over the stepping hips (degrees at a full stride, less for a shorter one): the pelvis drops on the
 // swing side in single support (LIST) with the trunk held upright over it and swaying SWAY of that toward the
 // stance foot; the pelvis turns with the leading leg (PELVIS_TURN) and the chest the other way (CHEST_TURN);
 // the trunk dips forward at each strike and back up in single support (LEAN).
-const LIST = 4.5, SWAY = 0.35, PELVIS_TURN = 4.5, CHEST_TURN = 4, LEAN = 1.8, MID_SLOW = 0.015, STRIKE_AHEAD = 0.64, HEEL_OFF = 0.3, HEEL_MIN = 4;
+const LIST = 4.5, SWAY = 0.35, PELVIS_TURN = 4.5, CHEST_TURN = 4, LEAN = 1.8, MID_SLOW = 0.015, STRIKE_AHEAD = [0.52, 0.64], HEEL_OFF = 0.3, HEEL_MIN = 4;
 // the swing's path: the heel kicks up right after toe-off (EARLY_AT of the swing, 2 frames at least: EARLY_FWD of the
-// way to mid-swing, EARLY_LIFT m up at a full stride and a swing of KICK_AIR frames or more), so the knee folds as the
+// way to mid-swing, EARLY_LIFT m up at a full stride and a swing of KICK_AIR frames or more, KICK_STROLL of that at a stroll's
+// pace: a person strolling folds the knee less), so the knee folds as the
 // toe leaves; it comes down LAND_BACK of the stride behind and LAND_ABOVE m over the strike LAND_AT of the swing before
 // it. A swing too short for a key leaves it out (the foot would jolt between keys a frame apart), and the closing step
 // sets down without either. The heel takes HEEL_MIN frames at least to rise and rises no higher than PITCH_MAX: past about 60 deg
 // the toes sit behind the ankle and QA reads a bent knee as bending backward.
-const EARLY_AT = 0.18, EARLY_FWD = 0.35, EARLY_LIFT = 0.18, KICK_AIR = 10, LAND_AT = 0.22, LAND_BACK = 0.12, LAND_ABOVE = 0.03, PITCH_MAX = 50;
+const EARLY_AT = 0.18, EARLY_FWD = 0.35, EARLY_LIFT = 0.18, KICK_STROLL = 0.55, KICK_AIR = 10, LAND_AT = 0.22, LAND_BACK = 0.12, LAND_ABOVE = 0.03, PITCH_MAX = 50;
 const fwd = h => apply(ry(h), [0, 0, 1]);
 const leftOf = h => apply(ry(h), [1, 0, 0]);
 const smoothstep = x => { const t = Math.min(1, Math.max(0, x)); return t * t * (3 - 2 * t); };
@@ -117,7 +118,8 @@ export function walk(gen, keys, sk, tag = "walk") {
 		const mid = footAt((stance[k] + sNew) / 2, k); mid[1] += R.height[i];
 		const off = pivot(ball, yw, Math.min(toeOff, PITCH_MAX), ankle), rise = add(off, scale(sub(mid, off), EARLY_FWD));
 		// a shorter swing kicks lower (the same rise in fewer frames would jolt the foot): by its length against KICK_AIR
-		rise[1] = off[1] + EARLY_LIFT * size * Math.min(1, (R.air[i] / KICK_AIR) ** 2);
+		// and with the step's own lift (gait-rhythm), so no two swings fold the knee alike
+		rise[1] = off[1] + EARLY_LIFT * size * Math.min(1, (R.air[i] / KICK_AIR) ** 2) * (KICK_STROLL + (1 - KICK_STROLL) * brisk(pace)) * (R.height[i] / W.lift);
 		// in a turn the line from the toe-off to mid-swing cuts in toward the other foot: the kick stays out at mid-swing's side
 		const outward = scale(leftOf(hs(stance[other])), k === "l" ? 1 : -1), foot = state[`foot_${other}`];
 		const side = p => (p[0] - foot[0]) * outward[0] + (p[2] - foot[2]) * outward[2], inside = side(mid) - side(rise);
@@ -125,9 +127,10 @@ export function walk(gen, keys, sk, tag = "walk") {
 		const early = ts + Math.max(2, Math.round(EARLY_AT * R.air[i]));
 		if (!last && early < tm - 1) at(early, { [`foot_${k}`]: rise, [`fpitch_${k}`]: 0.7 * Math.min(toeOff, PITCH_MAX) });
 		at(tm, { [`foot_${k}`]: mid, [`fyaw_${k}`]: hs((stance[k] + sNew) / 2), [`fpitch_${k}`]: 0 });
-		// at the strike the hips are well past the middle of the stride, over the landing foot's side (STRIKE_AHEAD);
+		// at the strike the hips are past the middle of the stride (STRIKE_AHEAD: about half way at a stroll, well past it
+		// at a brisk walk, so a slow walk's hips dip between spread legs), over the landing foot's side;
 		// between strikes they cross the floor at an even pace, a little slower over mid-stance (MID_SLOW of the step)
-		const sLand = stance[other] + STRIKE_AHEAD * (sNew - stance[other]);
+		const sLand = stance[other] + (STRIKE_AHEAD[0] + (STRIKE_AHEAD[1] - STRIKE_AHEAD[0]) * brisk(pace)) * (sNew - stance[other]);
 		const sEven = prev ? prev.s + (sLand - prev.s) * ((tm - prev.f) / (tl - prev.f)) : null;
 		const sMid = sEven === null ? stance[other] + 0.03 : sEven - MID_SLOW * Math.abs(sNew - stance[k]) / 2, shift = i === 0 ? 0.015 : 0.032;
 		const pm = add(C(sMid), scale(leftOf(hs(sMid)), (other === "l" ? 1 : -1) * shift)); pm[1] = standY + W.pelvisHigh;
@@ -137,7 +140,7 @@ export function walk(gen, keys, sk, tag = "walk") {
 		prev = { f: tl, s: sLand };
 		// heel rocker: the toes come up before the strike, then the foot rolls down about the heel to flat
 		const land = footAt(sNew, k), lyaw = hs(sNew), heel = add(land, apply(ry(lyaw), heelOff));
-		const strike = -STRIKE_DF * (last ? 0.5 : 1), nFlat = Math.max(2, Math.round(0.2 * W.period));
+		const strike = -(STRIKE_DF[0] + (STRIKE_DF[1] - STRIKE_DF[0]) * brisk(pace)) * (last ? 0.5 : 1), nFlat = Math.max(2, Math.round(0.2 * W.period));
 		const touch = pivot(heel, lyaw, strike, land), above = add(touch, scale(fwd(lyaw), -LAND_BACK * Math.abs(sNew - stance[k])));
 		above[1] += LAND_ABOVE;
 		if (!last && lead > 1 && tl - lead > tm + 1) at(tl - lead, { [`foot_${k}`]: above, [`fpitch_${k}`]: 0.6 * strike });
@@ -166,9 +169,9 @@ export function walk(gen, keys, sk, tag = "walk") {
 	// each swing again from where that foot now lifts (its approach to the strike, which the hips saw, unchanged)
 	if (gen.pelvisHigh === undefined && gen.pelvisLow === undefined) {
 		fitSwing(out, { end: settle, ground });
-		fitPelvis(sk, out, { f0: gen.f0, end: settle, period: W.period, ground, start: `${tag} start` });
-		fitTrail(sk, out, { end: settle, period: W.period, ground });
-		fitSwing(out, { end: settle, ground });
+		fitPelvis(sk, out, { f0: gen.f0, end: settle, period: W.period, pace, ground, start: `${tag} start` });
+		fitTrail(sk, out, { end: settle, period: W.period, pace, ground });
+		fitSwing(out, { end: settle, ground, sk });
 	}
 	src = `${tag} end`;
 	at(tend, stateAt(out, tend));

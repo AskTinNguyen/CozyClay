@@ -14,15 +14,22 @@
 //   (beyond about 60 deg the toes sit behind the ankle and QA reads a bent knee as bending backward); out of reach
 //   even then, the toe comes off the floor, the foot drawn toward the hip, as a person's does once the other foot
 //   is down.
-// - fitSwing: each swing on a clamped cubic spline from that lift-off, through walk.js's swing keys, into the strike.
+// - fitSwing: each swing on a clamped cubic spline from that lift-off, through walk.js's swing keys, into the strike;
+//   the foot's pitch follows the shank on the way.
+// The knee schedule eases with the walk's pace (brisk): a stroll strikes, loads and pushes off with straighter knees.
 import { bakeChannels } from "./channels.js";
-import { add, sub, scale, len, apply, rx, ry, rz } from "./math.js";
+import { add, sub, scale, len, dot, apply, rx, ry, rz } from "./math.js";
 
 // knee flexion (deg): at the strike, the loading peak, mid-stance, and at lift-off (TRAIL_POW shapes the push-off:
 // slow while the other foot is in the air, fast once it lands); a quick walk (period down to FAST frames from SLOW)
 // bends them FAST_MORE further, as a person's knees give more the faster they walk
 const KNEE_STRIKE = 18, KNEE_LOAD = 22, KNEE_MID = 7, KNEE_TOEOFF = 45, TRAIL_POW = 1, LOAD_SPAN = 0.4, PITCH_MAX = 50, PITCH_RATE = 15;
 const SLOW = 13, FAST = 9, FAST_MORE = { strike: 4, load: 4, mid: 3, toeOff: 5 };
+// a slow walk keeps the knees straighter (a person strolling strikes and loads nearly straight-legged): the schedule
+// eases from STROLL at a pace of PACE[0] (walk.js's pace: 1 = 0.5 m per 20 frames) up to the one above at PACE[1]
+const STROLL = { strike: 2, load: 14, mid: 7, toeOff: 48, pow: 1.8 }, PACE = [1, 2.2];
+/** 0 at a stroll's pace, 1 at a brisk walk's, smooth between. */
+export const brisk = pace => { const t = Math.min(1, Math.max(0, ((pace ?? PACE[1]) - PACE[0]) / (PACE[1] - PACE[0]))); return t * t * (3 - 2 * t); };
 const SOFT = 0.004, EASE = 8, BELOW_STAND = 0.008, REACH_IN = 0.35, MARGIN = 0.001, XZ_BLUR = 2;
 // a strike's trough is the lowest limit from 2 frames before it to TROUGH_SPAN periods after (its loading)
 const TROUGH_SPAN = 0.25, PEAK = [0.25, 0.5], CURVE = 0.008, smoother = t => t * t * t * (t * (6 * t - 15) + 10);
@@ -39,22 +46,23 @@ const SWUNG = new WeakSet();
 export const pivot = (p, yw, deg, from) => add(p, apply(ry(yw), apply(rx(deg), apply(ry(-yw), sub(from, p)))));
 
 /** The leg's reach at a knee flexion, the hip joints from the hips, and the knee schedule of a walk of this period. */
-function legOf(sk, period) {
+function legOf(sk, period, pace) {
 	const I = sk.index, P = sk.restWorldPos;
 	const a = len(sub(P[I.LeftLeg], P[I.LeftUpLeg])), b = len(sub(P[I.LeftFoot], P[I.LeftLeg]));
-	const q = Math.min(1, Math.max(0, (SLOW - period) / (SLOW - FAST)));
-	const strike = KNEE_STRIKE + q * FAST_MORE.strike, load = KNEE_LOAD + q * FAST_MORE.load, mid = KNEE_MID + q * FAST_MORE.mid, toeOff = KNEE_TOEOFF + q * FAST_MORE.toeOff;
+	const q = Math.min(1, Math.max(0, (SLOW - period) / (SLOW - FAST))), u = brisk(pace), mix = (s, k) => s + (k - s) * u;
+	const strike = mix(STROLL.strike, KNEE_STRIKE) + q * FAST_MORE.strike, load = mix(STROLL.load, KNEE_LOAD) + q * FAST_MORE.load;
+	const mid = mix(STROLL.mid, KNEE_MID) + q * FAST_MORE.mid, toeOff = mix(STROLL.toeOff, KNEE_TOEOFF) + q * FAST_MORE.toeOff;
 	return {
 		reach: deg => Math.sqrt(a * a + b * b + 2 * a * b * Math.cos((deg * Math.PI) / 180)),
 		hipOff: { l: sub(P[I.LeftUpLeg], P[I.Hips]), r: sub(P[I.RightUpLeg], P[I.Hips]) },
-		strike, load, mid, trail: u => mid + (toeOff - mid) * Math.min(1, Math.max(0, u)) ** TRAIL_POW,
+		strike, load, mid, trail: u => mid + (toeOff - mid) * Math.min(1, Math.max(0, u)) ** mix(STROLL.pow, TRAIL_POW),
 	};
 }
 const hipAt = (ch, f, off) => add(ch.root[f], apply(ry(ch.yaw?.[f] ?? 0), apply(rz(ch.roll?.[f] ?? 0), off)));
 
-export function fitPelvis(sk, out, { f0, end, period, ground, start }) {
+export function fitPelvis(sk, out, { f0, end, period, pace, ground, start }) {
 	const I = sk.index, P = sk.restWorldPos;
-	const { reach, hipOff, strike, load, mid, trail } = legOf(sk, period);
+	const { reach, hipOff, strike, load, mid, trail } = legOf(sk, period, pace);
 	const lead = Math.max(2, Math.round(REACH_IN * period));
 	const knee = (g, f) => {
 		if (f < g.a) return strike;
@@ -158,8 +166,8 @@ export function fitPelvis(sk, out, { f0, end, period, ground, start }) {
  * then the push-off's from walk.js's heel-off frame), so the heel comes up when the leg needs it to; never lowering the
  * heel again and never past PITCH_MAX. Its keys replace walk.js's scheduled rise on the same frames.
  */
-export function fitTrail(sk, out, { end, period, ground }) {
-	const { reach, hipOff, trail } = legOf(sk, period), ch = bakeChannels(out, end + 1);
+export function fitTrail(sk, out, { end, period, pace, ground }) {
+	const { reach, hipOff, trail } = legOf(sk, period, pace), ch = bakeChannels(out, end + 1);
 	const srcAt = new Map(out.map(x => [x.f, x.src]));
 	for (const k of ["l", "r"]) for (const g of ground[k]) {
 		if (g.free === undefined || !Number.isFinite(g.b) || g.b > end) continue;
@@ -205,16 +213,36 @@ function spline(xs, ys, d0, dn) {
 	};
 }
 
+// the swing foot keeps the ankle near neutral, as a person's does: its pitch follows the shank (SWING_DORSI deg toes-up
+// of it), eased in from the toe-off's pitch over FOLLOW_IN of the swing and out into the strike's over FOLLOW_OUT, the
+// ball held BALL_CLEAR m over its flat height away from the ends, the pitch no more than PITCH_MAX (a foot kept level would flap at the ankle as the shank swings)
+const SWING_DORSI = 3, FOLLOW_IN = 0.35, FOLLOW_OUT = 0.2, BALL_CLEAR = 0.03, HEEL_FREE = 0.04, HEEL_LOW = 0.025, deg = r => (r * 180) / Math.PI;
+const ease = x => { const t = Math.min(1, Math.max(0, x)); return t * t * (3 - 2 * t); };
+
+/** The shank's tilt (deg, + with the ankle behind the knee) of a leg from hip H to ankle A, thigh a, shank b, knee forward fw. */
+function shankTilt(H, A, fw, a, b) {
+	const d = sub(A, H), L = Math.min(a + b - 1e-6, Math.max(Math.abs(a - b) + 1e-6, len(d))), u = scale(d, 1 / len(d));
+	let v = sub(fw, scale(u, dot(fw, u)));
+	v = scale(v, 1 / (len(v) || 1));
+	const c = (a * a + L * L - b * b) / (2 * a * L), K = add(H, add(scale(u, a * c), scale(v, a * Math.sqrt(Math.max(0, 1 - c * c))))), sh = sub(A, K);
+	return deg(Math.atan2(-dot(sh, fw), -sh[1]));
+}
+
 /**
  * Each swing (lift-off to the next strike of that foot), once the toe-off is set (fitTrail): the ankle runs on a
  * clamped cubic spline from the lift-off, at the speed the push-off leaves it with, through walk.js's swing keys
  * (the heel kicked up behind, mid-swing, over the strike) into the strike at the heel rocker's speed, keyed every
- * frame: the knee and the foot move without the kinks per-channel keys leave where the path turns.
+ * frame: the knee and the foot move without the kinks per-channel keys leave where the path turns. Given the skeleton
+ * (the last pass, the hips set), each frame's foot pitch follows the shank too.
  */
-export function fitSwing(out, { end, ground }) {
+export function fitSwing(out, { end, ground, sk }) {
 	const ch = bakeChannels(out, end + 2), srcAt = new Map(out.map(x => [x.f, x.src]));
+	const I = sk?.index, P = sk?.restWorldPos, a = sk && len(sub(P[I.LeftLeg], P[I.LeftUpLeg])), b = sk && len(sub(P[I.LeftFoot], P[I.LeftLeg]));
 	for (const k of ["l", "r"]) {
-		const spans = ground[k];
+		const spans = ground[k], side = k === "l" ? "Left" : "Right";
+		const hipOff = sk && sub(P[I[`${side}UpLeg`]], P[I.Hips]), ball = sk && sub(P[I[`${side}ToeBase`]], P[I[`${side}Foot`]]), ballY = sk && P[I[`${side}ToeBase`]][1];
+		// QA's heel point from the ankle (qa/geometry.js solePoints)
+		const heel = sk && [0, 0.005 - P[I[`${side}Foot`]][1], -0.045];
 		for (let n = 0; n + 1 < spans.length; n++) {
 			const g = spans[n], h = spans[n + 1];
 			if (!Number.isFinite(g.b) || !h.strike || h.a > end || h.a - g.b < 3) continue;
@@ -222,9 +250,24 @@ export function fitSwing(out, { end, ground }) {
 			const xs = [g.b, ...via, h.a], foot = ch[`foot_${k}`], at = f => foot[Math.max(0, Math.min(foot.length - 1, f))];
 			const v0 = sub(at(g.b), at(g.b - 1)), vn = sub(at(h.a + 1), at(h.a));
 			const axes = [0, 1, 2].map(i => spline(xs, xs.map(f => at(f)[i]), v0[i], vn[i]));
+			const yawAt = f => ch[`fyaw_${k}`]?.[f] ?? 0, pitchAt = f => ch[`fpitch_${k}`]?.[f] ?? 0;
+			const follow = (f, p) => shankTilt(hipAt(ch, f, hipOff), p, apply(ry(yawAt(f)), [0, 0, 1]), a, b) - SWING_DORSI;
+			const span = h.a - g.b, off0 = sk && pitchAt(g.b) - follow(g.b, at(g.b)), off1 = sk && pitchAt(h.a) - follow(h.a, at(h.a));
 			for (let f = g.b + 1; f < h.a; f++) {
-				let p = axes.map(e => e(f));
-				const key = { f, set: { [`foot_${k}`]: p }, src: srcAt.get(f) };
+				const p = axes.map(e => e(f)), set = { [`foot_${k}`]: p };
+				if (sk) {
+					// never past PITCH_MAX (QA would read the bent knee as bending backward)
+					let pitch = Math.min(PITCH_MAX, follow(f, p) + off0 * (1 - ease((f - g.b) / (FOLLOW_IN * span))) + off1 * (1 - ease((h.a - f) / (FOLLOW_OUT * span))));
+					// the ball no lower than its flat height plus BALL_CLEAR (eased in and out over 3 frames at the ends)
+					const floor = ballY + BALL_CLEAR * ease(Math.min(f - g.b, h.a - f) / 3), ballAt = d => p[1] + apply(rx(d), ball)[1];
+					if (ballAt(pitch) < floor) { let lo = -30, hi = pitch; for (let it = 0; it < 20; it++) { const m = (lo + hi) / 2; if (ballAt(m) < floor) hi = m; else lo = m; } pitch = lo; }
+					// toes up lowers the heel: it comes no lower than HEEL_LOW (or the walk's keys, if they had it lower), so the strike
+					// lands when it did and the heel never skims the floor
+					const was = pitchAt(f), heelAt = d => p[1] + apply(rx(d), heel)[1], low = Math.min(HEEL_FREE, Math.max(heelAt(was), HEEL_LOW));
+					if (pitch < was && heelAt(pitch) < low) { let lo = pitch, hi = was; for (let it = 0; it < 20; it++) { const m = (lo + hi) / 2; if (heelAt(m) < low) lo = m; else hi = m; } pitch = hi; }
+					set[`fpitch_${k}`] = pitch;
+				}
+				const key = { f, set, src: srcAt.get(f) };
 				SWUNG.add(key); out.push(key);
 			}
 		}

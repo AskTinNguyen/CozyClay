@@ -20,11 +20,13 @@ const json = JSON.stringify, sk = skeletonFor("y-bot-tpose"), scene = motionScen
 const spec = (args, f0 = 10) => ({ schema: "cozyclay.motion-spec.v1", fps: 24, frames: "auto",
 	use: [{ skill: "standIdle", f0: 0, args: { at: [0.3, -0.2], heading: 15 } }, { skill: "walkTo", f0, args }] });
 // the frame each step's heel is fully rolled for toe-off: its largest fpitch key, the last of them where the roll reaches
-// its limit before the lift (compiler/walk.js rolls the heel up to it; walk-pelvis.js may hold PITCH_MAX a frame or two)
+// its limit before the lift (compiler/walk.js rolls the heel up to it; walk-pelvis.js may hold PITCH_MAX a frame or two).
+// Only the roll's keys count, the ones that also set the foot's heading (fyaw): the swing's per-frame keys
+// (walk-pelvis.js fitSwing) pitch the foot with the shank after the lift and carry no fyaw.
 const toeOffs = r => {
 	const top = new Map();
 	for (const k of r.expanded.keys) {
-		if (!/ step \d+$/.test(k.src ?? "")) continue;
+		if (!/ step \d+$/.test(k.src ?? "") || !Object.keys(k.set).some(c => /^fyaw_/.test(c))) continue;
 		for (const [c, v] of Object.entries(k.set)) {
 			const t = top.get(k.src);
 			if (/^fpitch_/.test(c) && (!t || v > t.v || (v === t.v && k.f > t.f))) top.set(k.src, { v, f: k.f });
