@@ -1,5 +1,6 @@
-import { memo, useEffect, useMemo, useRef } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { useFBX } from "@react-three/drei";
+import { useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { SkeletonUtils } from "three/examples/jsm/Addons.js";
 import { ProxyFigure } from "./proxy-figure.jsx";
@@ -25,19 +26,11 @@ const RiggedCharacter = memo(function RiggedCharacter({ url, position, rot, tint
 		// inside rig space: playback.js derives prep.scale from the bind pose,
 		// so a scaled bone hierarchy would be measured as a different rig.
 		clone.scale.setScalar(0.01 * scale);
-		// The joint shells (Alpha_Joints / Beta_Joints — elbows, knees, the
-		// exoskeleton bands) render in a darkened shade of the body tint so
-		// the segments read as separate pieces.
-		// The shipped clay is intentionally pale, but the stage deck is pale too.
-		// Lift neither with emissive nor a second light; a small value drop keeps
-		// the same authored hue while restoring silhouette contrast in the editor.
-		const bodyTint = new THREE.Color(tint).multiplyScalar(0.9);
-		const jointTint = bodyTint.clone().multiplyScalar(0.62);
 		clone.traverse((child) => {
 			if (child.isMesh) {
-				// warm clay reads as a maquette; cold grey reads as a broken render
+				// warm clay reads as a maquette; cold grey reads as a broken render.
+				// Its colour is the tint, set below in place.
 				child.material = new THREE.MeshStandardMaterial({
-					color: /_Joints$/i.test(child.name) ? jointTint : bodyTint,
 					// A slightly tighter highlight gives the clay enough form to read
 					// at blocking distance without turning it into shiny plastic.
 					roughness: 0.66,
@@ -56,7 +49,24 @@ const RiggedCharacter = memo(function RiggedCharacter({ url, position, rot, tint
 		// below runs immediately after and would otherwise be baked into "rest".
 		primeBindPose(clone);
 		return clone;
-	}, [fbx, tint, partColoursEnabled, partColoursMode]);
+	}, [fbx, partColoursEnabled, partColoursMode]);
+
+	// The tint recolours the clay in place, before the next frame. It must not rebuild the clone: a colour
+	// picker streams a value every drag frame, and a new clone re-binds the rig (playback, IK, contact radii).
+	// The joint shells (Alpha_Joints / Beta_Joints — elbows, knees, the exoskeleton bands) take a darkened
+	// shade of the body tint so the segments read as separate pieces. The shipped clay is intentionally pale,
+	// but the stage deck is pale too: a small value drop keeps the authored hue and restores silhouette
+	// contrast in the editor. Part colours paint the vertices themselves and keep their white material.
+	const invalidate = useThree((state) => state.invalidate);
+	useLayoutEffect(() => {
+		if (partColoursEnabled) return;
+		const bodyTint = new THREE.Color(tint).multiplyScalar(0.9);
+		const jointTint = bodyTint.clone().multiplyScalar(0.62);
+		model.traverse((child) => {
+			if (child.isMesh) child.material.color.copy(/_Joints$/i.test(child.name) ? jointTint : bodyTint);
+		});
+		invalidate();
+	}, [model, tint, partColoursEnabled, invalidate]);
 
 	// A new stature (a fresh extraction on this character) must not rebuild the
 	// clone — that would drop the rig the playback effects hold. Only the world
