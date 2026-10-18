@@ -5,7 +5,7 @@
 // installed one at QA 4 with POP LeftForeArm 5.95 cm/f^2 (the left elbow's launch into the swing: the
 // two frames around it push the same way) and FLIP RightForeArm 71 deg (the right elbow folded flat,
 // 165-171 deg, as the wrist passed the shoulder; the elbow moved 3 cm in that frame).
-import { createHash } from "node:crypto";
+import { takeHash as hashOf } from "../motion3/fixtures/take-hash.mjs";
 import { FOLD_SPEC, FOLD_SPEC_ID, FOLD_KIT_AT } from "../motion3/fixtures/bat-fold.mjs";
 import { CLEAN_SPEC, CLEAN_SPEC_ID, CLEAN_KIT_AT, STANCE_SPEC, STANCE_KIT_AT } from "../motion3/fixtures/bat-stance.mjs";
 import { SWING_SPEC as L2_SWING, SWING_SPEC_ID as L2_SWING_ID, batScene } from "../motion3/fixtures/ground-sessions.mjs";
@@ -31,11 +31,6 @@ function expect(name, condition, detail = "") {
 const sk = skeletonFor("y-bot-tpose"), I = sk.index;
 const kinds = r => r.qa.groups.map(g => `${g.kind} ${g.subject} n${g.count} f${g.first}-${g.last}`);
 const has = (r, kind, re = /./) => r.qa.groups.some(g => g.kind === kind && re.test(g.subject));
-const hashOf = t => {
-	const h = createHash("sha256");
-	for (const a of [t.rot, t.hips, ...Object.values(t.objects ?? {}).flatMap(o => Object.values(o).filter(v => ArrayBuffer.isView(v)))]) h.update(Buffer.from(a.buffer, a.byteOffset, a.byteLength));
-	return h.digest("hex").slice(0, 16);
-};
 const noLimits = spec => { const c = structuredClone(spec); delete c.checks.limits; return c; };
 const bendAt = (out, f, S) => { const P = out.frames[f].s.P; return angle(sub(P[I[`${S}ForeArm`]], P[I[`${S}Arm`]]), sub(P[I[`${S}Hand`]], P[I[`${S}ForeArm`]])); };
 
@@ -127,7 +122,7 @@ expect("a walking knee turned 120 deg for one frame is a FLIP", flipAt(swivel(wa
 // lane Q1 df6acdcc (the left hand's roll priced past the BODY allowance) and 9dcf19c5 (the flat front foot keeps its heading until it lifts)
 // Flow (compiler/channels.js: the free spine, head and arms carry through keys and trail) re-baked the takes whose arms swing
 // free (exitcar, walk, cup run3, the standing smokes, df6acdcc, 6262a69c); their QA did not change.
-const HASHES = { df6acdcc: [fold, "89be9795b7aa8758"], "f0f2be59 without limits": [clean, "881d97a81ca23b8e"], "9dcf19c5": [l2, "ed7327d5d8d8c15e"] };
+const HASHES = { df6acdcc: [fold, "42664ae71e36766b"], "f0f2be59 without limits": [clean, "26fdff9eb77b5223"], "9dcf19c5": [l2, "cfd475d9d2cb0886"] };
 const changed = Object.entries(HASHES).map(([k, [r, h]]) => [k, hashOf(bakeTake(sk, r.out)), h]).filter(([, got, h]) => got !== h);
 expect("the three swings bake bit for bit as before (df6acdcc and f0f2be59 retime: what QA calls a pop did not change there)", changed.length === 0, JSON.stringify(changed));
 

@@ -4,7 +4,7 @@
 // own 264 frames and all of them every beat's frame is scaled, the switches keep their order, and
 // observations.paced says so; below that it refuses with the frames and seconds it needs. At its
 // own length nothing changes: the exitcar take and the standing smoke bake bit for bit as v3@6b8b3669.
-import { createHash } from "node:crypto";
+import { takeHash as hashOf } from "../motion3/fixtures/take-hash.mjs";
 import { compileSpec } from "../motion3/fixtures/legacy-compile.mjs";
 import { motionScene } from "../../src/motion3/scene.js";
 import { skeletonFor } from "../../src/motion3/rigs/index.js";
@@ -18,11 +18,6 @@ function expect(name, condition, detail = "") {
 	console.log(`${condition ? "PASS" : "FAIL"} ${name}${condition ? "" : ` — ${detail}`}`);
 	if (!condition) failures += 1;
 }
-const hashOf = t => {
-	const h = createHash("sha256");
-	for (const a of [t.rot, t.hips, ...Object.values(t.objects ?? {}).flatMap(o => Object.values(o).filter(v => ArrayBuffer.isView(v)))]) h.update(Buffer.from(a.buffer, a.byteOffset, a.byteLength));
-	return h.digest("hex").slice(0, 16);
-};
 const cig = buildKit("cigarette", [], { position: { x: 0.6, z: 0.5 } }), lit = buildKit("lighter", cig.records, { position: { x: 0.75, z: 0.5 } });
 const kitScene = motionScene([...cig.records, ...lit.records, { id: "puff", name: "Exhale", renderer: "effect", x: 0, y: 1.5, z: 0.1, rot: 0, footprint: { width: 0, depth: 0 }, height: 0 }]);
 const KIT = { cig: cig.rootId, lighter: lit.rootId, exhale: "puff" };
@@ -89,9 +84,9 @@ const xb = skeletonFor("x-bot-tpose"), car = compileSpec(exitcar, { sk: xb, scen
 // and its walk has the narrower foot width, flat-ish heel strike and less stride-time noise (walk.js, gait-rhythm.js; was d1e1f37c072d3d94; QA 0 before and after),
 // its walk scales its knees, kick, strike and hips with its pace, the swing foot following the shank (walk.js, walk-pelvis.js; was 76db856fa910b0c0; QA 0 before and after),
 // and its walk's upper body follows its pace and leads the legs (walk.js, head-steady.js; was 26b40e28f45e83b3; QA 0 before and after)
-expect("the exitcar take from skills bakes bit for bit as before", hashOf(bakeTake(xb, car.out)) === "7d3e59a391982412" && !car.observations.paced, hashOf(bakeTake(xb, car.out)));
+expect("the exitcar take from skills bakes bit for bit as before", hashOf(bakeTake(xb, car.out)) === "a0afed0215e5b768" && !car.observations.paced, hashOf(bakeTake(xb, car.out)));
 // re-pinned when standIdle and walks began keying arm_hang (compiler/pose.js: a free forearm hangs plumb); QA unchanged
-const HASHES = { "y-bot-tpose": "f112eb57c6181e3b", "x-bot-tpose": "23dd79abf2dea3e6" };
+const HASHES = { "y-bot-tpose": "8d66416d78f67319", "x-bot-tpose": "429f2a0e14ac04bc" };
 for (const [rig, hash] of Object.entries(HASHES)) {
 	const r = compile(rig, smoke(266, STAND, false), false), got = hashOf(bakeTake(skeletonFor(rig), r.out));
 	expect(`${rig}: the standing smoke at its own length bakes bit for bit as before`, got === hash && !r.observations.paced && !("paced" in r.used[1]), got);

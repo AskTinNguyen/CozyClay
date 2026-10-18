@@ -13,7 +13,7 @@ import { skeletonFor } from "../../src/motion3/rigs/index.js";
 import { bakeTake } from "../../src/motion3/take.js";
 import { sceneObjectsAt, sceneObjectTravelMatrixAt, trackShown } from "../../src/object-travel.js";
 import { dist, apply, angle, matFromQuat, quatFromMat, mul, axisRot, sub, add, scale, dot, len } from "../../src/motion3/compiler/math.js";
-import { createHash } from "node:crypto";
+import { takeHash as hashOf } from "./fixtures/take-hash.mjs";
 import { SCENE_OBJECTS as BAT_SCENE, CHARACTER as BATTER, SWING_SPEC, SWING_KEYS, INSTALLED_SPEC_ID, BAT } from "./fixtures/bat-swing.mjs";
 import { compileSpec } from "../../src/motion3/pipeline.js";
 import { specIdOf } from "../../src/motion3/spec-store.js";
@@ -74,7 +74,6 @@ void apply;
 
 // ---- C14: the bat keyed at four frames ------------------------------------------------------
 const bsk = skeletonFor(BATTER.model), bscene = motionScene(BAT_SCENE), I = bsk.index;
-const hashOf = t => { const h = createHash("sha256"); for (const a of [t.rot, t.hips, ...Object.values(t.objects).flatMap(o => Object.values(o))]) h.update(Buffer.from(a.buffer, a.byteOffset, a.byteLength)); return h.digest("hex").slice(0, 16); };
 // lane Q1's carry with fix.self off: the self fix (elbows turned out of the body) is verify-motion3-self's
 const keyedSpec = keys => { const sp = structuredClone(SWING_SPEC); sp.objects[BAT].keys = keys; sp.fix = { ...(sp.fix ?? {}), self: false }; return sp; };
 const plain = compileSpec({ ...SWING_SPEC, fix: { ...(SWING_SPEC.fix ?? {}), self: false } }, { sk: bsk, scene: bscene }), keyed = compileSpec(keyedSpec(SWING_KEYS), { sk: bsk, scene: bscene });
@@ -83,7 +82,7 @@ const forearm = (r, f) => sub(r.out.frames[f].s.P[I.RightHand], r.out.frames[f].
 const span = (r, a, b) => { const v = []; for (let f = a; f <= b; f++) v.push(angle(batY(r, f), forearm(r, f))); return Math.max(...v) - Math.min(...v); };
 expect("the fixture is the installed take's spec (spec-3a5803641a71)", specIdOf(SWING_SPEC) === INSTALLED_SPEC_ID);
 expect("without keys the bat holds one angle to the right forearm all swing (the defect)", span(plain, 34, 81) < 0.01, `${span(plain, 34, 81)}`);
-expect("without keys the take is bit for bit the take of lane Q1 (L2's soles on the floor and back foot pivoting on its ball; a flat foot keeps its heading until it lifts)", hashOf(bakeTake(bsk, plain.out)) === "0ac49bec6e194bac", hashOf(bakeTake(bsk, plain.out)));
+expect("without keys the take is bit for bit the take of lane Q1 (L2's soles on the floor and back foot pivoting on its ball; a flat foot keeps its heading until it lifts)", hashOf(bakeTake(bsk, plain.out)) === "3943019d974ba45e", hashOf(bakeTake(bsk, plain.out)));
 expect("keyed: the angle between bat and forearm varies through the swing (>= 30 deg)", span(keyed, 40, 53) >= 30, `${span(keyed, 40, 53).toFixed(1)} deg`);
 let hit = 0;
 for (const k of SWING_KEYS) { const p = rootPoseAt(keyed.out, BAT, k.f), R = matFromQuat(k.rot); hit = Math.max(hit, dist(p.pos, k.pos) * 1000, angle(col(R, 1), col(p.R, 1)), angle(col(R, 0), col(p.R, 0))); }

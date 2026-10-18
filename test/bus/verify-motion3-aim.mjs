@@ -13,7 +13,7 @@
 // back foot pivots on its ball), the keyed swing's before that with lane K8 (the arm follows).
 // Flow (compiler/channels.js: the free spine, head and arms carry through keys and trail) re-baked the takes whose arms swing
 // free (exitcar, walk, cup run3, the standing smokes, df6acdcc, 6262a69c); their QA did not change.
-import { createHash } from "node:crypto";
+import { takeHash as hashOf } from "../motion3/fixtures/take-hash.mjs";
 import { SCENE_OBJECTS, CHARACTER, SWING_SPEC, SWING_KEYS, BAT } from "../motion3/fixtures/bat-swing.mjs";
 import { EXITCAR_SPEC, SCENE_OBJECTS as CAR_OBJECTS, CHARACTER as DRIVER } from "../motion3/fixtures/exitcar-scene.mjs";
 import { compileSpec } from "../motion3/fixtures/legacy-compile.mjs";
@@ -32,7 +32,6 @@ function expect(name, condition, detail = "") {
 	if (!condition) failures += 1;
 }
 const refusal = run => { try { run(); return ""; } catch (error) { return error.message; } };
-const hashOf = t => { const h = createHash("sha256"); for (const a of [t.rot, t.hips, ...Object.values(t.objects).flatMap(o => Object.values(o))]) h.update(Buffer.from(a.buffer, a.byteOffset, a.byteLength)); return h.digest("hex").slice(0, 16); };
 const sk = skeletonFor(CHARACTER.model), scene = motionScene(SCENE_OBJECTS);
 const withKeys = keys => { const sp = structuredClone(SWING_SPEC); sp.objects[BAT].keys = keys; return sp; };
 const compile = keys => compileSpec(withKeys(keys), { sk, scene });
@@ -49,7 +48,7 @@ const car = compileSpec({ fps: 24, ...EXITCAR_SPEC }, { sk: dsk, scene: motionSc
 // re-pinned when the walk's upper body began following its pace and leading the legs (walk.js, head-steady.js); QA 0 before and after
 const hashes = { plain: hashOf(bakeTake(sk, plain.out)), keyed: hashOf(bakeTake(sk, keyed.out)), exitcar: hashOf(bakeTake(dsk, car.out)) };
 expect("the car exit bakes the take of the grip turn on its door handle (compiler/grip.js), bit for bit; the swing without keys bakes the take of lane Q1, with the J2 rot keys the take of lane Q1",
-	hashes.plain === "0ac49bec6e194bac" && hashes.keyed === "94db1cc27a325334" && hashes.exitcar === "77ed54982843c0b3", JSON.stringify(hashes));
+	hashes.plain === "3943019d974ba45e" && hashes.keyed === "a15084d1d6c5b64a" && hashes.exitcar === "afac73f0fa63c981", JSON.stringify(hashes));
 
 // 2. the same keys as aims: +Y of each rot; roll = its turn about aim from where the plain carry holds the bat at that frame
 const rollFrom = (q, from, aim) => {

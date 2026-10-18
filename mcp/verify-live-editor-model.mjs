@@ -249,9 +249,20 @@ try {
 	for (const requestId of heldModelRequests) await send("Fetch.continueRequest", { requestId });
 	await send("Fetch.disable");
 	await withTimeout(lateRigReady, "x-bot rig mount", 20_000);
-	// Two more frames so every effect the remount scheduled has run, and the QA
-	// snapshot publishes the remounted camera object.
-	await evaluate(`new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(true))))`, "post-remount frame");
+	// Then until the shot camera holds still for two frames (at most a second): the
+	// remount's effects run, the QA snapshot publishes the remounted camera, and the
+	// camera keys frame_shot wrote reach it one render after the rig is ready.
+	await evaluate(`new Promise((resolve) => {
+		let last = null, still = 0, frames = 0;
+		const step = () => {
+			const cam = window.__cozyclay?.shotCam, now = cam ? cam.position.toArray().join(",") : null;
+			still = now !== null && now === last ? still + 1 : 0;
+			last = now;
+			if (still >= 2 || ++frames > 60) resolve(true);
+			else requestAnimationFrame(step);
+		};
+		requestAnimationFrame(step);
+	})`, "post-remount settle");
 	const aim = await evaluate(
 		`(() => {
 			const cam = window.__cozyclay.shotCam;

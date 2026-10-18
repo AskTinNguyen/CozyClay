@@ -6,7 +6,7 @@
 // request (test/motion3/fixtures/bat-aim-swing.mjs) and the J2 swing (bat-swing.mjs):
 //   session 16d12ba9 (aim keys)  installed at QA 115, REACH "empty: 77.0 cm off its keys"
 //   session 6912547c (rot keys)  installed at QA 35, REACH 12.0 cm, FLIP 107 deg
-import { createHash } from "node:crypto";
+import { takeHash as hashOf } from "../motion3/fixtures/take-hash.mjs";
 import { SWING_SPEC, SWING_SPEC_ID, EARLIER_SPEC, EARLIER_SPEC_ID, SWING_KIT_AT, EARLIER_KIT_AT, BAT, CHARACTER, batKit } from "../motion3/fixtures/bat-aim-swing.mjs";
 import * as J2 from "../motion3/fixtures/bat-swing.mjs";
 import { compileSpec } from "../motion3/fixtures/legacy-compile.mjs";
@@ -26,7 +26,6 @@ function expect(name, condition, detail = "") {
 	if (!condition) failures += 1;
 }
 const sk = skeletonFor(CHARACTER.model), I = sk.index;
-const hashOf = t => { const h = createHash("sha256"); for (const a of [t.rot, t.hips, ...Object.values(t.objects).flatMap(o => Object.values(o))]) h.update(Buffer.from(a.buffer, a.byteOffset, a.byteLength)); return h.digest("hex").slice(0, 16); };
 const kinds = r => r.qa.groups.map(g => `${g.kind} ${g.subject} f${g.first}-${g.last}`);
 const batReach = r => r.qa.groups.find(g => g.kind === "REACH" && /off its keys$/.test(g.subject));
 const cm = g => +(/: ([\d.]+) cm off its keys$/.exec(g?.subject ?? "")?.[1] ?? 0);

@@ -6,7 +6,7 @@
 // onto a stop at 160 deg and leaves the rest as a REACH residual (the ankle under the hip, so GROUND too), with
 // a hint to bring the root up. QA calls a knee past the stop a hard KNEE issue; the opt-in style KNEE stays.
 // Takes whose knees stay within 150 deg bake bit for bit as before.
-import { createHash } from "node:crypto";
+import { takeHash as hashOf } from "../motion3/fixtures/take-hash.mjs";
 import { compileSpec } from "../motion3/fixtures/legacy-compile.mjs";
 import { generalChecks } from "../../src/motion3/qa/checks.js";
 import { runMotionQa } from "../../src/motion3/qa/index.js";
@@ -33,11 +33,6 @@ const A = dist(rest.P[I.LeftUpLeg], rest.P[I.LeftLeg]), B = dist(rest.P[I.LeftLe
 const kneeOf = (sk, s, S) => angle(sub(s.P[sk.index[`${S}Leg`]], s.P[sk.index[`${S}UpLeg`]]), sub(s.P[sk.index[`${S}Foot`]], s.P[sk.index[`${S}Leg`]]));
 const maxKnee = (out, sk) => Math.max(...out.frames.flatMap(({ s }) => [kneeOf(sk, s, "Left"), kneeOf(sk, s, "Right")]));
 const kinds = r => r.qa.groups.map(g => `${g.kind} ${g.subject} n${g.count} f${g.first}-${g.last}`);
-const hashOf = t => {
-	const h = createHash("sha256");
-	for (const a of [t.rot, t.hips, ...Object.values(t.objects ?? {}).flatMap(o => Object.values(o).filter(v => ArrayBuffer.isView(v)))]) h.update(Buffer.from(a.buffer, a.byteOffset, a.byteLength));
-	return h.digest("hex").slice(0, 16);
-};
 
 // ---- 1. the limit, measured as QA measures it (UpLeg->Leg against Leg->Foot) ---------------------------
 expect("the knee bends freely to 150 deg and stops at 160 deg (passive flexion: the thigh on the calf)", KNEE_FOLD === 150 && KNEE_STOP === 160);
@@ -121,15 +116,15 @@ const TAKES = [
 // re-pinned when the walk scaled its knees, swing kick, heel strike and hips at the strike with its pace and the swing foot
 // began following the shank (walk.js, walk-pelvis.js); QA 0 before and after
 // re-pinned when the walk's upper body began following its pace and leading the legs (walk.js, head-steady.js); QA 0 before and after
-	["exitcar", xb, { fps: 24, ...EXITCAR_SPEC }, motionScene(CAR), 129.71, "77ed54982843c0b3", null],
-	["walk", yb, { ...spec0, frames: 160, use: [...STAND, { skill: "walkTo", f0: 1, args: { to: [0, 2.4], steps: 6, heading: 0 } }] }, { objects: {} }, 72.77, "e174422995712d16", null],
-	["smoke squat (Y Bot)", yb, smoke(240, { keys: [{ f: 0, set: SQUAT }] }, false), { objects: {} }, 133.46, "38c6581740baf1fd", 2.081],
-	["smoke squat (X Bot)", xb, smoke(240, { keys: [{ f: 0, set: SQUAT }] }, false), { objects: {} }, 134.67, "59389508b5bbd838", 0.29],
-	["smoke squat, kits (Y Bot)", yb, smoke(240, { keys: [{ f: 0, set: SQUAT }] }, true), kitScene, 133.46, "2be7e02a30c4290f", 2.081],
-	["smoke squat, kits (X Bot)", xb, smoke(240, { keys: [{ f: 0, set: SQUAT }] }, true), kitScene, 134.67, "bff1a9c3ec10ad34", 0.29],
-	["squat smoke cea7fa46", yb, G.SQUAT_SPEC, motionScene(G.smokeScene()), 127.13, "096cf692ba1a2cbf", 2.045],
-	["squat smoke 375e8ea5 (first)", yb, G.FIRST_SPEC, motionScene(G.smokeScene(...lifted)), 137.45, "19d913817f9a3e97", 2.036],
-	["squat smoke 375e8ea5 (raised)", yb, G.RAISED_SPEC, motionScene(G.smokeScene(...lifted)), 135.25, "75df917fd6e97599", 2.036],
+	["exitcar", xb, { fps: 24, ...EXITCAR_SPEC }, motionScene(CAR), 129.71, "afac73f0fa63c981", null],
+	["walk", yb, { ...spec0, frames: 160, use: [...STAND, { skill: "walkTo", f0: 1, args: { to: [0, 2.4], steps: 6, heading: 0 } }] }, { objects: {} }, 72.77, "814a1365c6f841b1", null],
+	["smoke squat (Y Bot)", yb, smoke(240, { keys: [{ f: 0, set: SQUAT }] }, false), { objects: {} }, 133.46, "7c3238785a9dfeaf", 2.081],
+	["smoke squat (X Bot)", xb, smoke(240, { keys: [{ f: 0, set: SQUAT }] }, false), { objects: {} }, 134.67, "c3c8312ec66cf583", 0.29],
+	["smoke squat, kits (Y Bot)", yb, smoke(240, { keys: [{ f: 0, set: SQUAT }] }, true), kitScene, 133.46, "5ed20645c4ffc6de", 2.081],
+	["smoke squat, kits (X Bot)", xb, smoke(240, { keys: [{ f: 0, set: SQUAT }] }, true), kitScene, 134.67, "a6bd2c97d50737fa", 0.29],
+	["squat smoke cea7fa46", yb, G.SQUAT_SPEC, motionScene(G.smokeScene()), 127.13, "06e8089f2827a5dc", 2.045],
+	["squat smoke 375e8ea5 (first)", yb, G.FIRST_SPEC, motionScene(G.smokeScene(...lifted)), 137.45, "5323857d83a1a75b", 2.036],
+	["squat smoke 375e8ea5 (raised)", yb, G.RAISED_SPEC, motionScene(G.smokeScene(...lifted)), 135.25, "c31dbdd5e2c22f59", 2.036],
 ];
 const wrong = [];
 for (const [name, sk, spec, scene, before, h0, lips0] of TAKES) {
