@@ -93,6 +93,9 @@ Font License 1.1, which allows them to be redistributed with software as long as
 the copyright notice and the licence travel with the files. The licence texts are
 in `public/fonts/` next to the fonts themselves.
 
+The text object's solid letters use one more typeface, bundled as glyph outlines
+in `src/text/fonts/`, under its own permissive licence (text in the same folder).
+
 ### Inter
 
 - Copyright (c) 2016 The Inter Project Authors
@@ -106,6 +109,13 @@ in `public/fonts/` next to the fonts themselves.
 - License: SIL Open Font License 1.1
 - Source: https://github.com/Instrument/instrument-serif
 - License text: `public/fonts/InstrumentSerif-OFL.txt`
+
+### Helvetiker Bold
+
+- Copyright (c) 2004 Magenta Ltd.
+- License: MgOpen font license (redistribution permitted with the notice)
+- Source: the three.js examples font set (`examples/fonts/helvetiker_bold.typeface.json`)
+- License text: `src/text/fonts/helvetiker-LICENSE.txt`
 
 ## Character models
 

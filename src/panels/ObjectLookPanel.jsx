@@ -5,11 +5,13 @@ import Foldout from "./Foldout.jsx";
 import { Field, Slider } from "../ui.jsx";
 import { ko } from "../locale.js";
 import { LIGHT_KIND, practicalShadows } from "../object-look.js";
+import { TEXT_KIND } from "../text/text-record.js";
 
 /**
- * Light and glow for the selected record: a practical light's type, colour,
- * brightness, reach, cone, shadow and flicker, and any record's glow. A drag is
- * one open transaction (one undo); a switch is one atomic edit.
+ * Words, light and glow for the selected record: a text's words and letter
+ * size, a practical light's type, colour, brightness, reach, cone, shadow and
+ * flicker, and any record's glow. A drag or a typing run is one open
+ * transaction (one undo); a switch is one atomic edit.
  */
 export default function ObjectLookPanel() {
 	const { selectedSceneObject: object, sceneObjects, beginSceneTransaction, endSceneTransaction } = useStudioShell();
@@ -35,6 +37,7 @@ export default function ObjectLookPanel() {
 	if (!object) return null;
 	const light = object.renderer === LIGHT_KIND ? object.light : null;
 	const glow = object.glow ?? null;
+	const text = object.renderer === TEXT_KIND ? object.text : null;
 	const capped = light?.shadow && practicalShadows(sceneObjects).capped.includes(object.id);
 	const ends = { onPointerUp: commit, onPointerCancel: commit, onKeyUp: commit, onBlur: commit };
 	const lightSlider = (field, label, min, max, step, unit = "") => (
@@ -42,6 +45,24 @@ export default function ObjectLookPanel() {
 	);
 	return (
 		<>
+			{text && (
+				<Foldout title={ko("Text", "텍스트")}>
+					<Field label={ko("Words", "글자")}>
+						<textarea rows={2} value={text.value} onChange={(event) => drag("text.value", { text: { value: event.target.value } })} onBlur={commit} />
+					</Field>
+					<div {...ends}>
+						<Slider label={ko("Letter height", "글자 높이")} min={0.02} max={3} step={0.01} unit=" m" softMax value={text.size} onChange={(value) => drag("text.size", { text: { size: value } })} />
+						<Slider label={ko("Depth (0 = flat)", "두께 (0 = 평면)")} min={0} max={0.5} step={0.005} unit=" m" softMax value={text.depth} onChange={(value) => drag("text.depth", { text: { depth: value } })} />
+						<Field label={ko("Align", "정렬")}>
+							<select value={text.align} onChange={(event) => set({ text: { align: event.target.value } })}>
+								<option value="left">{ko("Left", "왼쪽")}</option>
+								<option value="center">{ko("Centre", "가운데")}</option>
+								<option value="right">{ko("Right", "오른쪽")}</option>
+							</select>
+						</Field>
+					</div>
+				</Foldout>
+			)}
 			{light && (
 				<Foldout title={ko("Light", "조명")}>
 					<div {...ends}>

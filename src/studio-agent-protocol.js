@@ -2,6 +2,7 @@
 import { STUDIO_ELEMENTS, isSettableElement } from "./studio-elements.js";
 import { STUDIO_ERROR_CODES, refusalCode } from "./studio-error-codes.js";
 import { EFFECT_VALUE_SCHEMA } from "./effects/effect-record.js";
+import { TEXT_VALUE_SCHEMA } from "./text/text-record.js";
 import { wrongType, unknownField, missingField, arrayRefusal, duplicateItem, stringRefusal, enumRefusal, numberRefusal, unionRefusal } from "./studio-schema-errors.js";
 // Mirrors PREVIS_MODES (project.js) and POSTURES (scenes.js). Neither is imported:
 // both pull in three.js, which the agent sidecar must not load. The protocol test pins the lists to their owners.
@@ -130,7 +131,7 @@ const objectRoute = nullable(object({ points: array(vec3, 64, 2) }, { speed: num
 const objectLight = object({}, { type: choices(["point", "spot"]), color: { ...text(32), pattern: "^#[0-9a-fA-F]{6}$" }, intensity: number(0, 1000), range: number(0, 100), angle: number(1, 89), softness: number(0, 1), shadow: bool, flicker: number(0, 1), aim: nullable(vec3) });
 const objectGlow = nullable(object({}, { color: { ...text(32), pattern: "^#[0-9a-fA-F]{6}$" }, intensity: number(0, 20), halo: number(0, 4) }));
 const PATCH_VALUE_SCHEMAS = {
-	"character.pose": nullable(id), "character.identityImage": nullable(dataImage), "object.light": objectLight, "object.glow": objectGlow, "object.effect": EFFECT_VALUE_SCHEMA,
+	"character.pose": nullable(id), "character.identityImage": nullable(dataImage), "object.light": objectLight, "object.glow": objectGlow, "object.effect": EFFECT_VALUE_SCHEMA, "object.text": TEXT_VALUE_SCHEMA,
 	"object.parent": nullable(id), "object.path": objectRoute, "stage.environmentImage": nullable(dataImage),
 	"shot.cameraKeys": array(cameraKey, 64), "shot.targetModel": nullable(id) };
 /** One declared element as a JSON value schema, or null when the declaration
@@ -147,9 +148,7 @@ export function patchValueSchema(element) {
 	if (element.type === "image") return nullable(dataImage);
 	if (element.type === "vec3") {
 		const { min, max } = element; // the element's own range; a gizmo envelope only limits the UI drag
-		if (min && typeof min === "object" && max && typeof max === "object") {
-			return object({ x: number(min.x, max.x), y: number(min.y, max.y), z: number(min.z, max.z) });
-		}
+		if (min && typeof min === "object" && max && typeof max === "object") return object({ x: number(min.x, max.x), y: number(min.y, max.y), z: number(min.z, max.z) });
 		return vec3;
 	}
 	if (element.type === "string") return text(240);
