@@ -2,6 +2,34 @@
 
 ## Unreleased
 
+## 3.0.1 - 2026-10-19
+
+Fixes from an audit of recent Studio agent sessions.
+
+Motion
+
+- Whole-body pitch and roll take full turns; new skill `flip` (back, front,
+  cartwheel).
+- New skill `hitReaction`: a body hit by an object or a person is thrown,
+  lands and comes to rest.
+- Other characters' installed takes are bodies for QA and anchor targets
+  (`{kind: "person", person, bone}`, refs `person:<id>.<Bone>`).
+- A dropped object tumbles and rests on a stable face.
+- The `fist` and `grip` thumbs wrap the fingers instead of standing up.
+
+Studio and agent
+
+- QA reads as problems (`qa.problems`), not frame-level issues, on the draft
+  card, the timeline beats and the receipt summary.
+- The agent's requests carry less old bulk (older images and receipts are
+  shortened at call time), replies follow the user's language, and the plan
+  image comes only when staging or the scene asks for it.
+- The agent can place a character within ±240 m, rename a shot and set a
+  shot's camera mode (`shot.setCameraMode`). `object.attach` no longer
+  crashes, and an editor fault answers `INTERNAL_ERROR`.
+- Playback no longer stutters in large scenes: panels stop serializing the
+  scene on every render.
+
 ## 3.0.0 - 2026-10-19
 
 Motion is computed, not generated. The Studio agent writes a motion spec (key
