@@ -62,5 +62,11 @@ const source = normalizeTakeSource(JSON.parse(JSON.stringify(takeSource(job.take
 const reloaded = compileTakeSource(source);
 expect("a saved take with a person anchor compiles back bit for bit, without her take", reloaded && takeHash(reloaded) === takeHash(job.take) && reloaded.rot.every((v, i) => v === job.take.rot[i]));
 
+const looking = { ...spec0, frames: 30, use: [reach.use[0]], goals: [{ name: "near her head", near: ["joint:Head", "person:char-b.Head"], tol: 3, at: [5, 20] }] };
+const refJob = runCompileJob({ model: "y-bot-tpose", scene, spec: looking, bake: { position: [0, 0, 0], yaw: 0, prompt: "" } });
+const refSource = normalizeTakeSource(JSON.parse(JSON.stringify(takeSource(refJob.take, []))));
+expect("a person ref only in a goal is kept too: the saved source compiles back without her take", refJob.take.people?.["char-b"]?.names.join() === "Head" && takeHash(compileTakeSource(refSource)) === takeHash(refJob.take),
+	JSON.stringify(refJob.take.people && Object.keys(refJob.take.people)));
+
 if (failures) { console.error(`${failures} motion3 people check(s) failed`); process.exit(1); }
 console.log("motion3 people: all checks passed");

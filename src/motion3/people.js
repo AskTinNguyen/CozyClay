@@ -59,14 +59,20 @@ export const peopleList = scene => Object.entries(scene?.people ?? {}).map(([id,
 
 /**
  * What a take keeps of the people so that its saved source compiles the same again without the others' takes
- * (take-source.js): only the joints its person anchors name, as plain arrays (a saved project is JSON), or null.
+ * (take-source.js): only the joints its person anchors and refs name (anywhere in the spec: anchors, a skill's
+ * define, goals, probes), as plain arrays (a saved project is JSON), or null.
  */
 export function keptPeople(scene, spec) {
-	const want = new Map();
-	for (const a of Object.values(spec?.anchors ?? {})) {
-		const p = a?.kind === "person" && scene?.people?.[a.person], bone = p && resolveBone(skeletonFor(p.rig), a.bone).bone;
-		if (bone) want.set(a.person, new Set([...(want.get(a.person) ?? []), bone]));
-	}
+	const want = new Map(), keep = (id, b) => {
+		const p = scene?.people?.[id], bone = p && resolveBone(skeletonFor(p.rig), b).bone;
+		if (bone) want.set(id, new Set([...(want.get(id) ?? []), bone]));
+	};
+	const walk = v => {
+		if (typeof v === "string") { const m = /^person:([^.]+)\.(.+)$/.exec(v); if (m) keep(m[1], m[2]); }
+		else if (Array.isArray(v)) v.forEach(walk);
+		else if (v && typeof v === "object") { if (v.kind === "person") keep(v.person, v.bone); Object.values(v).forEach(walk); }
+	};
+	walk(spec);
 	if (!want.size) return null;
 	return Object.fromEntries([...want].map(([id, bones]) => {
 		const p = scene.people[id], names = [...bones], J = p.names.length, P = [];
