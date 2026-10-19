@@ -30,7 +30,8 @@ for (const kit of KIT_NAMES) {
 		&& k.records.slice(1).every(r => r.parent === k.rootId) && new Set(existing.map(r => r.id)).size === existing.length && k.records.every(r => r.y >= 0),
 	JSON.stringify(k.records.map(r => [r.id, r.renderer, r.parent, r.y])));
 	// the exhale kit rides no hand: its root follows the mouth (C16)
-	expect(`${kit}: bind carries the root and names a prop (exhale: follows the mouth)`, kit === "exhale" ? k.bind[k.rootId]?.follow === "landmark:mouth" : k.bind[k.rootId]?.prop && Array.isArray(k.bind[k.rootId].along), JSON.stringify(k.bind));
+	// a pinned grip names along; the ball names a grasp instead and rests where the hand takes it (#816)
+	expect(`${kit}: bind carries the root and names a prop (exhale: follows the mouth)`, kit === "exhale" ? k.bind[k.rootId]?.follow === "landmark:mouth" : k.bind[k.rootId]?.prop && (Array.isArray(k.bind[k.rootId].along) || typeof k.bind[k.rootId].grasp === "string"), JSON.stringify(k.bind));
 }
 const cigBody = built.cigarette.records.find(r => r.id === built.cigarette.parts.body);
 expect("the cigarette is 7.8 mm thick, its root at the grip 2.6 cm from the filter end",

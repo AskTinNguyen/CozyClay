@@ -38,9 +38,10 @@ export const bat = {
 
 export const ball = {
 	label: "Baseball", prop: "ballGrip",
-	description: "7.4 cm baseball held in the right fingers",
+	description: "7.4 cm baseball held in the right palm and fingers",
 	props: { ballGrip: { hand: "r", origin: RIGHT_FINGERS, points: { centre: [0, 0, -0.035] } } },
-	carry: { prop: "ballGrip", at: [0, 0, -0.035], along: [0, 1, 0] },
+	// no pinned point: it rests against the palm where the hand takes it and the fingers close round it (motion3 seat.js)
+	carry: { prop: "ballGrip", grasp: "spherical" },
 	parts: [{ role: "body", kind: "sphere", at: [0, -0.037, 0], scale: [0.074, 0.074, 0.074], color: "#f1ede3" }],
 };
 
