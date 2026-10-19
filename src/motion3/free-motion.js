@@ -10,7 +10,8 @@
 //         lowest point, turning at the spin it was let go with, rolls flat and over an edge onto a lower face
 //         while the drop has the energy (a phone falls flat, a can lies down). tumble: false drops it straight
 //         down as it was, bouncing at most once (bounce: the restitution 0..0.6, default 0.25, never higher
-//         than BOUNCE_MAX m); one that lands on a stable face as it falls bounces the same way.
+//         than BOUNCE_MAX m); one that lands on a stable face as it falls bounces the same way, and one that
+//         rolls spends its landing on the roll and does not bounce (bounce is not read for it).
 // Keys and falls chain in frame order: a fall starts from the pose the keys before it leave (a key on the
 // fall's own frame comes first), keys after a fall take over at their first frame.
 // A carry (C3) takes fall too: before its grab (the hand finds it where it landed) or from its release on.
