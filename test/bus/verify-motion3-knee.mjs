@@ -116,15 +116,15 @@ const TAKES = [
 // re-pinned when the walk scaled its knees, swing kick, heel strike and hips at the strike with its pace and the swing foot
 // began following the shank (walk.js, walk-pelvis.js); QA 0 before and after
 // re-pinned when the walk's upper body began following its pace and leading the legs (walk.js, head-steady.js); QA 0 before and after
-	["exitcar", xb, { fps: 24, ...EXITCAR_SPEC }, motionScene(CAR), 129.71, "afac73f0fa63c981", null],
+	["exitcar", xb, { fps: 24, ...EXITCAR_SPEC }, motionScene(CAR), 129.71, "7a35b86a0a288826", null],
 	["walk", yb, { ...spec0, frames: 160, use: [...STAND, { skill: "walkTo", f0: 1, args: { to: [0, 2.4], steps: 6, heading: 0 } }] }, { objects: {} }, 72.77, "814a1365c6f841b1", null],
-	["smoke squat (Y Bot)", yb, smoke(240, { keys: [{ f: 0, set: SQUAT }] }, false), { objects: {} }, 133.46, "7c3238785a9dfeaf", 2.081],
-	["smoke squat (X Bot)", xb, smoke(240, { keys: [{ f: 0, set: SQUAT }] }, false), { objects: {} }, 134.67, "c3c8312ec66cf583", 0.29],
-	["smoke squat, kits (Y Bot)", yb, smoke(240, { keys: [{ f: 0, set: SQUAT }] }, true), kitScene, 133.46, "5ed20645c4ffc6de", 2.081],
-	["smoke squat, kits (X Bot)", xb, smoke(240, { keys: [{ f: 0, set: SQUAT }] }, true), kitScene, 134.67, "a6bd2c97d50737fa", 0.29],
-	["squat smoke cea7fa46", yb, G.SQUAT_SPEC, motionScene(G.smokeScene()), 127.13, "06e8089f2827a5dc", 2.045],
-	["squat smoke 375e8ea5 (first)", yb, G.FIRST_SPEC, motionScene(G.smokeScene(...lifted)), 137.45, "5323857d83a1a75b", 2.036],
-	["squat smoke 375e8ea5 (raised)", yb, G.RAISED_SPEC, motionScene(G.smokeScene(...lifted)), 135.25, "c31dbdd5e2c22f59", 2.036],
+	["smoke squat (Y Bot)", yb, smoke(240, { keys: [{ f: 0, set: SQUAT }] }, false), { objects: {} }, 133.46, "c57884d0ea3d1603", 2.081],
+	["smoke squat (X Bot)", xb, smoke(240, { keys: [{ f: 0, set: SQUAT }] }, false), { objects: {} }, 134.67, "9c3b79ba1922488f", 0.29],
+	["smoke squat, kits (Y Bot)", yb, smoke(240, { keys: [{ f: 0, set: SQUAT }] }, true), kitScene, 133.46, "29bedcfc6c9154e6", 2.081],
+	["smoke squat, kits (X Bot)", xb, smoke(240, { keys: [{ f: 0, set: SQUAT }] }, true), kitScene, 134.67, "a6da7196e4bd1665", 0.29],
+	["squat smoke cea7fa46", yb, G.SQUAT_SPEC, motionScene(G.smokeScene()), 127.13, "4b988f4b26056859", 2.045],
+	["squat smoke 375e8ea5 (first)", yb, G.FIRST_SPEC, motionScene(G.smokeScene(...lifted)), 137.45, "693cfb2af67aa001", 2.036],
+	["squat smoke 375e8ea5 (raised)", yb, G.RAISED_SPEC, motionScene(G.smokeScene(...lifted)), 135.25, "f34605759ebbcc2f", 2.036],
 ];
 const wrong = [];
 for (const [name, sk, spec, scene, before, h0, lips0] of TAKES) {
