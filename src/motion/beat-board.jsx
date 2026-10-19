@@ -8,6 +8,7 @@ import { useSyncExternalStore } from "react";
 import { ko } from "../locale.js";
 import { latestDraft, progressVersion, subscribeProgress } from "../agent-progress.js";
 import { beatBoardModel, blockTitle } from "./beat-board-model.js";
+import { draftLabel } from "../draft-ghost.js";
 import "./beat-board.css";
 
 function stateChip(block) {
@@ -51,7 +52,7 @@ export function BeatBoard({ motion, frame, displayFrameCount, clipPct, onJump })
 			{model.mode === "draft" && (
 				<span className={"tl-beat-head" + (model.ok ? " ok" : "")} data-testid="beat-board-head"
 					title={ko("The agent's newest draft, not installed yet", "에이전트가 만든 최신 초안 (아직 적용 전)")}>
-					{ko(`Draft ${model.n} · QA ${model.total}`, `초안 ${model.n} · QA ${model.total}`)}
+					{draftLabel({ n: model.n, qa: model.qa })}
 				</span>
 			)}
 		</div>

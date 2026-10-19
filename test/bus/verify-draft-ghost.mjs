@@ -1,11 +1,12 @@
 // draft-ghost.js: the agent's latest draft shows as a ghost while it is not installed, looping on its own
-// clock at the take's rate; an installed draft fades out; the label names the draft and its QA; the
+// clock at the take's rate; an installed draft fades out; the label names the draft and its QA problems; the
 // viewer's switch is a transient setting. The drawing itself is checked in the browser
 // (scratchpad QA: the ghost on GIZMO_LAYER is absent from captures).
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DRAFT_GHOST_FADE_MS, DRAFT_GHOST_OPACITY, draftGhostShown, draftGhostState, draftLabel, setDraftGhostShown } from '../../src/draft-ghost.js';
 import { clearProgress, latestDraft, publishDraft } from '../../src/agent-progress.js';
+import { qaProblems, qaSay } from '../../src/qa-label.js';
 
 const take = (frameCount = 48, fps = 24) => ({ schema: 'cozyclay.take.v3', frameCount, fps });
 
@@ -35,20 +36,36 @@ test('nothing to show without a take v3', () => {
 	}
 });
 
-test('the label names the draft and its QA total (English default)', () => {
-	assert.equal(draftLabel({ n: 3, qa: { total: 31 } }), 'Draft 3 · QA 31');
-	assert.equal(draftLabel({ n: 7, qa: { total: 0 } }), 'Draft 7 · QA 0');
+test('the label names the draft and its problems, not its frame-level issues (English default)', () => {
+	// one goal missed on 321 frames read "QA 321" (the user saw "QA 549" for two long groups)
+	assert.equal(draftLabel({ n: 3, qa: { ok: false, total: 321, problems: 1 } }), 'Draft 3 · 1 problem');
+	assert.equal(draftLabel({ n: 4, qa: { ok: false, total: 549, problems: 2 } }), 'Draft 4 · 2 problems');
+	assert.equal(draftLabel({ n: 7, qa: { ok: true, total: 0, problems: 0 } }), 'Draft 7 · QA clean');
+	// a result from before problems existed counts its groups
+	assert.equal(draftLabel({ n: 5, qa: { ok: false, total: 40, groups: [{}, {}, {}] } }), 'Draft 5 · 3 problems');
+});
+
+test('a receipt says problems and the frame-level count', () => {
+	assert.equal(qaSay({ ok: false, total: 321, problems: 1 }), '1 problem (321 frame issues)');
+	assert.equal(qaSay({ ok: true, total: 0, problems: 0 }), 'clean');
+	assert.equal(qaProblems({ total: 7 }), 7, 'with neither problems nor groups, the total is all there is');
+	assert.equal(qaProblems({ ok: false, total: 5, groups: [] }), 5, 'a failed result never counts as no problems');
 });
 
 test('the newest published draft drives the ghost; installing it fades it; a clear removes it', () => {
 	clearProgress();
-	publishDraft('actor-a', { take: take(), installed: false, qa: { ok: false, total: 12 } });
+	publishDraft('actor-a', { take: take(), installed: false, qa: { ok: false, total: 12, problems: 2, groups: [{ kind: 'GOAL', subject: 'a', count: 10 }, { kind: 'POP', subject: 'b', count: 2 }] } });
 	const first = latestDraft();
 	assert.equal(draftGhostState(first, first.at).shown, true);
-	assert.equal(draftLabel(first), 'Draft 1 · QA 12');
+	assert.equal(first.qa.problems, 2, 'the stored draft keeps the problem count');
+	assert.equal(draftLabel(first), 'Draft 1 · 2 problems');
+	// an older caller's result (ok false, a total, neither problems nor groups) must not read as clean
+	publishDraft('actor-a', { take: take(), installed: false, qa: { ok: false, total: 12 } });
+	assert.equal(latestDraft().qa.problems, 12);
+	assert.equal(draftLabel(latestDraft()), 'Draft 2 · 12 problems');
 	publishDraft('actor-a', { take: take(), installed: true, qa: { ok: true, total: 0 } });
 	const second = latestDraft();
-	assert.equal(second.n, 2);
+	assert.equal(second.n, 3);
 	assert.equal(draftGhostState(second, second.at + DRAFT_GHOST_FADE_MS).shown, false, 'the installed draft is gone after the fade');
 	clearProgress();
 	assert.equal(draftGhostState(latestDraft(), Date.now()).shown, false);
