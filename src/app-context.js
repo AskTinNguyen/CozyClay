@@ -1,8 +1,13 @@
-import { createContext, useContext } from 'react';
+import { createContext, useContext, useMemo } from 'react';
 import { StudioProtocolError } from './studio-agent-protocol.js';
 
 export const AppContext = createContext(null);
-export function useBus() { return useContext(AppContext).bus; }
+// Reading `bus` refreshes the studio binding (it serializes the whole scene), so a panel must not read it while it
+// renders: playback re-renders panels every frame. The hook hands back a stable handle that opens the bus per call.
+export function useBus() {
+  const app = useContext(AppContext);
+  return useMemo(() => ({ run: (...args) => app.bus.run(...args), subscribe: (...args) => app.bus.subscribe(...args) }), [app]);
+}
 
 const ref = current => ({ current });
 
