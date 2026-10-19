@@ -31,10 +31,11 @@ await once(server, "listening");
 const origin = `http://127.0.0.1:${server.address().port}`;
 
 let turn = 0;
-async function studioTurn({ characterCount, text = "inspect selection", attachFrame, sessionId }) {
+async function studioTurn({ characterCount, text = "inspect selection", attachFrame, sessionId, sceneId }) {
   turn += 1;
   context = contextFixture();
   context.scene.characterCount = characterCount;
+  if (sceneId) context.host = { ...context.host, sceneId };
   commands.length = 0;
   faux.script([{ type: "text", text: "ok" }]);
   const before = faux.calls.length;
@@ -62,7 +63,9 @@ try {
   assert.equal(again.images.length, 1, "the request holds only the first turn's plan, still in the conversation");
   const asked = await studioTurn({ characterCount: 2, text: "카메라를 레일로 바꿔줘", sessionId: "00000000-0000-4000-8000-000000000701" });
   assert.deepEqual(asked.captures.filter((name) => name.startsWith("capture_")), ["capture_plan_png"], "a camera request in that session gets the plan again");
-  console.log("PASS a staged scene's plan comes once per session, and again on a staging request");
+  const other = await studioTurn({ characterCount: 2, sessionId: "00000000-0000-4000-8000-000000000701", sceneId: "scene-other" });
+  assert.deepEqual(other.captures.filter((name) => name.startsWith("capture_")), ["capture_plan_png"], "another scene opened in that session gets its own first plan");
+  console.log("PASS a staged scene's plan comes once per scene in a session, and again on a staging request");
 
   const worded = await studioTurn({ characterCount: 1, text: "투샷으로 잡아줘" });
   assert.deepEqual(worded.captures.filter((name) => name.startsWith("capture_")), ["capture_plan_png"], "a coverage word asks for the plan too");
