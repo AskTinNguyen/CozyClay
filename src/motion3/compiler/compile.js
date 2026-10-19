@@ -35,6 +35,8 @@ import { fitWeight } from "../fix/self.js";
 import { holdHook } from "../object-keys.js";
 import { HAND_CLEAR, keepOut, wristBody } from "../body.js";
 import { objectPoseAt, handOf, restingAt, frameAt, spanOf } from "../object-pose.js";
+import { heldFor } from "./finger-close.js";
+import { sagOf } from "../load.js";
 
 const smooth = x => x * x * (3 - 2 * x);
 // how far past the straight arm a grasp fit's wrist target may end before it counts as wound up (solveFrame), m
@@ -136,6 +138,10 @@ function hooksFor(ctx, c, f, inFit = false, lead = true, fitSide = null) {
 		afterArm: (k, s, diag) => measureProps(ctx, k, s, diag),
 		// a fit's passes only place the wrist; the final pose (and a plain one) turns the hand onto the body
 		grip: inFit ? undefined : (k, s, diag) => gripHand(ctx, sk, s, SIDES[k], k, c, f, diag),
+		// a carry's weight lowers a plain IK hand's target, on the final pose only (load.js)
+		sag: inFit ? undefined : (k, s, target) => sagOf(ctx, k, f, s, target, (1 - fitWeight(ctx.spec, c, k)) * Math.min(1, Math.max(0, c[`armw_${k}`] ?? 0))),
+		// fingers close on what the hand holds, on the final pose only (finger-close.js)
+		heldShapes: inFit || !ctx.grasp ? undefined : (k, s) => heldFor(ctx, c, f, k, s),
 	};
 }
 
@@ -186,7 +192,7 @@ export function compileMotion(spec, { sk, scene }, opts = {}) {
 	if (!(frameCount >= 1 && frameCount <= 20000)) throw new Error("MOTION_SPEC_INVALID: frames must be 1..20000");
 	const fix = fixOptions(spec.fix);
 	const [a, b] = opts.window ? [Math.max(0, opts.window[0]), Math.min(frameCount - 1, opts.window[1])] : [0, frameCount - 1];
-	const ctx = { sk, spec, scene, softReach: fix.reach, push: { l: new Map(), r: new Map() }, swivel: { l: new Map(), r: new Map() }, skinPush: { l: new Map(), r: new Map() }, keepOut: fix.self ? wristBody(sk) : null };
+	const ctx = { sk, spec, scene, grasp: fix.grasp, softReach: fix.reach, push: { l: new Map(), r: new Map() }, swivel: { l: new Map(), r: new Map() }, skinPush: { l: new Map(), r: new Map() }, keepOut: fix.self ? wristBody(sk) : null };
 	const out = { ctx, fps: spec.fps ?? 30, frameCount, f0: a, frames: [] };
 	// object anchors read the pose refs read (object-pose.js), on the frame being solved
 	ctx.objectPose = (id, f, now) => objectPoseAt(out, id, f, now);

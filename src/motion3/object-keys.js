@@ -11,6 +11,7 @@
 // The object itself is still drawn in the hand (object-pose.js): the residual is what the arm
 // and the wrist could not reach, and QA reports it (qa/key-checks.js).
 import { isCarried, carriedPose, compose, relative } from "./carried.js";
+import { seatsInHand, seatOffset, settleAt, between as slide } from "./seat.js";
 import { groupsOf } from "./scene.js";
 import { restState } from "./compiler/skeleton.js";
 import { add, scale, sub, apply, T, matFromQuat, quatFromMat } from "./compiler/math.js";
@@ -110,7 +111,8 @@ export const keyedEntries = spec => Object.entries(spec.objects ?? {}).filter(([
 export function holdHook(ctx, out, solvePlain, solveLed) {
 	const { sk, spec, scene } = ctx, held = keyedEntries(spec);
 	if (!held.length) return null;
-	const palmOf = (o, s) => carriedPose(sk, spec, s, { prop: o.prop }), attached = new WeakMap(), attaching = new Set();
+	const seated = new Set(held.map(([id]) => id).filter(id => seatsInHand(spec, spec.objects[id], scene, id)).map(id => spec.objects[id]));
+	const palmOf = (o, s) => carriedPose(sk, spec, s, { prop: o.prop }, seated.has(o)), attached = new WeakMap(), attaching = new Set();
 	const restAt = (id, f) => ctx.restingAt?.(id, f) ?? scene?.objects?.[id] ?? groupsOf(scene)[id];
 	// a keyed carry of a thin body (a cup, a can, a bar) whose grip is free (no at/along, no orient: false, no grasp fit, no keyed
 	// wrist at the grab) keeps the grip its keyed path holds most comfortably (grip-choice.js), solved on the plain frames with the
@@ -136,22 +138,25 @@ export function holdHook(ctx, out, solvePlain, solveLed) {
 		const cache = attached.get(out.baked), o = spec.objects[id];
 		if (cache.has(id)) return cache.get(id);
 		const picked = chosen(id);
-		if (picked && picked.name !== "today") { cache.set(id, picked.offset); return picked.offset; }
+		if (picked && picked.name !== "today") { const a = seated.has(o) ? seatOffset(sk, spec, scene, id, o, picked.offset) : picked.offset; cache.set(id, a); cache.set(`${id}|taken`, picked.offset); return a; }
 		const rest = scene?.objects?.[id] ?? groupsOf(scene)[id], group = !scene?.objects?.[id] && !!rest;
 		const keeps = o.at === undefined && o.along === undefined && (group || o.grab !== undefined);
 		// the grab frame solved without the keys: a left hand anchored on id reads it there (object-pose.js), where this offset puts it
 		attaching.add(id);
 		let s;
 		try { s = keeps ? solvePlain(spanIn(out, o)[0]).s : restState(sk); } finally { attaching.delete(id); }
-		const a = relative(palmOf(o, s), keeps ? ctx.restingAt?.(id, spanIn(out, o)[0]) ?? { pos: rest.pos, R: rest.R } : carriedPose(sk, spec, s, o));
-		cache.set(id, a);
+		const taken = relative(palmOf(o, s), keeps ? ctx.restingAt?.(id, spanIn(out, o)[0]) ?? { pos: rest.pos, R: rest.R } : carriedPose(sk, spec, s, o));
+		const a = keeps && seated.has(o) ? seatOffset(sk, spec, scene, id, o, taken) : taken;
+		cache.set(id, a); cache.set(`${id}|taken`, taken);
 		return a;
 	};
+	// on the grasp path a keyed carry's hand slides from where it took the object into its seat over the settle (seat.js)
+	const attachAt = (id, f) => { const a = attach(id), t = attached.get(out.baked)?.get(`${id}|taken`); return t && t !== a && f !== undefined ? slide(t, a, settleAt(spanIn(out, spec.objects[id])[0], f)) : a; };
 	const carryOn = (id, s) => compose(palmOf(spec.objects[id], s), attach(id));
 	const strainOn = (id, s, pose, opts) => { const o = spec.objects[id]; return holdCost(sk, s, SIDES[spec.props[o.prop].hand], compose(pose, invert(attach(id))), palmOf(o, s), opts); };
 	const heldAt = (id, o, f) => {
 		const curve = curveIn(out, id), w = leadWeight(curve, spanIn(out, o), f);
-		return w > 0 ? { w, palm: compose(keyedPose(curve, f), invert(attach(id))), measure: s => palmOf(o, s), comfort: o.keys.some(k => k.lean > 0) } : null;
+		return w > 0 ? { w, palm: compose(keyedPose(curve, f), invert(attachAt(id, f))), measure: s => palmOf(o, s), comfort: o.keys.some(k => k.lean > 0) } : null;
 	};
 	// the elbow's planned path over the frames the keys lead (hold-plan.js), once per baked channels and time map
 	const plans = new WeakMap();
@@ -263,5 +268,5 @@ export function holdHook(ctx, out, solvePlain, solveLed) {
 	const firstKey = id => { const t = Math.min(...spec.objects[id].keys.map(k => k.f)); return out.timeMap ? Math.round(out.timeMap(t)) : t; };
 	// the grips chosen for keyed carries (observations.wrist reads them): [{ id, hand, name, cost, today }]
 	const grips = () => held.map(([id, o]) => { const p = chosen(id); return p && { id, hand: spec.props[o.prop].hand, name: p.name, cost: p.cost, today: p.today }; }).filter(Boolean);
-	return { lead, attach, attaching: id => attaching.has(id), plainFrame: solvePlain, carryOn, strainOn, span: id => spanIn(out, spec.objects[id]), firstKey, grips };
+	return { lead, attach, attachAt, attaching: id => attaching.has(id), plainFrame: solvePlain, carryOn, strainOn, span: id => spanIn(out, spec.objects[id]), firstKey, grips };
 }

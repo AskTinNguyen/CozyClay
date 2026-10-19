@@ -51,6 +51,12 @@ const SCENES = {
 	aim: () => kit("sword", "sword", [], { x: -0.3, z: 0.3 }),
 	hinge: () => [box("door", [0, 0, 0.75], [0.9, 2, 0.04])],
 };
+// an inline example with an unknown field is refused, not compiled (the examples below are checked the same way)
+{
+	let refused = "";
+	try { compileSpec({ ...structuredClone(answer.examples[0].spec), objects: { lantern: { prop: "handleGrip", grab: 30, grip: "power" } } }, { sk: skeletonFor("y-bot-tpose"), scene: motionScene(SCENES.reachGrip()) }); } catch (e) { refused = e.message; }
+	expect("an inline example with an unknown field (objects.lantern.grip) is refused with the fields", /^MOTION_SPEC_INVALID: .*unknown field "grip"/.test(refused), refused);
+}
 for (const example of answer.examples) {
 	const key = example.name.split(/[\s:]/)[0], scene = motionScene(SCENES[key]());
 	for (const rig of ["y-bot-tpose", "x-bot-tpose"]) {

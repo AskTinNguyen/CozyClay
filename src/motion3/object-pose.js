@@ -26,6 +26,7 @@
 // Carried objects are OBSTACLES at every frame, at their pose that frame (qa/object-checks.js);
 // a follow entry is none.
 import { isCarried, isFollow, carriedPose, compose, relative, movesRecord } from "./carried.js";
+import { seatsInHand, seatOffset, settleAt, between } from "./seat.js";
 import { followPose } from "./follow.js";
 import { groupsOf } from "./scene.js";
 import { solveFrame } from "./compiler/compile.js";
@@ -131,9 +132,16 @@ function carriedOn(out, id, o, f, s) {
 	if (!keepsOffset(scene, id, o)) return carriedPose(sk, spec, s, o);
 	// keyed (object-keys.js): the grab-frame offset solved without the keys, which the hand followed. While that
 	// grab frame is solved (a hand anchored on the object reads it), the object is where the offset puts it: at rest.
-	if (o.keys?.length && out.ctx.hold) return out.ctx.hold.attaching(id) ? restPose(scene, id) : compose(carriedPose(sk, spec, s, { prop: o.prop }), out.ctx.hold.attach(id));
-	const palm = st => carriedPose(sk, spec, st, { prop: o.prop }), grab = spanOf(out, o)[0];
-	return compose(palm(s), relative(palm(grab === f ? s : frameAt(out, grab).s), restingAt(out, id, grab) ?? restPose(scene, id)));
+	const seat = seatsInHand(spec, o, scene, id);
+	if (o.keys?.length && out.ctx.hold) {
+		if (out.ctx.hold.attaching(id)) return restPose(scene, id);
+		const held = compose(carriedPose(sk, spec, s, { prop: o.prop }, seat), out.ctx.hold.attachAt(id, f)), grab = spanOf(out, o)[0];
+		return seat ? between(restingAt(out, id, grab) ?? restPose(scene, id), held, settleAt(grab, f)) : held;
+	}
+	const palm = st => carriedPose(sk, spec, st, { prop: o.prop }, seat), grab = spanOf(out, o)[0];
+	const taken = relative(palm(grab === f ? s : frameAt(out, grab).s), restingAt(out, id, grab) ?? restPose(scene, id));
+	// on the grasp path the object eases into its seat against the palm (seat.js)
+	return seat ? between(compose(palm(s), taken), compose(palm(s), seatOffset(sk, spec, scene, id, o, taken)), settleAt(grab, f)) : compose(palm(s), taken);
 }
 
 /** Pose of the record a carried entry moves, cached on the solved frame. */

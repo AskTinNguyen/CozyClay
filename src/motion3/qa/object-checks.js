@@ -1,6 +1,8 @@
 // QA of scene objects the spec carries (C3 and 7.1), as plain issues { kind, msg, frame, value,
 // limit } (frame indexes out.frames):
 //   GRAB     "<id>: hand 12.0 cm from it at grab", frame = grab, limit = checks.limits.grab
+//   CATCH    "<id> missed by 4.2 cm": a carry that takes it out of the air (a fall with v before the grab) is more than
+//            CATCH_GAP m from it at the grab (#816, catchObject)
 //            (default 0.03 m); the distance runs from the prop origin to the part boxes' surface
 //            at their scene pose (where the hand finds them). An object its visible channel shows
 //            only from grab on appears in the hand (a cigarette out of a pocket), and one grabbed
@@ -23,7 +25,7 @@ import { isCarried, propOrigin } from "../carried.js";
 import { objectBoxesAt, partsOf, spanOf, restingAt } from "../object-pose.js";
 import { add, sub, apply, dot, cross, len, dist, scale, norm } from "../compiler/math.js";
 
-const NEAR_SUPPORT = 3;
+const NEAR_SUPPORT = 3, CATCH_GAP = 0.03;
 
 const centre = b => add(b.pos, apply(b.R, [0, b.half[1], 0]));
 const col = (R, i) => [R[0][i], R[1][i], R[2][i]];
@@ -100,7 +102,10 @@ export function objectChecks(sk, out, spec) {
 		const [grab, release] = spanOf(out, o), k = spec.props?.[o.prop]?.hand, excused = new Set([`hand_${k}`, `farm_${k}`]);
 		if (o.grab !== undefined && grab > 0 && out.frames[grab - f0] && shownAt(out, o, grab - 1)) {
 			const gap = grabGap(out, id, grab);
-			if (gap > L.grab) push("GRAB", `${id}: hand ${(gap * 100).toFixed(1)} cm from it at grab`, grab - f0, gap, L.grab);
+			// a carry that takes a thing out of the air (a fall with v before its grab: catchObject) misses it: CATCH
+			const flying = [o.fall ?? []].flat().some(fl => Array.isArray(fl.v) && fl.at < grab);
+			if (flying && gap > CATCH_GAP) push("CATCH", `${id} missed by ${(gap * 100).toFixed(1)} cm`, grab - f0, gap, CATCH_GAP);
+			else if (!flying && gap > L.grab) push("GRAB", `${id}: hand ${(gap * 100).toFixed(1)} cm from it at grab`, grab - f0, gap, L.grab);
 		}
 		const support = o.grab !== undefined ? supportOf(out, id, grab) : null;
 		const nearSupport = f => Math.abs(f - grab) <= NEAR_SUPPORT || (o.release !== undefined && Math.abs(f - release) <= NEAR_SUPPORT);

@@ -107,8 +107,9 @@ function validateChecks(spec, err, { sk, scene, frames, unknown = err, past = ""
 	each("allow");
 	for (const name of Object.keys(c.limits ?? {})) if (!(name in QA_LIMITS)) unknown(`checks.limits.${name} is not a QA limit${didYouMean(name, Object.keys(QA_LIMITS))}`);
 	const fix = spec.fix;
-	if (fix !== undefined && fix !== false && (typeof fix !== "object" || fix === null)) err("spec.fix must be false or { reach, slide, penetration, self, retime }");
+	if (fix !== undefined && fix !== false && (typeof fix !== "object" || fix === null)) err(`spec.fix must be false or { ${FIX_KEYS.join(", ")} }`);
 	else for (const k of Object.keys(fix || {})) if (!FIX_KEYS.includes(k)) unknown(`spec.fix.${k} is not a fix${didYouMean(k, FIX_KEYS)} (fixes: ${FIX_KEYS.join(", ")})`);
+	if (fix && fix.grasp !== undefined && typeof fix.grasp !== "boolean") err(`spec.fix.grasp must be true (fingers close on what a hand holds, the default) or false (the preset grip, the object at its grab-frame offset), got ${fmt(fix.grasp)}`);
 }
 
 /** opts = { sk, scene, frames, lenient, unknown: err for an unknown field (a no-op when lenient), past: the

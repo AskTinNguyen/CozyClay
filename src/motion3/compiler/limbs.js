@@ -158,12 +158,27 @@ const FINGER_PRESETS = {
 	grip: { Index: [55, 60, 35], Middle: [60, 62, 35], Ring: [62, 62, 35], Pinky: [65, 62, 35], Thumb: [15, 10, 8] },
 	cigarette: { Index: [8, 10, 6], Middle: [10, 12, 8], Ring: [60, 75, 45], Pinky: [65, 80, 45], Thumb: [35, 25, 20] },
 	point: { Index: [0, 0, 0], Middle: [80, 95, 60], Ring: [85, 95, 60], Pinky: [85, 95, 60], Thumb: [40, 30, 30] },
+	spherical: { Index: [35, 40, 25], Middle: [38, 42, 25], Ring: [40, 42, 25], Pinky: [42, 44, 25], Thumb: [15, 10, 8] },
 };
+// A ball's fingers fan out round it (#816): each finger turns about the palm normal at its knuckle, degrees toward the
+// thumb side (+), by preset weight; the index leads the thumb round one side, the little finger the other.
+const SPREAD = { spherical: { Index: 9, Middle: 2, Ring: -5, Pinky: -12 } };
+
+/** Degrees phalanx k (0..2) of finger f curls at preset weights `weights` (blended over relaxed). */
+export function fingerCurl(weights, f, k) {
+	const base = FINGER_PRESETS.relaxed;
+	return base[f][k] + Object.entries(weights ?? {}).reduce((acc, [p, w]) => acc + (w || 0) * ((FINGER_PRESETS[p]?.[f]?.[k] ?? base[f][k]) - base[f][k]), 0);
+}
+/** The fist's curl of phalanx k of finger f: as far as a finger closes. */
+export const fistCurl = (f, k) => FINGER_PRESETS.fist[f][k];
 
 /** Blend presets by weight over `relaxed` and curl every finger toward the palm. */
 export function fingers(sk, s, side, weights) {
-	const base = FINGER_PRESETS.relaxed, sign = side === "Left" ? -1 : 1;
-	const curl = (f, k) => base[f][k] + Object.entries(weights ?? {}).reduce((acc, [p, w]) => acc + (w || 0) * ((FINGER_PRESETS[p]?.[f]?.[k] ?? base[f][k]) - base[f][k]), 0);
+	const sign = side === "Left" ? -1 : 1, curl = (f, k) => fingerCurl(weights, f, k);
+	for (const f of ["Index", "Middle", "Ring", "Pinky"]) {
+		const spread = Object.entries(weights ?? {}).reduce((acc, [p, w]) => acc + (w || 0) * (SPREAD[p]?.[f] ?? 0), 0), j = sk.index[`${side}Hand${f}1`];
+		if (spread && j !== undefined) rotateSubtree(sk, s, j, s.P[j].slice(), axisRot(palmAxes(sk, s, side).n, spread));
+	}
 	for (const f of ["Index", "Middle", "Ring", "Pinky", "Thumb"]) {
 		for (let k = 0; k < 3; k++) {
 			const j = sk.index[`${side}Hand${f}${k + 1}`];
@@ -181,7 +196,7 @@ export function fingers(sk, s, side, weights) {
 // palm and across it, then flexed at its two joints about their own axes (bone x palm normal). The fist's thumb lies over
 // the index and middle fingers' middle phalanges; the grip's closes around a handle against the index finger. Searched on
 // both rigs within the joints' ranges (thumb tip to the index's middle phalanx: fist 8.4 -> 3.7 cm Y Bot, 6.9 -> 2.4 X Bot).
-const THUMB_WRAP = { fist: [-70, -5, 5, 80], grip: [-30, -30, 30, 10] };
+const THUMB_WRAP = { fist: [-70, -5, 5, 80], grip: [-30, -30, 30, 10], spherical: [-40, -20, 20, 10] };
 function wrapThumb(sk, s, side, [oppose, across, flex2, flex3]) {
 	const sign = side === "Left" ? -1 : 1, J = k => sk.index[`${side}HandThumb${k}`];
 	if (J(1) === undefined) return;

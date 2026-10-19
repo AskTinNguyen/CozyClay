@@ -13,8 +13,10 @@ import { sitInSeat, exitCar } from "./car.js";
 import { smokeCigarette } from "./smoke.js";
 import { flip } from "./flip.js";
 import { hitReaction } from "./impact.js";
+import { throwObject } from "./throw.js";
+import { catchObject } from "./catch.js";
 
-const SKILLS = { standIdle, sitInSeat, exitCar, walkTo, reachGrip, smokeCigarette, flip, hitReaction };
+const SKILLS = { standIdle, sitInSeat, exitCar, walkTo, reachGrip, smokeCigarette, flip, hitReaction, throwObject, catchObject };
 export const SKILL_NAMES = Object.keys(SKILLS);
 const bad = msg => { throw new Error(`MOTION_SPEC_INVALID: ${msg}`); };
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -53,7 +55,7 @@ export function expandUse(spec, { sk, scene, lenient = false, auto = false }) {
 	if (!spec.use?.length) return { spec, used: [] };
 	if (!Array.isArray(spec.use)) bad("spec.use must be an array of { skill, args, f0 }");
 	const own = (spec.keys ?? []).map((k, i) => ({ ...k, src: `keys[${i}]` }));
-	const merged = { anchors: {}, props: {}, objects: {}, fits: [], checks: {}, channels: [] }, skillKeys = [], used = [];
+	const merged = { anchors: {}, props: {}, objects: {}, fits: [], checks: {}, channels: [], fills: {}, goals: [] }, skillKeys = [], used = [];
 	spec.use.forEach((u, i) => {
 		const tag = `use[${i}] ${u?.skill}`;
 		if (!SKILLS[u?.skill]) bad(`use[${i}].skill "${u?.skill}" is not a skill${didYouMean(String(u?.skill), SKILL_NAMES)} (skills: ${SKILL_NAMES.join(", ")})`);
@@ -61,7 +63,7 @@ export function expandUse(spec, { sk, scene, lenient = false, auto = false }) {
 		argsOk(u, i, lenient);
 		if (!Number.isInteger(u.f0) || u.f0 < 0 || u.f0 > spec.frames - 1) bad(`use[${i}].f0 must be an integer frame within 0..${spec.frames - 1}, got ${JSON.stringify(u.f0)}`);
 		const keys = [...skillKeys, ...own];
-		const ctx = { sk, scene, frames: spec.frames, auto, props: { ...merged.props, ...spec.props }, self: spec.fix !== false && spec.fix?.self !== false, f0: u.f0, args: structuredClone(u.args ?? {}), tag, keys,
+		const ctx = { sk, scene, frames: spec.frames, fps: spec.fps ?? 24, auto, props: { ...merged.props, ...spec.props }, self: spec.fix !== false && spec.fix?.self !== false, f0: u.f0, args: structuredClone(u.args ?? {}), tag, keys,
 			use: spec.use, index: i, place: fixOptions(spec.fix).stance, state: structuredClone(stateAt(keys, u.f0)), anchors: { ...merged.anchors, ...spec.anchors }, objects: { ...merged.objects, ...spec.objects } };
 		const part = SKILLS[u.skill](ctx), last = Math.max(part.end ?? u.f0, ...part.keys.map(k => k.f));
 		if (last > spec.frames - 1) bad(`${tag} needs ${last - u.f0} frames from f${u.f0} (to f${last}), past the last frame f${spec.frames - 1}; set frames >= ${last + 1} or frames: "auto"`);
@@ -72,6 +74,9 @@ export function expandUse(spec, { sk, scene, lenient = false, auto = false }) {
 		for (const fit of part.fits ?? []) if (!merged.fits.some(x => same(x, fit))) merged.fits.push(fit);
 		for (const ch of part.channels ?? []) if (!merged.channels.includes(ch)) merged.channels.push(ch);
 		mergeChecks(merged.checks, part.checks);
+		// fields a skill fills into an entry when it leaves them out (throwObject: a carry's release and fall)
+		for (const [id, f] of Object.entries(part.fills ?? {})) merged.fills[id] = { ...merged.fills[id], ...f };
+		merged.goals.push(...(part.goals ?? []));
 		used.push({ skill: u.skill, f0: u.f0, end: part.end, ...(part.paced ? { paced: part.paced } : {}), ...(part.cut ? { cut: part.cut } : {}), ...(part.placed ? { placed: part.placed } : {}) });
 	});
 	const out = { ...spec, keys: [...skillKeys, ...own], anchors: { ...merged.anchors, ...spec.anchors }, props: { ...merged.props, ...spec.props },
@@ -82,6 +87,8 @@ export function expandUse(spec, { sk, scene, lenient = false, auto = false }) {
 	out.fits = [...merged.fits.filter(f => !mine.some(m => m.side === f.side && m.anchor === f.anchor)), ...mine];
 	mergeChecks(merged.checks, spec.checks);
 	out.checks = merged.checks;
+	for (const [id, f] of Object.entries(merged.fills)) if (out.objects[id]) out.objects[id] = { ...f, ...out.objects[id] };
+	if (merged.goals.length) out.goals = [...merged.goals, ...(spec.goals ?? [])];
 	delete out.use;
 	return { spec: out, used };
 }

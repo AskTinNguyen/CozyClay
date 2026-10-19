@@ -114,7 +114,7 @@ const range = (a, b) => Array.from({ length: b - a + 1 }, (_, i) => a + i);
 	expect("a carried object falling while in hand is refused", /fall\.at = 20 is while it is in hand/.test(inHand), inHand);
 	expect("bounce outside 0..0.6 is refused", /bounce must be 0\.\.0\.6/.test(v({ can: { fall: { at: 5, bounce: 0.9 } } })));
 	expect("onto an unknown object is refused", /fall\.onto/.test(v({ can: { fall: { at: 5, onto: "nope" } } })), v({ can: { fall: { at: 5, onto: "nope" } } }));
-	expect("an unknown fall field is refused with the fields", /unknown field "speed".*a fall is \{ at, onto\?, bounce\?, tumble\? \}/.test(v({ can: { fall: { at: 5, speed: 2 } } })), v({ can: { fall: { at: 5, speed: 2 } } }));
+	expect("an unknown fall field is refused with the fields", /unknown field "speed".*a fall is \{ at, onto\?, bounce\?, tumble\?, v\? \}/.test(v({ can: { fall: { at: 5, speed: 2 } } })), v({ can: { fall: { at: 5, speed: 2 } } }));
 	expect("a fall needs its frame", /fall\.at must be the whole frame/.test(v({ can: { fall: {} } })));
 	const hinge = v({ can: { pivot: [0, 0, 0], channel: "door", keys: [] } });
 	expect("a hinge with keys says where keys belong", /keys and fall move an object with no pivot, axis or channel/.test(hinge), hinge);

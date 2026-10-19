@@ -6,6 +6,7 @@ import { add, sub, scale, norm, len, apply, mul, rx, ry, rz } from "./math.js";
 import { restState, rotateSubtree } from "./skeleton.js";
 import { twoBone, orientFoot, wrist, fingers, limitFold, askedFold, swivelElbow, ELBOW_FOLD, KNEE_FOLD } from "./limbs.js";
 import { holdHand } from "./hold.js";
+import { closeOnShape } from "./finger-close.js";
 import { clampWrist } from "./wrist-clamp.js";
 import { ELBOW_REST } from "./arm-orient.js";
 import { wristBody, bodyDistance } from "../body.js";
@@ -147,6 +148,9 @@ export function pose(sk, c, hooks = {}) {
 			if (hooks.keepOut) target = hooks.keepOut(k, s, target);
 			const push = hooks.push?.(k);
 			if (push) target = add(target, push);
+			// what the hand carries weighs it down (load.js)
+			const sag = hooks.sag?.(k, s, target);
+			if (sag) target = add(target, sag);
 			// the self fix's push rides the IK as far as the arm is on it (an arm coming in from FK would jump)
 			const skinPush = hooks.skinPush?.(k);
 			if (skinPush) target = add(target, scale(skinPush, turnWeight(w)));
@@ -171,6 +175,8 @@ export function pose(sk, c, hooks = {}) {
 		// the turn keeps the hand's world turn; a wrist it takes past its limits stops there and the hand turns with the elbow
 		// (wrist-clamp.js), unless keys lead what the hand holds: that hand keeps the object's grip (hold.js limits its wrist)
 		if (turn) { swivelElbow(sk, s, side, turn * turnWeight(w)); if (!held) clampWrist(sk, s, side); }
+		const grasped = hooks.heldShapes?.(k, s);
+		if (grasped) diag[`closed_${k}`] = closeOnShape(sk, s, side, grasped).touched;
 		hooks.afterArm?.(k, s, diag);
 	}
 	return { s, diag };

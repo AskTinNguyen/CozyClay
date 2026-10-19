@@ -103,8 +103,8 @@ function describeSkill(name) {
 const MEANT = { topics: ["objects", "channels"], skills: ["reachGrip"] };
 /** Topics no round-2 session needed for a first spec: essentials names their parts, the full topic has the fields. */
 const SHALLOW = ["checks"];
-/** Skills essentials leaves to topic skills: a flip or cartwheel is no first spec's need, and essentials has no room. */
-const FIRST_SPEC_SKIP = ["flip"];
+/** Skills essentials leaves to topic skills: a flip, a cartwheel or a body thrown by a hit is no first spec's need, and essentials has no room. */
+const FIRST_SPEC_SKIP = ["flip", "hitReaction", "throwObject", "catchObject"];
 
 /** A shared shape whose fields are mostly a skill's args (walk, walkTo): its own fields and `...<skill> args`. */
 function shapeLine(d) {

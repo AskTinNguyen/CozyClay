@@ -8,6 +8,7 @@
 import { palmAxes } from "./compiler/limbs.js";
 import { SIDES } from "./compiler/pose.js";
 import { add, scale, norm, sub, dot, cross, apply, mul, T, axisRot, I3 } from "./compiler/math.js";
+import { bonePoint } from "./compiler/skeleton.js";
 
 export const isCarried = o => typeof o?.prop === "string";
 /** A follow entry { follow: <ref>, offset?, aim?, visible?, level? } (C16, follow.js): the record rides a point of the body. */
@@ -23,9 +24,16 @@ export function propOrigin(sk, spec, s, o) {
 	return scale(prop.origin.map(b => s.P[sk.index[b]]).reduce((a, p) => add(a, p), [0, 0, 0]), 1 / prop.origin.length);
 }
 
-/** World { pos, R } of a carried record on pose s (at/along offset, PR #14). */
-export function carriedPose(sk, spec, s, o) {
-	const ax = palmAxes(sk, s, SIDES[spec.props[o.prop].hand]), origin = propOrigin(sk, spec, s, o);
+/** The prop origin carried by its hand's bone on pose s, where the bind pose has it against the hand: closing fingers do not move it (#816). */
+function handOrigin(sk, prop, s) {
+	const h = sk.index[`${SIDES[prop.hand]}Hand`], P = sk.restWorldPos;
+	const mean = scale(prop.origin.map(b => P[sk.index[b]]).reduce((a, p) => add(a, p), [0, 0, 0]), 1 / prop.origin.length);
+	return bonePoint(s, h, apply(T(sk.restWorldRot[h]), sub(mean, P[h])));
+}
+
+/** World { pos, R } of a carried record on pose s (at/along offset, PR #14); `fixed`: the origin rides the hand bone (seat.js). */
+export function carriedPose(sk, spec, s, o, fixed = false) {
+	const ax = palmAxes(sk, s, SIDES[spec.props[o.prop].hand]), origin = fixed ? handOrigin(sk, spec.props[o.prop], s) : propOrigin(sk, spec, s, o);
 	const palm = v => add(scale(ax.d, v[0]), add(scale(ax.l, v[1]), scale(ax.n, v[2])));
 	const y = norm(palm(o.along ?? [0, 0, 1]));
 	let x = sub(ax.d, scale(y, dot(ax.d, y)));

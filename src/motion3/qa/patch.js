@@ -6,6 +6,7 @@
 //   { path: "/fix/retime", value: true }                      set a spec path
 //   { path: "/anchors/cupHandle/p", delta: [dx, dy, dz] }     move a spec value by delta
 //   { channel: "root", f, delta, hold: true }                  move the body that stands at f
+//   { ops: userSpec => [{ op, path, value }] }                 the operations for the agent's spec (a second hand: load.js)
 // Each becomes g.patch = [{ op, path, value }] against opts.userSpec (the spec as the agent sent
 // it, use[] not expanded): a user key that sets the channel within f +-2 -> replace
 // /keys/<i>/set/<ch>; a standIdle stance moved sideways -> /use/<i>/args/at; otherwise add
@@ -131,7 +132,7 @@ function pathPatch(userSpec, fix) {
 
 /** The patch for one fix, or null when it does not apply mechanically or changes nothing. */
 function patchOf(fix, X, userSpec) {
-	const patch = fix.channel !== undefined ? channelPatch(X, userSpec, fix) : fix.path !== undefined ? pathPatch(userSpec, fix) : null;
+	const patch = fix.ops ? fix.ops(userSpec) : (fix.channel !== undefined ? channelPatch(X, userSpec, fix) : fix.path !== undefined ? pathPatch(userSpec, fix) : null);
 	if (!patch) return null;
 	try {
 		return JSON.stringify(applyPatch(userSpec, patch)) === JSON.stringify(userSpec) ? null : patch;

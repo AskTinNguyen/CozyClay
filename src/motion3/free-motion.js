@@ -24,6 +24,7 @@ import { groupsOf } from "./scene.js";
 import { curveOf, keyedPose } from "./object-keys.js";
 import { add, apply, sub, T, quatFromMat, I3 } from "./compiler/math.js";
 import { shapeOf, airPath, settlePath, settledAt, spinOf, spinEnergy, TIP } from "./settle.js";
+import { fallVelocity, moves, flightTime, drift, landingWith } from "./flight.js";
 
 /** Gravity, m/s^2. */
 export const G = 9.8;
@@ -97,24 +98,26 @@ function shapeIn(scene, id) {
  * a frame earlier (a release from the hand), for the spin it is let go with.
  */
 function fallPlan(spec, scene, id, start, t0, fall, fps, before = null) {
-	const land = landingOf(spec, scene, id, start, fall.onto ?? null), shape = fall.tumble === false ? null : shapeIn(scene, id);
+	// a throw (fall.v, flight.js) lands where it comes down
+	const v0 = fallVelocity(fall, start, before, fps), thrown = moves(v0), landAt = pose => landingOf(spec, scene, id, pose, fall.onto ?? null);
+	const land = thrown ? landingWith(landAt, start, v0, G, Object.values(scene.objects).map(topOf)) : landAt(start), shape = fall.tumble === false ? null : shapeIn(scene, id);
 	if (shape) {
-		const spin = before ? spinOf(before.R, start.R, fps) : [0, 0, 0], air = airPath(shape, start, spin, land.top, fps);
+		const spin = before ? spinOf(before.R, start.R, fps) : [0, 0, 0], air = airPath(shape, start, spin, land.top, fps, v0);
 		// a spin tips it the way its top moves (spin x up); a spin about the vertical tips nothing
 		const path = settlePath(shape, air.at(air.tl), land.top, TIP * land.h + spinEnergy(shape, spin), [-spin[2], 0, spin[0]]);
-		if (path.steps.length || spin.some(v => v)) {
+		if (path.steps.length || spin.some(v => v) || thrown) {
 			const at = f => { const t = (f - t0) / fps; return t <= 0 ? start : t <= air.tl ? air.at(t) : settledAt(path, t - air.tl); };
 			return { t0, land: t0 + air.tl * fps, end: t0 + (air.tl + path.time) * fps, h: land.h, support: land.support, top: land.top, at, rest: path.rest };
 		}
 	}
-	const h = land.h, tl = Math.sqrt(2 * h / G);
+	const h = land.h, tl = thrown ? flightTime(h, v0[1], G) : Math.sqrt(2 * h / G), off = drift(v0, Infinity, tl);
 	const e = Math.min(0.6, Math.max(0, fall.bounce ?? BOUNCE)), vb = Math.min(e * G * tl, Math.sqrt(2 * G * BOUNCE_MAX)), tb = 2 * vb / G;
-	const rest = { pos: [start.pos[0], start.pos[1] - h, start.pos[2]], R: start.R };
+	const rest = { pos: [start.pos[0] + off[0], start.pos[1] - h, start.pos[2] + off[2]], R: start.R };
 	const at = f => {
 		const t = (f - t0) / fps;
 		if (t <= 0) return start;
-		const dy = t <= tl ? -0.5 * G * t * t : t <= tl + tb ? -h + vb * (t - tl) - 0.5 * G * (t - tl) ** 2 : -h;
-		return { pos: [start.pos[0], start.pos[1] + Math.min(0, dy), start.pos[2]], R: start.R };
+		const dy = t <= tl ? (thrown ? v0[1] * t : 0) - 0.5 * G * t * t : t <= tl + tb ? -h + vb * (t - tl) - 0.5 * G * (t - tl) ** 2 : -h, d = drift(v0, t, tl);
+		return { pos: [start.pos[0] + d[0], start.pos[1] + (thrown ? dy : Math.min(0, dy)), start.pos[2] + d[2]], R: start.R };
 	};
 	return { t0, land: t0 + tl * fps, end: t0 + (tl + tb) * fps, h, support: land.support, top: land.top, at, rest };
 }

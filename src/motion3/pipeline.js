@@ -27,6 +27,7 @@ import { canonicalGoals } from "./compiler/validate-goals.js";
 import { heldReadings, HELD_UNITS } from "./qa/key-checks.js";
 import { observeNear, NEAR_UNITS } from "./qa/near.js";
 import { observeWrist, WRIST_UNITS } from "./qa/wrist-obs.js";
+import { observeLoad, LOAD_UNITS } from "./load.js";
 import { planWalks, applyWalkPlans } from "./walk-plan.js";
 import { relaxSpec } from "./lenient.js";
 
@@ -90,6 +91,8 @@ export function compileSpec(sent, { sk, scene }, opts = {}) {
 	const near = observeNear(sk, out), wrist = observeWrist(sk, out);
 	if (near) Object.assign(observations, { units: `${observations.units}; ${NEAR_UNITS}`, near });
 	if (wrist) Object.assign(observations, { units: `${observations.units}; ${WRIST_UNITS}`, wrist });
+	const load = observeLoad(sk, out);
+	if (load) Object.assign(observations, { units: `${observations.units}; ${LOAD_UNITS}`, load });
 	// a skill that paced its beats to fit a short span says so where every answer keeps it (C7 tier 1)
 	const paced = used.filter(u => u.paced).map(u => `${u.skill} paced ${u.paced.toFixed(2)} to fit f${u.f0}..f${u.end}`);
 	if (paced.length) observations.paced = paced;

@@ -77,4 +77,17 @@ export const SKILL_INFO = {
 			speed: num("launch speed, m/s (a shove 2, a car at 30 km/h about 8)", { default: 4, exclusiveMinimum: 0 }), land: { enum: ["back", "front"], description: "default: back when hit from the front" } },
 		needs: "a pose; dir or from", frames: "~40", adds: ["keys: thrown to rest"], example: { f0: 10, args: { dir: [0, -1], speed: 3 } },
 	},
+	throwObject: {
+		args: { object: str("the carried object's id (objects.<id>.prop on the hand's prop)"), side: side("the throwing hand (default r)"), to: { type: "array", items: { type: "number" }, minItems: 3, maxItems: 3, description: "[x, y, z] world m: where it lands" },
+			arc: { enum: ["low", "high"], description: "launch angle: low 20 deg, high 50 deg (default low)" } },
+		required: ["object", "to"], needs: "the object in that hand (its objects entry on the hand's prop)", frames: "24 (wind-up, swing, release at f0+18, follow-through)",
+		adds: ["keys: wind-up, swing, follow-through", "objects.<id>: release and fall { v: \"hand\" } when the entry leaves them out", "goals: <id> lands at the target"],
+		example: { f0: 40, args: { object: "ball", to: [0, 0, 5] } },
+	},
+	catchObject: {
+		args: { object: str("the flying object's id (objects.<id>.fall { at, v })"), side: { enum: ["r", "both"], description: "the right hand, or both (a thing over 1 kg takes both)" } },
+		required: ["object"], needs: "the object flying: objects.<id>.fall { at, v }", frames: "to the catch (the first frame in reach, at least 10 from f0) + 14",
+		adds: ["keys: reach, close, give with it", "objects.<id>: prop, grab, grasp when the entry leaves them out", "props.<id>Catch"],
+		example: { f0: 0, args: { object: "ball" } },
+	},
 };

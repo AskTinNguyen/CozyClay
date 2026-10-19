@@ -18,6 +18,7 @@ import { validateSpec } from "../../src/motion3/compiler/validate.js";
 import { nameChecks } from "../../src/motion3/qa/check-names.js";
 import { checkRef } from "../../src/motion3/refs.js";
 import { compileSpec } from "../../src/motion3/pipeline.js";
+import { createSceneObject } from "../../src/scene-objects.js";
 import { motionScene } from "../../src/motion3/scene.js";
 import { skeletonFor } from "../../src/motion3/rigs/index.js";
 import { MOTION_OUTPUT_BUDGET } from "../../src/motion3/report.js";
@@ -73,11 +74,16 @@ expect("reachGrip: required args starred, defaults shown, adds props.<anchor>Gri
 	&& list.skills.find(s => s.name === "reachGrip").adds.some(x => x.includes("props.<anchor>Grip")));
 expect("walkTo says it needs a standing pose keyed before f0", /standing pose keyed before f0/.test(list.skills.find(s => s.name === "walkTo").needs));
 for (const name of SKILL_NAMES) {
-	const one = describe("skills", name), scene = SKILL_INFO[name].needs.includes("car") || name === "sitInSeat" ? car : empty;
+	// throwObject throws what a hand carries: the example's ball, carried in the right hand from f0; catchObject catches it
+	// flying at the body from 6 m
+	const throws = name === "throwObject", catches = name === "catchObject", ball = { ...createSceneObject("sphere"), id: "ball", name: "ball", x: 0.2, y: 0.9, z: 0.2, scaleX: 0.074, scaleY: 0.074, scaleZ: 0.074 };
+	const one = describe("skills", name), scene = SKILL_INFO[name].needs.includes("car") || name === "sitInSeat" ? car : throws ? motionScene([ball]) : catches ? motionScene([{ ...ball, x: 0, y: 1.6, z: 6 }]) : empty;
 	expect(`describe skills ${name}: ${bytes(one)} B, the args schema and a use example`, bytes(one) <= MOTION_OUTPUT_BUDGET && one.name === name && one.example.skill === name
 		&& JSON.stringify(Object.keys(one.schema.properties)) === JSON.stringify(Object.keys(SKILL_INFO[name].args)) && one.schema.additionalProperties === false);
 	const before = name === "exitCar" ? [{ skill: "sitInSeat", f0: 0, args: { car: "Car" } }] : name === "standIdle" || name === "sitInSeat" ? [] : [STAND];
-	const spec = { schema: "cozyclay.motion-spec.v1", fps: 24, frames: "auto", use: [...before, one.example] };
+	const spec = { schema: "cozyclay.motion-spec.v1", fps: 24, frames: "auto", use: [...before, one.example],
+		...(throws ? { props: { ballGrip: { hand: "r", origin: ["RightHandIndex2", "RightHandMiddle2"], points: {} } }, objects: { ball: { prop: "ballGrip", grasp: "spherical", grab: 0 } } } : {}),
+		...(catches ? { objects: { ball: { fall: { at: 0, v: [0, 2.5, -9] } } } } : {}) };
 	const msg = refusal(() => validate(spec, { sk, scene }));
 	expect(`describe skills ${name}: the example expands and validates`, msg === "", msg);
 }
@@ -86,6 +92,8 @@ expect("an unknown skill name is refused with a suggestion", /skill "walkto" is 
 // 2b. essentials: one call names every field, type, channel, skill and skill arg; it fits one receipt.
 // Lane H3c: checks names its lists only (topic checks has the entry fields); objects, channels and reachGrip carry meanings.
 const ess = describe("essentials"), essText = JSON.stringify(ess);
+// physical grasp (#816): the first spec learns the carry's grasp and mass, a fall's v, and where throw and catch live
+expect("essentials names mass, grasp, spherical, fall.v, throwObject and catchObject", ["mass", "grasp", "spherical", "throwObject", "catchObject"].every(w => essText.includes(w)) && /fall[^"]*"?[^}]*\bv\?/.test(essText), essText.slice(0, 200));
 expect("essentials answers { topic, types, skills, notes }", JSON.stringify(Object.keys(ess)) === '["topic","types","skills","notes"]' && ess.notes.every(n => typeof n === "string"));
 expect("essentials has a type line for every topic but skills, and for every shared shape it names, no other",
 	DESCRIBE_TOPICS.filter(t => t !== "skills" && t !== "essentials" && t !== "examples").every(t => typeof ess.types[t] === "string")
@@ -103,8 +111,11 @@ const channels = [...VEC_CHANNELS, ...NUM_CHANNELS, ...MAP_CHANNELS].filter(ch =
 const skillOnly = [...SKILL_CHANNELS].filter(ch => named(ch, ess.types.channels));
 expect("essentials names every channel (a left/right pair as x_l|r) but the skill-keyed ones", channels.length === 0 && skillOnly.length === 0, [...channels, ...skillOnly].join());
 expect("essentials names every ref kind", REF_KINDS.every(k => ess.types.refs.includes(`${k}:`)), ess.types.refs);
-// flip (a tumble no first spec needs) is in topic skills only: essentials has no room for it (describe.js FIRST_SPEC_SKIP)
-expect("essentials lists exactly SKILL_NAMES but flip, each with needs, frames, adds and every arg typed", JSON.stringify(ess.skills.map(s => s.name)) === JSON.stringify(SKILL_NAMES.filter(n => n !== "flip"))
+// flip, hitReaction and throwObject (a tumble, a body thrown by a hit, a throw after a pickup: no first spec needs them) are in
+// topic skills only: essentials has no room for them (describe.js FIRST_SPEC_SKIP; hitReaction left it when grasp, mass and
+// fall.v joined, throwObject never joined, #816)
+const SKIPPED = ["flip", "hitReaction", "throwObject", "catchObject"];
+expect("essentials lists exactly SKILL_NAMES but flip, hitReaction, throwObject and catchObject, each with needs, frames, adds and every arg typed", JSON.stringify(ess.skills.map(s => s.name)) === JSON.stringify(SKILL_NAMES.filter(n => !SKIPPED.includes(n)))
 	&& ess.skills.every(s => s.needs === SKILL_INFO[s.name].needs && s.frames === SKILL_INFO[s.name].frames && s.adds === SKILL_INFO[s.name].adds
 		&& Object.keys(SKILL_INFO[s.name].args).every(a => named(a, s.args))));
 const rg = ess.skills.find(s => s.name === "reachGrip").args;
@@ -116,7 +127,7 @@ expect("essentials: the spec line names the topic lines, the walk generator the 
 	&& ess.types.walk === "{type: 'walk', f0: int, heading?: [number, number], ...walkTo args but to, arrive}", `${ess.types.spec}\n${ess.types.walk}`);
 // Round 2 (three live sessions): after essentials every run read skills reachGrip, objects and channels.
 // Each meaning those answers gave (a field's description, but a bare unit) is in essentials, verbatim or as
-// "<head>, as <field>" where its tail repeats an earlier field's; so do the carry example and its no-jump note.
+// "<head>, as <field>" where its tail repeats an earlier field's; so do the carry example and its rest-in-the-palm note.
 const FOLLOW_UPS = [["skills", "reachGrip"], ["objects"], ["channels"]];
 const meanings = s => (!s || typeof s !== "object" ? [] : [...(typeof s.description === "string" && !/^(degrees|m)$/.test(s.description) ? [s.description] : []),
 	...Object.entries(s).filter(([k]) => k !== "description" && k !== "$defs").flatMap(([, v]) => (Array.isArray(v) ? v.flatMap(meanings) : meanings(v)))]);
@@ -130,8 +141,9 @@ for (const [topic, name] of FOLLOW_UPS) {
 	expect(`essentials holds every meaning of describe ${topic}${name ? ` ${name}` : ""} (${ds.length})`, lost.length === 0, lost.join(" | "));
 }
 const carry = describe("objects");
-expect("essentials holds the carry example (a grip prop's origin bones, grab, release) and the no-jump note",
-	essText.includes(literal({ props: carry.example.props, objects: { cup: carry.example.objects.cup } })) && carry.notes.some(n => n.includes("no jump") && essText.includes(n.slice(n.indexOf("Without at/along")))));
+const REST = "No at/along: it rests in the palm, fingers closed on it.";
+expect("essentials holds the carry example (a grip prop's origin bones, grab, release) and the rest-in-the-palm note (#816; was no-jump)",
+	essText.includes(literal({ props: carry.example.props, objects: { cup: carry.example.objects.cup } })) && carry.notes.some(n => n.includes(REST)) && essText.includes(REST));
 expect("essentials: reachGrip's needs, frames and adds are the skill answer's notes", describe("skills", "reachGrip").notes.every(n => essText.includes(n.replace(/^(needs|frames from f0|adds): /, "").split("; ")[0])));
 console.log(`  sizes: the round-2 follow-ups (${FOLLOW_UPS.map(f => f.join(" ")).join(", ")}) took ${followBytes} B in 3 calls for ${facts} meanings; essentials has them all in ${bytes(ess)} B (budget ${DESCRIBE_BUDGET})`);
 // What the three live sessions read in 2-3 calls each (topics, then skills by name): the sum cannot fit

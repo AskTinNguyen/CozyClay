@@ -16,6 +16,8 @@
 //   retime       speed spikes get more frames, borrowed from the neighbouring keys
 //   stance       a standIdle stance whose legs, feet or hips are in a scene body slides out of it, the least
 //                distance (skills/stance.js; applied when the skills expand, reported in observations.placed)
+//   grasp        a holding hand's fingers close on what it holds and the object rests in the hand (#816);
+//                false keeps the preset grip and the grab-frame offset
 import { lowerHips, armReach } from "./reach.js";
 import { lockFeet } from "./slide.js";
 import { holdTurns } from "./turn.js";
@@ -24,14 +26,14 @@ import { pushOut } from "./push.js";
 import { retime } from "./retime.js";
 import { selfClear } from "./self.js";
 
-const FIX_KEYS = ["reach", "slide", "penetration", "self", "retime", "stance"];
+const FIX_KEYS = ["reach", "slide", "penetration", "self", "retime", "stance", "grasp"];
 export { FIX_KEYS };
 
 export function fixOptions(fix) {
-	if (fix === false) return { reach: false, slide: false, penetration: 0, self: false, retime: false, stance: false };
+	if (fix === false) return { reach: false, slide: false, penetration: 0, self: false, retime: false, stance: false, grasp: false };
 	const f = fix ?? {};
 	const pen = f.penetration === true ? 0.02 : Math.min(0.05, Math.max(0, Number(f.penetration) || 0));
-	return { reach: f.reach !== false, slide: f.slide !== false, penetration: pen, self: f.self !== false, retime: f.retime === true, stance: f.stance !== false };
+	return { reach: f.reach !== false, slide: f.slide !== false, penetration: pen, self: f.self !== false, retime: f.retime === true, stance: f.stance !== false, grasp: f.grasp !== false };
 }
 
 /** The slide report with the flat feet whose turn waited (turn.js): turns { frames, max deg }. */
