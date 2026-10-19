@@ -33,7 +33,7 @@ import { fixOptions, applyFixes } from "../fix/index.js";
 import { fitWeight } from "../fix/self.js";
 import { holdHook } from "../object-keys.js";
 import { HAND_CLEAR, keepOut, wristBody } from "../body.js";
-import { objectPoseAt, handOf, restingAt } from "../object-pose.js";
+import { objectPoseAt, handOf, restingAt, frameAt, spanOf } from "../object-pose.js";
 
 const smooth = x => x * x * (3 - 2 * x);
 
@@ -180,6 +180,9 @@ export function compileMotion(spec, { sk, scene }, opts = {}) {
 	ctx.objectHand = (id, f) => handOf(out, id, f);
 	// a keyed carry's grab offset is taken where it rests at grab (object-keys.js; a fall before grab: where it landed)
 	ctx.restingAt = (id, f) => restingAt(out, id, f);
+	// a prop anchor outside its hand's carry reads the carry's grab (release) frame (anchors.js propOnCarry)
+	ctx.carrySpan = o => spanOf(out, o);
+	ctx.solvedAt = f => frameAt(out, f);
 	const engine = {
 		rebake(keys) {
 			out.keys = keys;
