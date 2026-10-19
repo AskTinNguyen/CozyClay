@@ -42,15 +42,29 @@ export function elementSetSchema(kind) {
 export function elementTarget(kind, value, id, sceneId) {
   return kinds.get(projectionKind(kind)).collection ? value.find(row => row.id === id) : id === sceneId ? value : undefined;
 }
-export function readElementDocument(projection, { ids, select } = {}, sceneId) {
+// A kind's `read` shapes what a document read answers (motion leaves out a take's bulky source
+// unless its row id was named): `named` are the ids the caller asked for by name. A read answers
+// at most DOCUMENT_READ_CHARS of kinds, the smallest first; the rest are named in `omitted` with
+// their size, to select alone or by ids. One kind alone answers whole (ids narrow it).
+const DOCUMENT_READ_CHARS = 90_000;
+export function readElementDocument(projection, { ids, select, named = ids } = {}, sceneId) {
   const entries = Object.entries(projection).flatMap(([key, value]) => {
     const kind = projectionKind(key);
     if (select && !select.includes(key) && !select.includes(kind)) return [];
     if (!ids || ids.includes(key) || ids.includes(kind) || ids.includes(sceneId)) return [[key, value]];
     const selected = kinds.get(kind).collection ? value.filter(row => ids.includes(row.id)) : [];
     return selected.length ? [[key, selected]] : [];
+  }).map(([key, value]) => {
+    const read = kinds.get(projectionKind(key))?.read;
+    return [key, read ? read(value, id => Boolean(named?.includes(id))) : value];
   });
-  return { document: structuredClone(Object.fromEntries(entries)), schema: Object.fromEntries(entries.map(([key]) => [key, elementSetSchema(projectionKind(key))])) };
+  const sized = entries.map(([key, value]) => { const schema = elementSetSchema(projectionKind(key)); return { key, value, schema, chars: JSON.stringify([value, schema]).length }; });
+  let room = DOCUMENT_READ_CHARS;
+  const fits = new Set(sized.length < 2 ? sized.map(row => row.key) : [...sized].sort((a, b) => a.chars - b.chars).filter(row => (room -= row.chars) >= 0).map(row => row.key));
+  const kept = sized.filter(row => fits.has(row.key)), omitted = sized.filter(row => !fits.has(row.key));
+  return { document: structuredClone(Object.fromEntries(kept.map(row => [row.key, row.value]))), schema: Object.fromEntries(kept.map(row => [row.key, row.schema])),
+    ...(omitted.length ? { omitted: Object.fromEntries(omitted.map(row => [row.key, row.chars])),
+      note: `Left out to keep this read under ${DOCUMENT_READ_CHARS} characters (sizes in omitted): select a kind alone, name ids, or page objects with scope "entities".` } : {}) };
 }
 export function readElement(document, path) {
   const element = kinds.get(path.slice(0, path.indexOf('.'))).elements.find(row => row.path === path);

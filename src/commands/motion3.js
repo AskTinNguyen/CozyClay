@@ -141,7 +141,9 @@ export function register(registry, ports) {
 		const character = characterOf(ports, characterId);
 		if ((spec === undefined) === (base === undefined)) fail("INVALID_ARGUMENT", "Send exactly one of spec or base (the specId of a compiled spec, with patch).");
 		if (patch !== undefined && base === undefined) fail("INVALID_ARGUMENT", "patch applies to base, the specId of a compiled spec; send base with it, or the whole spec.");
-		const patched = [], source = spec ?? asArgument(() => applyPatch(store.get(base) ?? unknownSpec("base", base), patch ?? [], patched));
+		// a base the store forgot (a reload) may still be the installed take's spec: a document read names it by specId
+		const installedSpec = () => { const take = owner().motionFor(characterId); return take?.spec && specIdOf(take.spec) === base ? structuredClone(take.spec) : null; };
+		const patched = [], source = spec ?? asArgument(() => applyPatch(store.get(base) ?? installedSpec() ?? unknownSpec("base", base), patch ?? [], patched));
 		// the take is always baked: the user watches every draft, installed or not
 		return after(compile(character, source, { probes, repair }, {}), r => {
 			const { qa, take } = r, notes = [...patched, ...(r.notes ?? [])];

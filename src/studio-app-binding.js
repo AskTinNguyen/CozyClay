@@ -343,7 +343,7 @@ export function createStudioAppBinding(ports) {
 				const select = { shot: ["shot"], motion: ["motion", "character"] }[command.args.scope];
 				const ids = args.ids ?? (command.args.scope === "selection" ? [s.selection?.id ?? s.host.sceneId]
 					: args.query && select ? (command.args.scope === "shot" ? s.shots : entityProjection(s).filter(row => row.kind === "character")).filter(wanted).map(row => row.id) : undefined);
-				return { ...head, scope: "document", ...readElementDocument(s.document, { ...command.args, ids, select }, c.host.sceneId) };
+				return { ...head, scope: "document", ...readElementDocument(s.document, { ...command.args, ids, select, named: args.ids }, c.host.sceneId) };
 			}
 			// Build each page from the same complete authoritative projection; never
 			// page by slicing an already-truncated Send context.
