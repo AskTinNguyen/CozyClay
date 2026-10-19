@@ -103,16 +103,21 @@ export function twoBone(sk, s, root, mid, end, target, pole, restBend, stop = nu
 	return inside || d - dc;
 }
 
-/** Aim a foot: Foot->ToeBase along yaw/pitch of its rest direction, sole kept level. */
-export function orientFoot(sk, s, side, yawDeg, pitchDeg) {
+/**
+ * Aim a foot: Foot->ToeBase along yaw/pitch of its rest direction, sole kept level. With `tilt` (pose.js tiltFrame: a body
+ * turned well past upright) the yaw and pitch are read in that frame and the sole levels to its up, so a foot in a flip
+ * points with the shin instead of staying flat to the floor; no toe-off then (the toes are off the ground).
+ */
+export function orientFoot(sk, s, side, yawDeg, pitchDeg, tilt = null) {
 	const foot = sk.index[`${side}Foot`], toe = sk.index[`${side}ToeBase`];
 	const rest = sub(sk.restWorldPos[toe], sk.restWorldPos[foot]);
-	const want = apply(ry(yawDeg), apply(rx(pitchDeg), rest));
+	const want = tilt ? apply(tilt.R, apply(ry(yawDeg - tilt.yaw), apply(rx(pitchDeg), rest))) : apply(ry(yawDeg), apply(rx(pitchDeg), rest));
+	const up = tilt ? apply(tilt.R, [0, 1, 0]) : [0, 1, 0];
 	// level the sole: the foot's own carried up vector goes to world up (no roll from the leg IK)
-	rotateSubtree(sk, s, foot, s.P[foot].slice(), align(sub(s.P[toe], s.P[foot]), carried(sk, s, foot, [0, 1, 0]), want, [0, 1, 0]));
+	rotateSubtree(sk, s, foot, s.P[foot].slice(), align(sub(s.P[toe], s.P[foot]), carried(sk, s, foot, [0, 1, 0]), want, up));
 	// Toe-off: bend the toe joint so the toes stay flat on the ground while the heel rises.
 	const tip = sk.index[`${side}Toe_End`];
-	if (pitchDeg > 0 && tip !== undefined) {
+	if (!tilt && pitchDeg > 0 && tip !== undefined) {
 		const seg = sub(s.P[tip], s.P[toe]), flat = [seg[0], 0, seg[2]];
 		if (len(flat) > 1e-6) rotateSubtree(sk, s, toe, s.P[toe].slice(), align(seg, [0, 1, 0], flat, [0, 1, 0]));
 	}

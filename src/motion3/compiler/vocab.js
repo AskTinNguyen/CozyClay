@@ -20,8 +20,9 @@ const RANGES = [
 	[/^wtwist_[lr]$/, -85, 85, "wrist twist about the forearm in degrees"],
 	[/^wflex_[lr]$/, -70, 70, "wrist flex about the knuckle line in degrees"],
 	[/^fpitch_[lr]$/, -60, 90, "toe-down pitch in degrees: + lifts the heel (the toes stay flat), - lifts the toes"],
-	[/^(pitch|spine_pitch|head_pitch)$/, -120, 120, "degrees, + bends forward"],
-	[/^(roll|spine_roll|head_roll)$/, -90, 90, "degrees"],
+	// the whole-body pitch and roll have none: they turn in full (flips, cartwheels; pose.js tiltFrame)
+	[/^(spine_pitch|head_pitch)$/, -120, 120, "degrees, + bends forward"],
+	[/^(spine_roll|head_roll)$/, -90, 90, "degrees"],
 ];
 export const rangeOf = ch => RANGES.find(([re]) => re.test(ch)) ?? null;
 
@@ -36,7 +37,7 @@ export const CONVENTIONS = {
 
 /** What each channel family means (a family drops the _l/_r side), for motion.describe "channels". */
 export const CHANNEL_DOCS = {
-	root: CONVENTIONS.root, yaw: `degrees; ${CONVENTIONS.yaw}`, pitch: "whole-body pitch, degrees", roll: "whole-body roll, degrees",
+	root: CONVENTIONS.root, yaw: `degrees; ${CONVENTIONS.yaw}`, pitch: "degrees", roll: "degrees",
 	spine_yaw: "degrees", spine_pitch: "degrees, + bends forward", spine_roll: "degrees", head_yaw: "degrees", head_pitch: "degrees, + looks down", head_roll: "degrees",
 	arm_rest: "FK arms down from the T-pose (default 72)", arm_hang: "1 = a free FK forearm hangs plumb (standIdle and walks key it)", foot: CONVENTIONS.foot, fyaw: CONVENTIONS.fyaw, fpitch: "toe-down pitch, degrees, + heel up",
 	knee: `knee pole, ${CONVENTIONS.pole}`, armw: "0 = FK arm, 1 = IK to hand_* / the anchors", hand: CONVENTIONS.hand, elbow: `elbow pole, ${CONVENTIONS.pole}`,

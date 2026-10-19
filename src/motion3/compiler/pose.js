@@ -82,6 +82,21 @@ function hangOf(sk, down) {
 	return hang;
 }
 
+/**
+ * The frame the knee and elbow poles and the feet are read in once the whole body turns well past upright (a flip, a
+ * cartwheel): the root's yaw, pitch and roll, the tilt eased in from TILT_FROM to TILT_FULL degrees (the larger of the
+ * wrapped pitch and roll). Under TILT_FROM it is null and the poles turn with the yaw only, as they always have, so an
+ * upright take is unchanged.
+ */
+const TILT_FROM = 60, TILT_FULL = 120;
+const wrap180 = a => a - 360 * Math.round(a / 360);
+export function tiltFrame(yaw, pitch, roll) {
+	const p = wrap180(pitch), r = wrap180(roll), u = (Math.max(Math.abs(p), Math.abs(r)) - TILT_FROM) / (TILT_FULL - TILT_FROM);
+	if (u <= 0) return null;
+	const w = u >= 1 ? 1 : u * u * (3 - 2 * u);
+	return { yaw, R: mul(ry(yaw), mul(rx(p * w), rz(r * w))) };
+}
+
 export function pose(sk, c, hooks = {}) {
 	const s = restState(sk);
 	const diag = {};
@@ -107,7 +122,7 @@ export function pose(sk, c, hooks = {}) {
 	rotateSubtree(sk, s, hips, s.P[hips].slice(), mul(ry(yaw), mul(rx(num(c.pitch)), rz(num(c.roll)))));
 	const shift = sub(v3(c.root, s.P[hips]), s.P[hips]);
 	for (let j = 0; j < s.P.length; j++) s.P[j] = add(s.P[j], shift);
-	const body = ry(yaw);
+	const tilt = tiltFrame(yaw, num(c.pitch), num(c.roll)), body = tilt?.R ?? ry(yaw);
 	// Legs: two-bone IK to the ankle targets, the knee no further folded than its stop (limbs.js KNEE_STOP), then aim the feet.
 	for (const [k, side] of Object.entries(SIDES)) {
 		if (!c[`foot_${k}`]) continue;
@@ -117,7 +132,7 @@ export function pose(sk, c, hooks = {}) {
 		// a target nearer the hip than the knee folds leaves a residual (leg_miss); leg_fold says what it asked
 		const fold = askedFold(sk, s, side, target, LEG);
 		if (fold > KNEE_FOLD) diag[`leg_fold_${k}`] = fold;
-		orientFoot(sk, s, side, num(c[`fyaw_${k}`], yaw), num(c[`fpitch_${k}`]));
+		orientFoot(sk, s, side, num(c[`fyaw_${k}`], yaw), num(c[`fpitch_${k}`]), tilt);
 	}
 	// Arms: blend the FK hand toward the hook's target, poles blended the same way.
 	for (const k of hooks.armOrder ?? ["r", "l"]) {

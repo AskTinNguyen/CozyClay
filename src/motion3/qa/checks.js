@@ -58,11 +58,15 @@ export function generalChecks(sk, out, opts = {}) {
 		for (const [nm, p, r] of probes) { const d = headDepth(sk, s, p) + r; if (d > L.headAllow) push("FACE", `${nm} into head`, f, d, L.headAllow); }
 		if (segDist(s.P[I.LeftLeg], s.P[I.LeftFoot], s.P[I.RightLeg], s.P[I.RightFoot]) < 0.1 + L.self) push("SELF", "shins touch", f, 0.1, 0.1);
 		if (segDist(s.P[I.LeftUpLeg], s.P[I.LeftLeg], s.P[I.RightUpLeg], s.P[I.RightLeg]) < 0.135 + L.self) push("SELF", "thighs overlap", f, 0.135, 0.135);
+		const tilted = norm(sub(s.P[I.Spine], s.P[I.Hips]))[1] < 0.5;
 		for (const S of ["Left", "Right"]) {
 			const th = s.P[I[`${S}UpLeg`]], kn = s.P[I[`${S}Leg`]], an = s.P[I[`${S}Foot`]];
 			const bend = angle(sub(kn, th), sub(an, kn));
-			// the foot's heading on the ground; the toe sits below the ankle, which must not count
-			const toeDir = sub(s.P[I[`${S}ToeBase`]], an); toeDir[1] = 0;
+			// the foot's heading on the ground; the toe sits below the ankle, which must not count. With the pelvis turned past
+			// 60 deg from upright (a flip, a cartwheel, lying) the ground says nothing about the leg: the foot's front is the toe
+			// across the shin, which an upright leg reads the same way
+			let toeDir = sub(s.P[I[`${S}ToeBase`]], an);
+			if (tilted) { const shin = norm(sub(an, kn)); toeDir = sub(toeDir, scale(shin, dot(toeDir, shin))); } else toeDir[1] = 0;
 			const mid = sub(kn, [(th[0] + an[0]) / 2, (th[1] + an[1]) / 2, (th[2] + an[2]) / 2]);
 			if (bend > 3 && dot(mid, toeDir) < -0.002) push("KNEE", `${S} knee bends backward`, f, bend, 0);
 			// a knee folded past its stop puts the shin in the thigh (the solver stops at KNEE_STOP)

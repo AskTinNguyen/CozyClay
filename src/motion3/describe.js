@@ -103,6 +103,8 @@ function describeSkill(name) {
 const MEANT = { topics: ["objects", "channels"], skills: ["reachGrip"] };
 /** Topics no round-2 session needed for a first spec: essentials names their parts, the full topic has the fields. */
 const SHALLOW = ["checks"];
+/** Skills essentials leaves to topic skills: a flip or cartwheel is no first spec's need, and essentials has no room. */
+const FIRST_SPEC_SKIP = ["flip"];
 
 /** A shared shape whose fields are mostly a skill's args (walk, walkTo): its own fields and `...<skill> args`. */
 function shapeLine(d) {
@@ -134,7 +136,8 @@ function essentials() {
 	}
 	// use.skill without the enum: the skills list below names them
 	if (shared.use) shared.use = objectOf(USE_FIELDS, USE_TYPES, "use", ["skill", "f0"]);
-	const skills = SKILL_NAMES.map(n => {
+	// a skill no first spec needs (FIRST_SPEC_SKIP) is in topic skills only
+	const skills = SKILL_NAMES.filter(n => !FIRST_SPEC_SKIP.includes(n)).map(n => {
 		const { args, required = [], needs, frames, adds } = SKILL_INFO[n] ?? bad(`describe: skill ${n} has no entry in skills/info.js`);
 		return { name: n, args: briefType({ type: "object", properties: args, required }, { means: MEANT.skills.includes(n) }), needs, frames, adds };
 	});
