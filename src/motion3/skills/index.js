@@ -62,7 +62,7 @@ export function expandUse(spec, { sk, scene, lenient = false, auto = false }) {
 		if (!Number.isInteger(u.f0) || u.f0 < 0 || u.f0 > spec.frames - 1) bad(`use[${i}].f0 must be an integer frame within 0..${spec.frames - 1}, got ${JSON.stringify(u.f0)}`);
 		const keys = [...skillKeys, ...own];
 		const ctx = { sk, scene, frames: spec.frames, auto, props: { ...merged.props, ...spec.props }, self: spec.fix !== false && spec.fix?.self !== false, f0: u.f0, args: structuredClone(u.args ?? {}), tag, keys,
-			use: spec.use, index: i, place: fixOptions(spec.fix).stance, state: structuredClone(stateAt(keys, u.f0)), anchors: { ...merged.anchors, ...spec.anchors } };
+			use: spec.use, index: i, place: fixOptions(spec.fix).stance, state: structuredClone(stateAt(keys, u.f0)), anchors: { ...merged.anchors, ...spec.anchors }, objects: { ...merged.objects, ...spec.objects } };
 		const part = SKILLS[u.skill](ctx), last = Math.max(part.end ?? u.f0, ...part.keys.map(k => k.f));
 		if (last > spec.frames - 1) bad(`${tag} needs ${last - u.f0} frames from f${u.f0} (to f${last}), past the last frame f${spec.frames - 1}; set frames >= ${last + 1} or frames: "auto"`);
 		skillKeys.push(...part.keys.map(k => ({ ...k, src: k.src ?? tag })));

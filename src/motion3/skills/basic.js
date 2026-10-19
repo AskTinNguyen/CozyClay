@@ -104,16 +104,18 @@ export function reachGrip(ctx) {
 	const held = Math.min(reach + hold, last - ctx.f0);
 	for (const [c, v] of [[w, 0], [fg, { [preset]: 0 }], [armw, 0]]) if (state[c] === undefined) state[c] = v;
 	// the head looks at what the hand goes for unless the keys already move it (reach-human.js); read before the keys move state
-	const end = reach + hold + release, look = !headKeyed(ctx.keys ?? [], ctx.f0, ctx.f0 + end) && gazeAt(ctx, args.define ?? ctx.anchors?.[name], state);
+	// the reach's own view: a thing that spec.objects moves before the hand gets there is not at rest (reach-human.js)
+	const end = reach + hold + release, rc = { ...ctx, until: ctx.f0 + reach };
+	const look = !headKeyed(ctx.keys ?? [], ctx.f0, ctx.f0 + end) && gazeAt(rc, args.define ?? ctx.anchors?.[name], state);
 	const head = look ? { head_yaw: state.head_yaw ?? 0, head_pitch: state.head_pitch ?? 0 } : null;
 	const b = keyBook(state, ctx.f0);
 	b.hold(0, w, fg, armw, el, ...(look ? ["head_yaw", "head_pitch"] : []));
 	// the transport's early-peaked bell; on a thing the open hand clears, the fingers stay open to CLOSE of the reach, then close
 	// (a reach for a moving point, or below the knees, keeps the plain ease: reach-human.js earlyTransport)
 	const target = args.define ?? ctx.anchors?.[name], w0 = state[w], a0 = state[armw], lerp = (a, z, t) => a + (z - a) * t;
-	if (earlyTransport(ctx, target)) for (const [f, t, ta] of transportKeys(reach)) b.at(f, { [w]: lerp(w0, 1, t), [armw]: lerp(a0, 1, ta) });
+	if (earlyTransport(rc, target)) for (const [f, t, ta] of transportKeys(reach)) b.at(f, { [w]: lerp(w0, 1, t), [armw]: lerp(a0, 1, ta) });
 	const close = Math.round(CLOSE * reach);
-	if (close > 0 && close < reach && holdsOpen(ctx, target, state)) b.hold(close, fg);
+	if (close > 0 && close < reach && holdsOpen(rc, target, state)) b.hold(close, fg);
 	if (look) b.at(Math.max(1, Math.round(GAZE * reach)), look);
 	b.at(reach, { [w]: 1, [fg]: { ...state[fg], [preset]: 1 }, [armw]: 1, ...(args.elbow ? { [el]: args.elbow } : {}) });
 	b.hold(held, w, fg, armw, el, ...(look ? ["head_yaw", "head_pitch"] : []));

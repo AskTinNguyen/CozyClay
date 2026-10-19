@@ -69,3 +69,8 @@ check("a head the spec keys during the reach is left alone", () => {
 	const r = run(sk, [TABLE, CUP], spec({ kind: "world", p: cupMid }, [{ f: 20, set: { head_yaw: -20, head_pitch: 0 } }]));
 	assert.ok(Math.abs((r.out.frames[F0 + REACH].c.head_yaw ?? 0) + 20) < 1e-6, `${r.out.frames[F0 + REACH].c.head_yaw}`);
 });
+check("a thing spec.objects moves during the reach is not planned from where it started: no gaze keys, the plain ease", () => {
+	const moving = { ...spec({ kind: "object", object: "cylinder", local: [0, 0.05, 0] }), objects: { cylinder: { keys: [{ f: 0, pos: [CUP.x, CUP.y, CUP.z] }, { f: 20, pos: [CUP.x + 0.1, CUP.y, CUP.z] }] } } };
+	const r = run(sk, [TABLE, CUP], moving), keyed = r.out.keys.filter(k => /reachGrip/.test(k.src ?? "") && k.f > F0 && k.f < F0 + REACH);
+	assert.ok(!keyed.some(k => k.set?.head_yaw !== undefined || k.set?.[`w_cup_r`] !== undefined), JSON.stringify(keyed.map(k => [k.f, Object.keys(k.set)])));
+});

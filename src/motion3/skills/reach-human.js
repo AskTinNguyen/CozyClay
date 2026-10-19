@@ -58,8 +58,20 @@ export function earlyTransport(ctx, a) {
 function restPoint(ctx, a) {
 	if (a?.kind === "world" && Array.isArray(a.p)) return a.p;
 	const o = a?.kind === "object" ? ctx.scene?.objects?.[a.object] : null;
-	if (!o) return null;
+	if (!o || [a.object, ...(o.ancestors ?? [])].some(id => movesBy(ctx, id))) return null;
 	return add(o.pos, apply(o.R, a.local ?? [0, o.half?.[1] ?? 0, 0]));
+}
+
+/**
+ * True when spec.objects moves record `id` before the reach is done (ctx.until): a follow or a hinge, or keys or a fall
+ * from before that frame (a carry whose keys start at a grab after the hand arrives rests until then).
+ */
+function movesBy(ctx, id) {
+	const o = ctx.objects?.[id];
+	if (!o || typeof o !== "object") return false;
+	if (o.follow !== undefined || o.hinge !== undefined) return true;
+	const from = Math.min(...(o.keys ?? []).map(k => k.f).filter(Number.isFinite), o.fall?.at ?? Infinity);
+	return from < (ctx.until ?? Infinity);
 }
 
 const opened = new WeakMap();
