@@ -744,7 +744,7 @@ export function createHttpTransport({ fetchImpl = globalThis.fetch?.bind(globalT
 		},
 		/** Streams sidecar events to `onEvent`. Resolves when the turn ends. */
 		async turn(turnRequest, onEvent, signal) {
-			const { sessionId, text, attachFrame, model, effort, attachments, supervisor } = turnRequest;
+			const { sessionId, text, attachFrame, model, effort, attachments, supervisor, tasks } = turnRequest;
 			const attached = Array.isArray(attachments) && attachments.length ? { attachments } : {};
 			const studio = turnRequest.surface === "studio";
 			const turnId = studio ? turnRequest.turnId : null;
@@ -803,9 +803,10 @@ export function createHttpTransport({ fetchImpl = globalThis.fetch?.bind(globalT
 				})
 				: JSON.stringify({ sessionId, text, attachFrame, model, ...(effort ? { effort } : {}), ...attached, ...(telemetry.turnId ? { turn_id: telemetry.turnId } : {}) });
 			try {
-				const response = await fetchImpl(sidecarUrl("/agent/turn"), {
+				// Task mode (the panel's Tasks switch): the turn goes to the main agent, which answers at once and runs tasks.
+				const response = await fetchImpl(sidecarUrl(studio && tasks ? "/agent/main" : "/agent/turn"), {
 					method: "POST",
-					headers: { "content-type": "application/json", accept: "text/event-stream" },
+					headers: { "content-type": "application/json", accept: "text/event-stream", ...(studio && tasks ? { "x-cozyclay-tasks": "on" } : {}) },
 					body,
 					signal,
 				});
@@ -1454,6 +1455,8 @@ export function createAgentChatStore({
 			return () => listeners.delete(listener);
 		},
 		setDraft: (draft) => set({ draft: String(draft ?? "") }),
+		/** A reply the main agent made on its own (task mode: a task ended while nobody was talking to it). */
+		note: (text) => { if (String(text ?? "").trim()) set({ items: [...state.items, { kind: "assistant", id: newId(), text: String(text) }] }); },
 		/** Pictures pasted or dropped into the composer. Returns what was taken and
 		 * what had to be refused, so the composer can say so instead of a picture
 		 * vanishing on its way in. */
@@ -1511,7 +1514,7 @@ export function createAgentChatStore({
 					attachFrame: Boolean(options.attachFrame),
 					model: options.model,
 					effort: options.effort ?? undefined,
-					...(typeof options.supervisor === "boolean" ? { supervisor: options.supervisor } : {}),
+					...(typeof options.supervisor === "boolean" ? { supervisor: options.supervisor } : {}), ...(options.tasks ? { tasks: true } : {}),
 				}, applyEvent, signal);
 			} catch (error) {
 				if (!signal.aborted) applyEvent({ type: "error", code: "upstream", message: String(error?.message || error) });

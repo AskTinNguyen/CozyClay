@@ -136,3 +136,35 @@ test('what a command writes, known before it runs', () => {
   assert.deepEqual(commandKeys('objects.arrange', { ops: [{ op: 'create' }, { op: 'update', id: 'p' }] }, state), ['object:p']);
   assert.deepEqual(commandKeys('some.newCommand', {}, state, { kind: 'mutation' }), ['scene'], 'an unknown command writes scene');
 });
+
+test('the panel hears a task\'s scope grow and the user editing inside it (task.scope, task.userEdit)', () => {
+  const { f, ids, task, begin, move } = setup();
+  const heard = [];
+  const stop = f.binding.bus.subscribe(event => { if (/^task\./.test(event?.type)) heard.push(event); });
+  try {
+    const a = task('task-a');
+    ok(begin('task-a', [`object:${ids.cube}`], { title: 'cube' }));
+    ok(a('task.requestScope', { taskId: 'task-a', scope: [`object:${ids.chair}`] }));
+    ok(move((action, args) => f.run(action, args, 'ui'), ids.cube, 7));
+    ok(move((action, args) => f.run(action, args, 'ui'), ids.sphere, 8));
+    ok(a('task.finish', { taskId: 'task-a' }));
+    assert.deepEqual(heard.map(event => event.type), ['task.begun', 'task.scope', 'task.userEdit', 'task.finished']);
+    assert.deepEqual(heard[1].scope, [`object:${ids.cube}`, `object:${ids.chair}`]);
+    assert.deepEqual(heard[2], { type: 'task.userEdit', taskId: 'task-a', keys: [`object:${ids.cube}`] }, 'only the edit inside the scope is told');
+  } finally { stop(); f.dispose(); }
+});
+
+test('undo task, newest first: once the later task is undone, the earlier one undoes though its key has a new token', () => {
+  const { f, ids, task, begin, x, move } = setup();
+  try {
+    const ui = (action, args) => f.run(action, args, 'ui');
+    const before = x(ids.cube);
+    ok(begin('task-a', [`object:${ids.cube}`])); ok(move(task('task-a'), ids.cube, 1)); ok(task('task-a')('task.finish', { taskId: 'task-a' }));
+    ok(begin('task-b', [`object:${ids.cube}`])); ok(move(task('task-b'), ids.cube, 2)); ok(task('task-b')('task.finish', { taskId: 'task-b' }));
+    refused(ui('task.undo', { taskId: 'task-a' }), 'UNDO_CONFLICT');
+    ok(ui('task.undo', { taskId: 'task-b' }));
+    assert.equal(x(ids.cube), 1);
+    ok(ui('task.undo', { taskId: 'task-a' }));
+    assert.equal(x(ids.cube), before);
+  } finally { f.dispose(); }
+});

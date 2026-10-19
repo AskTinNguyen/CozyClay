@@ -450,7 +450,10 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 		let current;
 		try { current = studioRuntime?.readContext ? await studioRuntime.readContext(value.context.host) : await authoritativeStudioContext(value, hub); }
 		catch (error) { if (error instanceof StudioProtocolError) throw error; if (error?.code) throw new StudioProtocolError(error.code, error.message); throw new StudioProtocolError("CAPABILITY_MISSING", "The connected editor does not expose authoritative Studio context."); }
-		validateStudioContextFreshness(value.context, current);
+		// Task mode: other tasks edit the scene all the time, so a main turn or a task's run is admitted on the host alone (a
+		// sibling task's edit between the read and here is expected); the bus's scope admission guards every write.
+		const tasked = Boolean(value.main || value.task);
+		validateStudioContextFreshness(tasked ? { ...value.context, entities: current.entities, entityPage: current.entityPage, entityIndex: current.entityIndex, revision: current.revision } : value.context, current);
 		// The session, and the owner token only this turn's response can hand
 		// the browser, exist only once the turn is admitted. Minting them before
 		// a refusal (the editor still reconnecting after a restart) left a
@@ -781,7 +784,8 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 			}
 			return true;
 		}
-		if (path === "/agent/main" || path.startsWith("/agent/main/") || path.startsWith("/agent/task/")) { if (studioTasks()) return taskRoutes(req, res, path); json(res, 404, { error: "not found" }); return true; }
+		// Task mode: the COZYCLAY_STUDIO_TASKS flag, or one Studio session that opted in (the panel's Tasks switch, studio-task-routes.mjs).
+		if (path === "/agent/main" || path.startsWith("/agent/main/") || path.startsWith("/agent/task/")) return taskRoutes(req, res, path);
 		if (req.method !== "POST" || !["/agent/turn", "/agent/stop"].includes(path)) {
 			json(res, 404, { error: "not found" }); return true;
 		}

@@ -16,6 +16,7 @@
 //       scope and the main agent hears task.sceneChanged; a task lost mid-command (UNCERTAIN_APPLY) on a changed scope
 //       fails with that reason.
 import assert from "node:assert/strict";
+import { Readable } from "node:stream";
 import { createServer } from "node:http";
 import { once } from "node:events";
 import { randomUUID } from "node:crypto";
@@ -160,6 +161,15 @@ const dispatch = (board, title, scope, extra = {}) => board.dispatch({ title, in
 	assert.equal(status().a, "cancelled"); assert.equal(board.cancel(a.taskId), null);
 	console.log("PASS cancel: a queued task ends at once, a running one stops and ends cancelled");
 }
+{
+	// A cancel that reaches a run which already finished on the bus (task.finish) cannot take it back: the card says done.
+	const { board, runs, status } = boardFixture();
+	const a = dispatch(board, "a", ["object:a"]); await tick();
+	board.cancel(a.taskId);
+	runs[0].resolve({ status: "done", reply: "a moved" }); await tick(); await tick();
+	assert.equal(status().a, "done");
+	console.log("PASS a cancel that arrives after the run finished leaves it done, not cancelled");
+}
 
 // --- (b) the main agent's words ----------------------------------------------------------------------------
 {
@@ -248,6 +258,11 @@ const { MAIN_SYSTEM_PROMPT } = await import("../bin/agent/main-prompt.mjs");
 	const res = { statusCode: 0, writeHead(code) { this.statusCode = code; }, setHeader() {}, end() {} };
 	await disabled({ method: "POST", url: "/agent/main", headers: {} }, res, "/agent/main");
 	assert.equal(res.statusCode, 404, "the flag is off by default: single mode stays");
+	// The panel's Tasks switch opts one session in without the flag: its main turn carries x-cozyclay-tasks: on.
+	const optIn = Object.assign(Readable.from([Buffer.from("{}")]), { method: "POST", url: "/agent/main", headers: { "x-cozyclay-tasks": "on", "content-type": "application/json" } });
+	const answered = { statusCode: 0, writeHead(code) { this.statusCode = code; }, setHeader() {}, end() {} };
+	await disabled(optIn, answered, "/agent/main");
+	assert.equal(answered.statusCode, 400, "an opted-in main turn reaches the main agent's route (here refused for its empty envelope), not a 404");
 	await handler.close?.(); await new Promise(resolve => server.close(resolve)); f.dispose();
 	console.log("PASS the routes: the main agent answers at once, two tasks edit two objects of one scene in their own scopes, a quick edit lands, the main agent reports when they end, task sessions keep their parent");
 }

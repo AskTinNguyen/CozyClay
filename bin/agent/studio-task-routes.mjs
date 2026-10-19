@@ -108,6 +108,8 @@ export function createStudioTaskRoutes({ enabled, handleStudioTurn, studioSessio
 			else if (frame.type === "tool.done" && !frame.ok && LOST_STUDIO.has(String(frame.error ?? "").split(":")[0])) { out.lost = true; if (String(frame.error).startsWith("UNCERTAIN_APPLY")) task.midCommand = true; stop(); }
 			else if (frame.type === "error") { out.error = { code: frame.code, message: frame.message }; if (frame.code === "SCOPE_BUSY") out.busy = true; if (LOST_STUDIO.has(frame.code)) out.lost = true; }
 			else if (frame.type === "done" && frame.usage) out.usage = { ...frame.usage, cost: frame.cost ?? 0 };
+			// How the bus closed the task: a stop that came after the run already finished keeps its edits (task.finish).
+			else if (frame.type === "receipt" && /^task\.(cancel|finish)$/.test(frame.receipt?.action ?? "")) out.ended = frame.receipt.action;
 		};
 		try {
 			await handleStudioTurn(ownerRequest(owner), fakeResponse(), { surface: "studio", sessionId, turnId, text: taskHeader(task, { deps, resume }), context, model: main.model, effort: main.effort, observe,
@@ -121,7 +123,7 @@ export function createStudioTaskRoutes({ enabled, handleStudioTurn, studioSessio
 		const common = { reply: out.reply, receipts: out.receipts, usage: out.usage };
 		if (out.lost) return { status: "lost", sceneId: context.host.sceneId, ...common };
 		if (out.busy) return { status: "scopeBusy", error: out.error, ...common };
-		if (signal.aborted) return { status: "cancelled", ...common };
+		if (signal.aborted && out.ended !== "task.finish") return { status: "cancelled", ...common };
 		return out.error ? { status: "failed", error: out.error, ...common } : { status: "done", ...common };
 	}
 
@@ -146,7 +148,10 @@ export function createStudioTaskRoutes({ enabled, handleStudioTurn, studioSessio
 	const taskOwner = taskId => [...mains.values()].find(main => main.board.get(taskId));
 
 	return async function route(req, res, path) {
-		if (!enabled()) { json(res, 404, { error: "not found" }); return true; }
+		// Off unless the flag is on, or the panel's Tasks switch opted this session in: a main turn sent with the header
+		// x-cozyclay-tasks: on, after which that session's board and its tasks answer too.
+		const optedIn = path === "/agent/main" ? req.headers?.["x-cozyclay-tasks"] === "on" : [...mains.keys()].some(id => path.startsWith(`/agent/main/${encodeURIComponent(id)}/`)) || /^\/agent\/task\//.test(path) && mains.size > 0;
+		if (!enabled() && !optedIn) { json(res, 404, { error: "not found" }); return true; }
 		if (path === "/agent/main" && req.method === "POST") {
 			let value;
 			try { value = await validateEnvelope(await readBody(req)); } catch (error) { json(res, 400, { error: error?.toJSON?.() ?? "invalid request" }); return true; }
