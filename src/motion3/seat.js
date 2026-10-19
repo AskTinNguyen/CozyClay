@@ -53,7 +53,8 @@ export function seatOffset(sk, spec, scene, id, o, offset) {
 		}
 		return d;
 	};
-	const d0 = depthAt(0), outward = depthAt(0.01) < depthAt(-0.01) ? 1 : -1, inside = d0 > -TOUCH;
+	// out of the hand is the palm's side: -n on the right hand, +n on the left (limbs.js palmAxes), the frame's y column n
+	const d0 = depthAt(0), outward = prop.hand === "l" ? 1 : -1, inside = d0 > -TOUCH;
 	// inside: the answer lies outward within FAR; floating: inward within NEAR (never past the touch)
 	let lo = 0, hi = inside ? FAR : NEAR;
 	const sign = inside ? outward : -outward;

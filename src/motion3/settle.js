@@ -10,6 +10,7 @@
 // pivot on the support, paced by gravity: closed form and deterministic.
 import { add, sub, scale, dot, cross, len, norm, mul, apply, axisRot, clamp } from "./compiler/math.js";
 import { G } from "./free-motion.js";
+import { flightTime } from "./flight.js";
 
 /** The share of the drop height a landing spends tipping the object over an edge. */
 export const TIP = 0.3;
@@ -54,17 +55,21 @@ export function spinOf(Ra, Rb, fps) {
 	return len(axis) > 0 ? scale(axis, rate) : [0, 0, 0];
 }
 
-/** The fall through the air from `start` onto the support top: { tl (s), at(t) } with the centre on a parabola, turning at `spin`. */
-export function airPath(s, start, spin, top, fps) {
-	const rate = len(spin), com0 = world(start, s.com);
+/**
+ * The fall through the air from `start` onto the support top: { tl (s), at(t) } with the centre on a parabola, turning at
+ * `spin`, leaving at v0 m/s (a throw, flight.js; zero: straight down, as before).
+ */
+export function airPath(s, start, spin, top, fps, v0 = [0, 0, 0]) {
+	const rate = len(spin), com0 = world(start, s.com), still = !v0.some(v => v !== 0);
 	const at = t => {
 		const R = rate > 0 ? mul(axisRot(spin, deg(rate * t)), start.R) : start.R;
-		return { pos: sub(add(com0, [0, -0.5 * G * t * t, 0]), apply(R, s.com)), R };
+		const fall = still ? [0, -0.5 * G * t * t, 0] : [v0[0] * t, v0[1] * t - 0.5 * G * t * t, v0[2] * t];
+		return { pos: sub(add(com0, fall), apply(R, s.com)), R };
 	};
 	const h = Math.max(0, lowest(s, start) - top);
-	if (rate === 0) return { tl: Math.sqrt((2 * h) / G), at };
+	if (rate === 0) return { tl: still ? Math.sqrt((2 * h) / G) : flightTime(h, v0[1], G), at };
 	// spinning: the first sub-frame step whose lowest corner reaches the top, then halved down to the touch
-	const dt = 1 / (fps * 8), cap = Math.sqrt((2 * (h + len(sub(s.hi, s.lo)))) / G) + dt;
+	const dt = 1 / (fps * 8), cap = (still ? Math.sqrt((2 * (h + len(sub(s.hi, s.lo)))) / G) : flightTime(h + len(sub(s.hi, s.lo)), v0[1], G)) + dt;
 	let a = 0, b = dt;
 	while (b < cap && lowest(s, at(b)) > top) { a = b; b += dt; }
 	for (let i = 0; i < 24 && b - a > 1e-7; i++) { const m = (a + b) / 2; if (lowest(s, at(m)) > top) a = m; else b = m; }

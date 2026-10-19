@@ -18,6 +18,7 @@ import { validateSpec } from "../../src/motion3/compiler/validate.js";
 import { nameChecks } from "../../src/motion3/qa/check-names.js";
 import { checkRef } from "../../src/motion3/refs.js";
 import { compileSpec } from "../../src/motion3/pipeline.js";
+import { createSceneObject } from "../../src/scene-objects.js";
 import { motionScene } from "../../src/motion3/scene.js";
 import { skeletonFor } from "../../src/motion3/rigs/index.js";
 import { MOTION_OUTPUT_BUDGET } from "../../src/motion3/report.js";
@@ -73,11 +74,14 @@ expect("reachGrip: required args starred, defaults shown, adds props.<anchor>Gri
 	&& list.skills.find(s => s.name === "reachGrip").adds.some(x => x.includes("props.<anchor>Grip")));
 expect("walkTo says it needs a standing pose keyed before f0", /standing pose keyed before f0/.test(list.skills.find(s => s.name === "walkTo").needs));
 for (const name of SKILL_NAMES) {
-	const one = describe("skills", name), scene = SKILL_INFO[name].needs.includes("car") || name === "sitInSeat" ? car : empty;
+	// throwObject throws what a hand carries: the example's ball, carried in the right hand from f0
+	const throws = name === "throwObject", ball = { ...createSceneObject("sphere"), id: "ball", name: "ball", x: 0.2, y: 0.9, z: 0.2, scaleX: 0.074, scaleY: 0.074, scaleZ: 0.074 };
+	const one = describe("skills", name), scene = SKILL_INFO[name].needs.includes("car") || name === "sitInSeat" ? car : throws ? motionScene([ball]) : empty;
 	expect(`describe skills ${name}: ${bytes(one)} B, the args schema and a use example`, bytes(one) <= MOTION_OUTPUT_BUDGET && one.name === name && one.example.skill === name
 		&& JSON.stringify(Object.keys(one.schema.properties)) === JSON.stringify(Object.keys(SKILL_INFO[name].args)) && one.schema.additionalProperties === false);
 	const before = name === "exitCar" ? [{ skill: "sitInSeat", f0: 0, args: { car: "Car" } }] : name === "standIdle" || name === "sitInSeat" ? [] : [STAND];
-	const spec = { schema: "cozyclay.motion-spec.v1", fps: 24, frames: "auto", use: [...before, one.example] };
+	const spec = { schema: "cozyclay.motion-spec.v1", fps: 24, frames: "auto", use: [...before, one.example],
+		...(throws ? { props: { ballGrip: { hand: "r", origin: ["RightHandIndex2", "RightHandMiddle2"], points: {} } }, objects: { ball: { prop: "ballGrip", grasp: "spherical", grab: 0 } } } : {}) };
 	const msg = refusal(() => validate(spec, { sk, scene }));
 	expect(`describe skills ${name}: the example expands and validates`, msg === "", msg);
 }
@@ -103,9 +107,11 @@ const channels = [...VEC_CHANNELS, ...NUM_CHANNELS, ...MAP_CHANNELS].filter(ch =
 const skillOnly = [...SKILL_CHANNELS].filter(ch => named(ch, ess.types.channels));
 expect("essentials names every channel (a left/right pair as x_l|r) but the skill-keyed ones", channels.length === 0 && skillOnly.length === 0, [...channels, ...skillOnly].join());
 expect("essentials names every ref kind", REF_KINDS.every(k => ess.types.refs.includes(`${k}:`)), ess.types.refs);
-// flip and hitReaction (a tumble, a body thrown by a hit: no first spec needs them) are in topic skills only: essentials has no room
-// for them (describe.js FIRST_SPEC_SKIP; hitReaction left it when grasp, mass and fall.v joined, #816)
-expect("essentials lists exactly SKILL_NAMES but flip and hitReaction, each with needs, frames, adds and every arg typed", JSON.stringify(ess.skills.map(s => s.name)) === JSON.stringify(SKILL_NAMES.filter(n => n !== "flip" && n !== "hitReaction"))
+// flip, hitReaction and throwObject (a tumble, a body thrown by a hit, a throw after a pickup: no first spec needs them) are in
+// topic skills only: essentials has no room for them (describe.js FIRST_SPEC_SKIP; hitReaction left it when grasp, mass and
+// fall.v joined, throwObject never joined, #816)
+const SKIPPED = ["flip", "hitReaction", "throwObject"];
+expect("essentials lists exactly SKILL_NAMES but flip, hitReaction and throwObject, each with needs, frames, adds and every arg typed", JSON.stringify(ess.skills.map(s => s.name)) === JSON.stringify(SKILL_NAMES.filter(n => !SKIPPED.includes(n)))
 	&& ess.skills.every(s => s.needs === SKILL_INFO[s.name].needs && s.frames === SKILL_INFO[s.name].frames && s.adds === SKILL_INFO[s.name].adds
 		&& Object.keys(SKILL_INFO[s.name].args).every(a => named(a, s.args))));
 const rg = ess.skills.find(s => s.name === "reachGrip").args;
