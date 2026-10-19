@@ -22,6 +22,7 @@ import { qaSay } from "../qa-label.js";
 import { carryEdit } from "../motion3/edit-carry.js";
 import { normalizeCompileArgs } from "../motion3/lenient.js";
 import { createCompileRunner } from "./motion3-compile.js";
+import { peopleOf } from "../motion3/people.js";
 
 const TIMELINE_FPS = 24;
 const id = { type: "string", minLength: 1 };
@@ -92,6 +93,11 @@ export function register(registry, ports) {
 		if (Math.abs((character.scale ?? 1) - 1) > 1e-6) fail("TARGET_NOT_READY", "Set the character's scale back to 1 before compiling motion.");
 		return sk;
 	};
+	// the scene a compile sees: the objects, and the other characters' installed takes as moving bodies (people.js)
+	const sceneFor = character => {
+		const state = ports.state(), people = peopleOf(state.characters, character.id, id => owner().motionFor(id));
+		return { ...motionScene(state.objects), ...(Object.keys(people).length ? { people } : {}) };
+	};
 	// one compile worker per editor in the browser, the calling thread elsewhere (motion3-compile.js)
 	const runner = createCompileRunner();
 	const workerWarning = () => { const note = runner.takeWarning(); return note ? { warnings: [note] } : {}; };
@@ -102,7 +108,7 @@ export function register(registry, ports) {
 	const compile = (character, spec, opts = {}, bake) => {
 		rigOf(character);
 		const placed = bake && { position: [character.x ?? 0, character.y ?? 0, character.z ?? 0], yaw: character.rot ?? 0, ...bake };
-		return runner.run({ model: character.model, scene: motionScene(ports.state().objects), spec, ...opts, ...(placed ? { bake: placed } : {}) });
+		return runner.run({ model: character.model, scene: sceneFor(character), spec, ...opts, ...(placed ? { bake: placed } : {}) });
 	};
 	/** The whole output, kept in the store (motion.report, delta) and cut to the receipt budget (report.js). */
 	const report = (r, head, extra = {}) => {
@@ -197,7 +203,7 @@ export function register(registry, ports) {
 	// motion.keyObject (C14): one key of a held object (or a hinge angle) in the installed take's spec, compiled
 	// and installed whatever QA says (a user edit), as one undo entry
 	registry.register({ ...declarations[5], available: mounted, target: args => args.characterId, run({ characterId, ...args }, context) {
-		const character = characterOf(ports, characterId), take = installed(characterId), scene = motionScene(ports.state().objects);
+		const character = characterOf(ports, characterId), take = installed(characterId), scene = sceneFor(character);
 		const { spec, keyed } = asArgument(() => keyObject(take.spec, scene, args, expandUse(take.spec, { sk: rigOf(character), scene, lenient: true }).spec.objects));
 		return after(compile(character, spec, { lenient: true }, { prompt: take.prompt }), r => {
 			const timing = put(character, r.take, context);

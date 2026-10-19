@@ -180,7 +180,7 @@ checkRef(spec, err, ctx, "goals[0].near[1]", "landmark:nose");
 checkRef(spec, err, ctx, "goals[0].near[0]", "joint:Hips", ["object"]);
 expect("checkRef messages", msgs[0] === 'probes[0].distance[0] "joint:LeftHnad": unknown bone; did you mean "LeftHand"?' && /probes\[1\]\.position "object:empty-3" names object "empty-3", which is not in the scene; did you mean "empty-2"?/.test(msgs[1])
 	&& msgs[2] === 'goals[0].near[1] "landmark:nose": the only landmark is "mouth"' && msgs[3] === 'goals[0].near[0] "joint:Hips" must be object:<id>[.center|.top|.base]', msgs.join("\n"));
-expect("REF_KINDS lists the grammar", REF_KINDS.join() === "joint,bone,prop,anchor,landmark,object");
+expect("REF_KINDS lists the grammar", REF_KINDS.join() === "joint,bone,prop,anchor,landmark,object,person");
 
 // 7. objectOk names a group's parts
 const groupMsg = refusal(() => validateSpec({ ...stand(), use: undefined, keys: [{ f: 0, set: { yaw: 0 } }], checks: { clearance: [{ name: "c", part: "hand_r", object: CUP.group, min: 0.01 }] } }, { sk, scene }));

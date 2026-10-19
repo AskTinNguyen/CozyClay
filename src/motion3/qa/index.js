@@ -1,5 +1,5 @@
 // Motion QA entry: general checks on every take, the checks the spec declares, the objects it
-// moves (object-checks.js), its goals (goals.js) and the style checks it opted into by naming
+// moves (object-checks.js), the other people in the scene (people-checks.js, PERSON), its goals (goals.js) and the style checks it opted into by naming
 // their limit (style.js; otherwise style is measured, not judged: observeMotion). Groups are
 // ranked by severity.js. total counts frame-level issues (a goal held on "all" frames adds one per failing frame); problems
 // counts the groups, which is what a person reads (src/qa-label.js).
@@ -9,6 +9,7 @@ import { specChecks } from "./spec-checks.js";
 import { objectChecks } from "./object-checks.js";
 import { goalChecks } from "./goals.js";
 import { wristIssues } from "./wrist-checks.js";
+import { peopleChecks } from "./people-checks.js";
 import { explainGroups } from "./explain.js";
 import { LOW_IS_BAD, groupKey, rankGroups } from "./severity.js";
 
@@ -35,7 +36,7 @@ export function runMotionQa(sk, out, spec, opts = {}) {
 	const checks = spec.checks ?? {}, goals = goalChecks(out, spec.goals ?? []);
 	const issues = [...generalChecks(sk, out, { allow: checks.allow, limits: checks.limits, mouthPoints: checks.mouthPoints }), ...specChecks(out, checks),
 		...objectChecks(sk, out, spec), ...floatChecks(out, checks),
-		...styleChecks(sk, out, checks, { ...QA_LIMITS, ...checks.limits }), ...wristIssues(sk, out), ...goals.issues];
+		...styleChecks(sk, out, checks, { ...QA_LIMITS, ...checks.limits }), ...wristIssues(sk, out), ...peopleChecks(sk, out, checks), ...goals.issues];
 	if (out.f0) for (const i of issues) i.frame += out.f0;
 	const groups = summarizeIssues(issues);
 	if (opts.explain !== false) explainGroups(sk, out, spec, groups, { userSpec: opts.userSpec });

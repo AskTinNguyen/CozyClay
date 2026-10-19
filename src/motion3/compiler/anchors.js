@@ -10,6 +10,8 @@
 //                       that frame (hinged, carried, following; object-pose.js objectPoseAt), in its own axes
 //   { kind: "landmark", name: "mouth" }                     measured face landmark on the Head bone
 //   { kind: "prop",     prop: "cig", point: "tip", offset: [x,y,z] }  a point on a prop held by the other hand
+//   { kind: "person",   person: "char-b", bone: "LeftArm", offset: [x,y,z] }  world offset from another character's joint
+//                       where its installed take has it at that frame (people.js)
 // spec.props = { name: { hand: "r", origin: ["RightHandIndex2", "RightHandMiddle2"],
 //                        points: { name: [d, l, n] } } }   offsets along the palm axes (m)
 import { add, sub, scale, len, apply, ry } from "./math.js";
@@ -18,6 +20,7 @@ import { palmAxes } from "./limbs.js";
 import { SIDES } from "./pose.js";
 import { HAND_CLEAR, keepOut } from "../body.js";
 import { groupsOf } from "../scene.js";
+import { personJoint, peopleList } from "../people.js";
 
 function armReach(sk, k) {
 	const side = SIDES[k], P = sk.restWorldPos, I = sk.index;
@@ -83,6 +86,11 @@ function anchorPoint(ctx, a, name, s, diag, c, side) {
 		case "prop": {
 			const p = diag.props?.[a.prop]?.[a.point];
 			if (!p) throw new Error(`MOTION_SPEC_INVALID: anchor "${name}" needs prop ${a.prop}.${a.point}, which is held by an arm solved later`);
+			return add(p, a.offset ?? [0, 0, 0]);
+		}
+		case "person": {
+			const p = personJoint(ctx.scene, a.person, a.bone, diag?.frame ?? 0);
+			if (!p) throw new Error(`MOTION_SPEC_INVALID: anchor "${name}" names person "${a.person}" bone "${a.bone}", which the scene does not have (people: ${peopleList(ctx.scene)})`);
 			return add(p, a.offset ?? [0, 0, 0]);
 		}
 		default: throw new Error(`MOTION_SPEC_INVALID: anchor "${name}" has unknown kind "${a.kind}"`);

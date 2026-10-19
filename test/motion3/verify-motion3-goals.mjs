@@ -152,7 +152,7 @@ r = run([{ name: "bare", moved: "cylinder", by: 0.02, at: 47 }, { name: "bare gr
 const prefixedRun = run([{ name: "bare", moved: "object:cylinder", by: 0.02, at: 47 }, { name: "bare group", moved: `object:${CUP.group}.top`, at: 47 }]);
 expect("a bare moved id is the object: ref (the same result; the filled-in spec holds object:<id>)", JSON.stringify(r.qa.goals) === JSON.stringify(prefixedRun.qa.goals)
 	&& r.qa.goals[0].ok && r.spec.goals[0].moved === "object:cylinder" && r.spec.goals[1].moved === `object:${CUP.group}.top`, JSON.stringify([r.qa.goals, r.spec.goals]));
-const ALL = "joint:<Bone>, bone:<Bone>, prop:<prop>.<point>, anchor:<name>, landmark:mouth, object:<id>[.center|.top|.base]";
+const ALL = "joint:<Bone>, bone:<Bone>, prop:<prop>.<point>, anchor:<name>, landmark:mouth, object:<id>[.center|.top|.base], person:<id>.<Bone>";
 const bareCases = [
 	[[{ moved: "nope", at: 3 }], ['goals[0].moved "object:nope" names object "nope", which is not in the scene; did you mean "cube"?']],
 	[[{ moved: 3, at: 3 }], ['goals[0].moved must be an object id or a point ref (object:<id>[.center|.top|.base], prop:<prop>.<point>, joint:<Bone>, landmark:mouth, anchor:<name>), got 3']],

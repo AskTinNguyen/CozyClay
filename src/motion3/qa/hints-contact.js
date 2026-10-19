@@ -8,6 +8,7 @@ import { kneeFoldHint, kneeWhy } from "./hints-knee.js";
 import { objectFrame } from "../compiler/anchors.js";
 import { bodyFor, bodyNormal, limbDepth } from "../body.js";
 import { footProbes, footDepths } from "./foot-checks.js";
+import { personCapsules } from "./people-checks.js";
 
 const MARGIN = 0.003;
 /** The most a foot hint lifts a foot over a body it went into through a side (a stair riser); higher, it backs out. */
@@ -19,7 +20,7 @@ function anchorFix(X, name, f, delta, k) {
 	const a = X.spec.anchors?.[name], path = field => `/anchors/${name}/${field}`;
 	if (a?.kind === "world") return { path: path("p"), delta };
 	if (a?.kind === "body") return { path: path("p"), delta: apply(ry(-(X.fr(f).c.yaw ?? 0)), delta) };
-	if (["bone", "segment", "prop"].includes(a?.kind)) return { path: path("offset"), delta };
+	if (["bone", "segment", "prop", "person"].includes(a?.kind)) return { path: path("offset"), delta };
 	if (a?.kind !== "object") return undefined;
 	// local is in the object's axes where that hand's target read it (anchors.js objectFrame)
 	const fr = X.fr(f), o = objectFrame(X.out.ctx, a, name, { ...fr, diag: { ...fr.diag, frame: f } }, k);
@@ -104,6 +105,21 @@ export const contactHints = {
 			if (X.spec.fix !== false) r.fix = { path: "/fix/penetration", value: 0.02 };
 		}
 		return r;
+	},
+	/** PERSON "<part> x person:<id>": the part moves out of the other person's deepest capsule, along the line between their nearest points. */
+	PERSON(X, g) {
+		const [, part, id] = /^(\S+) x person:(.+)$/.exec(g.subject) ?? [], mine = capsule(part), p0 = X.out?.ctx?.scene?.people?.[id];
+		if (!mine || !p0) return null;
+		const f = g.worstFrame, { s } = X.fr(f), pts = segPoints(s.P[X.I[mine[1]]], s.P[X.I[mine[2]]]);
+		const near = ([other, C, D, q]) => {
+			const cd = sub(D, C), dd = Math.max(dot(cd, cd), 1e-12);
+			return pts.map(p => { const at = add(C, scale(cd, clamp(dot(sub(p, C), cd) / dd, 0, 1))); return { other, p, q: at, depth: mine[3] + q - len(sub(p, at)) }; })
+				.reduce((m, x) => (x.depth > m.depth ? x : m));
+		};
+		const hit = personCapsules(p0, f).map(near).reduce((m, x) => (x.depth > m.depth ? x : m));
+		const away = len(sub(hit.p, hit.q)) > 1e-6 ? norm(sub(hit.p, hit.q)) : norm([hit.p[0] - hit.q[0] || 1, 0, hit.p[2] - hit.q[2]]);
+		const r = moveHint(X, part, f, scale(away, g.worst - g.limit + MARGIN), ` (out of ${p0.name}'s ${hit.other})`);
+		return { ...r, hint: `${r.hint}; or, for a touch you mean, checks.allow [{ part: "${part}", object: "person:${id}", depth: ${m3(g.worst + MARGIN)} }]` };
 	},
 	CLEARANCE(X, g) {
 		const k = (X.spec.checks?.clearance ?? []).find(c => g.subject.startsWith(`${c.name}:`));

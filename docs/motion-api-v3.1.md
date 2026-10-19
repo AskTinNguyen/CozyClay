@@ -41,7 +41,7 @@ Paths without a folder are under `src/motion3/`. Every lane test is already regi
 ## C2. Point references (`refs.js`)
 
 ```text
-ref := joint:<Bone> | bone:<Bone> | prop:<prop>.<point> | anchor:<name> | landmark:mouth | object:<id>[.center|.top|.base]
+ref := joint:<Bone> | bone:<Bone> | prop:<prop>.<point> | anchor:<name> | landmark:mouth | object:<id>[.center|.top|.base] | person:<character id>.<Bone>
 refPoint(out, f, ref)            -> [x, y, z] | null   f is absolute; null outside out.f0 .. out.f0 + frames - 1
 refDistance(out, f, a, b)        -> metres | null      a bare object:<id> means "to its surface" (sdBox, 0 inside)
 checkRef(spec, err, { sk, scene }, at, ref, kinds = REF_KINDS) -> boolean
