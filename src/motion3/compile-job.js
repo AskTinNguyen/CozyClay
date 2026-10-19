@@ -1,6 +1,6 @@
 // One motion compile as a job of plain data, the same in the compile worker (compile-worker.js) and on
 // the calling thread (commands/motion3-compile.js, where no worker runs: Node, tests): the rig by model
-// name, the motion scene (scene.js motionScene of the editor's objects: boxes only), the spec as sent, and
+// name, the motion scene (scene.js motionScene of the editor's objects: oriented boxes; shapes.js reads a sphere or a cylinder round from them), the spec as sent, and
 // what to do with it (probes, checks, lenient, repair, bake). The answer is plain data and typed arrays
 // only (the compiler's out holds closures), so it crosses a worker boundary: QA, observations, the stored
 // spec, and the baked take when asked.
