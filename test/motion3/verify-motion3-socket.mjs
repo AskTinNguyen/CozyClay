@@ -92,6 +92,13 @@ check("a palm grasp on a stored socket presses the palm down onto the crate's to
 	const H = hand(r.out.frames[30].s, "l");
 	assert.ok(deg(dot(H.palm, [0, -1, 0])) < 15, `palm ${deg(dot(H.palm, [0, -1, 0])).toFixed(1)} deg off straight down`);
 });
+check("a stored socket whose side runs along its axis still compiles: the palm faces against the side", () => {
+	const scene = motionScene([{ ...BOX[0], grasp: { top: { at: [0, 0.9, 0], axis: [0, 1, 0], from: [0, 1, 0] } } }].map(normalizeSceneObject));
+	const r = compileSpec({ schema: "cozyclay.motion-spec.v1", fps: 24, frames: 50, use: [{ skill: "standIdle", f0: 0, args: { at: [0, 0], heading: 0 } },
+		{ skill: "reachGrip", f0: 5, args: { anchor: "lid", side: "l", reach: 20, hold: 20, define: { kind: "object", object: "crate", socket: "top", grasp: "power" } } }] }, { sk, scene });
+	assert.ok(r.out.frames.every(fr => fr.s.P.every(p => p.every(Number.isFinite))), "a pose went NaN");
+	assert.ok(deg(dot(hand(r.out.frames[30].s, "l").palm, [0, -1, 0])) < 25);
+});
 check("an agent's object set carries grasp sockets and the store normalizes them (unit directions, named, null removes)", () => {
 	const value = { handle: { at: [0, 0.5, 0.15], axis: [2, 0, 0], from: [0, 0, 3] }, "bad name": { at: [0, 0, 0] } };
 	const set = validateStudioSchema(STUDIO_PATCH_SET_SCHEMAS.object, { grasp: value }, "INVALID_ARGUMENT", "set");

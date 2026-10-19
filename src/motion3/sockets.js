@@ -79,7 +79,8 @@ export function socketDistance(w, q) {
  */
 export function socketPalm(side, w, type, fwd, yawDeg = 0) {
 	const right = side === "Right", sign = v => (right ? v : scale(v, -1));
-	if (w.axis && type !== "palm") {
+	// a side along the axis leaves no knuckle line across it: the palm then just faces against the side (below)
+	if (w.axis && type !== "palm" && !(w.from && len(flat(w.axis, w.from)) < 1e-3)) {
 		if (w.from) {
 			const n = sign(w.from), l0 = norm(flat(w.axis, n)), pick = l => (w.thumb ? dot(l, w.thumb) : dot(cross(l, n), fwd));
 			const l = pick(l0) >= pick(scale(l0, -1)) ? l0 : scale(l0, -1);
