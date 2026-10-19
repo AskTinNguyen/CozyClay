@@ -2,6 +2,34 @@
 
 ## Unreleased
 
+## 3.0.3 - 2026-10-20
+
+Grasp round 2, from a user's own cup, ball and steering-wheel sessions on 3.0.2.
+
+Motion
+
+- A grasp's IK target, QA REACH, the reachGrip contact and a goal's `near`
+  read one measure: the held part's surface. A cup reach that read 0.845 m
+  short while its goal passed now reports the real miss.
+- A steering wheel (a thin disc) is a rim socket: each hand keeps its spot
+  on the rim while the wheel moves.
+- A stance inside what it stands in slides out of it; standIdle with no `at`
+  before a reachGrip steps up within reach (`observations.placed`).
+- An upright cup or can is wrapped from the side, not covered from the top.
+- A reach to grasp moves like a person's: the wrist peaks at about a third
+  of the reach and approaches slowly, the hand stays open wider than the
+  object and closes on the approach, and the head turns to the object first.
+- reachGrip names its fingers' prop apart from an existing one, cuts a hold
+  past the take's end instead of refusing it, and `motion.report` accepts
+  `characterId`. Contact sheets with a focus follow it when it moves.
+
+Studio
+
+- The command bus can run several agent tasks at once, each inside its own
+  scope (objects, characters, shots, stage, timeline, scene), with scoped
+  cancel and undo. The agent still runs one turn at a time until the task
+  mode ships.
+
 ## 3.0.2 - 2026-10-19
 
 Fixes from an audit of the latest Studio agent sessions, and a grasp round.
