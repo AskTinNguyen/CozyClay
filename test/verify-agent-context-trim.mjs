@@ -78,6 +78,12 @@ check("each Studio prompt ends with its reply-language reminder; English text an
 	assert.equal(out[2].content.at(-1).text, "now pull the chair", "an English message carries no reminder, though its scene name is Korean");
 	assert.match(run([prompt("椅子に座って")])[0].content.at(-1).text, /^\[Reply in Japanese\. /);
 });
+check("a long turn repeats the reply language on every 8th tool result, at fixed places", () => {
+	const out = run(history(17)), turn = out.slice(out.findLastIndex(m => m.role === "user")).filter(m => m.role === "toolResult");
+	const reminded = turn.map((m, i) => /^\[Reply in Korean\. /.test(m.content.at(-1).text ?? "") ? i + 1 : 0).filter(Boolean);
+	assert.deepEqual(reminded, [8, 16], "9240db36 wrote an English note 17 results into a Korean turn");
+	assert.deepEqual(run(history(18)).slice(0, out.length - 2).map(text), out.slice(0, out.length - 2).map(text), "the reminders stay where they were as the turn grows");
+});
 check("the plan comes on a staging request, or once on a staged scene's first turn", () => {
 	assert.equal(wantsPlan({ text: "의자에 앉아줘", characterCount: 2, shots: 1, planSeen: false }), true, "first turn of a staged scene");
 	assert.equal(wantsPlan({ text: "의자에 앉아줘", characterCount: 2, shots: 1, planSeen: true }), false, "not again on a plain turn");
