@@ -118,22 +118,22 @@ const TAKES = [
 // re-pinned when the walk scaled its knees, swing kick, heel strike and hips at the strike with its pace and the swing foot
 // began following the shank (walk.js, walk-pelvis.js); QA 0 before and after
 // re-pinned when the walk's upper body began following its pace and leading the legs (walk.js, head-steady.js); QA 0 before and after
-	["exitcar", "x-bot-tpose", { fps: 24, ...EXITCAR_SPEC }, motionScene(CAR), 137.07, "afac73f0fa63c981", null],
-	["smoke stand (Y Bot)", "y-bot-tpose", smoke(266, { use: STAND }, false), { objects: {} }, 134.57, "8d66416d78f67319", null],
-	["smoke stand (X Bot)", "x-bot-tpose", smoke(266, { use: STAND }, false), { objects: {} }, 137.07, "429f2a0e14ac04bc", null],
-	["smoke squat, kits (Y Bot)", "y-bot-tpose", smoke(240, { keys: [{ f: 0, set: SQUAT }] }, true), kitScene, 132.24, "5ed20645c4ffc6de", null],
-	["smoke squat, kits (X Bot)", "x-bot-tpose", smoke(240, { keys: [{ f: 0, set: SQUAT }] }, true), kitScene, 134.53, "a6bd2c97d50737fa", null],
-	["squat smoke cea7fa46", "y-bot-tpose", G.SQUAT_SPEC, motionScene(G.smokeScene()), 131.75, "06e8089f2827a5dc", null],
+	["exitcar", "x-bot-tpose", { fps: 24, ...EXITCAR_SPEC }, motionScene(CAR), 137.07, "7a35b86a0a288826", null],
+	["smoke stand (Y Bot)", "y-bot-tpose", smoke(266, { use: STAND }, false), { objects: {} }, 134.57, "23c7c29a978ffeb1", null],
+	["smoke stand (X Bot)", "x-bot-tpose", smoke(266, { use: STAND }, false), { objects: {} }, 137.07, "35bbaaf6f2607e62", null],
+	["smoke squat, kits (Y Bot)", "y-bot-tpose", smoke(240, { keys: [{ f: 0, set: SQUAT }] }, true), kitScene, 132.24, "29bedcfc6c9154e6", null],
+	["smoke squat, kits (X Bot)", "x-bot-tpose", smoke(240, { keys: [{ f: 0, set: SQUAT }] }, true), kitScene, 134.53, "a6da7196e4bd1665", null],
+	["squat smoke cea7fa46", "y-bot-tpose", G.SQUAT_SPEC, motionScene(G.smokeScene()), 131.75, "4b988f4b26056859", null],
 	["walk", "y-bot-tpose", { ...spec0, frames: 160, use: [...STAND, { skill: "walkTo", f0: 1, args: { to: [0, 2.4], steps: 6, heading: 0 } }] }, { objects: {} }, 9.51, "814a1365c6f841b1", null],
-	["cup run3", "y-bot-tpose", RUN3_SPEC, motionScene(CUP_SCENE), 133.27, "c01d1b43ea3d584a", null],
-	["J2 bat, no keys", "y-bot-tpose", J2.SWING_SPEC, motionScene(J2.SCENE_OBJECTS), 141.52, "3943019d974ba45e", null],
-	["J2 bat, keys", "y-bot-tpose", j2keyed, motionScene(J2.SCENE_OBJECTS), 140.96, "a15084d1d6c5b64a", null],
-	["K8 16d12ba9", "y-bot-tpose", K8.SWING_SPEC, motionScene(K8.batKit(K8.SWING_KIT_AT)), 143.57, "3c66bd1f2a5a61df", null],
-	["K8 6912547c", "y-bot-tpose", K8.EARLIER_SPEC, motionScene(K8.batKit(K8.EARLIER_KIT_AT)), 150.89, "2228cc5001daba8e", "bbf1565720eb5867"],
-	["N1 d5c110a7", "y-bot-tpose", N1.STANCE_SPEC, motionScene(K8.batKit(N1.STANCE_KIT_AT)), 154.06, "fa22fc331b91e0aa", "fa11b07ae82cc2a6"],
-	["N1 f0f2be59", "y-bot-tpose", N1.CLEAN_SPEC, motionScene(K8.batKit(N1.CLEAN_KIT_AT)), 152.2, "3d73c4b9e175a657", "601f6f5fc3209ea6"],
-	["L2 9dcf19c5", "y-bot-tpose", G.SWING_SPEC, motionScene(G.batScene()), 150.87, "a7ffbc022b463875", "cfd475d9d2cb0886"],
-	["P2 df6acdcc", "y-bot-tpose", FOLD_SPEC, foldScene, 170.87, "cba7efc1642eee3a", "42664ae71e36766b"],
+	["cup run3", "y-bot-tpose", RUN3_SPEC, motionScene(CUP_SCENE), 133.27, "95ba80251e30a32e", null],
+	["J2 bat, no keys", "y-bot-tpose", J2.SWING_SPEC, motionScene(J2.SCENE_OBJECTS), 141.52, "7e49b1630982dfc8", null],
+	["J2 bat, keys", "y-bot-tpose", j2keyed, motionScene(J2.SCENE_OBJECTS), 140.96, "248dc5649b0c7499", null],
+	["K8 16d12ba9", "y-bot-tpose", K8.SWING_SPEC, motionScene(K8.batKit(K8.SWING_KIT_AT)), 143.57, "496cb796f592d8e8", null],
+	["K8 6912547c", "y-bot-tpose", K8.EARLIER_SPEC, motionScene(K8.batKit(K8.EARLIER_KIT_AT)), 150.89, "2228cc5001daba8e", "fc6f95586f8b1622"],
+	["N1 d5c110a7", "y-bot-tpose", N1.STANCE_SPEC, motionScene(K8.batKit(N1.STANCE_KIT_AT)), 154.06, "fa22fc331b91e0aa", "5528ad309521dd71"],
+	["N1 f0f2be59", "y-bot-tpose", N1.CLEAN_SPEC, motionScene(K8.batKit(N1.CLEAN_KIT_AT)), 152.2, "3d73c4b9e175a657", "e874f6556578614d"],
+	["L2 9dcf19c5", "y-bot-tpose", G.SWING_SPEC, motionScene(G.batScene()), 150.87, "a7ffbc022b463875", "6c6926016a279376"],
+	["P2 df6acdcc", "y-bot-tpose", FOLD_SPEC, foldScene, 170.87, "cba7efc1642eee3a", "f912e5753d15fa42"],
 ];
 const runs = {}, wrong = [];
 for (const [name, rig, spec, scene, before, h0, h1] of TAKES) {

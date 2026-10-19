@@ -10,7 +10,8 @@ import { compileMotion } from "../../src/motion3/compiler/compile.js";
 import { runMotionQa } from "../../src/motion3/qa/index.js";
 import { solePoints } from "../../src/motion3/qa/geometry.js";
 import { bakeTake, takeQuat, takeHips } from "../../src/motion3/take.js";
-import { dist, I3, angle, sub } from "../../src/motion3/compiler/math.js";
+import { dist, I3, angle, sub, dot } from "../../src/motion3/compiler/math.js";
+import { palmAxes } from "../../src/motion3/compiler/limbs.js";
 
 let failures = 0;
 function expect(name, condition, detail = "") {
@@ -34,6 +35,25 @@ for (const model of ["x-bot-tpose", "y-bot-tpose"]) {
 	expect(`${model}: bone lengths unchanged by posing`, drift < 1e-9, drift);
 	const L2 = toLocal(sk, p), back2 = fk(sk, L2.quats, L2.hips);
 	expect(`${model}: posed state survives local quaternions`, Math.max(...p.P.map((q, j) => dist(q, back2.P[j]))) < 1e-9);
+}
+
+// A fist's or a grip's thumb closes over the index and middle fingers. The old thumb curls turned about the knuckle line
+// and swung the thumb out to the side, so a fist read as a thumbs-up: its tip sat 8.4 cm (Y Bot) from the index finger.
+for (const model of ["x-bot-tpose", "y-bot-tpose"]) {
+	const sk = rig(model), I = sk.index;
+	for (const preset of ["fist", "grip"]) {
+		const tip = {};
+		for (const [k, side] of [["r", "Right"], ["l", "Left"]]) {
+			const { s: p } = pose(sk, { [`fingers_${k}`]: { [preset]: 1 } }), P = j => p.P[I[`${side}Hand${j}`]];
+			const hand = dist(P("Middle1"), p.P[I[`${side}Hand`]]), { d, l, n } = palmAxes(sk, p, side), t = sub(P("Thumb4"), p.P[I[`${side}Hand`]]);
+			const near = Math.min(...["Index", "Middle"].map(f => { const a = P(`${f}2`), ab = sub(P(`${f}3`), a), u = Math.max(0, Math.min(1, dot(sub(P("Thumb4"), a), ab) / dot(ab, ab))); return dist(P("Thumb4"), a.map((v, i) => v + ab[i] * u)); }));
+			tip[k] = [dot(t, d), dot(t, l), dot(t, n)];
+			expect(`${model} ${side} ${preset}: the thumb tip rests on the index or middle finger's middle phalanx`, near < 0.25 * hand, `${(near * 100).toFixed(1)} cm, hand ${(hand * 100).toFixed(1)} cm`);
+			expect(`${model} ${side} ${preset}: the thumb is not raised out to the side (no thumbs-up)`, tip[k][1] < 0.3 * hand, `${(tip[k][1] * 100).toFixed(1)} cm toward the thumb side`);
+		}
+		// the rigs themselves differ left to right by up to 0.1 mm
+		expect(`${model} ${preset}: the two hands mirror`, Math.abs(tip.r[0] - tip.l[0]) < 0.002 && Math.abs(tip.r[1] - tip.l[1]) < 0.002 && Math.abs(tip.r[2] + tip.l[2]) < 0.002, JSON.stringify(tip));
+	}
 }
 
 const ch = bakeChannels([{ f: 0, set: { a: 0 } }, { f: 10, set: { a: 1 } }, { f: 20, set: { a: 1 } }, { f: 30, set: { a: 0, v: 1 }, step: ["v"] }, { f: 5, set: { v: 0 } }], 40);

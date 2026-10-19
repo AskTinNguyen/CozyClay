@@ -71,7 +71,7 @@ delete bare.checks.allow;
 const unallowed = compileSpec(bare, { sk, scene: bat(Q.CLEAN_KIT_AT) });
 // WRIST (qa/wrist-checks.js): the follow-through's keys ask the right forearm 1 deg past its 85 deg twist for a frame or two
 const onlyTwist = r => r.qa.groups.every(g => g.kind === "WRIST" && /^hand_r twist/.test(g.subject) && g.count <= 2);
-expect("6262a69c: QA 0 but a frame or two of WRIST hand_r twist past 85 deg, and the same take, bit for bit", onlyTwist(clean) && hashOf(bakeTake(sk, clean.out)) === "2742bcd7828e6f21", kinds(clean).join(" | "));
+expect("6262a69c: QA 0 but a frame or two of WRIST hand_r twist past 85 deg, and the same take, bit for bit", onlyTwist(clean) && hashOf(bakeTake(sk, clean.out)) === "8396660b457d69cc", kinds(clean).join(" | "));
 expect("6262a69c without its checks.allow (hand_l x empty 5 cm) is QA 0 too (but that WRIST): the left palm is on the handle at f37-40 while the grip fades (weight 0.3-0.6)",
 	onlyTwist(unallowed), kinds(unallowed).join(" | "));
 
@@ -114,19 +114,19 @@ const TAKES = [
 // re-pinned when the walk scaled its knees, swing kick, heel strike and hips at the strike with its pace and the swing foot
 // began following the shank (walk.js, walk-pelvis.js); QA 0 before and after
 // re-pinned when the walk's upper body began following its pace and leading the legs (walk.js, head-steady.js); QA 0 before and after
-	["exitcar", "x-bot-tpose", { fps: 24, ...EXITCAR_SPEC }, motionScene(CAR), "9e35eb6aa9a2c9f8", "afac73f0fa63c981", "the walk's natural rhythm (compiler/gait-rhythm.js) and foot rockers and arms (compiler/walk.js), and the left hand's grip turn on the door handle (compiler/grip.js) and hips (compiler/walk-pelvis.js); then the smaller heel strike and the stride length term (walk.js, gait-rhythm.js); then the hips-first walk (walk-pelvis.js, walk.js); then the walk by pace (walk.js, walk-pelvis.js)"],
-	["smoke squat cea7fa46", "y-bot-tpose", G.SQUAT_SPEC, motionScene(G.smokeScene()), "06e8089f2827a5dc", null],
+	["exitcar", "x-bot-tpose", { fps: 24, ...EXITCAR_SPEC }, motionScene(CAR), "9e35eb6aa9a2c9f8", "7a35b86a0a288826", "the walk's natural rhythm (compiler/gait-rhythm.js) and foot rockers and arms (compiler/walk.js), and the left hand's grip turn on the door handle (compiler/grip.js) and hips (compiler/walk-pelvis.js); then the smaller heel strike and the stride length term (walk.js, gait-rhythm.js); then the hips-first walk (walk-pelvis.js, walk.js); then the walk by pace (walk.js, walk-pelvis.js)"],
+	["smoke squat cea7fa46", "y-bot-tpose", G.SQUAT_SPEC, motionScene(G.smokeScene()), "4b988f4b26056859", null],
 	["walk", "y-bot-tpose", { ...spec0, frames: 160, use: [...STAND, { skill: "walkTo", f0: 1, args: { to: [0, 2.4], steps: 6, heading: 0 } }] }, { objects: {} }, "6a6295472b4a4781", "814a1365c6f841b1", "the walk's natural rhythm (compiler/gait-rhythm.js) and foot rockers and arms (compiler/walk.js) and hips (compiler/walk-pelvis.js); then the smaller heel strike and the stride length term (walk.js, gait-rhythm.js); then the hips-first walk (walk-pelvis.js, walk.js); then the walk by pace (walk.js, walk-pelvis.js)"],
-	["cup run3", "y-bot-tpose", RUN3_SPEC, motionScene(CUP_SCENE), "b2e90da88e394432", "c01d1b43ea3d584a", "the walk's natural rhythm (compiler/gait-rhythm.js) and foot rockers and arms (compiler/walk.js) and hips (compiler/walk-pelvis.js); then the smaller heel strike and the stride length term (walk.js, gait-rhythm.js); then the hips-first walk (walk-pelvis.js, walk.js); then the walk by pace (walk.js, walk-pelvis.js)"],
-	["K8 6912547c", "y-bot-tpose", K8.EARLIER_SPEC, motionScene(K8.batKit(K8.EARLIER_KIT_AT)), "bbf1565720eb5867", null],
-	["N1 f0f2be59", "y-bot-tpose", N1.CLEAN_SPEC, motionScene(K8.batKit(N1.CLEAN_KIT_AT)), "601f6f5fc3209ea6", null],
-	["J2 bat, no keys", "y-bot-tpose", J2.SWING_SPEC, motionScene(J2.SCENE_OBJECTS), "681b862de6399b43", "3943019d974ba45e", "the flat back foot turned 7.2 deg (turn.js)"],
-	["J2 bat, keys", "y-bot-tpose", j2keyed, motionScene(J2.SCENE_OBJECTS), "c21fc53ff579e90f", "a15084d1d6c5b64a", "the same foot (turn.js)"],
-	["K8 16d12ba9", "y-bot-tpose", K8.SWING_SPEC, motionScene(K8.batKit(K8.SWING_KIT_AT)), "35a73f309c9fe95f", "3c66bd1f2a5a61df", "the left hand's roll priced past SELF on the right hand"],
-	["N1 d5c110a7", "y-bot-tpose", N1.STANCE_SPEC, motionScene(K8.batKit(N1.STANCE_KIT_AT)), "38d773bb8b474f7a", "fa11b07ae82cc2a6", "the left hand's roll priced past BODY in the torso"],
-	["L2 9dcf19c5", "y-bot-tpose", G.SWING_SPEC, motionScene(G.batScene()), "ad773fd24b96b59b", "cfd475d9d2cb0886", "the flat front foot turned 18.5 deg (turn.js)"],
-	["P2 df6acdcc", "y-bot-tpose", FOLD_SPEC, bat(FOLD_KIT_AT), "f3d9e1c7e86e7d08", "42664ae71e36766b", "the left hand's roll priced past BODY"],
-	["Q1 4db5d447", "y-bot-tpose", Q.SEVENTEEN_SPEC, bat(Q.SEVENTEEN_KIT_AT), "9521e2c61c85f8b1", "6c05caa4906b6d7a", "all four"],
+	["cup run3", "y-bot-tpose", RUN3_SPEC, motionScene(CUP_SCENE), "b2e90da88e394432", "95ba80251e30a32e", "the walk's natural rhythm (compiler/gait-rhythm.js) and foot rockers and arms (compiler/walk.js) and hips (compiler/walk-pelvis.js); then the smaller heel strike and the stride length term (walk.js, gait-rhythm.js); then the hips-first walk (walk-pelvis.js, walk.js); then the walk by pace (walk.js, walk-pelvis.js)"],
+	["K8 6912547c", "y-bot-tpose", K8.EARLIER_SPEC, motionScene(K8.batKit(K8.EARLIER_KIT_AT)), "fc6f95586f8b1622", null],
+	["N1 f0f2be59", "y-bot-tpose", N1.CLEAN_SPEC, motionScene(K8.batKit(N1.CLEAN_KIT_AT)), "e874f6556578614d", null],
+	["J2 bat, no keys", "y-bot-tpose", J2.SWING_SPEC, motionScene(J2.SCENE_OBJECTS), "681b862de6399b43", "7e49b1630982dfc8", "the flat back foot turned 7.2 deg (turn.js)"],
+	["J2 bat, keys", "y-bot-tpose", j2keyed, motionScene(J2.SCENE_OBJECTS), "c21fc53ff579e90f", "248dc5649b0c7499", "the same foot (turn.js)"],
+	["K8 16d12ba9", "y-bot-tpose", K8.SWING_SPEC, motionScene(K8.batKit(K8.SWING_KIT_AT)), "35a73f309c9fe95f", "496cb796f592d8e8", "the left hand's roll priced past SELF on the right hand"],
+	["N1 d5c110a7", "y-bot-tpose", N1.STANCE_SPEC, motionScene(K8.batKit(N1.STANCE_KIT_AT)), "38d773bb8b474f7a", "5528ad309521dd71", "the left hand's roll priced past BODY in the torso"],
+	["L2 9dcf19c5", "y-bot-tpose", G.SWING_SPEC, motionScene(G.batScene()), "ad773fd24b96b59b", "6c6926016a279376", "the flat front foot turned 18.5 deg (turn.js)"],
+	["P2 df6acdcc", "y-bot-tpose", FOLD_SPEC, bat(FOLD_KIT_AT), "f3d9e1c7e86e7d08", "f912e5753d15fa42", "the left hand's roll priced past BODY"],
+	["Q1 4db5d447", "y-bot-tpose", Q.SEVENTEEN_SPEC, bat(Q.SEVENTEEN_KIT_AT), "9521e2c61c85f8b1", "e1ad064ef842f30d", "all four"],
 ];
 const wrong = [];
 for (const [name, rig, spec, scene, h0, h1, why] of TAKES) {

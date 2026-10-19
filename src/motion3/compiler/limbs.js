@@ -144,11 +144,13 @@ export function wrist(sk, s, side, twistDeg, flexDeg) {
 	rotateSubtree(sk, s, h, s.P[h].slice(), axisRot(axT, clamp(twistDeg, -85, 85)));
 }
 
-// Finger curl presets, degrees per phalanx (1, 2, 3); thumb is [opposition, curl, curl].
+// Finger curl presets, degrees per phalanx (1, 2, 3); thumb is [opposition, curl, curl]. A fist and a grip keep the
+// relaxed thumb here and close it with THUMB_WRAP: these thumb curls turn about the knuckle line and the hand's long axis,
+// which only swings a thumb out to the side (a fist read as a thumbs-up).
 const FINGER_PRESETS = {
 	relaxed: { Index: [12, 18, 10], Middle: [15, 20, 12], Ring: [18, 22, 12], Pinky: [20, 24, 14], Thumb: [15, 10, 8] },
-	fist: { Index: [80, 95, 60], Middle: [85, 95, 60], Ring: [85, 95, 60], Pinky: [85, 95, 60], Thumb: [45, 30, 35] },
-	grip: { Index: [55, 60, 35], Middle: [60, 62, 35], Ring: [62, 62, 35], Pinky: [65, 62, 35], Thumb: [40, 20, 20] },
+	fist: { Index: [80, 95, 60], Middle: [85, 95, 60], Ring: [85, 95, 60], Pinky: [85, 95, 60], Thumb: [15, 10, 8] },
+	grip: { Index: [55, 60, 35], Middle: [60, 62, 35], Ring: [62, 62, 35], Pinky: [65, 62, 35], Thumb: [15, 10, 8] },
 	cigarette: { Index: [8, 10, 6], Middle: [10, 12, 8], Ring: [60, 75, 45], Pinky: [65, 80, 45], Thumb: [35, 25, 20] },
 	point: { Index: [0, 0, 0], Middle: [80, 95, 60], Ring: [85, 95, 60], Pinky: [85, 95, 60], Thumb: [40, 30, 30] },
 };
@@ -165,6 +167,26 @@ export function fingers(sk, s, side, weights) {
 			const ax = f === "Thumb" && k === 0 ? d : l;
 			rotateSubtree(sk, s, j, s.P[j].slice(), axisRot(ax, sign * curl(f, k)));
 		}
+	}
+	const wrap = [0, 1, 2, 3].map(i => Object.entries(weights ?? {}).reduce((acc, [p, w]) => acc + (w || 0) * (THUMB_WRAP[p]?.[i] ?? 0), 0));
+	if (wrap.some(Boolean)) wrapThumb(sk, s, side, wrap);
+}
+
+// A closing hand's thumb, by preset weight after the relaxed one, degrees: turned in about the hand's long axis toward the
+// palm and across it, then flexed at its two joints about their own axes (bone x palm normal). The fist's thumb lies over
+// the index and middle fingers' middle phalanges; the grip's closes around a handle against the index finger. Searched on
+// both rigs within the joints' ranges (thumb tip to the index's middle phalanx: fist 8.4 -> 3.7 cm Y Bot, 6.9 -> 2.4 X Bot).
+const THUMB_WRAP = { fist: [-70, -5, 5, 80], grip: [-30, -30, 30, 10] };
+function wrapThumb(sk, s, side, [oppose, across, flex2, flex3]) {
+	const sign = side === "Left" ? -1 : 1, J = k => sk.index[`${side}HandThumb${k}`];
+	if (J(1) === undefined) return;
+	const { d, n } = palmAxes(sk, s, side);
+	rotateSubtree(sk, s, J(1), s.P[J(1)].slice(), axisRot(d, sign * oppose));
+	// n = d x l flips with the mirror, so the turn across the palm keeps its sign on both hands
+	rotateSubtree(sk, s, J(1), s.P[J(1)].slice(), axisRot(n, across));
+	for (const [k, deg] of [[2, flex2], [3, flex3]]) {
+		const ax = norm(cross(norm(sub(s.P[J(k + 1)], s.P[J(k)])), n));
+		rotateSubtree(sk, s, J(k), s.P[J(k)].slice(), axisRot(ax, sign * deg));
 	}
 }
 
