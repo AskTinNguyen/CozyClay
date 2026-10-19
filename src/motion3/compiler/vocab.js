@@ -11,6 +11,12 @@ export const MAP_CHANNELS = new Set(sided(["fingers"]));
 // Channels the skills key (standIdle, walks): valid in a spec, left out of motion.describe so a first spec need not read them.
 export const SKILL_CHANNELS = new Set(["arm_hang"]);
 export const FINGER_PRESETS = ["relaxed", "fist", "grip", "cigarette", "point"];
+/** The grasps an object anchor takes a hand by (../sockets.js), and the finger preset each closes the hand to by default. */
+export const GRASPS = ["power", "pinch", "hook", "palm"];
+export const GRASP_FINGERS = { power: "grip", pinch: "cigarette", hook: "grip", palm: "relaxed" };
+/** Where the held thing sits in the hand, [d, l, n] on the palm axes from the finger middles (n toward the palm; m): a bar in a
+ * power grip or a hook lies across the palm under the finger middles, a pinch is held at the fingertips, a flat palm presses with its centre. */
+export const GRASP_POINTS = { power: [0, 0, 0.02], hook: [0, 0, 0.02], pinch: [0.025, 0, 0.01], palm: [-0.045, 0, 0.015] };
 
 // [min, max, convention] for numeric channels whose values have a hard range.
 const RANGES = [

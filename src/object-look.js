@@ -194,3 +194,5 @@ export function withShadowCapWarnings(result, objects) {
 	const warnings = shadowCapWarnings(objects, result?.affectedIds ?? []);
 	return warnings.length ? { ...result, warnings: [...(result.warnings ?? []), ...warnings] } : result;
 }
+// A record's grasp sockets ride the same normalize and patch paths (object-grasp.js).
+export { objectGraspFields, objectGraspPatch } from "./object-grasp.js";

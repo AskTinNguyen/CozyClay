@@ -127,11 +127,11 @@ const cameraKey = object({ frame: integer(), framing: object({ pos: vec3, yaw: n
 // rules; this only carries the shape through untouched.
 const routeMark = union(number(0, 1), object({ t: number(0, 1) }, { bank: number(-90, 90), pitch: number(-90, 90) }));
 const objectRoute = nullable(object({ points: array(vec3, 64, 2) }, { speed: number(0, 50), faceTravel: bool, loop: bool, extend: bool, marks: array(routeMark, 6) }));
-// A practical light and a glow (src/object-look.js owns the defaults and the repair).
+// A practical light and a glow (src/object-look.js owns the defaults and the repair); grasp sockets (src/object-grasp.js).
 const objectLight = object({}, { type: choices(["point", "spot"]), color: { ...text(32), pattern: "^#[0-9a-fA-F]{6}$" }, intensity: number(0, 1000), range: number(0, 100), angle: number(1, 89), softness: number(0, 1), shadow: bool, flicker: number(0, 1), aim: nullable(vec3) });
-const objectGlow = nullable(object({}, { color: { ...text(32), pattern: "^#[0-9a-fA-F]{6}$" }, intensity: number(0, 20), halo: number(0, 4) }));
+const objectGlow = nullable(object({}, { color: { ...text(32), pattern: "^#[0-9a-fA-F]{6}$" }, intensity: number(0, 20), halo: number(0, 4) })), objectGrasp = nullable(openObject);
 const PATCH_VALUE_SCHEMAS = {
-	"character.pose": nullable(id), "character.identityImage": nullable(dataImage), "object.light": objectLight, "object.glow": objectGlow, "object.effect": EFFECT_VALUE_SCHEMA, "object.text": TEXT_VALUE_SCHEMA,
+	"character.pose": nullable(id), "character.identityImage": nullable(dataImage), "object.light": objectLight, "object.glow": objectGlow, "object.grasp": objectGrasp, "object.effect": EFFECT_VALUE_SCHEMA, "object.text": TEXT_VALUE_SCHEMA,
 	"object.parent": nullable(id), "object.path": objectRoute, "stage.environmentImage": nullable(dataImage),
 	"shot.cameraKeys": array(cameraKey, 64), "shot.targetModel": nullable(id) };
 /** One declared element as a JSON value schema, or null when the declaration

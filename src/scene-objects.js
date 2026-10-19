@@ -27,7 +27,7 @@ import { isEffectivelyHidden } from "./object-hidden.js";
 import { objectSize } from "./object-size.js";
 import { EFFECT_ENTRY, effectFields } from "./effects/effect-record.js";
 import { TEXT_ENTRY, TEXT_KIND, textFields, textPatch } from "./text/text-record.js";
-import { LIGHT_KIND, LIGHT_MENU_ENTRIES, lightLibraryEntry, objectLookFields, objectLookPatch } from "./object-look.js";
+import { LIGHT_KIND, LIGHT_MENU_ENTRIES, lightLibraryEntry, objectLookFields, objectLookPatch, objectGraspFields, objectGraspPatch } from "./object-look.js";
 export { OBJECT_COLORS, normalizeObjectColor, rememberObjectColor, readStoredObjectColors, writeStoredObjectColors } from "./object-colors.js";
 export { isEffectivelyHidden };
 
@@ -552,7 +552,7 @@ const TRANSFORM_LIMITS = {
 /** The patch keys updateSceneObject reads for this object; any other key is
  * silently ignored there, so callers that must not be silent check against this. */
 export function objectPatchFields(object) {
-	const fields = [...Object.keys(TRANSFORM_LIMITS), "name", "color", "hidden", "opacity", "path", "glow"];
+	const fields = [...Object.keys(TRANSFORM_LIMITS), "name", "color", "hidden", "opacity", "path", "glow", "grasp"];
 	if (object?.renderer === LIGHT_KIND) fields.push("light");
 	if (object?.renderer === CUTOUT_KIND) fields.push("assetId", "sourceAssetId", "matteAssetId", "matteScale", "height", "aspect", "width", "stretch");
 	if (object?.renderer === MESH_KIND) fields.push("clay", "assetId", "height");
@@ -862,8 +862,8 @@ export function updateSceneObject(objects, id, patch) {
 				Object.assign(update, sculptStandingBox(normalized.recipe));
 			}
 		}
-		// Light, glow and a text's words merge over the record's own and are repaired (object-look.js, text-record.js).
-		Object.assign(update, objectLookPatch(object, patch), textPatch(object, patch));
+		// Light, glow and a text's words merge over the record's own and are repaired (object-look.js, text-record.js); grasp sockets replace (object-grasp.js).
+		Object.assign(update, objectLookPatch(object, patch), textPatch(object, patch), objectGraspPatch(object, patch));
 		if (!Object.keys(update).length) return object;
 		changed = true;
 		return { ...object, ...update };
@@ -1092,8 +1092,8 @@ export function normalizeSceneObject(record) {
 						height: Math.max(MESH_HEIGHT_MIN, pick(record.height, entry.height)),
 					}
 				: { footprint: { ...entry.footprint }, height: entry.height, supportY: Number.isFinite(entry.supportY) ? entry.supportY : entry.height }),
-		// A light's light, and a glow on any record (object-look.js).
-		...objectLookFields(record, entry),
+		// A light's light, and a glow on any record (object-look.js); grasp sockets (object-grasp.js).
+		...objectLookFields(record, entry), ...objectGraspFields(record),
 		// An effect record's emitter (src/effects/effect-record.js).
 		...effectFields(record),
 		// A text's words; its box is measured from them (src/text/text-record.js).

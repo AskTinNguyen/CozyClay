@@ -3,7 +3,7 @@
 // looks each field up here, and throws when one is missing, so a new field needs a type here.
 // Shared shapes are $refs into DEFS (describe.js adds the ones an answer uses).
 import { REF_KINDS, OBJECT_KEY_FIELDS } from "./fields.js";
-import { CONVENTIONS } from "../compiler/vocab.js";
+import { CONVENTIONS, GRASPS } from "../compiler/vocab.js";
 import { QA_LIMITS } from "../qa/checks.js";
 import { CAPSULES } from "../qa/geometry.js";
 
@@ -64,7 +64,7 @@ export const ANCHOR_TYPES = {
 	from: str("bone"), to: str("bone"), t: num("0 = from .. 1 = to", { default: 0.5 }), tMin: num("with reach: the lowest t to slide back to", { default: 0.15 }),
 	reach: side("slide toward `from` until this arm reaches"), object: str("scene object id"), local: ref("vec3", "point in the object's frame, m"),
 	name: { const: "mouth" }, prop: str("a prop held by the other hand"), point: str("a point of that prop, or origin"),
-	person: str("a character id"),
+	person: str("a character id"), socket: str("a socket of the object"), grasp: { enum: GRASPS, description: "the hand takes it by a socket" },
 };
 
 const palm = d => ref("vec3", `${d} [d, l, n] on the palm axes (d to the middle finger, l to the thumb side, n = d x l), m`);

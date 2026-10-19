@@ -1,7 +1,7 @@
 // Validation of the spec parts other than keys: anchors, props, fits, generators, checks and
 // fix; objects (validate-objects.js) and goals (validate-goals.js) run from here too. Unknown
 // fields go through opts.unknown, which ignores them on a lenient reload. See validate.js.
-import { didYouMean, suggestField, CONVENTIONS, isVec3, fmt } from "./vocab.js";
+import { didYouMean, suggestField, CONVENTIONS, isVec3, fmt, GRASPS } from "./vocab.js";
 import { FIX_KEYS } from "../fix/index.js";
 import { QA_LIMITS } from "../qa/checks.js";
 import { ANCHOR_FIELDS, PROP_FIELDS, FIT_FIELDS, WALK_FIELDS, CHECK_FIELDS, CHECK_ENTRY_FIELDS } from "../schema/fields.js";
@@ -9,6 +9,7 @@ import { boneOk, objectOk, refOk } from "./validate-common.js";
 import { validateObjects } from "./validate-objects.js";
 import { validateGoals } from "./validate-goals.js";
 import { personJoint, peopleList } from "../people.js";
+import { socketsOf, socketNamed } from "../sockets.js";
 
 const SIDE = new Set(["l", "r"]);
 const isObject = v => Boolean(v) && typeof v === "object" && !Array.isArray(v);
@@ -29,7 +30,11 @@ function validateAnchors(spec, err, { sk, scene, unknown = err }) {
 		if ((a.kind === "world" || a.kind === "body") && a.p === undefined) err(`${at} (${a.kind}) needs p: [x, y, z]${a.kind === "body" ? `, ${CONVENTIONS.pole}` : ""}`);
 		if (a.kind === "bone") boneOk(err, sk, at, a.bone);
 		if (a.kind === "segment") { boneOk(err, sk, `${at}.from`, a.from); boneOk(err, sk, `${at}.to`, a.to); if (a.reach !== undefined && !SIDE.has(a.reach)) err(`${at}.reach must be "l" or "r"`); }
-		if (a.kind === "object") objectOk(err, scene, at, a.object, { groups: true });
+		if (a.kind === "object" && objectOk(err, scene, at, a.object, { groups: true })) {
+			if (a.grasp !== undefined && !GRASPS.includes(a.grasp)) err(`${at}.grasp must be one of ${GRASPS.join(", ")}, got ${fmt(a.grasp)}`);
+			if (a.socket !== undefined && scene?.objects && !socketNamed(scene, a.object, a.socket)) err(`${at}.socket: "${a.object}" has no socket ${fmt(a.socket)} (sockets: ${socketsOf(scene, a.object).map(k => k.name).join(", ") || "none"})`);
+			if (a.socket !== undefined && a.grasp === undefined) err(`${at}.socket needs grasp (${GRASPS.join(", ")}): the socket says how the hand takes it`);
+		}
 		if (a.kind === "person" && !personJoint(scene, a.person, a.bone ?? "", 0)) err(`${at} (person) needs person: the id of another character with an installed take (people: ${peopleList(scene)}) and bone: one of its joints, got ${fmt(a.person)} ${fmt(a.bone)}`);
 		if (a.kind === "landmark" && a.name !== "mouth") err(`${at}: the only landmark is "mouth", got ${fmt(a.name)}`);
 		if (a.kind === "prop" && !spec.props?.[a.prop]?.points?.[a.point] && a.point !== "origin") err(`${at} needs prop point ${a.prop}.${a.point}, which spec.props does not define`);

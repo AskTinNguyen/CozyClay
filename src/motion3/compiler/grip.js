@@ -24,6 +24,7 @@
 // forearm's neutral roll. A thin body (a cup, a can) keeps the neutral offset: its aim keys pick the
 // roll the arm holds most easily from it, and the cylindrical grip measured worse on every bench cup.
 // Those frames read the carried body where it rested before the grab, never a pose the hand moves.
+// An anchor that takes a grasp (an object anchor with `grasp`) turns the hand by its socket instead (socket-grip.js).
 import { add, sub, scale, norm, cross, dot, len, apply, ry, mul, T, axisRot } from "./math.js";
 import { palmAxes, twoBone } from "./limbs.js";
 import { aimArm, orient } from "./hold.js";
@@ -31,6 +32,7 @@ import { ELBOW_REST, WRIST_COMFORT, wristNeed } from "./arm-orient.js";
 import { resolveAnchor } from "./anchors.js";
 import { sdBox } from "../qa/geometry.js";
 import { partsOf } from "../object-pose.js";
+import { graspAnchor, socketCarry, socketHand, keepSocketTurn, ownWrist } from "./socket-grip.js";
 
 const NEAR = 0.06, THIN = 0.045, ALIGN = 0.3, PREFER = 30, DEG = 180 / Math.PI, ITER = 2, UP = [0, 1, 0];
 const cols = (a, b, c) => [[a[0], b[0], c[0]], [a[1], b[1], c[1]], [a[2], b[2], c[2]]];
@@ -141,9 +143,13 @@ function comfortable(F, now, twist) {
  */
 export function gripHand(ctx, sk, s, side, k, c, f, diag) {
 	// a wrist the spec turns on this frame is the agent's (or a skill's) own; a neutral 0 asks for nothing
-	if (Math.abs(c[`wtwist_${k}`] ?? 0) > 1e-3 || Math.abs(c[`wflex_${k}`] ?? 0) > 1e-3) return;
-	const on = activeFit(ctx.spec, c, k);
+	// a hand that takes a grasp (socket-grip.js) yields only to the agent's own wrist keys, not to a skill's (a walk's swing)
+	const on = activeFit(ctx.spec, c, k), carry = socketCarry(ctx, k, f), grasp = on && on.w >= 1e-3 && graspAnchor(ctx.spec, on.fit.anchor);
+	if (carry || grasp ? ownWrist(ctx.spec, k) : Math.abs(c[`wtwist_${k}`] ?? 0) > 1e-3 || Math.abs(c[`wflex_${k}`] ?? 0) > 1e-3) return;
+	// a hand that holds what it carries by a socket keeps the grasp it took on the grab frame
+	if (carry && f > carry.grab) return carry.keyed ? undefined : keepSocketTurn(ctx, sk, s, side, k, carry);
 	if (!on || on.w < 1e-3) return;
+	if (grasp) return socketHand(ctx, sk, s, side, k, c, diag, on, st => effectorAt(sk, ctx.spec, st, side, on.fit.effector ?? {}));
 	// a hand that carries something on this frame holds that (its carry's grip), whatever its fit's anchor
 	if (Object.keys(ctx.spec.objects ?? {}).some(id => ctx.spec.objects[id]?.prop && ctx.objectHand?.(id, f) === k && ownGrip(ctx, id, k, f) === null)) return;
 	const now = { s, diag, c }, anchor = ctx.spec.anchors?.[on.fit.anchor];

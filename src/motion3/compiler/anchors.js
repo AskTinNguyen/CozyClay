@@ -23,6 +23,8 @@ import { HAND_CLEAR, keepOut } from "../body.js";
 import { groupsOf } from "../scene.js";
 import { personJoint, peopleList } from "../people.js";
 import { isCarried } from "../carried.js";
+import { socketsOf, socketNamed, socketWorld, socketDistance, faceFrom } from "../sockets.js";
+import { partsOf } from "../object-pose.js";
 
 function armReach(sk, k) {
 	const side = SIDES[k], P = sk.restWorldPos, I = sk.index;
@@ -83,7 +85,11 @@ function anchorPoint(ctx, a, name, s, diag, c, side) {
 			for (let t = a.t ?? 0.45; t >= (a.tMin ?? 0.15); t -= 0.01) if (len(sub(at(t), sh)) <= r) return at(t);
 			return at(a.tMin ?? 0.15);
 		}
-		case "object": { const o = objectFrame(ctx, a, name, { s, diag, c }, side); return add(o.pos, apply(o.R, a.local ?? [0, 0, 0])); }
+		case "object": {
+			if (a.grasp && a.local === undefined) return anchorSocket(ctx, name, s, diag, c, side).p;
+			const o = objectFrame(ctx, a, name, { s, diag, c }, side);
+			return add(o.pos, apply(o.R, a.local ?? [0, 0, 0]));
+		}
 		case "landmark": return bonePoint(s, I.Head, sk.landmarks[a.name] ?? (() => { throw new Error(`MOTION_SPEC_INVALID: unknown landmark "${a.name}"`); })());
 		case "prop": {
 			const p = propOnCarry(ctx, a, name, diag?.frame) ?? diag.props?.[a.prop]?.[a.point];
@@ -123,6 +129,28 @@ function propOnCarry(ctx, a, name, f) {
 	const there = nested(ctx, name, pick.id, pick.at, () => ctx.solvedAt(pick.at).diag.props?.[a.prop]?.[a.point]);
 	const was = ctx.objectPose(pick.id, pick.at), now = ctx.objectPose(pick.id, f);
 	return there && was && now ? add(now.pos, apply(now.R, apply(T(was.R), sub(there, was.pos)))) : null;
+}
+
+/**
+ * The socket (../sockets.js) an object anchor with `grasp` takes the hand by, in world space on its object's pose that
+ * frame: { p, axis?, from?, thumb? }, p the anchor's point (its `local` when it has one). Its `socket`, else the one
+ * nearest its `local` point or, without one, nearest the shoulder of the hand: picked once per compile (ctx.sockets),
+ * so the hand does not hop between sockets. An object with no socket gives the bare point: the palm faces it.
+ */
+export function anchorSocket(ctx, name, s, diag, c, side) {
+	const a = ctx.spec.anchors[name], now = { s, diag, c }, poseOf = id => objectFrame(ctx, { ...a, object: id }, name, now, side);
+	const local = a.local && (o => add(o.pos, apply(o.R, a.local)))(poseOf(a.object));
+	ctx.sockets ??= new Map();
+	if (!ctx.sockets.has(name)) {
+		const all = socketsOf(ctx.scene, a.object), I = ctx.sk.index, near = local ?? s.P[I[side ? `${SIDES[side]}Arm` : "Hips"]];
+		const pick = a.socket ? socketNamed(ctx.scene, a.object, a.socket) : all.map(k => ({ k, d: socketDistance(socketWorld(k, poseOf(k.owner)), near) })).sort((x, y) => x.d - y.d)[0]?.k;
+		ctx.sockets.set(name, pick ?? null);
+	}
+	const sock = ctx.sockets.get(name), w = sock ? socketWorld(sock, poseOf(sock.owner)) : { p: local ?? poseOf(a.object).pos };
+	if (local) w.p = local;
+	// a socket with neither an axis nor a side (a box, a wall): the palm faces against the face of the body nearest the point
+	if (!w.axis && !w.from) w.from = faceFrom(partsOf(ctx.scene, a.object).map(id => ({ ...poseOf(id), half: ctx.scene.objects[id].half })), w.p);
+	return w;
 }
 
 /** Points of every prop held by hand k, in world space, written to diag.props. */

@@ -11,7 +11,7 @@ export const KEY_FIELDS = ["f", "set", "step", "src"];
 export const USE_FIELDS = ["skill", "args", "f0"];
 /** Anchor fields by anchor kind (besides `kind`). */
 export const ANCHOR_FIELDS = { world: ["p"], body: ["p"], bone: ["bone", "offset"], segment: ["from", "to", "t", "tMin", "offset", "reach"],
-	object: ["object", "local"], landmark: ["name"], prop: ["prop", "point", "offset"], person: ["person", "bone", "offset"] };
+	object: ["object", "local", "socket", "grasp"], landmark: ["name"], prop: ["prop", "point", "offset"], person: ["person", "bone", "offset"] };
 export const PROP_FIELDS = ["hand", "origin", "points"];
 export const FIT_FIELDS = ["side", "anchor", "effector", "offset", "orient"];
 /** spec.objects[id]: a hinge or a carry (a body or a group id), see C3; carry keys: C14; a switch (any record, C15) moves nothing; a follow (any record, C16) rides a point of the body; a free entry (C17) moves by keys and falls. */

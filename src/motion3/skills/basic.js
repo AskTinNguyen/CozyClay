@@ -4,6 +4,10 @@ import { add, apply, ry } from "../compiler/math.js";
 import { walk } from "../compiler/walk.js";
 import { keyBook, skillError } from "./book.js";
 import { walkEnd } from "./info.js";
+import { GRASP_FINGERS, GRASP_POINTS } from "../compiler/vocab.js";
+
+/** The fingers' point a reachGrip fits onto its anchor: the finger middles, or where a grasp holds the thing (the palm is -n on the right hand). */
+const graspPoint = (grasp, k) => (GRASP_POINTS[grasp] ? GRASP_POINTS[grasp].map((v, i) => (i === 2 && k === "r" ? -v : v)) : [0, 0, 0]);
 
 /** standIdle({ at: [x, z], heading = 0, until }): a neutral standing pose, arms down (FK). */
 export function standIdle(ctx) {
@@ -59,7 +63,9 @@ export function reachGrip(ctx) {
 	const { args, state } = ctx, k = args.side, name = args.anchor;
 	if (k !== "l" && k !== "r") skillError(ctx.tag, `args.side must be "l" or "r", got ${JSON.stringify(k)}`);
 	if (typeof name !== "string" || /_[lr]$/.test(name)) skillError(ctx.tag, "args.anchor must name an anchor (not ending in _l/_r)");
-	const reach = args.reach ?? 20, hold = args.hold ?? 22, release = args.release ?? 12, preset = args.fingers ?? "grip";
+	const reach = args.reach ?? 20, hold = args.hold ?? 22, release = args.release ?? 12;
+	// an anchor that takes a grasp closes the hand to that grasp's fingers (../sockets.js)
+	const grasp = (args.define ?? ctx.anchors?.[name])?.grasp, preset = args.fingers ?? GRASP_FINGERS[grasp] ?? "grip";
 	const w = `w_${name}_${k}`, fg = `fingers_${k}`, armw = `armw_${k}`, el = `elbow_${k}`, wasFk = !(state[armw] > 0.5);
 	// a take that ends after the hold but before the hand lets go cuts the release: the grip holds to the last frame
 	const last = ctx.frames - 1, cut = ctx.f0 + reach + hold <= last && ctx.f0 + reach + hold + release > last;
@@ -75,7 +81,7 @@ export function reachGrip(ctx) {
 	const a = args.define ?? ctx.anchors?.[name], obj = a?.kind === "object" ? a.object : a?.kind === "person" ? `person:${a.person}` : null;
 	return {
 		keys: b.keys, end: cut ? last : ctx.f0 + reach + hold + release, ...(cut ? { cut: `release cut at f${last} (hold to the end)` } : {}), anchors: def,
-		props: { [prop]: { hand: k, origin: [`${S}HandIndex2`, `${S}HandMiddle2`], points: { fingers: [0, 0, 0] } } },
+		props: { [prop]: { hand: k, origin: [`${S}HandIndex2`, `${S}HandMiddle2`], points: { fingers: graspPoint(grasp, k) } } },
 		fits: [{ side: k, anchor: name, effector: { prop, point: "fingers" }, ...(args.orient === false ? { orient: false } : {}) }],
 		checks: { contacts: [{ name: `fingers on ${name}`, point: `prop:${prop}.fingers`, target: `anchor:${name}`, tol: 0.04, when: w }],
 			allow: obj ? [{ part: "hand", object: obj, depth: 0.04 }] : [] },

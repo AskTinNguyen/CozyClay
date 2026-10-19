@@ -147,6 +147,7 @@ function makeCase(entry) {
 		if (field === "cutout") Object.assign(input, { renderer: "cutout", assetId: "image-authored", aspect: 1.5, height: 2 });
 		if (field === "light") Object.assign(input, { renderer: "light", light: { type: "spot", color: "#FFAA00", intensity: 40, range: 12, angle: 35, softness: 0.5, shadow: true, flicker: 0.2, aim: { x: 0, y: 0, z: 1 } } });
 		if (field === "glow") input.glow = { color: "#ff5a1f", intensity: 6, halo: 2 };
+		if (field === "grasp") input.grasp = { grip: { at: [0, 0.1, 0], axis: [0, 2, 0], thumb: [0, 1, 0] } };
 		if (field === "effect") Object.assign(input, { renderer: "effect", effect: { preset: "fire", rate: 12 } });
 		if (field === "text") Object.assign(input, { renderer: "text", text: { value: "Authored words", size: 0.5, depth: 0.04, align: "left" } });
 		return {
@@ -226,6 +227,7 @@ const expected = new Map([
 	["object.cutout", "image-authored"],
 	["object.light", { type: "spot", color: "#ffaa00", intensity: 40, range: 12, angle: 35, softness: 0.5, shadow: true, flicker: 0.2, aim: { x: 0, y: 0, z: 1 } }],
 	["object.glow", { color: "#ff5a1f", intensity: 6, halo: 2 }],
+	["object.grasp", { grip: { at: [0, 0.1, 0], axis: [0, 1, 0], thumb: [0, 1, 0] } }],
 	["object.effect", ["fire", 12, true]],
 	["object.text", { value: "Authored words", size: 0.5, depth: 0.04, align: "left" }],
 ]);
