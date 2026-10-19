@@ -10,8 +10,9 @@ import { SKILL_INFO } from "./info.js";
 import { standIdle, walkTo, reachGrip } from "./basic.js";
 import { sitInSeat, exitCar } from "./car.js";
 import { smokeCigarette } from "./smoke.js";
+import { flip } from "./flip.js";
 
-const SKILLS = { standIdle, sitInSeat, exitCar, walkTo, reachGrip, smokeCigarette };
+const SKILLS = { standIdle, sitInSeat, exitCar, walkTo, reachGrip, smokeCigarette, flip };
 export const SKILL_NAMES = Object.keys(SKILLS);
 const bad = msg => { throw new Error(`MOTION_SPEC_INVALID: ${msg}`); };
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);

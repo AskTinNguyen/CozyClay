@@ -10,7 +10,7 @@
 // See docs/motion-api-v3.1.md C13.
 import { add, sub, scale, len, dot, angle } from "../compiler/math.js";
 import { CAPSULES, segPoints, sdBox } from "./geometry.js";
-import { groundSole } from "./ground.js";
+import { groundSole, groundY } from "./ground.js";
 
 const SPEED_JOINTS = ["Hips", "Head", "LeftHand", "RightHand", "LeftFoot", "RightFoot", "LeftLeg", "RightLeg", "LeftForeArm", "RightForeArm"];
 const CORE = new Set(["Hips", "Head"]);
@@ -101,11 +101,18 @@ function balanceMargins(out, supports = []) {
 	});
 }
 
-/** Runs [a, b] (indexes of out.frames) with both soles 2 cm or more above the ground (ground.js) and no declared support. */
+/** True when a hand rests on the ground at frame f: its wrist or knuckles within HAND_DOWN of the ground under them. */
+const HAND_DOWN = 0.06;
+function handDown(out, f) {
+	const { P } = out.frames[f].s, I = out.ctx.sk.index;
+	return ["Left", "Right"].some(S => [`${S}Hand`, `${S}HandMiddle1`].some(j => I[j] !== undefined && P[I[j]][1] - groundY(out, f, P[I[j]]) < HAND_DOWN));
+}
+
+/** Runs [a, b] (indexes of out.frames) with both soles 2 cm or more above the ground (ground.js), no hand on it and no declared support. */
 function airRuns(out, supports = []) {
 	const n = out.frames.length, runs = [];
 	const air = out.frames.map((_, f) => !supported(out, f, supports)
-		&& ["Left", "Right"].every(S => { const sp = groundSole(out, f, S); return Math.min(sp.heel[1], sp.ball[1]) >= 0.02; }));
+		&& ["Left", "Right"].every(S => { const sp = groundSole(out, f, S); return Math.min(sp.heel[1], sp.ball[1]) >= 0.02; }) && !handDown(out, f));
 	for (let a = 0; a < n; a++) {
 		if (!air[a]) continue;
 		let b = a;
