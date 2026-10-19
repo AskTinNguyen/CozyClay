@@ -14,12 +14,12 @@ export const FINGER_PRESETS = ["relaxed", "fist", "grip", "cigarette", "point"];
 
 // [min, max, convention] for numeric channels whose values have a hard range.
 const RANGES = [
-	[/^(armw)_[lr]$/, 0, 1, "0 = FK arm, 1 = IK to the hand target"],
+	[/^(armw)_[lr]$/, 0, 1, "0 FK, 1 IK to the hand target"],
 	[/^arm_hang$/, 0, 1, "1 = a free FK forearm hangs plumb"],
-	[/^w_.+_[lr]$/, 0, 1, "a hand-target weight; the weights of one hand add up to at most 1"],
-	[/^wtwist_[lr]$/, -85, 85, "wrist twist about the forearm in degrees"],
-	[/^wflex_[lr]$/, -70, 70, "wrist flex about the knuckle line in degrees"],
-	[/^fpitch_[lr]$/, -60, 90, "toe-down pitch in degrees: + lifts the heel (the toes stay flat), - lifts the toes"],
+	[/^w_.+_[lr]$/, 0, 1, "hand-target weight; a hand's sum <= 1"],
+	[/^wtwist_[lr]$/, -85, 85, "twist about the forearm, deg"],
+	[/^wflex_[lr]$/, -70, 70, "flex about the knuckle line, deg"],
+	[/^fpitch_[lr]$/, -60, 90, "toe-down pitch, deg: + lifts the heel (toes flat), - lifts the toes"],
 	// the whole-body pitch and roll have none: they turn in full (flips, cartwheels; pose.js tiltFrame)
 	[/^(spine_pitch|head_pitch)$/, -120, 120, "degrees, + bends forward"],
 	[/^(spine_roll|head_roll)$/, -90, 90, "degrees"],
@@ -28,20 +28,20 @@ export const rangeOf = ch => RANGES.find(([re]) => re.test(ch)) ?? null;
 
 export const CONVENTIONS = {
 	yaw: "yaw 0 faces +Z and + turns toward +X",
-	fyaw: "foot heading in degrees, as yaw",
-	pole: "a body-frame direction (turned by the root yaw only): +z forward, +x the character's left, +y up",
-	foot: "the ANKLE target in world metres (standing: 0.087 X Bot, 0.105 Y Bot)",
-	hand: "the WRIST target in world metres",
-	root: "the hips joint in world metres (standing: 1.03 X Bot, 0.99 Y Bot)",
+	fyaw: "foot heading, as yaw",
+	pole: "body-frame direction (root yaw): +z forward, +x its left, +y up",
+	foot: "ANKLE target, world m (standing 0.087 X Bot, 0.105 Y Bot)",
+	hand: "WRIST target, world m",
+	root: "hips joint, world m (standing 1.03 X Bot, 0.99 Y Bot)",
 };
 
 /** What each channel family means (a family drops the _l/_r side), for motion.describe "channels". */
 export const CHANNEL_DOCS = {
-	root: CONVENTIONS.root, yaw: `degrees; ${CONVENTIONS.yaw}`, pitch: "degrees", roll: "degrees",
-	spine_yaw: "degrees", spine_pitch: "degrees, + bends forward", spine_roll: "degrees", head_yaw: "degrees", head_pitch: "degrees, + looks down", head_roll: "degrees",
-	arm_rest: "FK arms down from the T-pose (default 72)", arm_hang: "1 = a free FK forearm hangs plumb (standIdle and walks key it)", foot: CONVENTIONS.foot, fyaw: CONVENTIONS.fyaw, fpitch: "toe-down pitch, degrees, + heel up",
+	root: CONVENTIONS.root, yaw: `deg; ${CONVENTIONS.yaw}`, pitch: "degrees", roll: "degrees",
+	spine_yaw: "degrees", spine_pitch: "deg, + bends forward", spine_roll: "degrees", head_yaw: "degrees", head_pitch: "degrees, + looks down", head_roll: "degrees",
+	arm_rest: "FK arms down, deg, default 72", arm_hang: "1 = a free FK forearm hangs plumb (standIdle and walks key it)", foot: CONVENTIONS.foot, fyaw: CONVENTIONS.fyaw, fpitch: "toe-down pitch, degrees, + heel up",
 	knee: `knee pole, ${CONVENTIONS.pole}`, armw: "0 = FK arm, 1 = IK to hand_* / the anchors", hand: CONVENTIONS.hand, elbow: `elbow pole, ${CONVENTIONS.pole}`,
-	wtwist: "wrist twist, degrees", wflex: "wrist flex, degrees", aswing: "FK arm swing, degrees, + forward", abend: "FK elbow bend, degrees",
+	wtwist: "wrist twist, degrees", wflex: "wrist flex, degrees", aswing: "FK arm swing, deg, + forward", abend: "FK elbow bend, deg",
 	fingers: "{ preset: weight 0..1 }",
 };
 export const channelFamily = ch => ch.replace(/_[lr]$/, "");

@@ -23,10 +23,10 @@ function checkValue(err, at, ch, v) {
 		if (!isVec3(v)) return err(`${at} ${ch} must be [x, y, z] (3 finite numbers), got ${fmt(v)}`);
 		if (POLE_CHANNELS.has(ch)) {
 			const l = Math.hypot(...v);
-			if (l < 1e-6) return err(`${at} ${ch} = ${fmt(v)} has no direction; a pole is ${CONVENTIONS.pole}`);
-			if (ch.startsWith("knee") && v[2] < -0.7 * l) err(`${at} ${ch} = ${fmt(v)} points backward; knees bend toward +z. A pole is ${CONVENTIONS.pole}`);
+			if (l < 1e-6) return err(`${at} ${ch} = ${fmt(v)} has no direction; a pole is a ${CONVENTIONS.pole}`);
+			if (ch.startsWith("knee") && v[2] < -0.7 * l) err(`${at} ${ch} = ${fmt(v)} points backward; knees bend toward +z. A pole is a ${CONVENTIONS.pole}`);
 		}
-		if (ch.startsWith("foot") && v[1] < 0.04) err(`${at} ${ch} y = ${v[1]} puts the ankle into the floor; foot_* is ${CONVENTIONS.foot}`);
+		if (ch.startsWith("foot") && v[1] < 0.04) err(`${at} ${ch} y = ${v[1]} puts the ankle into the floor; foot_* is the ${CONVENTIONS.foot}`);
 		return;
 	}
 	if (MAP_CHANNELS.has(ch)) {
