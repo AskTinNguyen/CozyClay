@@ -84,4 +84,10 @@ export const SKILL_INFO = {
 		adds: ["keys: wind-up, swing, follow-through", "objects.<id>: release and fall { v: \"hand\" } when the entry leaves them out", "goals: <id> lands at the target"],
 		example: { f0: 40, args: { object: "ball", to: [0, 0, 5] } },
 	},
+	catchObject: {
+		args: { object: str("the flying object's id (objects.<id>.fall { at, v })"), side: { enum: ["r", "both"], description: "the right hand, or both (a thing over 1 kg takes both)" } },
+		required: ["object"], needs: "the object flying: objects.<id>.fall { at, v }", frames: "to the catch (the first frame in reach, at least 10 from f0) + 14",
+		adds: ["keys: reach, close, give with it", "objects.<id>: prop, grab, grasp when the entry leaves them out", "props.<id>Catch"],
+		example: { f0: 0, args: { object: "ball" } },
+	},
 };
