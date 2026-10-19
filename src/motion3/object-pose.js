@@ -14,7 +14,9 @@
 //   f < grab              the scene pose
 //   grab <= f <= release  follows the prop's hand; without at/along it keeps the transform it had
 //                         against the palm axes at grab (no jump); at/along pin an offset (a group: its root, C15)
-//   f > release           frozen at the release pose
+//   f > release           frozen at the release pose; let go over a body that moves on its own (a seat of a truck the spec
+//                         drives with keys, a hinged lid), it rides that body's mover from the release on, keeping its world
+//                         pose at the release (riderOf): a lighter put down in the cab leaves with the truck
 //   no grab: in hand from frame 0; no release: in hand to the end (PR #14 behaviour)
 //   keys (C14, object-keys.js): the object leads and the hand follows; the object is still drawn
 //                         in the hand, so what the hand cannot reach shows as a residual (QA)
@@ -29,7 +31,8 @@ import { groupsOf } from "./scene.js";
 import { solveFrame } from "./compiler/compile.js";
 import { channelsAt } from "./compiler/channels.js";
 import { resolveBone } from "./bones.js";
-import { isFree, freePoseAt, beforeGrab, afterRelease } from "./free-motion.js";
+import { isFree, freePoseAt, beforeGrab, afterRelease, fallsAfter, corners, topOf, under, TOUCH } from "./free-motion.js";
+import { add } from "./compiler/math.js";
 
 /**
  * Body ids that make up `id` in a motionScene: [id] for a body (plus any bodies parented under
@@ -68,7 +71,7 @@ export function spanOf(out, o) {
 /** Without at/along a grabbed body, and a group, keeps its grab-frame palm offset; at/along pin one (a kit root, C15). */
 const keepsOffset = (scene, id, o) => o.at === undefined && o.along === undefined && ((!scene?.objects?.[id] && !!groupsOf(scene)[id]) || o.grab !== undefined);
 
-const solved = new WeakMap(), poses = new WeakMap();
+const solved = new WeakMap(), poses = new WeakMap(), riders = new WeakMap();
 
 /** What free-motion.js reads of a compile result: the spec, the scene and the time map. */
 const freeCtx = out => ({ spec: out.ctx.spec, scene: out.ctx.scene, timeMap: out.timeMap });
@@ -82,6 +85,34 @@ export function restingAt(out, id, f) {
 	if (!isCarried(o)) return null;
 	const root = beforeGrab(freeCtx(out), mover, o, f, spanOf(out, o)[0]);
 	return root && (mover === id ? root : compose(root, relative(restPose(scene, mover), restPose(scene, id))));
+}
+
+/**
+ * The spec.objects key a carry `id` (entry o) rides after its release: the key that moves the highest body under the
+ * record's centre at the release frame, when that key moves on its own (keys, a fall or a hinge; never a hand or a follow)
+ * and is not the record itself. null when the carry falls after its release, is never let go, or nothing under it moves.
+ */
+export function riderOf(out, id) {
+	if (!riders.has(out)) riders.set(out, new Map());
+	const cache = riders.get(out);
+	if (cache.has(id)) return cache.get(id);
+	const { spec, scene } = out.ctx, o = spec.objects?.[id], rest = restPose(scene, id), parts = partsOf(scene, id);
+	let best = null;
+	if (isCarried(o) && o.release !== undefined && rest && parts.length) {
+		const release = spanOf(out, o)[1];
+		if (release < out.frameCount - 1 && !fallsAfter(freeCtx(out), o, release)) {
+			const at = carriedAt(out, id, o, release), pts = parts.flatMap(p => corners({ ...compose(at, relative(rest, scene.objects[p])), half: scene.objects[p].half }));
+			const low = Math.min(...pts.map(p => p[1])), c = pts.reduce((a, p) => add(a, p), [0, 0, 0]).map(v => v / pts.length);
+			for (const [k, body] of Object.entries(scene.objects)) {
+				const mover = parts.includes(k) ? null : moverOf(spec, scene, k), entry = spec.objects?.[mover];
+				if (!mover || mover === id || isCarried(entry) || isFollow(entry)) continue;
+				const box = { ...objectPoseAt(out, k, release), half: body.half }, top = topOf(box);
+				if (under(box, c) && top <= low + TOUCH && (!best || top > best.top)) best = { mover, top };
+			}
+		}
+	}
+	cache.set(id, best?.mover ?? null);
+	return best?.mover ?? null;
 }
 
 /** The solved frame at absolute f: out.frames, or solved once on demand outside a window. */
@@ -129,6 +160,8 @@ export function rootPoseAt(out, id, f, now = null) {
 		if (f < grab && rest) return restingAt(out, id, f);
 		const after = f > release ? afterRelease(freeCtx(out), id, o, f, release, carriedAt(out, id, o, release), release > 0 ? carriedAt(out, id, o, release - 1) : null) : null;
 		if (after) return after;
+		const by = f > release ? riderOf(out, id) : null;
+		if (by) { const at = carriedAt(out, id, o, release); return compose(rootPoseAt(out, by, f), relative(rootPoseAt(out, by, release), at)); }
 		return now && g === f ? carriedOn(out, id, o, f, now.s) : carriedAt(out, id, o, g);
 	}
 	if (!rest) return null;

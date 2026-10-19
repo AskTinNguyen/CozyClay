@@ -148,7 +148,7 @@ export function renderTakeEdit(take) {
 		if (track.pos) { next.pos = new Float32Array(D * 3); at.forEach(({ i0, i1, t }, f) => lerp(next.pos, f * 3, track.pos, i0 * 3, track.pos, i1 * 3, t, 3)); }
 		if (track.quat) { next.quat = new Float32Array(D * 4); at.forEach(({ i0, i1, t }, f) => nlerp(next.quat, f * 4, track.quat, i0 * 4, track.quat, i1 * 4, t)); }
 		if (track.lvl) { next.lvl = new Float32Array(D); at.forEach(({ i0, i1, t }, f) => lerp(next.lvl, f, track.lvl, i0, track.lvl, i1, t, 1)); }
-		for (const key of ["vis", "hold"]) if (track[key]) { next[key] = new Uint8Array(D); at.forEach(({ near }, f) => { next[key][f] = track[key][near]; }); }
+		for (const key of ["vis", "hold", "world"]) if (track[key]) { next[key] = new Uint8Array(D); at.forEach(({ near }, f) => { next[key][f] = track[key][near]; }); }
 		return [id, next];
 	}));
 	return { ...take, frameCount: D, frames: D, rot, hips, objects, edit, editRendered: true };

@@ -29,7 +29,9 @@ import { shapeOf, airPath, settlePath, settledAt, spinOf, spinEnergy, TIP } from
 export const G = 9.8;
 /** The highest a bounce goes, metres. */
 export const BOUNCE_MAX = 0.03;
-const BOUNCE = 0.25, TOUCH = 0.005;
+const BOUNCE = 0.25;
+/** A support's top may sit this far above the lowest point of what rests on it (m). */
+export const TOUCH = 0.005;
 const HELD_OR_HINGED = ["prop", "follow", "pivot", "axis", "channel"];
 
 /** A free entry (C17): no prop, follow or hinge field, and keys or fall. */
@@ -41,14 +43,14 @@ const restOf = (scene, id) => scene?.objects?.[id] ?? groupsOf(scene)[id] ?? nul
 const partsIn = (scene, id) => Object.keys(scene?.objects ?? {}).filter(k => k === id || scene.objects[k].ancestors?.includes(id));
 
 /** The 8 corners of a base-pivot box { pos, R, half }. */
-function corners(box) {
+export function corners(box) {
 	const out = [];
 	for (const x of [-1, 1]) for (const y of [0, 2]) for (const z of [-1, 1]) out.push(add(box.pos, apply(box.R, [x * box.half[0], y * box.half[1], z * box.half[2]])));
 	return out;
 }
-const topOf = box => Math.max(...corners(box).map(p => p[1]));
+export const topOf = box => Math.max(...corners(box).map(p => p[1]));
 /** True when the vertical through x/z point p crosses the footprint of box. */
-const under = (box, p) => { const q = apply(T(box.R), sub([p[0], box.pos[1] + box.half[1], p[2]], box.pos)); return Math.abs(q[0]) <= box.half[0] && Math.abs(q[2]) <= box.half[2]; };
+export const under = (box, p) => { const q = apply(T(box.R), sub([p[0], box.pos[1] + box.half[1], p[2]], box.pos)); return Math.abs(q[0]) <= box.half[0] && Math.abs(q[2]) <= box.half[2]; };
 
 /** Bodies a spec.objects entry moves (itself or a group above it): they hold nothing up. */
 function moversIn(spec, scene) {
@@ -193,6 +195,12 @@ export function afterRelease(ctx, id, o, f, release, releasePose, beforePose = n
 	// the release pose comes from the solved body, which a rebake changes: plan these falls afresh
 	const plan = (start, fall) => fallPlan(ctx.spec, ctx.scene, id, start, fall.t, fall, ctx.spec.fps ?? 30, fall.t <= release + 1 ? beforePose : null);
 	return events.length ? walk(events, f, releasePose, plan, false) : null;
+}
+
+/** True when carry entry o falls at or after its release (absolute frame; afterRelease then moves it). */
+export function fallsAfter(ctx, o, release) {
+	const map = ctx.timeMap ?? (f => f);
+	return fallsOf(o).some(fl => map(fl.at) >= release);
 }
 
 /** The falls of entry `id` as planned under the current time map, for readers (timeline, tests): [{ t0, land, end, h, support, top }]. */

@@ -17,7 +17,7 @@ import { groupKey } from "../../src/motion3/qa/severity.js";
 import { sceneObjectsAt, sceneObjectTravelMatrixAt } from "../../src/object-travel.js";
 import { goalChecks } from "../../src/motion3/qa/goals.js";
 import { grabReleases } from "../../src/motion3/beats.js";
-import { rootPoseAt } from "../../src/motion3/object-pose.js";
+import { rootPoseAt, riderOf, objectPoseAt } from "../../src/motion3/object-pose.js";
 import { propOrigin } from "../../src/motion3/carried.js";
 import { axisRot, mul, apply, sub, add } from "../../src/motion3/compiler/math.js";
 import { compileTakeSource } from "../../src/domains/motion/take-source.js";
@@ -182,6 +182,26 @@ expect("a hinge takes no keys (its channel is keyed; keys move a free or carried
 const auto = compileSpec({ ...held, frames: "auto" }, { sk, scene });
 expect("frames: \"auto\" with keys: resolves to the last key + 1, stores the number and bakes the same take", auto.spec.frames === 100 && auto.out.frameCount === 100
 	&& bakeTake(sk, auto.out).objects[CUP.group].pos.every((v, i) => v === kt.objects[CUP.group].pos[i]));
+
+// ---- let go over a body that moves on its own: it rides that body ------------------------------
+// A lighter put down in a truck that drives off (session 1c631d0c) stayed where it was let go. Here the table the cup is put
+// back over drives 0.5 m along +X after the release (free keys on the table group): the cup rides it, keeping its world pose
+// at the release, the take marks those frames world space (no hand holds it), and the renderer, which carries the cup with
+// its scene parent (the table), draws it once, where the compiler has it.
+const drive = { keys: [{ f: 85, pos: [0, 0, 1] }, { f: 99, pos: [0.5, 0, 1] }] };
+const mr = compileSpec(cupSpec({ objects: { [CUP.group]: { prop: "grip", grab: GRAB, release: RELEASE }, [CUP.table]: drive } }), { sk, scene }).out;
+const mt = bakeTake(sk, mr), mtrack = mt.objects[CUP.group], mpose = (id, f) => ({ pos: Array.from(mt.objects[id].pos.subarray(f * 3, f * 3 + 3)), R: matFromQuat(Array.from(mt.objects[id].quat.subarray(f * 4, f * 4 + 4))) });
+expect("a carry let go over a moving body rides that body's mover (riderOf)", riderOf(mr, CUP.group) === CUP.table && riderOf(out, CUP.group) === null, `${riderOf(mr, CUP.group)} / ${riderOf(out, CUP.group)}`);
+const onTable = f => relative(mpose(CUP.table, f), mpose(CUP.group, f)), atRelease = onTable(RELEASE);
+let slide = 0;
+for (let f = RELEASE + 1; f < 100; f++) { const o = onTable(f); slide = Math.max(slide, gap(o.pos, atRelease.pos), ...o.R.map((row, i) => gap(row, atRelease.R[i]))); }
+expect("from the release on the cup keeps its place on the table (1e-5, Float32 tracks)", slide <= 1e-5, `${slide}`);
+expect("the cup travels with the table (0.5 m along +X by the last frame)", Math.abs(mpose(CUP.group, 99).pos[0] - mpose(CUP.group, RELEASE).pos[0] - 0.5) < 1e-5 && gap(mpose(CUP.group, 99).pos, objectPoseAt(mr, CUP.group, 99).pos) < 1e-5);
+expect("the take marks the riding frames world space, not held", mtrack.world?.[RELEASE] === 0 && mtrack.world?.[RELEASE + 1] === 1 && mtrack.hold[RELEASE + 1] === 0 && track.world === undefined);
+const mplay = { frameCount: mt.frameCount, fps: 24, objectTracks: new Map(Object.entries(mt.objects).map(([id, t]) => [id, { frameCount: mt.frameCount, ...t }])) };
+const drawn = sceneObjectTravelMatrixAt(SCENE_OBJECTS, CUP.group, 99, mplay);
+expect("the renderer draws the riding cup once, at its track (the table's travel is not added again)", gap([drawn.elements[12], drawn.elements[13], drawn.elements[14]], mpose(CUP.group, 99).pos) < 1e-5,
+	`${[drawn.elements[12], drawn.elements[13], drawn.elements[14]].map(v => v.toFixed(3))} vs ${mpose(CUP.group, 99).pos.map(v => v.toFixed(3))}`);
 
 if (failures) { console.error(`${failures} grab check(s) failed`); process.exit(1); }
 console.log("motion3 grab/release and groups: all checks passed");
