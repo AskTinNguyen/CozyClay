@@ -38,7 +38,8 @@ export function createStudioTools({ liveHub, workspaceHandle, session, resolveIm
     } catch (error) {
       // A STALE_SCENE re-admits whichever family met it, so the retry the
       // model is told to make is admitted at the live revision.
-      if (session?.admission && (error?.code === "STALE_SCENE" || (mutationNames.has(name) && error?.code === "UNCERTAIN_APPLY"))) scratch.fresh = await session.admission.refresh();
+      // A refresh that fails (the editor went away) keeps the error that happened, not the refresh's.
+      if (session?.admission && (error?.code === "STALE_SCENE" || (mutationNames.has(name) && error?.code === "UNCERTAIN_APPLY"))) scratch.fresh = await session.admission.refresh().catch(() => null);
       throw error;
     }
     if (result?.ok === false) {

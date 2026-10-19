@@ -10,7 +10,11 @@
 //   (c) the routes with a scripted model and the real bus (the shipped binding): POST /agent/main answers at once while
 //       two tasks edit two objects of one scene in their own scopes, the board ends with both done, the main agent
 //       reports on its own when they end, a quick_edit lands inside a one-command task, and the task sessions are kept
-//       with their parent's id and left out of the session list.
+//       with their parent's id and left out of the session list;
+//   (d) a Studio reload (case 14 with the coordinator's rule): a task paused by a lost Studio resumes when the scope
+//       reads as it left it; when it does not (autosave missed the task's newest edit), the task is told to re-read its
+//       scope and the main agent hears task.sceneChanged; a task lost mid-command (UNCERTAIN_APPLY) on a changed scope
+//       fails with that reason.
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { once } from "node:events";
@@ -246,5 +250,79 @@ const { MAIN_SYSTEM_PROMPT } = await import("../bin/agent/main-prompt.mjs");
 	assert.equal(res.statusCode, 404, "the flag is off by default: single mode stays");
 	await handler.close?.(); await new Promise(resolve => server.close(resolve)); f.dispose();
 	console.log("PASS the routes: the main agent answers at once, two tasks edit two objects of one scene in their own scopes, a quick edit lands, the main agent reports when they end, task sessions keep their parent");
+}
+
+// --- (d) a Studio reload while a task runs -----------------------------------------------------------------------
+async function reloadScenario({ lostWith, reloadKeeps }) {
+	let cur = objectsFixture(), down = false;
+	const cube = cur.store.current.objects.find(o => o.renderer === "cube").id;
+	const read = () => { if (down) throw Object.assign(new Error("LIVE_HUB_UNAVAILABLE: no editor"), { code: "LIVE_HUB_UNAVAILABLE" }); const context = cur.binding.handlers.read_studio_context({ host: cur.host() }); return { ...context, host: { ...context.host, workspaceHandle: "handle-1" } }; };
+	const hub = {
+		async command(name, payload) {
+			if (down) throw Object.assign(new Error(`${lostWith}: Live editor disconnected while a command was running.`), { code: lostWith });
+			const response = await dispatchLiveFrame(JSON.stringify({ type: "cmd", id: randomUUID(), name, args: payload }), cur.binding.handlers);
+			if (!response.ok) throw Object.assign(new Error(response.error), { code: String(response.error).split(":")[0] });
+			return response.value;
+		},
+		workspaceId: () => cur.host().workspaceId, resolveWorkspace: () => "handle-1", connected: true, workspaceHandles: ["handle-1"],
+	};
+	const notes = [], fakeModel = createFakeModel();
+	const lastUser = context => JSON.stringify([...context.messages].reverse().find(message => message.role === "user") ?? {});
+	const step = async context => {
+		if (context.systemPrompt === MAIN_SYSTEM_PROMPT) {
+			const last = context.messages.at(-1);
+			if (last.role === "user" && lastUser(context).includes("Move the cube")) return fauxAssistantMessage([fauxToolCall("dispatch_task", { title: "cube", instructions: `Move ${cube} to x 1, then to x 2.`, scope: [`object:${cube}`] }, { id: `m-${randomUUID()}` })]);
+			return fauxAssistantMessage([fauxText("알겠어요.")]);
+		}
+		const user = lastUser(context);
+		if (/reads as you left it|scene changed while the Studio reloaded/.test(user) && context.messages.at(-1).role === "user") { notes.push(user.includes("scene changed") ? "changed" : "same"); return fauxAssistantMessage([fauxText("Resumed and finished.")]); }
+		const results = context.messages.filter(message => message.role === "toolResult").length;
+		if (results === 0) return fauxAssistantMessage([fauxToolCall("run_action", { action: "object.set", args: { id: cube, set: { position: { x: 1, y: 0, z: 0 } } } }, { id: `t-${randomUUID()}` })]);
+		if (results === 1) { await new Promise(r => setTimeout(r, 60)); down = true; return fauxAssistantMessage([fauxToolCall("run_action", { action: "object.set", args: { id: cube, set: { position: { x: 2, y: 0, z: 0 } } } }, { id: `t-${randomUUID()}` })]); }
+		return fauxAssistantMessage([fauxText("Moved.")]);
+	};
+	fakeModel.fauxProvider.setResponses(Array.from({ length: 30 }, () => step));
+	let server;
+	const handler = createAgentHandler({ auth: { getAccessToken: async () => "token" }, codex: { parseQuotaHeaders: () => ({ primary: {}, credits: {} }) }, models: fakeModel.models, fauxProvider: fakeModel.fauxProvider,
+		liveHub: hub, studioRuntime: { readContext: async () => read() }, supervisor: false, studioTasks: () => true, taskLimits: { staggerMs: 0 }, port: () => server.address().port });
+	server = createServer((req, res) => handler(req, res).catch(error => { if (!res.headersSent) res.writeHead(500); res.end(error.stack); }));
+	server.listen(0, "127.0.0.1"); await once(server, "listening");
+	const origin = `http://127.0.0.1:${server.address().port}`, sessionId = randomUUID();
+	const post = async (text, cookie) => fetch(`${origin}/agent/main`, { method: "POST", headers: { "content-type": "application/json", origin, ...(cookie ? { cookie } : {}) },
+		body: JSON.stringify({ surface: "studio", sessionId, turnId: randomUUID(), text, context: read(), model: "faux/scripted" }) });
+	const first = await post("Move the cube");
+	const cookie = first.headers.get("set-cookie").split(";")[0]; await first.text();
+	const board = async () => (await (await fetch(`${origin}/agent/main/${sessionId}/board`, { headers: { origin, cookie } })).json()).tasks[0];
+	const until = async want => { let task; for (let i = 0; i < 300; i++) { task = await board(); if (want.includes(task.status)) return task; await new Promise(r => setTimeout(r, 20)); } return task; };
+	const paused = await until(["paused", "failed"]);
+	assert.equal(paused.status, "paused", JSON.stringify(paused));
+	// The reload: a new editor on the same scene, from what autosave kept.
+	const kept = structuredClone(cur.store.current.objects).map(o => (o.id === cube && !reloadKeeps ? { ...o, x: 0 } : o));
+	cur.dispose(); cur = objectsFixture(kept); down = false;
+	await (await post("다시 연결됐어", cookie)).text();
+	const ended = await until(["done", "failed"]);
+	// The board's feed replays every event from the start; read what arrives in a short window.
+	const reader = (await fetch(`${origin}/agent/main/${sessionId}/events?after=0`, { headers: { origin, cookie } })).body.getReader();
+	let events = "";
+	const stopAt = Date.now() + 300;
+	while (Date.now() < stopAt) { const chunk = await Promise.race([reader.read(), new Promise(r => setTimeout(() => r(null), stopAt - Date.now()))]); if (!chunk || chunk.done) break; events += new TextDecoder().decode(chunk.value); }
+	await reader.cancel();
+	await handler.close?.(); await new Promise(resolve => server.close(resolve)); cur.dispose();
+	return { ended, notes, events };
+}
+{
+	const same = await reloadScenario({ lostWith: "LIVE_HUB_UNAVAILABLE", reloadKeeps: true });
+	assert.equal(same.ended.status, "done", JSON.stringify(same.ended));
+	assert.deepEqual(same.notes, ["same"], "the scope reads as the task left it: it resumes");
+	assert.ok(!same.events.includes("task.sceneChanged"));
+	const changed = await reloadScenario({ lostWith: "LIVE_HUB_UNAVAILABLE", reloadKeeps: false });
+	assert.equal(changed.ended.status, "done");
+	assert.deepEqual(changed.notes, ["changed"], "autosave missed its edit: the task is told to re-read its scope");
+	assert.match(changed.events, /"type":"task.sceneChanged".*"keys":\["object:cube"\]/s, "the main agent hears it");
+	const mid = await reloadScenario({ lostWith: "UNCERTAIN_APPLY", reloadKeeps: false });
+	assert.equal(mid.ended.status, "failed");
+	assert.match(mid.ended.reason, /scene changed while the Studio reloaded .* mid-command/);
+	assert.deepEqual(mid.notes, [], "a task lost mid-command on a changed scope does not resume blind");
+	console.log("PASS case 14 after a reload: a paused task resumes when its scope reads as it left it, re-reads when it changed (and the main agent hears it), and fails when it was mid-command");
 }
 process.exit(0);

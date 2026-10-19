@@ -13,7 +13,9 @@
 // edits still land.
 import { randomUUID } from "node:crypto";
 
-export const LOST_STUDIO = new Set(["LIVE_HUB_UNAVAILABLE", "STALE_HANDLE"]);
+// The Studio went away (a reload, a closed tab): no editor answers, or it went while a command ran (UNCERTAIN_APPLY: the
+// command may or may not have landed; mcp/live-hub.mjs).
+export const LOST_STUDIO = new Set(["LIVE_HUB_UNAVAILABLE", "STALE_HANDLE", "NO_EDITOR", "UNCERTAIN_APPLY"]);
 
 export function studioTransaction({ hub, context, turnId, admission, task = null, signal, plain = false }) {
 	// The main agent holds no transaction (plain): its one quick edit opens a task of its own.
