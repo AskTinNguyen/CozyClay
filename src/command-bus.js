@@ -1,40 +1,11 @@
 // The Studio command runner. The registry owns declarations/implementations;
 // the editor ports own native state/history, and the existing journal owns
 // idempotency. Synchronous UI actions stay synchronous (including user gestures).
-import { HISTORY_LIMIT } from './history.js';
 import { StudioProtocolError, StudioSchemas, validateStudioSchema, validateReceipt, validateStudioIdentity, refusalCode } from './studio-agent-protocol.js';
 import { agentTurnControls, markAgentTurn, turnEditPoint, recordTurnEdit, undoTurnEdit } from './agent-turn-mark.js';
+import { createBusTasks } from './bus-tasks.js';
 
-// A batching/retention adapter over the existing object history owner. The
-// native store still owns every snapshot and transition; this tracks only the
-// retained pre-image identities needed by receipts.
-export function withCommandHistory(store) {
-  let past = [], future = [], group = null;
-  const adapter = Object.create(store);
-  const pushed = before => { if (before !== store.present()) { past.push(before); past = past.slice(-HISTORY_LIMIT); future = []; } };
-  adapter.hasHistoryState = state => state === store.present() || past.includes(state) || future.includes(state);
-  adapter.settle = (...args) => { const before = store.present(); store.settle(...args); pushed(before); };
-  adapter.applyAtomic = fn => {
-    if (group) { if (!group.running) fail('TARGET_BUSY', 'A command transaction owns the object history.'); return store.applyIn(group.token, fn); }
-    adapter.settle(); const before = store.present(); store.applyAtomic(fn); pushed(before);
-  };
-  adapter.begin = (...args) => { adapter.settle(); return store.begin(...args); };
-  adapter.end = (token, options) => { const before = store.present(), ended = store.end(token, options); if (options.commit) pushed(before); return ended; };
-  adapter.undo = () => { adapter.settle(); const before = store.present(), restored = store.undo(); if (restored !== null) { past.pop(); future.unshift(before); } return restored; };
-  adapter.redo = () => { const before = store.present(), restored = store.redo(); if (restored !== null) { past.push(before); future.shift(); } return restored; };
-  adapter.beginCommand = () => {
-    if (group) fail('TARGET_BUSY', 'An object command is already in progress.');
-    adapter.settle(); const before = store.present();
-    const current = { running: 0, token: store.begin('command-bus', () => { current.closed = true; group = null; }) }; group = current;
-    const check = () => { if (current.closed) fail('STALE_TARGET', 'Native object transaction was retired.'); };
-    return {
-      run(fn) { check(); current.running++; try { const result = fn(); if (result?.then) return result.finally(() => { current.running--; }); current.running--; return result; } catch (error) { current.running--; throw error; } },
-      commit() { check(); current.closed = true; group = null; store.end(current.token, { commit: true }); pushed(before); return before !== store.present(); },
-      cancel() { if (current.closed) return false; current.closed = true; group = null; return store.end(current.token, { commit: false }); },
-    };
-  };
-  return adapter;
-}
+export { withCommandHistory } from './command-history.js';
 
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const fail = (code, message) => { throw new StudioProtocolError(code, message); };
@@ -47,6 +18,7 @@ export function createCommandBus({ registry, ports }) {
   const pending = new Map(), transactions = new Map(), jobs = new Map(), listeners = new Set();
   const confirmations = new Map(), historyReceipts = new Map();
   let agentTurn = null;
+  const tasks = createBusTasks({ ports, emit: event => emit(event) });
   function exposure(entry, args, request) {
     if (request.origin === 'ui') return;
     if (entry.exposure === 'ui-only') fail('CAPABILITY_MISSING', entry.uiOnlyHint ?? 'This command is available only from the Studio UI.');
@@ -63,7 +35,7 @@ export function createCommandBus({ registry, ports }) {
   const object = properties => ({ type: 'object', properties, required: Object.keys(properties), additionalProperties: false });
   const argsSchema = { type: 'object', properties: {}, required: [], additionalProperties: true };
   const controls = {
-    ...agentTurnControls(object, identifier),
+    ...agentTurnControls(object, identifier), ...tasks.controls(object, identifier),
     'run.begin': object({ id: identifier, args: argsSchema }),
     'run.update': object({ txId: identifier, args: argsSchema }),
     'run.commit': object({ txId: identifier }),
@@ -84,10 +56,11 @@ export function createCommandBus({ registry, ports }) {
     tx.timer = (ports.setTimeout ?? setTimeout)(() => cancelTransaction(tx, true), ports.transactionIdleMs ?? 30_000);
   }
   function control(id, args, request, before) {
+    if (id.startsWith('task.')) return tasks.control(id, args, request, before, agentTurn ? 'Finish the agent turn first.' : transactions.size ? 'Finish the open command transaction first.' : null);
     if (id.startsWith('agent.turn.')) {
       if (request.origin !== 'agent' || request.turnId !== args.turnId) fail('CAPABILITY_MISSING', 'Only the owning agent turn can control this transaction.');
       if (id === 'agent.turn.begin') {
-        if (agentTurn || transactions.size) fail('TARGET_BUSY', 'Finish the open transaction first.');
+        if (agentTurn || transactions.size || tasks.size) fail('TARGET_BUSY', 'Finish the open transaction first.');
         agentTurn = { txId: args.turnId, before, affectedIds: new Set(), toasts: [], session: null };
         return transactionReceipt(id, agentTurn, request, before);
       }
@@ -105,7 +78,8 @@ export function createCommandBus({ registry, ports }) {
     // Every Studio turn opens a turn transaction (#715), so "undo the last thing" arrives inside one. Until the
     // turn has authored (no session yet) history traversal is safe: the undo lands as its own entry (#735).
     // After that the turn owns the frontier: its own agent may undo its newest edit (agent-turn-mark.js).
-    const traversal = id === 'edit.undo' || id === 'edit.redo';
+    const traversal = id === 'edit.undo' || id === 'edit.redo', scoped = traversal && tasks.traversal(id, args, request, before, id === 'edit.undo' ? ports.history?.(false) : null);
+    if (scoped) return scoped;
     if (agentTurn && !id.startsWith('job.') && !(traversal && !agentTurn.session)) { if (id === 'edit.undo' && request.turnId === agentTurn.txId) return validateReceipt(undoTurnEdit(agentTurn, args, request, before, () => ports.read())); fail('TARGET_BUSY', 'Finish the agent turn before traversing history or opening another transaction.'); }
     if (traversal) {
       const redo = id === 'edit.redo', historyEntryId = ports.history?.(redo);
@@ -242,7 +216,7 @@ export function createCommandBus({ registry, ports }) {
     if (agentTurn && !same(agentTurn.before.host, before.host)) {
       agentTurn.session?.cancel({ restore: false }); agentTurn = null;
     }
-    const turn = request.origin === 'agent' && request.turnId === agentTurn?.txId ? agentTurn : null;
+    const turn = request.origin === 'agent' && request.turnId === agentTurn?.txId ? agentTurn : null, task = tasks.of(request, id);
     const recordAction = (domain, invoke, targetId, nested = false) => {
       if (!turn) return ports.recordAction(domain, invoke, targetId, nested);
       // Enrol each owner in the existing composed session. Do not commit (or
@@ -293,13 +267,14 @@ export function createCommandBus({ registry, ports }) {
         // can advance the revision while their wire request is in transit.
         // Document identity and the job's own publication fence still apply.
         // A readOnly action (declared data, e.g. motion.qa) only measures: no revision or gesture fence, the host check above still holds.
-        if (!entry?.readOnly && !['job.await', 'job.cancel', 'agent.turn.mark', 'agent.turn.rollback', 'agent.turn.finish', 'agent.turn.cancel'].includes(id) && request.expectedRevision !== before.revision) fail('STALE_SCENE', 'Authored state changed; obtain fresh intent.');
+        if (!task && !id.startsWith('task.') && !entry?.readOnly && !['job.await', 'job.cancel', 'agent.turn.mark', 'agent.turn.rollback', 'agent.turn.finish', 'agent.turn.cancel'].includes(id) && request.expectedRevision !== before.revision) fail('STALE_SCENE', 'Authored state changed; obtain fresh intent.');
         if (!entry?.readOnly && before.busy && !turn && !transactions.has(validated.txId) && !id.startsWith('job.')) fail('TARGET_BUSY', 'Finish the current editor gesture first.');
       }
       if (controls[id]) return mapResult(control(id, validated, request, before), remember, rejected);
       if (transactions.size) fail('TARGET_BUSY', 'Finish or cancel the open command transaction first.');
       if (turn && entry.kind === 'document') fail('TARGET_BUSY', 'Finish the agent turn before changing documents.');
       exposure(entry, validated, request);
+      const scoped = tasks.admit(task, entry, validated, request, before);
       releaseToasts = ports.captureToasts?.(toast => toasts.push(typeof toast === 'string' ? { message: toast } : toast));
       const domain = entry.domain ?? entry.undoDomain;
       const targetId = entry.target?.(validated, before) ?? validated.characterId ?? validated.shotId ?? validated.objectId;
@@ -317,7 +292,7 @@ export function createCommandBus({ registry, ports }) {
           const current = ports.read();
           // Name the fence that tripped: the three share one code, and a bare "something changed" leaves the user and the agent guessing.
           if (!same(current.host, before.host)) fail('STALE_TARGET', 'The open document or scene changed while the job was running.');
-          if (domain && current.domainRevisions?.[domain] !== domainRevision) fail('STALE_TARGET', `The ${domain} data changed while the job was running (revision ${domainRevision} to ${current.domainRevisions?.[domain]}); an edit landed between the request and its result.`);
+          if (domain && !task && current.domainRevisions?.[domain] !== domainRevision) fail('STALE_TARGET', `The ${domain} data changed while the job was running (revision ${domainRevision} to ${current.domainRevisions?.[domain]}); an edit landed between the request and its result.`);
           if (targetId && ports.readTarget?.(targetId) !== token) fail('STALE_TARGET', `${targetId} changed while the job was running.`);
         },
         commit(apply) {
@@ -363,7 +338,7 @@ export function createCommandBus({ registry, ports }) {
         releaseToasts?.(); releaseToasts = null;
         const refused = output?.output === undefined ? toastRefusal() : null; // a job that answered was not refused by a toast that showed meanwhile
         if (refused) throw refused;
-        return recordTurnEdit(turn, point, remember(receipt(entry, request, before, { ...output, affectedIds: [...new Set([...output.affectedIds, ...nestedIds])] }, historyEntryId ?? committedHistoryId, toasts, turn)));
+        return tasks.record(scoped, recordTurnEdit(turn, point, remember(receipt(entry, request, before, { ...output, affectedIds: [...new Set([...output.affectedIds, ...nestedIds])] }, historyEntryId ?? committedHistoryId, toasts, turn))));
       });
       const finished = value?.then ? value.then(finish) : finish(value);
       const answer = finished?.then ? finished.catch(rejected) : finished;
@@ -405,5 +380,5 @@ export function createCommandBus({ registry, ports }) {
     // Trusted UI adapter only: wire callers can consume, never mint a token.
     confirm(id, args = {}) { const prepared = registry.prepare(id, args), token = crypto.randomUUID(); confirmations.set(token, { id, args: prepared.args, host: ports.read().host, expires: (ports.now ?? Date.now)() + 300_000 }); return token; },
     subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
-    dispose() { agentTurn?.session?.cancel(); agentTurn = null; for (const tx of transactions.values()) cancelTransaction(tx); for (const job of jobs.values()) if (!job.outcome) job.controller.abort(new StudioProtocolError('CANCELLED', 'Studio closed.')); listeners.clear(); } };
+    dispose() { agentTurn?.session?.cancel(); agentTurn = null; tasks.dispose(); for (const tx of transactions.values()) cancelTransaction(tx); for (const job of jobs.values()) if (!job.outcome) job.controller.abort(new StudioProtocolError('CANCELLED', 'Studio closed.')); listeners.clear(); } };
 }
