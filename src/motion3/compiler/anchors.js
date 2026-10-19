@@ -15,7 +15,7 @@
 //                       where its installed take has it at that frame (people.js)
 // spec.props = { name: { hand: "r", origin: ["RightHandIndex2", "RightHandMiddle2"],
 //                        points: { name: [d, l, n] } } }   offsets along the palm axes (m)
-import { add, sub, scale, len, apply, ry, T } from "./math.js";
+import { add, sub, scale, len, dot, norm, apply, ry, T } from "./math.js";
 import { bonePoint } from "./skeleton.js";
 import { palmAxes } from "./limbs.js";
 import { SIDES } from "./pose.js";
@@ -25,8 +25,10 @@ import { personJoint, peopleList } from "../people.js";
 import { isCarried } from "../carried.js";
 import { socketsOf, socketNamed, socketWorld, socketDistance, faceFrom, rimPoint } from "../sockets.js";
 import { partsOf } from "../object-pose.js";
+import { GRASP_POINTS } from "./vocab.js";
 
-function armReach(sk, k) {
+/** Shoulder to wrist with the arm straight (rest bone lengths), m. */
+export function armReach(sk, k) {
 	const side = SIDES[k], P = sk.restWorldPos, I = sk.index;
 	return len(sub(P[I[`${side}ForeArm`]], P[I[`${side}Arm`]])) + len(sub(P[I[`${side}Hand`]], P[I[`${side}ForeArm`]]));
 }
@@ -150,6 +152,14 @@ export function anchorSocket(ctx, name, s, diag, c, side) {
 	let w = sock ? socketWorld(sock, poseOf(sock.owner)) : { p: local ?? poseOf(a.object).pos };
 	if (sock?.rim) w = rimHold(ctx, name, side, sock, poseOf(sock.owner), w, local ?? s.P[ctx.sk.index[side ? `${SIDES[side]}Arm` : "Hips"]]);
 	else if (local) w.p = local;
+	// a thick body (a cup) holds its axis further off the finger middles than the grasp's point does (vocab.js GRASP_POINTS,
+	// 2 cm on a power grip): the point moves out from the axis toward the hand's shoulder by the difference, so the fingers
+	// close on the surface instead of being asked into the body (session 7f15b4ae: a 4 cm cup, fingers asked 2 cm inside)
+	else if (w.axis && w.radius > 0) {
+		const inset = Math.abs(GRASP_POINTS[a.grasp]?.[2] ?? 0), out = w.radius - inset, sh = s.P[ctx.sk.index[`${SIDES[side] ?? "Right"}Arm`]];
+		const v = sub(sh, w.p), across = sub(v, scale(w.axis, dot(v, w.axis)));
+		if (out > 1e-4 && len(across) > 1e-6) w.p = add(w.p, scale(norm(across), out));
+	}
 	// a socket with neither an axis nor a side (a box, a wall): the palm faces against the face of the body nearest the point
 	if (!w.axis && !w.from) w.from = faceFrom(partsOf(ctx.scene, a.object).map(id => ({ ...poseOf(id), half: ctx.scene.objects[id].half })), w.p);
 	return w;

@@ -44,7 +44,8 @@ export function socketsOf(scene, id) {
 	for (const part of partsOf(scene, id)) {
 		if (part !== id) own(part, `${part}.`);
 		const { half, renderer } = scene.objects[part], long = thinAxis(half);
-		if (long >= 0) out.push({ name: part, owner: part, at: [0, half[1], 0], axis: AXES[long] });
+		// a thin body's radius: the thinner of the two half sizes across the axis (how far the palm sits off the axis)
+		if (long >= 0) out.push({ name: part, owner: part, at: [0, half[1], 0], axis: AXES[long], radius: Math.min(...half.filter((_, i) => i !== long)) });
 		else if (isDisc(renderer, half)) out.push({ name: part, owner: part, at: [0, half[1], 0], rim: half[0], normal: AXES[1] });
 	}
 	return out;
@@ -56,7 +57,7 @@ export const socketNamed = (scene, id, name) => socketsOf(scene, id).find(s => s
 /** A socket in world space on its owner's pose { pos, R }: { p, axis?, from?, thumb? }. */
 export function socketWorld(socket, pose) {
 	const dir = v => (v ? norm(apply(pose.R, v)) : undefined);
-	return { p: add(pose.pos, apply(pose.R, socket.at ?? [0, 0, 0])), axis: dir(socket.axis), from: dir(socket.from), thumb: dir(socket.thumb),
+	return { p: add(pose.pos, apply(pose.R, socket.at ?? [0, 0, 0])), axis: dir(socket.axis), from: dir(socket.from), thumb: dir(socket.thumb), radius: socket.radius,
 		...(socket.rim ? { rim: socket.rim, normal: dir(socket.normal) } : {}) };
 }
 

@@ -23,10 +23,11 @@ import { isCarried, isFollow, hingePose, movesRecord, compose, relative } from "
 import { isFree, freePoseAt } from "../free-motion.js";
 import { groupsOf } from "../scene.js";
 import { pose, SIDES } from "./pose.js";
+import { graspAnchor } from "./socket-grip.js";
 import { gripHand } from "./grip.js";
 import { bakeChannels, channelsAt, flowOptions } from "./channels.js";
 import { idleLayer, withIdle, busyHands } from "./idle.js";
-import { resolveAnchor, measureProps } from "./anchors.js";
+import { resolveAnchor, measureProps, armReach } from "./anchors.js";
 import { expandGenerators } from "./walk.js";
 import { steadyHead } from "./head-steady.js";
 import { fixOptions, applyFixes } from "../fix/index.js";
@@ -36,6 +37,8 @@ import { HAND_CLEAR, keepOut, wristBody } from "../body.js";
 import { objectPoseAt, handOf, restingAt, frameAt, spanOf } from "../object-pose.js";
 
 const smooth = x => x * x * (3 - 2 * x);
+// how far past the straight arm a grasp fit's wrist target may end before it counts as wound up (solveFrame), m
+const REACH_SLACK = 0.02;
 
 /**
  * Scene boxes by frame. A body moves with its own spec.objects entry or its nearest group's (a
@@ -146,15 +149,25 @@ export function solveFrame(ctx, c0, f, lead = true) {
 		if (!(c[wch] > 1e-4)) continue;
 		const full = { ...c, [wch]: 1, [`armw_${fit.side}`]: 1 };
 		for (const ch of Object.keys(full)) if (ch !== wch && new RegExp(`^w_.+_${fit.side}$`).test(ch)) full[ch] = 0;
-		let corr = [0, 0, 0];
+		// each pass adds what the effector still misses; an arm at full reach misses the same each pass, so on a grasp's fit
+		// the sum wound the wrist target far past the anchor (session 7f15b4ae: 0.6 m, read back as REACH 0.845 m on a cup a
+		// few cm out of reach). A grasp fit whose wrist target ends past the straight arm (REACH_SLACK) aims instead at the
+		// anchor by the hand's own wrist-to-effector offset of its best pass: the arm reaches straight for it and its
+		// residual (REACH) is what the effector misses. Other fits keep their passes as they were (their takes are pinned).
+		let corr = [0, 0, 0], best = null, last = null;
+		const grasp = graspAnchor(ctx.spec, fit.anchor), shoulder = ctx.sk.index[`${SIDES[fit.side]}Arm`], wristAt = ctx.sk.index[`${SIDES[fit.side]}Hand`];
 		for (let i = 0; i < 6; i++) {
 			full[`fit_${fit.anchor}_${fit.side}`] = corr;
 			const { s, diag } = pose(ctx.sk, full, hooksFor(ctx, full, f, true, lead, fit.side));
 			const eff = effectorPoint(ctx.sk, s, diag, fit.effector);
 			const goal = add(resolveAnchor(ctx, fit.anchor, s, diag, full, fit.side), fit.offset ?? [0, 0, 0]);
 			if (!eff) break;
-			corr = add(corr, sub(goal, eff));
+			const miss = sub(goal, eff), err = len(miss);
+			if (grasp && (!best || err < best.err)) best = { err, hand: sub(s.P[wristAt], eff) };
+			last = { goal, shoulder: s.P[shoulder] };
+			corr = add(corr, miss);
 		}
+		if (grasp && best && last && len(sub(add(last.goal, corr), last.shoulder)) > armReach(ctx.sk, fit.side) + REACH_SLACK) corr = best.hand;
 		c[`fit_${fit.anchor}_${fit.side}`] = corr;
 	}
 	const { s, diag } = pose(ctx.sk, c, hooksFor(ctx, c, f, false, lead));
