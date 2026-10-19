@@ -148,6 +148,9 @@ export function pose(sk, c, hooks = {}) {
 			if (hooks.keepOut) target = hooks.keepOut(k, s, target);
 			const push = hooks.push?.(k);
 			if (push) target = add(target, push);
+			// what the hand carries weighs it down (load.js)
+			const sag = hooks.sag?.(k, s, target);
+			if (sag) target = add(target, sag);
 			// the self fix's push rides the IK as far as the arm is on it (an arm coming in from FK would jump)
 			const skinPush = hooks.skinPush?.(k);
 			if (skinPush) target = add(target, scale(skinPush, turnWeight(w)));
