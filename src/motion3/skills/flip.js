@@ -52,8 +52,10 @@ function base(ctx) {
 }
 
 function tuck(ctx, b, kind) {
-	const { args } = ctx, s = kind === "back" ? -1 : 1, turn = s * 360 * Math.max(1, Math.round(args.turns ?? 1));
-	const H = Math.max(0.3, Math.min(1.2, args.height ?? 0.5)), travel = args.travel ?? (kind === "back" ? -0.25 : 0.4);
+	// one turn from a standing jump whose hips rise H at the top: the curves below are measured clean for that flip (a
+	// higher jump or more turns would need its own tuck timing, so the skill takes neither)
+	const { args } = ctx, s = kind === "back" ? -1 : 1, turn = s * 360, H = 0.5;
+	const travel = args.travel ?? (kind === "back" ? -0.25 : 0.4);
 	const yT = b.y0 + 0.05, yL = b.y0 - 0.02;                // the hips at take-off (toes pointed) and at touch-down
 	const Tf = Math.max(10, Math.round(Math.sqrt(2 * (H - 0.05) / G) + Math.sqrt(2 * (yT + H - 0.05 - yL) / G)));
 	const v0 = (yL - yT + (G * Tf * Tf) / 2) / Tf, vL = v0 - G * Tf, yc = yT - (v0 * PUSH) / 2, bottom = yL + (vL * LAND) / 2;
@@ -189,7 +191,7 @@ function cartwheel(ctx, b) {
 	return { keys, end: tE + 1 };
 }
 
-/** flip({ kind: "back" | "front" | "cartwheel", height, travel, turns, side, heading }) */
+/** flip({ kind: "back" | "front" | "cartwheel", travel, side, heading }) */
 export function flip(ctx) {
 	const kind = ctx.args.kind ?? "back";
 	if (!["back", "front", "cartwheel"].includes(kind)) skillError(ctx.tag, `kind must be "back", "front" or "cartwheel", got ${JSON.stringify(kind)}`);

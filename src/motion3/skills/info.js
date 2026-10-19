@@ -55,10 +55,9 @@ export const SKILL_INFO = {
 	},
 	flip: {
 		args: { kind: { enum: ["back", "front", "cartwheel"], default: "back", description: "a standing back or front tuck, or a cartwheel" },
-			height: num("back/front: how high the hips rise at the top, m", { default: 0.5 }), turns: int("back/front: whole turns in the air", { default: 1 }),
 			travel: num("back/front: m along the heading at landing (default back -0.25, front 0.4)"),
 			side: side("cartwheel: toward the character's l (default) or r"), heading: num("degrees (yaw); default the keyed yaw") },
-		needs: "a standing pose keyed before f0", frames: "back/front about 52 (more with height); cartwheel 62",
+		needs: "a standing pose keyed before f0", frames: "back/front 58 (one turn, the hips 0.5 m up); cartwheel 68",
 		adds: ["keys every frame: back/front crouch, push-off, a ballistic tucked flight turning the whole body (pitch to -360 back, +360 front) and a landing that stands up",
 			"cartwheel: a side step, then the whole body rolls 360 like a wheel on the straddled legs and the arms overhead, the hands planted in turn",
 			"whole-body pitch and roll take full turns in any key (no range); past 60 deg the knee and elbow poles and the feet turn with the body"],
