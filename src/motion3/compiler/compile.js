@@ -196,11 +196,15 @@ export function compileMotion(spec, { sk, scene }, opts = {}) {
 	// a prop anchor outside its hand's carry reads the carry's grab (release) frame (anchors.js propOnCarry)
 	ctx.carrySpan = o => spanOf(out, o);
 	ctx.solvedAt = f => frameAt(out, f);
+	// a reach's grasp is planned on its first full-weight frame (socket-grip.js plannedGrasp)
+	ctx.weightAt = (ch, f) => out.baked?.[ch]?.[f];
+	ctx.frameCount = frameCount;
 	const engine = {
 		rebake(keys) {
 			out.keys = keys;
 			out.baked = bakeChannels(keys, frameCount, flowOptions(spec.flow));
 			ctx.socketTurns = new Map();
+			ctx.graspPlans = new Map();
 			steadyHead(out.baked, keys, frameCount);
 			// a held pose breathes and shifts its weight (idle.js): offsets solveFrame adds, contacts and out.baked stay as keyed
 			ctx.idle = idleLayer(out.baked, { spec, sk, frameCount });

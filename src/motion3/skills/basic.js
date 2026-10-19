@@ -6,6 +6,7 @@ import { keyBook, skillError } from "./book.js";
 import { walkEnd } from "./info.js";
 import { GRASP_FINGERS, GRASP_POINTS } from "../compiler/vocab.js";
 import { clearStance, reachStance } from "./stance.js";
+import { CLOSE, GAZE, gazeAt, headKeyed, earlyTransport, holdsOpen, transportKeys } from "./reach-human.js";
 
 /** The fingers' point a reachGrip fits onto its anchor: the finger middles, or where a grasp holds the thing (the palm is -n on the right hand). */
 const graspPoint = (grasp, k) => (GRASP_POINTS[grasp] ? GRASP_POINTS[grasp].map((v, i) => (i === 2 && k === "r" ? -v : v)) : [0, 0, 0]);
@@ -102,11 +103,21 @@ export function reachGrip(ctx) {
 	const last = ctx.frames - 1, cut = ctx.f0 + reach <= last && ctx.f0 + reach + hold + release > last;
 	const held = Math.min(reach + hold, last - ctx.f0);
 	for (const [c, v] of [[w, 0], [fg, { [preset]: 0 }], [armw, 0]]) if (state[c] === undefined) state[c] = v;
+	// the head looks at what the hand goes for unless the keys already move it (reach-human.js); read before the keys move state
+	const end = reach + hold + release, look = !headKeyed(ctx.keys ?? [], ctx.f0, ctx.f0 + end) && gazeAt(ctx, args.define ?? ctx.anchors?.[name], state);
+	const head = look ? { head_yaw: state.head_yaw ?? 0, head_pitch: state.head_pitch ?? 0 } : null;
 	const b = keyBook(state, ctx.f0);
-	b.hold(0, w, fg, armw, el);
+	b.hold(0, w, fg, armw, el, ...(look ? ["head_yaw", "head_pitch"] : []));
+	// the transport's early-peaked bell; on a thing the open hand clears, the fingers stay open to CLOSE of the reach, then close
+	// (a reach for a moving point, or below the knees, keeps the plain ease: reach-human.js earlyTransport)
+	const target = args.define ?? ctx.anchors?.[name], w0 = state[w], a0 = state[armw], lerp = (a, z, t) => a + (z - a) * t;
+	if (earlyTransport(ctx, target)) for (const [f, t, ta] of transportKeys(reach)) b.at(f, { [w]: lerp(w0, 1, t), [armw]: lerp(a0, 1, ta) });
+	const close = Math.round(CLOSE * reach);
+	if (close > 0 && close < reach && holdsOpen(ctx, target, state)) b.hold(close, fg);
+	if (look) b.at(Math.max(1, Math.round(GAZE * reach)), look);
 	b.at(reach, { [w]: 1, [fg]: { ...state[fg], [preset]: 1 }, [armw]: 1, ...(args.elbow ? { [el]: args.elbow } : {}) });
-	b.hold(held, w, fg, armw, el);
-	if (!cut) b.at(reach + hold + release, { [w]: 0, [fg]: { ...state[fg], [preset]: 0 }, ...(wasFk ? { [armw]: 0 } : {}) });
+	b.hold(held, w, fg, armw, el, ...(look ? ["head_yaw", "head_pitch"] : []));
+	if (!cut) b.at(end, { [w]: 0, [fg]: { ...state[fg], [preset]: 0 }, ...(wasFk ? { [armw]: 0 } : {}), ...(head ?? {}) });
 	// the fingers' prop is <anchor>Grip, unless the spec (or another skill) has a prop of that name of its own: its points
 	// would replace these (session 7f15b4ae: props.ballGrip for a carry broke reachGrip on anchor "ball")
 	const S = k === "l" ? "Left" : "Right", fingersProp = { hand: k, origin: [`${S}HandIndex2`, `${S}HandMiddle2`], points: { fingers: graspPoint(grasp, k) } };
