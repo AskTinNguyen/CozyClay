@@ -48,7 +48,7 @@ export const EXAMPLES = {
 };
 
 const UNITS = `World metres, +Y up; ${CONVENTIONS.yaw}; the character's left is +X at yaw 0. Angles in degrees.`;
-const NO_JUMP = "Without at/along it keeps its grab-frame palm offset: no jump.";
+const NO_JUMP = "No at/along: it rests in the palm, fingers closed on it. Throw/catch: throwObject, catchObject.";
 /** The objects example's carry: a grip prop and the object it holds. */
 const CARRY = { props: EXAMPLES.objects.props, objects: { cup: EXAMPLES.objects.objects.cup } };
 
@@ -70,10 +70,11 @@ export const NOTES = {
 	props: ["A prop is a set of points fixed to one hand, [d, l, n] along the palm axes; prop:<prop>.origin is the mean of its origin bones.",
 		"fits: the hand target moves so the effector (a prop point or the mean of joints), not the wrist, lands on the anchor.",
 		"A fit on a scene body also turns the hand about the forearm into a grip: a thin body (a can, a bar, a handle, a neck) across the palm, else thumb up; never past a comfortable forearm turn. A wrist you turn (wtwist/wflex) wins; fit.orient: false (reachGrip args.orient: false) turns it off.",
-		"reachGrip adds props.<anchor>Grip and its fit. Carry a scene object with objects.<id>.prop (topic objects)."],
+		"reachGrip adds props.<anchor>Grip and its fit. Carry a scene object with objects.<id>.prop (topic objects).",
+		"Do not pin a carried thing on a knuckle point: without at/along it rests in the palm and the fingers close on it (fix.grasp). objects.<id>.grasp names how: power, pinch, hook, palm, spherical (a ball). objects.<id>.mass (kg) weighs on the arm; past one hand QA says LOAD and patches in the other hand."],
 	objects: ["A hinge turns the object (a body or a group) about pivot/axis by the angle channel your keys set (degrees).",
 		"A carry follows the prop's hand: before grab the scene pose, grab..release in the hand, after release where it was let go, riding a body under it that keys or a hinge move.",
-		`No grab: in hand from frame 0; no release: to the end. ${NO_JUMP}`,
+		"No grab: in hand from frame 0; no release: to the end. No at/along: it rests in the palm, fingers closed on it.",
 		"A group (Empty) id moves all its parts; at/along pin a group's root to the palm too (an object.createKit kit). A carried object is an obstacle for the body and the scene.",
 		"A switch { visible?, level? } (no prop, no hinge field) moves nothing: it shows or hides any record (a part, a light, an effect) and sets its level, 0..4 light, glow and effect strength "
 			+ "(an unkeyed level reads 1). Hiding a group hides its parts. A carry takes level too.",

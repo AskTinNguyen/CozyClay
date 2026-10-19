@@ -434,7 +434,7 @@ object.createKit { "kit": "cigarette", "name"?: "Smoke", "position"?: { "x": 0.5
 | lighter | body (sculpt: body, hood, wheel), flame (sphere, glow), light (point, flicker 0.6); flame and light are `showOnlyInTake` | prop `lighter`: origin LeftHand/LeftHandMiddle1; +Y toward the thumb, flame at the prop point flame [0.01, 0.036, 0]; along [0, 1, 0] |
 | exhale (C16) | puff (an exhale effect on the root, `showOnlyInTake`) | no hand: the root's bind is `{ follow: "landmark:mouth", aim: "face", visible: "exhale" }`; the catalogue row has `follow` in place of `prop` |
 | bat | body (sculpt: knob, handle, taper frustums, barrel, end cap; 0.84 m), trail (effect on the barrel, width 0.3 along it) | root at the knob, +Y along the bat; props.batGrip of the swing fixture, at -0.14 u, along u = [0, 0.5, 0.866] |
-| ball | body (7.4 cm sphere) | props.ballGrip |
+| ball | body (7.4 cm sphere) | root at the centre; props.ballGrip; carry `{ prop: "ballGrip", grasp: "spherical" }` (no `at`/`along`: it rests in the palm and the fingers close on it, C20) |
 | sword | body (sculpt: pommel, grip, guard, blade, tip; 1 m), trail | root at the grip; props.swordGrip |
 | pistol | body (sculpt), flash (glow), light | root at the grip, barrel along +X; props.gunGrip; flash and light switch on `muzzle_vis` and are `showOnlyInTake` (hidden in a static scene) |
 
@@ -588,6 +588,34 @@ A mechanical slip in a request is fixed, not refused, when the fix cannot change
 - **describe and report args** (`commands/motion3.js`): a `topic` beside `topics` joins them, and a `name` beside `topics` goes to the one ask that can take it (C9); motion.report without `part` reads `groups`. Measured in the efficiency bench: 2 refused describes ({ topics: ["skills"], name }) and 2 refused reports (no part) in 12 runs.
 - **verify_result frames** (C11): named frames past the range are drawn at its nearest end, each once, and `visualRefs[0].adjusted` says which (`frames 60, 70 lie outside 0..47: drawn at 47`).
 - **Still refused**: keys past the clip (timing), `tol` on `above`/`moved`/`speed` (C8), unknown fields and channels, a backward knee pole, a skill that needs more frames, a patch_elements batch over several kinds (one receipt is one commit domain and one undo entry, C10 and the receipt contract).
+
+## C20. Physical grasp: hold, weight, throw, catch (#816)
+
+`spec.fix.grasp` (default on; `fix: { grasp: false }` gives the takes of before, bit for bit).
+
+### Grasp (`seat.js`, `compiler/finger-close.js`, `qa/grasp-checks.js`)
+
+- A carry seats when it names `grasp` (`power | pinch | hook | palm | spherical`), or has no `at`/`along` on one round body (a sphere or a cylinder, `shapes.js`). The palm frame rides the Hand bone; the grab-frame offset slides along the palm normal (out on the palm's side) until the palm and knuckles touch the object; the object eases in over `SETTLE` = 4 frames from the grab. A box or a kit with no grasp keeps its grab-frame offset; a pinned `at`/`along` stays.
+- After the arm, the hold and the swivel, each finger closes joint by joint (bisection on the joint positions) until it touches the held shape, never past the fist; a finger the preset curled into it straightens when that leaves it shallower; one that cannot reach keeps the preset. It closes on a seated carry from its grab, and on an object anchor with `grasp` while the reach arrives (rim sockets keep their rim grip).
+- QA, from the settle on (a grasp fit: once its weight and its fingers' grip are 0.995 and the hand is within 3 cm): `FINGER_PEN "<Bone> into <id>"` (a phalanx skin deeper than 4 mm), `FINGER_GAP "<side> fingers off <id>"` (fewer than three fingertips, or the thumb and two, within 8 mm), `SUPPORT "<id> not supported"` (nothing under it, no opposed thumb, no enclosing contacts). With `fix.grasp` false the carries it would seat are judged as held; hints (`qa/hints-grasp.js`) patch `/fix/grasp` true, move the hand, or set `objects.<id>.grasp` by shape.
+- A contact check on a hand holding a seated carry measures its fingers to that carry's surface.
+
+### Load (`load.js`, `mass.js`)
+
+- `objects.<id>.mass` kg (else a small sphere 0.15, else its volume at 400 kg/m^3, 0.02..60). Load = mass x 9.81 x the shoulder-to-wrist distance across, N m.
+- A carry that can reach 2 N m lowers a plain IK hand's wrist target by min(0.06, 0.006 x mass) m and draws it as far toward the shoulder (eased after the grab and before the release); a fit or a keyed carry is not moved.
+- `observations.load`: `{ hand_k: { object, mass, maxNm, at, frames: [first, last] } }`. `LOAD "<side> holds <id> at <x> N m"` past 25 N m with no second hand on it; for a right-hand carry its patch adds `anchors.<id>Other` (object, palm grasp, the face nearest the left shoulder) and a left `reachGrip` arriving at the grab. `fix.ops(userSpec)` (`qa/patch.js`) carries such multi-op patches.
+
+### Throw (`flight.js`, `settle.js` airPath, `skills/throw.js`)
+
+- `fall.v`: `[vx, vy, vz]` m/s, or `"hand"` on a carry (its pose at the release minus the frame before, x fps). The flight adds `v t` (G 9.8), the landing solves the quadratic with `vy`, and the support is re-picked under where it comes down in two fixed passes. Without `v` every fall is as before.
+- `throwObject { object, side = "r", to: [x, y, z], arc: "low" (20 deg) | "high" (50 deg) }`: wind-up out on the hand's side, swing, release at f0 + 18, follow-through. Closed-form speed for the arc from the release point to `to`; the last two frames before the release move the wrist at that velocity. It fills the carry's `release` and `fall { at: release, v }` (the planned velocity: the hand's whip as the elbow opens adds about 2 m/s that only the solved frames know) and adds the goal `<id> lands at the target` (near, 0.25 m). Skills may return `fills` (fields an agent's entry leaves out) and `goals`.
+- There is no implicit fall: a release with no fall stays where the hand let it go (C3).
+
+### Catch (`skills/catch.js`, `qa/object-checks.js`)
+
+- A flying thing is a free entry `fall { at, v }`. `catchObject { object, side = "r" | "both" }` samples the flight, picks its first frame in front of the chest 0.35-0.65 m from the shoulder (no earlier than 12 frames after f0), and puts the finger middles on it there (world-anchor fits, arriving 2 frames early on the reach transport), then along the incoming velocity by clamp(0.08 + 0.02 x mass x speed, 0.08, 0.15) m over 6 frames (a fit chain, weight handed frame by frame) and back. It fills `prop`, `grab`, `grasp: "spherical"`. `side "both"`, or over 1 kg, adds the left hand on the same path at the thing's left side.
+- A flight never within reach is refused (`MOTION_SPEC_INVALID ... nearest at f<n>, [x, y, z]`). `CATCH "<id> missed by <cm>"`: a carry whose object still flies at the grab, more than 3 cm from the hand (instead of GRAB); its patch moves the skill's f0 earlier by the frames the hand came late.
 
 ## Amendment procedure
 

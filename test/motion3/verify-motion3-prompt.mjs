@@ -16,9 +16,10 @@ const sentences = text => text.split(/(?<=[.;:])\s+/).map(s => s.trim()).filter(
 
 // +291 characters for the efficiency round (the motion reference, describe topics, one script for sweeps): budgets +300
 // +332 for the camera round (a new view is a cut, a move is one rail, no camera-key chains): +350
-check("the whole prompt is at most 11,900 characters", () => assert.ok(prompt.length <= 11900, `${prompt.length}`));
-check("the motion part is at most 1,800 characters", () => {
-	assert.ok(motion.length > 0 && motion.length <= 1800, `${motion.length}`);
+// +253 for physical grasp (#816: let the hand hold, throwObject/catchObject, read LOAD): +260
+check("the whole prompt is at most 12,160 characters", () => assert.ok(prompt.length <= 12160, `${prompt.length}`));
+check("the motion part is at most 2,060 characters", () => {
+	assert.ok(motion.length > 0 && motion.length <= 2060, `${motion.length}`);
 });
 check("the prompt names describe, grab, goals, repair, base, beats and the 0.01 m scale floor", () => {
 	for (const word of ["motion.describe", "grab", "goals", "repair", "base", "\"beats\"", "0.01 m"]) assert.ok(prompt.includes(word), word);
