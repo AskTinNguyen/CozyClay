@@ -23,7 +23,7 @@ import { HAND_CLEAR, keepOut } from "../body.js";
 import { groupsOf } from "../scene.js";
 import { personJoint, peopleList } from "../people.js";
 import { isCarried } from "../carried.js";
-import { socketsOf, socketNamed, socketWorld, socketDistance, faceFrom } from "../sockets.js";
+import { socketsOf, socketNamed, socketWorld, socketDistance, faceFrom, rimPoint } from "../sockets.js";
 import { partsOf } from "../object-pose.js";
 
 function armReach(sk, k) {
@@ -146,11 +146,29 @@ export function anchorSocket(ctx, name, s, diag, c, side) {
 		const pick = a.socket ? socketNamed(ctx.scene, a.object, a.socket) : all.map(k => ({ k, d: socketDistance(socketWorld(k, poseOf(k.owner)), near) })).sort((x, y) => x.d - y.d)[0]?.k;
 		ctx.sockets.set(name, pick ?? null);
 	}
-	const sock = ctx.sockets.get(name), w = sock ? socketWorld(sock, poseOf(sock.owner)) : { p: local ?? poseOf(a.object).pos };
-	if (local) w.p = local;
+	const sock = ctx.sockets.get(name);
+	let w = sock ? socketWorld(sock, poseOf(sock.owner)) : { p: local ?? poseOf(a.object).pos };
+	if (sock?.rim) w = rimHold(ctx, name, side, sock, poseOf(sock.owner), w, local ?? s.P[ctx.sk.index[side ? `${SIDES[side]}Arm` : "Hips"]]);
+	else if (local) w.p = local;
 	// a socket with neither an axis nor a side (a box, a wall): the palm faces against the face of the body nearest the point
 	if (!w.axis && !w.from) w.from = faceFrom(partsOf(ctx.scene, a.object).map(id => ({ ...poseOf(id), half: ctx.scene.objects[id].half })), w.p);
 	return w;
+}
+
+/**
+ * A rim socket held by hand `side`: the rim point nearest q (the anchor's local point, else the shoulder) the first time
+ * it is asked, kept in the rim's own axes so the hand stays on that spot of the rim as the rim moves (a wheel in a truck).
+ */
+function rimHold(ctx, name, side, sock, pose, w, q) {
+	ctx.rims ??= new Map();
+	// asked with no hand (a contact check, a goal): the spot a hand already holds
+	const held = side ? null : [...ctx.rims.keys()].find(k => k.startsWith(`${name}|`) && !k.endsWith("|"));
+	const key = held ?? `${name}|${side ?? ""}`;
+	if (!ctx.rims.has(key)) {
+		const r = rimPoint(w, q), back = v => apply(T(pose.R), v);
+		ctx.rims.set(key, { at: back(sub(r.p, pose.pos)), axis: back(r.axis) });
+	}
+	return socketWorld(ctx.rims.get(key), pose);
 }
 
 /** Points of every prop held by hand k, in world space, written to diag.props. */
