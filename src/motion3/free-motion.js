@@ -100,7 +100,7 @@ function shapeIn(scene, id) {
 function fallPlan(spec, scene, id, start, t0, fall, fps, before = null) {
 	// a throw (fall.v, flight.js) lands where it comes down
 	const v0 = fallVelocity(fall, start, before, fps), thrown = moves(v0), landAt = pose => landingOf(spec, scene, id, pose, fall.onto ?? null);
-	const land = thrown ? landingWith(landAt, start, v0, G) : landAt(start), shape = fall.tumble === false ? null : shapeIn(scene, id);
+	const land = thrown ? landingWith(landAt, start, v0, G, Object.values(scene.objects).map(topOf)) : landAt(start), shape = fall.tumble === false ? null : shapeIn(scene, id);
 	if (shape) {
 		const spin = before ? spinOf(before.R, start.R, fps) : [0, 0, 0], air = airPath(shape, start, spin, land.top, fps, v0);
 		// a spin tips it the way its top moves (spin x up); a spin about the vertical tips nothing

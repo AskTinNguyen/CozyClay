@@ -29,6 +29,16 @@ const sk = skeletonFor("y-bot-tpose");
 	expect("a free ball with fall.v [0, 0, 6] from 1.4 m lands at the analytic range (G 9.8) within 0.05 m", Math.abs(rest[2] - 0.5 - range) <= 0.05 && Math.abs(rest[0] - 0.5) < 1e-6, rest.join());
 }
 
+// over a raised platform: coming down from 1.4 m at 4 m/s it reaches the platform's 1.0 m top above the platform (z 1.59),
+// though at floor height it would be past it (z 2.6): it lands on the platform (PR #818 review)
+{
+	const kit = buildKit("ball", [], { position: { x: 0.5, y: 1.4, z: 0.5 } }), id = kit.rootId;
+	const deck = { id: "deck", name: "deck", renderer: "cube", x: 0.5, y: 0, z: 1.8, rot: 0, rotX: 0, rotZ: 0, scaleX: 1, scaleY: 1, scaleZ: 0.8, footprint: { width: 1, depth: 1 }, height: 1 };
+	const scene = motionScene([...kit.records, deck]), r = compileSpec(spec(60, { [id]: { fall: { at: 0, v: [0, 0, 4] } } }), { sk, scene }), rest = objectPoseAt(r.out, id, 59).pos;
+	const low = Math.min(...Object.values(scene.objects).filter(e => e !== scene.objects.deck).map(e => e.pos[1])), z = 0.5 + 4 * Math.sqrt((2 * (low - 1)) / G);
+	expect(`a throw over a raised platform lands on it (top 1.0 m, at z ${z.toFixed(3)} within 0.05 m)`, rest[1] > 0.99 && Math.abs(rest[2] - z) <= 0.05, rest.join());
+}
+
 // thrown at [0, 0, 5]: the ball carried by its pinned grip (so the throw is measured, not the grasp), its scene record
 // where that grip holds it at the grab
 const props = { ballGrip: { hand: "r", origin: ["RightHandIndex2", "RightHandMiddle2"], points: {} } }, GRAB = 4;
