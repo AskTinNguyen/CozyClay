@@ -1,6 +1,7 @@
 // C11 own views: the cameras of a verify_result contact_sheet with `views`. They are the
 // agent's own cameras around the subject, never the user's shot camera. A view stays at one
-// place for every frame of the sheet and frames what matters over those frames (the focus
+// place for every frame of the sheet (or rides with the focus when it travels farther than its
+// size) and frames what matters over those frames (the focus
 // refs, else the whole character, plus any trail), so a small action fills the tile and
 // motion reads as change inside one still frame. Pure over a compile result (compileSpec .out).
 //   front          in front of the character, 10 degrees up
@@ -78,7 +79,8 @@ function fit(name, points, back, upHint, aspect) {
  * Deterministic: the same compile, frames and arguments give the same cameras.
  */
 export function viewCameras(out, { views, frames, focus = [], trails = [], aspect = 1 }) {
-	let points = frames.flatMap(f => focus.flatMap(ref => refPoints(out, f, ref)));
+	const ride = rideOf(out, frames, focus);
+	let points = frames.flatMap(f => focus.flatMap(ref => refPoints(out, f, ref)).map(p => (ride ? sub(p, ride[f]) : p)));
 	const body = frames.flatMap(f => jointsAt(out, f));
 	if (!points.length) points = body;
 	points = [...points, ...trails.flatMap(t => t.points.map(q => q.p))];
@@ -86,10 +88,31 @@ export function viewCameras(out, { views, frames, focus = [], trails = [], aspec
 	const { left, forward } = facingOf(out, frames), hips = mean(frames.map(f => jointsAt(out, f)[out.ctx.sk.index.Hips]).filter(Boolean));
 	const side = focus.length && dot(sub(mean(points), hips), left) > 0.02 ? left : scale(left, -1);
 	return views.map(name => {
-		if (name === "top") return fit(name, points, UP, forward, aspect);
-		const e = rad(ELEVATION[name]), level = name === "front" ? forward : name === "side" ? side : norm(add(forward, side));
-		return fit(name, points, add(scale(level, Math.cos(e)), scale(UP, Math.sin(e))), UP, aspect);
+		const cam = name === "top" ? fit(name, points, UP, forward, aspect)
+			: (e => fit(name, points, add(scale(name === "front" ? forward : name === "side" ? side : norm(add(forward, side)), Math.cos(e)), scale(UP, Math.sin(e))), UP, aspect))(rad(ELEVATION[name]));
+		return ride ? { ...cam, ride } : cam;
 	});
+}
+
+/**
+ * The focus's travel over the frames: { [frame]: its centre there less its mean centre } when it moves farther than its
+ * own size (a wheel in a driving truck, session 2ad2760a: one camera for the whole drive framed the road and showed the
+ * hands too small to read), else null. A riding view keeps its place relative to the focus (cameraAt).
+ */
+function rideOf(out, frames, focus) {
+	if (!focus.length) return null;
+	const at = frames.map(f => ({ f, points: focus.flatMap(ref => refPoints(out, f, ref)) })).filter(x => x.points.length);
+	if (at.length < 2) return null;
+	const centres = at.map(x => mean(x.points)), mid = mean(centres);
+	const size = Math.max(MIN_HALF, ...at.map((x, i) => Math.max(...x.points.map(p => Math.hypot(...sub(p, centres[i]))))));
+	if (Math.max(...centres.map(c => Math.hypot(...sub(c, mid)))) <= size) return null;
+	return Object.fromEntries(at.map((x, i) => [x.f, sub(centres[i], mid)]));
+}
+
+/** View camera `cam` at `frame`: a riding view moved by the focus's travel there (rideOf), else cam itself. */
+export function cameraAt(cam, frame) {
+	const d = cam.ride?.[frame];
+	return d ? { ...cam, eye: add(cam.eye, d), target: add(cam.target, d) } : cam;
 }
 
 // A picture hides distance along its own line of sight, so a sheet holds two views at least APART

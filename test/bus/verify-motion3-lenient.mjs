@@ -41,8 +41,10 @@ for (const run of REACH_PAST_END) {
 	expect(`${run.session}: ${w} holds 1 from the reach (f${a.reach}) to the last frame`, r.out.baked[w].slice(a.reach).every(v => Math.abs(v - 1) < 1e-9), JSON.stringify(r.out.baked[w].slice(-4)));
 	const retry = compile(run, { ...spec, frames: spec.frames + 1 });
 	expect(`${run.session}: every channel up to the hold end (f${held}) equals the agent's retry with one more frame, bit for bit`, !retry.used[0].cut && diffUpTo(r, retry, held) === 0, diffUpTo(r, retry, held));
-	expect(`${run.session}: a take that ends before the hold ends is refused as before`, refusal(() => compile(run, { ...spec, frames: held }))
-		=== `use[0] reachGrip needs ${held + a.release} frames from f0 (to f${held + a.release}), past the last frame f${held - 1}; set frames >= ${held + a.release + 1} or frames: "auto"`, refusal(() => compile(run, { ...spec, frames: held })));
+	// a hold the take end cuts holds to the end too (grasp round 2, session 7f15b4ae); these specs' own keys past it are still refused
+	const short = refusal(() => compile(run, { ...spec, frames: held }));
+	expect(`${run.session}: a take that ends before the hold ends is refused for the spec's own keys past its end, not by reachGrip`,
+		new RegExp(`^keys\\[\\d+\\]\\.f = \\d+ is outside 0\\.\\.${held - 1} \\(spec\\.frames ${held}\\)`).test(short) && !/reachGrip needs/.test(short), short);
 	const auto = compile(run, { ...spec, frames: "auto" });
 	expect(`${run.session}: frames "auto" ends with the release (frames ${held + a.release + 1}), nothing cut`, resolveFrames({ ...spec, frames: "auto" }, { sk, scene: motionScene(batKit(run.kitAt)) }).frames === held + a.release + 1
 		&& auto.out.frameCount === held + a.release + 1 && !auto.used[0].cut && !auto.observations.cut, `${auto.out.frameCount} ${JSON.stringify(auto.used)}`);

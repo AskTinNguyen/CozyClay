@@ -11,6 +11,10 @@
 // bar, a can, a handle) is one too, named by its id, through its centre along its long axis. An object anchor with
 // `grasp` (power, pinch, hook, palm) takes the hand by a socket of its object: `socket` names it, else the one
 // nearest the anchor's `local` point or, without one, nearest the shoulder of the hand, picked once per compile.
+// A disc (a cylinder whose height is under THIN m and whose two sides are wider: a steering wheel) is a rim socket
+// instead: `rim` its radius, `normal` its axis; the hand takes the rim where it is nearest the anchor's `local` point
+// or the hand's shoulder, the knuckle line along the rim (session 2ad2760a: the wheel was held by points in the
+// driver's frame, 15 cm off the rim, and they did not follow the truck). anchorSocket fixes that point once per hand.
 import { add, sub, scale, norm, cross, dot, len, apply, ry, T } from "./compiler/math.js";
 import { partsOf } from "./object-pose.js";
 
@@ -24,6 +28,9 @@ function thinAxis(half) {
 	return [0, 1, 2].filter(i => i !== long).every(i => half[i] < THIN) ? long : -1;
 }
 
+/** A cylinder flat along its axis (its height under THIN m) and round across it, both sides over THIN m. */
+const isDisc = (renderer, half) => renderer === "cylinder" && !!half && half[1] < THIN && Math.min(half[0], half[2]) >= THIN && Math.abs(half[0] - half[2]) < 0.1 * half[0];
+
 /** The record's stored sockets: a body's in scene.objects, a group's (an Empty) in scene.others. */
 const stored = (scene, id) => scene?.objects?.[id]?.grasp ?? scene?.others?.[id]?.grasp ?? null;
 
@@ -36,8 +43,9 @@ export function socketsOf(scene, id) {
 	own(id, "");
 	for (const part of partsOf(scene, id)) {
 		if (part !== id) own(part, `${part}.`);
-		const half = scene.objects[part].half, long = thinAxis(half);
+		const { half, renderer } = scene.objects[part], long = thinAxis(half);
 		if (long >= 0) out.push({ name: part, owner: part, at: [0, half[1], 0], axis: AXES[long] });
+		else if (isDisc(renderer, half)) out.push({ name: part, owner: part, at: [0, half[1], 0], rim: half[0], normal: AXES[1] });
 	}
 	return out;
 }
@@ -48,7 +56,14 @@ export const socketNamed = (scene, id, name) => socketsOf(scene, id).find(s => s
 /** A socket in world space on its owner's pose { pos, R }: { p, axis?, from?, thumb? }. */
 export function socketWorld(socket, pose) {
 	const dir = v => (v ? norm(apply(pose.R, v)) : undefined);
-	return { p: add(pose.pos, apply(pose.R, socket.at ?? [0, 0, 0])), axis: dir(socket.axis), from: dir(socket.from), thumb: dir(socket.thumb) };
+	return { p: add(pose.pos, apply(pose.R, socket.at ?? [0, 0, 0])), axis: dir(socket.axis), from: dir(socket.from), thumb: dir(socket.thumb),
+		...(socket.rim ? { rim: socket.rim, normal: dir(socket.normal) } : {}) };
+}
+
+/** The point of world rim socket w nearest world point q, and the rim's direction there: { p, axis }. */
+export function rimPoint(w, q) {
+	const v = flat(sub(q, w.p), w.normal), r = len(v) > 1e-6 ? norm(v) : norm(flat(Math.abs(w.normal[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0], w.normal));
+	return { p: add(w.p, scale(r, w.rim)), axis: norm(cross(w.normal, r)) };
 }
 
 /** The outward normal of the face of the box (of boxes [{ pos, R, half }], base pivots) nearest world point p, or undefined. */
@@ -62,9 +77,10 @@ export function faceFrom(boxes, p) {
 	return best?.n;
 }
 
-/** How far world point q is from a world socket: from its axis line through p, else from p. */
+/** How far world point q is from a world socket: from its rim, else its axis line through p, else from p. */
 export function socketDistance(w, q) {
 	const v = sub(q, w.p);
+	if (w.rim) return Math.hypot(dot(v, w.normal), len(flat(v, w.normal)) - w.rim);
 	return len(w.axis ? flat(v, w.axis) : v);
 }
 

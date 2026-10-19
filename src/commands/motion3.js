@@ -48,7 +48,7 @@ const declarations = Object.freeze([
 		input: input({ topic: { type: "string", enum: DESCRIBE_TOPICS }, name: id,
 			topics: list({ oneOf: [{ type: "string", enum: DESCRIBE_TOPICS }, input({ topic: { type: "string", enum: DESCRIBE_TOPICS }, name: id }, ["topic"])] }, 8) }, []) },
 	{ id: "motion.report", label: "Read motion report", kind: "job", domain: "motion", timeoutMs: 10000, readOnly: true, description: HELP.report,
-		input: input({ specId, part: { type: "string", enum: ["groups", "timeline", "probes"], default: "groups" }, from: { type: "integer", minimum: 0, default: 0 } }, ["specId"]) },
+		input: input({ specId, characterId: id, part: { type: "string", enum: ["groups", "timeline", "probes"], default: "groups" }, from: { type: "integer", minimum: 0, default: 0 } }, []) },
 	{ id: "motion.keyObject", label: "Key held object", kind: "job", domain: "motion", timeoutMs: 120000, description: HELP.keyObject,
 		input: input({ characterId: id, objectId: id, frame: { type: "integer", minimum: 0 }, pos: numbers(3), rot: numbers(4), aim: numbers(3), roll: { type: "number" },
 			angle: { type: "number" }, remove: { type: "boolean", default: false } }, ["characterId", "objectId", "frame"]) },
@@ -198,9 +198,15 @@ export function register(registry, ports) {
 		}
 		return { affectedIds: [], summary: `Described ${topic}${name ? ` ${name}` : ""}.`, output: asArgument(() => describe(topic, name)) };
 	} });
-	registry.register({ ...declarations[4], available: always, run({ specId: wanted, part = "groups", from = 0 }) {
-		const page = reportPage(store.parts(wanted) ?? unknownSpec("specId", wanted, "compile it again"), wanted, part, from);
-		return { affectedIds: [], summary: `${page.items.length} ${part} from ${from}.`, output: page };
+	// a characterId reads the installed take's report (session 2ad2760a asked for it that way and was refused): the stored
+	// one when this session compiled that spec, else the take's QA run now
+	registry.register({ ...declarations[4], available: always, run({ specId: wanted, characterId, part = "groups", from = 0 }) {
+		const answer = (parts, id) => { const page = reportPage(parts, id, part, from); return { affectedIds: [], summary: `${page.items.length} ${part} from ${from}.`, output: page }; };
+		if (wanted) return answer(store.parts(wanted) ?? unknownSpec("specId", wanted, "compile it again"), wanted);
+		if (!characterId) fail("INVALID_ARGUMENT", "motion.report needs specId (from a motion.compile or motion.qa answer) or characterId (its installed take).");
+		const take = installed(characterId), id = specIdOf(take.spec), kept = store.parts(id);
+		if (kept) return answer(kept, id);
+		return after(compile(characterOf(ports, characterId), take.spec), r => { const out = report(r, {}); return answer(store.parts(out.specId), out.specId); });
 	} });
 	// motion.keyObject (C14): one key of a held object (or a hinge angle) in the installed take's spec, compiled
 	// and installed whatever QA says (a user edit), as one undo entry

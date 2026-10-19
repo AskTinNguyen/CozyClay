@@ -52,6 +52,23 @@ export function walkTo(ctx) {
 	return { keys, end };
 }
 
+/** base when `props` has no other prop of that name (the same one again is fine), else base_<side>, base_<side>2, ... */
+function freeName(props = {}, base, k, mine) {
+	const taken = n => props[n] && JSON.stringify(props[n]) !== JSON.stringify(mine);
+	if (!taken(base)) return base;
+	let name = `${base}_${k}`;
+	for (let i = 2; taken(name); i++) name = `${base}_${k}${i}`;
+	return name;
+}
+
+/** What a hand on `obj` may touch: the object, or for a group (an Empty, no body of its own) every part under it. */
+const touchable = (scene, obj) => {
+	const objects = scene?.objects ?? {};
+	if (!obj || objects[obj] || obj.startsWith("person:")) return obj ? [obj] : [];
+	const parts = Object.keys(objects).filter(k => objects[k].ancestors?.includes(obj));
+	return parts.length ? parts : [obj];
+};
+
 /**
  * reachGrip({ anchor, side, reach = 20, hold = 22, release = 12, elbow, fingers = "grip",
  * define, orient = true }): the hand goes to the anchor (defined elsewhere, or by `define`) over
@@ -67,23 +84,28 @@ export function reachGrip(ctx) {
 	// an anchor that takes a grasp closes the hand to that grasp's fingers (../sockets.js)
 	const grasp = (args.define ?? ctx.anchors?.[name])?.grasp, preset = args.fingers ?? GRASP_FINGERS[grasp] ?? "grip";
 	const w = `w_${name}_${k}`, fg = `fingers_${k}`, armw = `armw_${k}`, el = `elbow_${k}`, wasFk = !(state[armw] > 0.5);
-	// a take that ends after the hold but before the hand lets go cuts the release: the grip holds to the last frame
-	const last = ctx.frames - 1, cut = ctx.f0 + reach + hold <= last && ctx.f0 + reach + hold + release > last;
+	// a take that ends before the hand lets go cuts the hold or the release: the grip holds to the last frame (a hold
+	// asked past the end was refused, session 7f15b4ae: "needs 92 frames from f10 (to f102), past the last frame f85")
+	const last = ctx.frames - 1, cut = ctx.f0 + reach <= last && ctx.f0 + reach + hold + release > last;
+	const held = Math.min(reach + hold, last - ctx.f0);
 	for (const [c, v] of [[w, 0], [fg, { [preset]: 0 }], [armw, 0]]) if (state[c] === undefined) state[c] = v;
 	const b = keyBook(state, ctx.f0);
 	b.hold(0, w, fg, armw, el);
 	b.at(reach, { [w]: 1, [fg]: { ...state[fg], [preset]: 1 }, [armw]: 1, ...(args.elbow ? { [el]: args.elbow } : {}) });
-	b.hold(reach + hold, w, fg, armw, el);
+	b.hold(held, w, fg, armw, el);
 	if (!cut) b.at(reach + hold + release, { [w]: 0, [fg]: { ...state[fg], [preset]: 0 }, ...(wasFk ? { [armw]: 0 } : {}) });
-	const S = k === "l" ? "Left" : "Right", prop = `${name}Grip`;
+	// the fingers' prop is <anchor>Grip, unless the spec (or another skill) has a prop of that name of its own: its points
+	// would replace these (session 7f15b4ae: props.ballGrip for a carry broke reachGrip on anchor "ball")
+	const S = k === "l" ? "Left" : "Right", fingersProp = { hand: k, origin: [`${S}HandIndex2`, `${S}HandMiddle2`], points: { fingers: graspPoint(grasp, k) } };
+	const prop = freeName(ctx.props, `${name}Grip`, k, fingersProp);
 	const def = args.define ? { [name]: args.define } : {};
 	// the hand may touch what it grips: an object, or the other person (people.js) whose joint the anchor is on
 	const a = args.define ?? ctx.anchors?.[name], obj = a?.kind === "object" ? a.object : a?.kind === "person" ? `person:${a.person}` : null;
 	return {
-		keys: b.keys, end: cut ? last : ctx.f0 + reach + hold + release, ...(cut ? { cut: `release cut at f${last} (hold to the end)` } : {}), anchors: def,
-		props: { [prop]: { hand: k, origin: [`${S}HandIndex2`, `${S}HandMiddle2`], points: { fingers: graspPoint(grasp, k) } } },
+		keys: b.keys, end: cut ? last : ctx.f0 + reach + hold + release, ...(cut ? { cut: `${held < reach + hold ? "hold" : "release"} cut at f${last} (hold to the end)` } : {}), anchors: def,
+		props: { [prop]: fingersProp },
 		fits: [{ side: k, anchor: name, effector: { prop, point: "fingers" }, ...(args.orient === false ? { orient: false } : {}) }],
 		checks: { contacts: [{ name: `fingers on ${name}`, point: `prop:${prop}.fingers`, target: `anchor:${name}`, tol: 0.04, when: w }],
-			allow: obj ? [{ part: "hand", object: obj, depth: 0.04 }] : [] },
+			allow: touchable(ctx.scene, obj).map(object => ({ part: "hand", object, depth: 0.04 })) },
 	};
 }

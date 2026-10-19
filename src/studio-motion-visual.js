@@ -9,7 +9,7 @@ import { compileSpec } from "./motion3/pipeline.js";
 import { motionScene } from "./motion3/scene.js";
 import { skeletonFor } from "./motion3/rigs/index.js";
 import { beatFrames, grabReleases, traceSeries, TRACE_COLORS } from "./motion3/beats.js";
-import { depthViews, projectPoint, trailPoints, viewCameras } from "./motion3/views.js";
+import { cameraAt, depthViews, projectPoint, trailPoints, viewCameras } from "./motion3/views.js";
 import { checkRef } from "./motion3/refs.js";
 import { renderWithGhosts } from "./ghost-set.js";
 import { GHOST_COLORS, sheetGhostSettings } from "./view-ghosts.js";
@@ -92,14 +92,14 @@ function viewSheet(args, r, { s, frames, span, grid, picks, ports, added }) {
 	if (!cameras.length) throw new StudioProtocolError("TARGET_NOT_READY", "views found no compiled frame of the take in the range.");
 	const cells = cameras.flatMap(cam => frames.map(frame => ({ cam, frame }))), target = args.ghosts ? s.targets.get(r.characterId) : null;
 	if (args.ghosts && !target?.rig) throw new StudioProtocolError("TARGET_NOT_READY", "ghosts pose a copy of the character's rig; it has not loaded in the editor yet.");
-	const sheet = buildContactSheet(cells, ({ cam, frame }) => {
-		const render = () => ports.renderFrameBuffer(frame, { eye: cam.eye, quaternion: cam.quaternion, fovDeg: cam.fovDeg, output: { width: side, height: side } });
+	const sheet = buildContactSheet(cells, ({ cam: view, frame }) => {
+		const cam = cameraAt(view, frame), render = () => ports.renderFrameBuffer(frame, { eye: cam.eye, quaternion: cam.quaternion, fovDeg: cam.fovDeg, output: { width: side, height: side } });
 		const tile = target ? renderWithGhosts({ rig: target.rig, take: target.motion, objects: s.objects }, frame, render) : render();
 		const dots = trails.flatMap(t => t.points.map(({ f, p }) => [f, projectPoint(cam, p, tile.width, tile.height), rgb(t.color)])
 			.filter(([, q]) => q).map(([f, [x, y], color]) => ({ x, y, color, r: f === frame ? 4 : 1.5, alpha: f <= frame ? 1 : 0.35, ring: f === frame })));
 		return { ...tile, data: paintDots(tile.data, tile.width, tile.height, dots) };
 	}, grid);
-	const views = cameras.map(cam => ({ name: cam.name, eye: round2(cam.eye), target: round2(cam.target) }));
+	const views = cameras.map(cam => ({ name: cam.name, eye: round2(cam.eye), target: round2(cam.target), ...(cam.ride ? { rides: "focus" } : {}) }));
 	const ref = { frames, layout: grid.layout, views, ...(added ? { addedView: added } : {}), focus: focus.length ? focus : "character", ...(trails.length ? { trails: trails.map(({ ref: of, color }) => ({ ref: of, color })) } : {}), ...(picks ? { picks } : {}),
 		...(target ? { ghosts: { ...sheetGhostSettings(), ...GHOST_COLORS } } : {}) };
 	return [{ dataUrl: ports.encodePng(sheet.data, sheet), width: sheet.width, height: sheet.height, frames, layout: grid.layout, views: views.map(v => v.name) }, ref];
