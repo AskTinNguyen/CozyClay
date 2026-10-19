@@ -4,6 +4,7 @@
 // (on its back when pushed from the front, "land"), the trunk and head whip on a damped spring against the shove,
 // the arms flail and trail, the legs follow the hips (feet held off the floor) and the whole body lies still at the end.
 import { add, apply, ry, rx } from "../compiler/math.js";
+import { tiltFrame } from "../compiler/pose.js";
 import { personJoint } from "../people.js";
 import { skillError } from "./book.js";
 
@@ -91,10 +92,13 @@ export function hitReaction(ctx) {
 		const foot = (k, x, z) => { const p = add(root, R([x, legY, z])), cap = root[1] - 0.05; if (back) p[1] = cap - 0.05 * Math.log1p(Math.exp((cap - p[1]) / 0.05)); p[1] = softFloor(p[1], floor, 0.03); const o = from[k]; if (!o) return p; const q = o.at.map((x, i) => x + o.v[i] * (f - ctx.f0) * (1 - off)); q[1] = Math.max(o.at[1], q[1]); return reach(p.map((v, i) => q[i] + (v - q[i]) * off)); };
 		// a foot left behind is drawn in within the leg's reach of the hips (a soft cap, in as the foot lifts), so the leg is pulled, not torn
 		const reach = p => { const d = p.map((v, i) => v - root[i]), n = Math.hypot(...d), m = LEG - 0.02 * Math.log1p(Math.exp((LEG - n) / 0.02)); return n > 1e-9 ? root.map((v, i) => v + d[i] * (1 + (m / n - 1) * off)) : p; };
-		// a knee pole turns with the root yaw only: the body's forward pitched with it stays square to the leg (no flip lying down)
-		const knee = [0, -Math.sin(pitch * Math.PI / 180), Math.max(0.05, Math.cos(pitch * Math.PI / 180))];
+		// the knee points along the body's forward pitched with it, square to the leg (no flip lying down); a pole is read
+		// in the yaw frame, tilted past 60 degrees of pitch (pose.js tiltFrame), so that tilt (lean) is taken back out of
+		// the knee poles (and half of it, face down, out of the foot pitch: the toes rest on the floor, not in it)
+		const tf = tiltFrame(0, pitch, 0), back0 = tf ? apply(tf.R, [0, 1, 0]) : [0, 1, 0], lean = Math.atan2(back0[2], back0[1]) * 180 / Math.PI;
+		const knee = apply(rx(-lean), [0, -Math.sin(pitch * Math.PI / 180), Math.max(0.05, Math.cos(pitch * Math.PI / 180))]);
 		const set = { root: r3(root), yaw: r1(yaw), pitch: r1(pitch), roll: 0,
-			foot_l: r3(foot("l", 0.11, 0.04 + 0.1 * flail * off - (back ? 0.1 : 0) * lying)), foot_r: r3(foot("r", -0.11, 0.04 - 0.1 * flail * off - (back ? 0.1 : 0) * lying)), fyaw_l: r1(yaw), fyaw_r: r1(yaw), fpitch_l: r1((back ? -50 : 0) * lying), fpitch_r: r1((back ? -50 : 0) * lying),
+			foot_l: r3(foot("l", 0.11, 0.04 + 0.1 * flail * off - (back ? 0.1 : 0) * lying)), foot_r: r3(foot("r", -0.11, 0.04 - 0.1 * flail * off - (back ? 0.1 : 0) * lying)), fyaw_l: r1(yaw), fyaw_r: r1(yaw), fpitch_l: r1(back ? -50 * lying : -0.5 * lean), fpitch_r: r1(back ? -50 * lying : -0.5 * lean),
 			knee_l: r3([0.05, knee[1], knee[2]]), knee_r: r3([-0.05, knee[1], knee[2]]),
 			spine_pitch: r1(sign * 22 * whip * Math.min(1, speed / 4)), spine_yaw: 0, spine_roll: r1(10 * flail * (1 - lying)), head_pitch: r1(sign * 30 * whip * Math.min(1, speed / 4) + (back ? -8 : 8) * lying), head_roll: r1(12 * lying),
 			arm_rest: r1(72 - 22 * lying), aswing_l: r1(sign * 45 * flail + 8 * lying), aswing_r: r1(-sign * 35 * flail - 8 * lying), abend_l: r1(25 + 30 * flail * flail), abend_r: r1(30 + 25 * flail * flail) };
