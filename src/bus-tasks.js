@@ -72,7 +72,9 @@ export function createBusTasks({ ports, emit }) {
 		control(id, args, request, before, busy) {
 			if (id === 'task.undo') {
 				const task = finished.get(args.taskId) ?? fail('UNDO_EXPIRED', `Task ${args.taskId} is not a finished task this editor still holds.`);
-				const moved = [...task.final].filter(([key, token]) => tokenOf(key) !== token).map(([key]) => key);
+				// A key moved when its token did and its content did too: a later task undone first puts the same content back
+				// under a new token, and that is not a change.
+				const moved = [...task.final].filter(([key, { token, value }]) => tokenOf(key) !== token && JSON.stringify(snapshot(key).value) !== value).map(([key]) => key);
 				if (moved.length) fail('UNDO_CONFLICT', `Changed since the task finished: ${listOf(moved)}; undo those first or edit by hand.`);
 				const historyEntryId = restore(task, [...task.pre.values()], 'undone');
 				finished.delete(args.taskId);
@@ -89,7 +91,7 @@ export function createBusTasks({ ports, emit }) {
 				return receipt(id, task, request, before);
 			}
 			const task = open.get(args.taskId) ?? fail('STALE_TARGET', `Task ${args.taskId} is not open.`);
-			if (id === 'task.requestScope') { grant(task, args.scope); return receipt(id, task, request, before); }
+			if (id === 'task.requestScope') { grant(task, args.scope); emit?.({ type: 'task.scope', taskId: task.taskId, scope: [...task.keys] }); return receipt(id, task, request, before); }
 			if (id === 'task.mark') { task.mark = { values: [...task.keys].map(snapshot), keys: new Set(task.keys) }; return receipt(id, task, request, before); }
 			if (id === 'task.rollback') {
 				const mark = task.mark ?? fail('STALE_TARGET', 'The task has no mark to roll back to.');
@@ -104,7 +106,7 @@ export function createBusTasks({ ports, emit }) {
 				const historyEntryId = restore(task, [...task.pre.values()], 'cancelled');
 				return receipt(id, task, request, before, { historyEntryId, affectedIds: task.affectedIds });
 			}
-			task.final = new Map([...task.pre.keys()].map(key => [key, tokenOf(key)]));
+			task.final = new Map([...task.pre.keys()].map(key => [key, { token: tokenOf(key), value: JSON.stringify(snapshot(key).value) }]));
 			finished.set(task.taskId, task);
 			while (finished.size > FINISHED_KEPT) finished.delete(finished.keys().next().value);
 			emit?.({ type: 'task.finished', taskId: task.taskId });
@@ -116,8 +118,10 @@ export function createBusTasks({ ports, emit }) {
 		 * task's edit restores to (undo_edit of it), after keeping each key's first pre-image.
 		 */
 		admit(task, entry, args, request, before) {
-			if (!task && (request.origin === 'ui' || !open.size)) return null;
+			if (!task && !open.size) return null;
 			const keys = entry?.id ? commandKeys(entry.id, args, before, entry) : [];
+			// The user's own edit is never refused; a running task whose scope it touches hears of it (the panel's card).
+			if (!task && request.origin === 'ui') { for (const other of open.values()) { const mine = keys.filter(key => other.keys.has(key)); if (mine.length) emit?.({ type: 'task.userEdit', taskId: other.taskId, keys: mine }); } return null; }
 			if (!task) {
 				const held = keys.find(key => scopeConflict(null, [key], open));
 				if (held) fail('SCOPE_BUSY', `${scopeConflict(null, [held], open)}; this command waits for that task.`);
@@ -137,12 +141,14 @@ export function createBusTasks({ ports, emit }) {
 		record(point, recorded) {
 			if (!point || !recorded?.ok) return recorded;
 			const { task } = point, state = ports.read(), warnings = [];
+			let grew = false;
 			for (const id of recorded.affectedIds ?? []) {
 				const key = keyOfId(id, state);
 				if (!key || task.keys.has(key)) continue;
 				if (scopeConflict(task.taskId, [key], open)) warnings.push({ code: 'SCOPE_DENIED', message: `${key} changed outside the task's scope.` });
-				else { task.keys.add(key); if (!point.keys.includes(key)) { task.pre.set(key, { key, value: undefined }); point.values.push({ key, value: undefined }); } }
+				else { task.keys.add(key); grew = true; if (!point.keys.includes(key)) { task.pre.set(key, { key, value: undefined }); point.values.push({ key, value: undefined }); } }
 			}
+			if (grew) emit?.({ type: 'task.scope', taskId: task.taskId, scope: [...task.keys] });
 			for (const key of task.keys) task.tokens.set(key, tokenOf(key));
 			if (recorded.authored) {
 				task.edits.push({ receiptId: recorded.receiptId, values: point.values, keys: point.keys, mark: point.mark });

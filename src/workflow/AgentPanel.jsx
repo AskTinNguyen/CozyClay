@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { Fragment, Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { FiAlertTriangle, FiArrowUp, FiCheck, FiChevronRight, FiClock, FiDownload, FiImage, FiMoreHorizontal, FiPaperclip, FiPlus, FiRotateCw, FiX } from "react-icons/fi";
 import { ATTACHMENT_FAILED_NOTICE, ATTACHMENT_LIMIT_NOTICE, ATTACHMENT_TYPE_NOTICE, attachmentFilesFromTransfer, attachmentFromFile, transferCarriesFiles } from "./attachment-image.js";
 import { isImeComposing } from "../ime.js";
@@ -37,7 +37,10 @@ import {
 	shortModelId,
 	supervisorFollowUp,
 } from "./agent-client.js";
+import { readStoredTaskMode, storeTaskMode } from "./task-board.js";
 import "./agent-panel.css";
+// The task board (task mode, parallel Studio tasks) loads only where it is used: the Studio, never the workflow page.
+const TaskBoard = lazy(() => import("./TaskBoard.jsx"));
 import { AgentProgressCard } from "./AgentProgressCard.jsx";
 import { LoginPanel } from "./LoginPanel.jsx";
 import { TurnSteps } from "./AgentTurnSteps.jsx";
@@ -296,6 +299,9 @@ export default function AgentPanel({
 	// the post-turn review for every turn sent from this panel.
 	const [supervisorOn, setSupervisorOn] = useState(() => readStoredSupervisor());
 	const toggleSupervisor = useCallback(() => setSupervisorOn((current) => { storeSupervisor(!current); return !current; }), []);
+	// Task mode (parallel Studio tasks): the chat talks to the main agent, which answers at once and runs tasks on the board.
+	const [taskMode, setTaskMode] = useState(() => surface === "studio" && readStoredTaskMode());
+	const toggleTaskMode = useCallback(() => setTaskMode((current) => { storeTaskMode(!current); return !current; }), []);
 	// One place takes `{ providers, models }` from the sidecar: the grouped list
 	// the dropdown draws, the flat key-addressed list every lookup uses, and the
 	// model to open with. Returns false when nothing was advertised.
@@ -623,8 +629,9 @@ export default function AgentPanel({
 	const runTurn = useCallback((text) => {
 		setAttachNotice(null);
 		setSteerNotice("");
-		return store.send(text, { attachFrame, model, effort: effort ?? undefined, supervisor: supervisorOn });
-	}, [attachFrame, effort, model, store, supervisorOn]);
+		return store.send(text, { attachFrame, model, effort: effort ?? undefined, supervisor: supervisorOn, tasks: taskMode });
+	}, [attachFrame, effort, model, store, supervisorOn, taskMode]);
+	const taskStepLabel = useCallback((call) => stepLabel(call, presentation.toolLabels), [presentation.toolLabels]);
 	const stopTurn = useCallback(() => store.stop(), [store]);
 	// Steering the turn that is already running: the composer's text joins THAT
 	// turn instead of starting a second one. A refusal (the turn ended while the
@@ -886,6 +893,7 @@ export default function AgentPanel({
 			{!layout.some((entry) => entry.type === "steps" && entry.last) && progressCard}
 			{rateLimit && <PausedCard resetAt={rateLimit.resetAt} onRetry={() => { store.clearRateLimit(); runTurn(chat.lastPrompt); }} onSwitchModel={switchModel} />}
 		</div>
+		{surface === "studio" && taskMode && authenticated && <Suspense fallback={null}><TaskBoard sessionId={chat.sessionId} pulse={chat.lastTurn?.endedAt ?? 0} labelOf={taskStepLabel} onMainNote={store.note} /></Suspense>}
 
 		{/* Never a blank panel: busy states name the phase and tick, a finished
 		    turn states how it ended, and idle says so in as many words. */}
@@ -951,6 +959,11 @@ export default function AgentPanel({
 					{surface === "studio" && (
 						<button type="button" className={`agent-supervisor-toggle${supervisorOn ? " is-on" : ""}`} role="switch" aria-checked={supervisorOn} aria-label={ko("Supervisor review", "감독 검토")} title={ko(supervisorOn ? "Supervisor review is on: a note arrives after each editing turn" : "Supervisor review is off", supervisorOn ? "감독 검토 켜짐: 편집 턴이 끝나면 메모가 옵니다" : "감독 검토 꺼짐")} onClick={toggleSupervisor}>
 							{ko("Supervisor", "감독")} {supervisorOn ? "ON" : "OFF"}
+						</button>
+					)}
+					{surface === "studio" && (
+						<button type="button" className={`agent-supervisor-toggle agent-tasks-toggle${taskMode ? " is-on" : ""}`} role="switch" aria-checked={taskMode} aria-label={ko("Task mode", "작업 모드")} title={ko(taskMode ? "Task mode is on: the agent answers at once and runs your requests as parallel tasks" : "Task mode is off: one request at a time", taskMode ? "작업 모드 켜짐: 에이전트가 바로 답하고 요청을 병렬 작업으로 돌려요" : "작업 모드 꺼짐: 한 번에 요청 하나")} onClick={toggleTaskMode} disabled={streaming}>
+							{ko("Tasks", "작업")} {taskMode ? "ON" : "OFF"}
 						</button>
 					)}
 					<span className="agent-composer-spacer" aria-hidden="true" />

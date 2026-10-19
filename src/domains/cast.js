@@ -715,7 +715,8 @@ export function useCast(appContext) {
 	}
 	function undoScene() {
 		const receipt = appContext.bus.run('edit.undo');
-		if (receipt.status === 'noop') appContext.notify(ko("Nothing to undo", "실행 취소할 작업이 없어요"));
+		// A refusal says why: the last edit belongs to a running task (parallel tasks), which its own card undoes.
+		if (receipt.status === 'noop' || receipt.ok === false) appContext.notify(receipt.ok === false ? ko(receipt.message ?? "Undo was refused", `실행 취소 불가: ${receipt.message ?? ""}`) : ko("Nothing to undo", "실행 취소할 작업이 없어요"));
 		return receipt;
 	}
 	function redoScene() {

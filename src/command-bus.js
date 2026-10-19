@@ -286,7 +286,7 @@ export function createCommandBus({ registry, ports }) {
         domainRevision = domain ? current.domainRevisions?.[domain] : null;
       };
       const nestedIds = new Set();
-      const context = { origin: request.origin, signal: controller.signal,
+      const context = { origin: request.origin, signal: controller.signal, taskId: request.taskId ?? null,
         check() {
           controller.signal.throwIfAborted();
           const current = ports.read();

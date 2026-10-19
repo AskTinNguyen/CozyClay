@@ -101,7 +101,8 @@ export function createTaskBoard({ run, emit = () => {}, now = Date.now, setTimer
 		else if (result.status === "lost") { task.status = "paused"; task.reason = "Studio disconnected; it resumes when Studio reconnects to the same scene"; task.sceneId = result.sceneId; tell("task.paused", task); }
 		else {
 			const summary = { reply: clip(String(result.reply ?? "").trim(), L.summaryChars), receipts: (result.receipts ?? []).slice(-L.receipts) };
-			end(task, task.stopReason ? "failed" : task.cancelled ? "cancelled" : result.status, { reason: task.stopReason ?? (result.status === "failed" ? clip(String(result.error?.message ?? result.error ?? "the run failed"), 300) : undefined), summary });
+			// A cancel that arrived after the run finished cannot take it back: it stays done (and can be undone).
+			end(task, task.stopReason ? "failed" : task.cancelled && result.status !== "done" ? "cancelled" : result.status, { reason: task.stopReason ?? (result.status === "failed" ? clip(String(result.error?.message ?? result.error ?? "the run failed"), 300) : undefined), summary });
 		}
 		rescheduleNow();
 	}

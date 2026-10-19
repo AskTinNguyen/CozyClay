@@ -105,10 +105,10 @@ export function register(registry, ports) {
 	 * spec on the character's rig and the current scene (compile-job.js) -> { stored (the spec a take keeps and its specId
 	 * names), qa, ..., take when bake is given }, at once or as a promise. opts: probes, checks, lenient, repair.
 	 */
-	const compile = (character, spec, opts = {}, bake) => {
+	const compile = (character, spec, opts = {}, bake, taskId = null) => {
 		rigOf(character);
 		const placed = bake && { position: [character.x ?? 0, character.y ?? 0, character.z ?? 0], yaw: character.rot ?? 0, ...bake };
-		return runner.run({ model: character.model, scene: sceneFor(character), spec, ...opts, ...(placed ? { bake: placed } : {}) });
+		return runner.run({ model: character.model, scene: sceneFor(character), spec, ...opts, ...(placed ? { bake: placed } : {}) }, { taskId, characterId: character.id });
 	};
 	/** The whole output, kept in the store (motion.report, delta) and cut to the receipt budget (report.js). */
 	const report = (r, head, extra = {}) => {
@@ -145,7 +145,7 @@ export function register(registry, ports) {
 		const installedSpec = () => { const take = owner().motionFor(characterId); return take?.spec && specIdOf(take.spec) === base ? structuredClone(take.spec) : null; };
 		const patched = [], source = spec ?? asArgument(() => applyPatch(store.get(base) ?? installedSpec() ?? unknownSpec("base", base), patch ?? [], patched));
 		// the take is always baked: the user watches every draft, installed or not
-		return after(compile(character, source, { probes, repair }, {}), r => {
+		return after(compile(character, source, { probes, repair }, {}, context?.taskId), r => {
 			const { qa, take } = r, notes = [...patched, ...(r.notes ?? [])];
 			// ifClean: install only a clean final result (qa.ok includes the goals; after repair when asked)
 			const wanted = install === "ifClean" ? qa.ok : install;
