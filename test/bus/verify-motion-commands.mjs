@@ -65,6 +65,18 @@ test('motion: an agent IK key and undo restore both the authored key layer and e
   } finally { f.dispose(); }
 });
 
+test('motion: ik.applyPose refuses a bone outside POSE_BONES and keys nothing (#773)', () => {
+  const f = motionFixture();
+  try {
+    owned(f); seed(f);
+    const before = f.snapshot();
+    const refused = f.run('ik.applyPose', { characterId: 'actor-a', frame: 0, pose: { bones: { __probe__: [0, 0, 0] } } }, 'agent');
+    assert.equal(refused.code, 'INVALID_ARGUMENT');
+    assert.match(refused.message, /__probe__/);
+    assert.deepEqual(f.snapshot(), before);
+  } finally { f.dispose(); }
+});
+
 test('motion: every mutation origin exercises receipt, undo, expiry, cancellation, revision and concurrent-job fences', async () => {
   assert.deepEqual(Object.keys(cases).sort(), declarations.filter(entry => entry.kind === 'mutation' && entry.exposure !== 'ui-only').map(entry => entry.id).sort());
   for (const [command, input] of Object.entries(cases)) for (const origin of ['ui', 'agent', 'mcp', 'cli']) {
