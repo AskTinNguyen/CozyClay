@@ -262,23 +262,29 @@ function registerTests() {
 		assert.deepEqual({ min: objectPosition.properties.x.minimum, max: objectPosition.properties.x.maximum }, { min: -240, max: 240 });
 		assert.deepEqual({ min: objectPosition.properties.y.minimum, max: objectPosition.properties.y.maximum }, { min: 0, max: 240 });
 		const charPosition = protocol.STUDIO_PATCH_SET_SCHEMAS.character.properties.position;
-		for (const axis of ["x", "z"]) { assert.equal(charPosition.properties[axis].minimum, -4); assert.equal(charPosition.properties[axis].maximum, 4); }
+		for (const axis of ["x", "z"]) { assert.equal(charPosition.properties[axis].minimum, -240); assert.equal(charPosition.properties[axis].maximum, 240); }
 		assert.equal(charPosition.properties.y.minimum, 0); assert.equal(charPosition.properties.y.maximum, 240);
 		// The catalogue's patchable vocabulary carries the same declared ranges, not
 		// just the bare path list.
 		const objectDescriptor = protocol.STUDIO_PATCH_DESCRIPTORS.find(d => d.path === "object.scale");
 		assert.deepEqual(objectDescriptor, { path: "object.scale", type: "vec3", min: { x: 0.01, y: 0.01, z: 0.01 }, max: { x: 100, y: 100, z: 100 } });
 		const charPositionDescriptor = protocol.STUDIO_PATCH_DESCRIPTORS.find(d => d.path === "character.position");
-		assert.deepEqual(charPositionDescriptor.min, { x: -4, y: 0, z: -4 });
-		assert.deepEqual(charPositionDescriptor.max, { x: 4, y: 240, z: 4 });
+		// The element's own range (±240 m), as arrange_characters places them: the ±4 m gizmo envelope only limits the UI
+		// drag, and enforcing it here refused a pedestrian at x = -28.82 on a street set.
+		assert.deepEqual(charPositionDescriptor.min, { x: -240, y: 0, z: -240 });
+		assert.deepEqual(charPositionDescriptor.max, { x: 240, y: 240, z: 240 });
+		assert.equal(protocol.validateStudioCommand({ name: "patch_elements", args: { ops: [{ target: { kind: "character", id: "char-alex" }, set: { position: { x: -28.82, y: 0, z: -0.4 } } }] } }).args.ops[0].set.position.x, -28.82);
 		// An out-of-range patch on a vec3 axis is a structured rejection, not a
 		// silent clamp.
 		rejects(() => protocol.validateStudioCommand({ name: "patch_elements", args: { ops: [{ target: { kind: "object", id: "o-1" }, set: { scale: { x: 1, y: 1, z: 999 } } }] } }), "INVALID_ARGUMENT");
-		rejects(() => protocol.validateStudioCommand({ name: "patch_elements", args: { ops: [{ target: { kind: "character", id: "char-alex" }, set: { position: { x: 99, y: 0, z: 0 } } }] } }), "INVALID_ARGUMENT");
-		// The gizmo envelope, not the wider document/persistence room, is what the
-		// agent path enforces: x=5 is inside the document bound (±240) but outside
-		// the gizmo bound (±4).
-		rejects(() => protocol.validateStudioCommand({ name: "patch_elements", args: { ops: [{ target: { kind: "character", id: "char-alex" }, set: { position: { x: 5, y: 0, z: 0 } } }] } }), "INVALID_ARGUMENT");
+		rejects(() => protocol.validateStudioCommand({ name: "patch_elements", args: { ops: [{ target: { kind: "character", id: "char-alex" }, set: { position: { x: 999, y: 0, z: 0 } } }] } }), "INVALID_ARGUMENT");
+		// A runtime fault in the editor is not the caller's input.
+		assert.equal(protocol.refusalCode(new TypeError("Cannot read properties of undefined (reading 'current')")), "INTERNAL_ERROR");
+		assert.equal(protocol.refusalCode(new Error("Invalid name")), "INVALID_ARGUMENT");
+		assert.equal(protocol.refusalCode(new protocol.StudioProtocolError("STALE_TARGET", "gone")), "STALE_TARGET");
+		assert.ok(protocol.STUDIO_ERROR_CODES.includes("INTERNAL_ERROR"));
+		// The document range, not the ±4 m gizmo envelope of the UI drag, is what the agent path enforces: x = 5 is in.
+		assert.equal(protocol.validateStudioCommand({ name: "patch_elements", args: { ops: [{ target: { kind: "character", id: "char-alex" }, set: { position: { x: 5, y: 0, z: 0 } } }] } }).args.ops[0].set.position.x, 5);
 		// An out-of-range patch value names the offending path and the allowed
 		// range instead of the generic union rejection: every patchOp variant
 		// fails on a bad number, and the caller needs to know which path and
@@ -290,12 +296,12 @@ function registerTests() {
 			assert.match(error.message, /0\.01/);
 			assert.match(error.message, /100/);
 		}
-		try { protocol.validateStudioCommand({ name: "patch_elements", args: { ops: [{ target: { kind: "character", id: "char-alex" }, set: { position: { x: 5, y: 0, z: 0 } } }] } }); assert.fail("out-of-range position must be refused"); }
+		try { protocol.validateStudioCommand({ name: "patch_elements", args: { ops: [{ target: { kind: "character", id: "char-alex" }, set: { position: { x: 500, y: 0, z: 0 } } }] } }); assert.fail("out-of-range position must be refused"); }
 		catch (error) {
 			assert.equal(error.code, "INVALID_ARGUMENT");
 			assert.match(error.message, /position\.x/);
-			assert.match(error.message, /-4/);
-			assert.match(error.message, /4/);
+			assert.match(error.message, /-240/);
+			assert.match(error.message, /240/);
 		}
 	});
 	test("D7 patch receipts report per-operation outcomes and never hide a dropped path", () => {

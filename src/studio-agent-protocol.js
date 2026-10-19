@@ -1,6 +1,6 @@
 // Shared by the browser and sidecar. No Node, React, renderer or provider imports.
 import { STUDIO_ELEMENTS, isSettableElement } from "./studio-elements.js";
-import { STUDIO_ERROR_CODES } from "./studio-error-codes.js";
+import { STUDIO_ERROR_CODES, refusalCode } from "./studio-error-codes.js";
 import { EFFECT_VALUE_SCHEMA } from "./effects/effect-record.js";
 import { wrongType, unknownField, missingField, arrayRefusal, duplicateItem, stringRefusal, enumRefusal, numberRefusal, unionRefusal } from "./studio-schema-errors.js";
 // Mirrors PREVIS_MODES (project.js) and POSTURES (scenes.js). Neither is imported:
@@ -30,7 +30,7 @@ export const STUDIO_TOOLS = Object.freeze(Object.keys(STUDIO_TOOL_LABELS));
  * object→objects, shot→shot, stage→stage. */
 export const STUDIO_PATCH_KINDS = Object.freeze(["character", "object", "shot", "stage"]);
 export const STUDIO_PATCH_DOMAINS = Object.freeze({ character: "cast", object: "objects", shot: "shot", stage: "stage" });
-export { STUDIO_ERROR_CODES };
+export { STUDIO_ERROR_CODES, refusalCode };
 export const STUDIO_VARIANTS = freezeStudioData({
 	selectionKinds: ["scene", "object", "character", "rig", "camera"], modes: ["scene", "pose", "camera", "motion"], shotModes: ["keys", "follow", "rail"],
 	framingSizes: ["extreme close-up", "close-up", "medium close-up", "medium shot", "medium-wide shot", "wide shot", "extreme wide shot"],
@@ -146,9 +146,9 @@ export function patchValueSchema(element) {
 	if (element.type === "color") return { ...text(32), pattern: "^#[0-9a-fA-F]{6}$" };
 	if (element.type === "image") return nullable(dataImage);
 	if (element.type === "vec3") {
-		const bounds = element.gizmo ?? element;
-		if (bounds.min && typeof bounds.min === "object" && bounds.max && typeof bounds.max === "object") {
-			return object({ x: number(bounds.min.x, bounds.max.x), y: number(bounds.min.y, bounds.max.y), z: number(bounds.min.z, bounds.max.z) });
+		const { min, max } = element; // the element's own range; a gizmo envelope only limits the UI drag
+		if (min && typeof min === "object" && max && typeof max === "object") {
+			return object({ x: number(min.x, max.x), y: number(min.y, max.y), z: number(min.z, max.z) });
 		}
 		return vec3;
 	}
@@ -160,10 +160,10 @@ export function patchValueSchema(element) {
  * derived from the same declaration table as `patchValueSchema` so the two
  * can never drift apart. */
 export function buildPatchDescriptors(elements) {
-	return elements.filter(isSettableElement).map(({ path, type, min, max, enum: enumValues, gizmo, note }) => ({
+	return elements.filter(isSettableElement).map(({ path, type, min, max, enum: enumValues, note }) => ({
 		path, type,
-		...(gizmo?.min !== undefined ? { min: { ...gizmo.min } } : min !== undefined ? { min: min && typeof min === "object" ? { ...min } : min } : {}),
-		...(gizmo?.max !== undefined ? { max: { ...gizmo.max } } : max !== undefined ? { max: max && typeof max === "object" ? { ...max } : max } : {}),
+		...(min !== undefined ? { min: min && typeof min === "object" ? { ...min } : min } : {}),
+		...(max !== undefined ? { max: max && typeof max === "object" ? { ...max } : max } : {}),
 		...(enumValues ? { enum: [...enumValues] } : {}),
 		...(note ? { note } : {}),
 	}));

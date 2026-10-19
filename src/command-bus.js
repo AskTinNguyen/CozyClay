@@ -2,7 +2,7 @@
 // the editor ports own native state/history, and the existing journal owns
 // idempotency. Synchronous UI actions stay synchronous (including user gestures).
 import { HISTORY_LIMIT } from './history.js';
-import { StudioProtocolError, StudioSchemas, validateStudioSchema, validateReceipt, validateStudioIdentity } from './studio-agent-protocol.js';
+import { StudioProtocolError, StudioSchemas, validateStudioSchema, validateReceipt, validateStudioIdentity, refusalCode } from './studio-agent-protocol.js';
 import { agentTurnControls, markAgentTurn } from './agent-turn-mark.js';
 
 // A batching/retention adapter over the existing object history owner. The
@@ -203,7 +203,7 @@ export function createCommandBus({ registry, ports }) {
   function refusal(request, before, error, mutated) {
     const changed = mutated ?? (ports.read().revision !== before.revision);
     return validateReceipt({ ok: false, commandId: request.commandId, host: before.host,
-      code: error.code ?? 'INVALID_ARGUMENT', phase: changed ? 'commit' : 'admission', affectedIds: [], expectedTargets: [], currentTargets: [],
+      code: refusalCode(error), phase: changed ? 'commit' : 'admission', affectedIds: [], expectedTargets: [], currentTargets: [],
       mutated: changed, preserved: { authoredState: changed ? 'changed' : 'unchanged' }, recovery: { action: 'inspect', retryAllowed: false },
       message: [...String(error.message || error)].slice(0, 500).join('') });
   }

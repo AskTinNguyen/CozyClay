@@ -200,5 +200,18 @@ function verify() {
   assert.equal(facade.nextStoreHistory(false), first.storeDomain('cast'));
   assert.equal(facade.undoClock, 1, 'render projections never fork committed history');
   console.log('PASS domain facade: render closure lifetime and shared interleaved undo clock');
+
+  // Each domain reads only the shared values its App.jsx forRender block hands it: forRender scopes them per domain, so a
+  // value another domain receives is undefined here. A plain read of a missing one crashed every object.attach and
+  // object.detach (`appContext.shared.attachFrameRef.current`, "Cannot read properties of undefined"). Optional reads
+  // (`?.`) fall back on purpose and are not counted.
+  const appSource = read('src/App.jsx'), unwired = [];
+  for (const [, hook, body] of appSource.matchAll(/const \w+ = (use[A-Z]\w*)\(appContext\.forRender\(\{([\s\S]*?)\n\t\}\)\);/g)) {
+    const given = new Set([...body.matchAll(/get (\w+)\(\)/g), ...body.matchAll(/^\s*(\w+)\s*[,:]/gm)].map(m => m[1]));
+    const name = hook.slice(3, 4).toLowerCase() + hook.slice(4), file = [`src/domains/${name}.js`, `src/domains/${name}s.js`].find(path => existsSync(new URL(path, root)));
+    for (const m of read(file).matchAll(/appContext\.shared(\?)?\.(\w+)(\?\.)?/g)) if (!m[1] && !m[3] && !given.has(m[2])) unwired.push(`${file}: ${m[2]}`);
+  }
+  assert.deepEqual([...new Set(unwired)], [], 'every plain appContext.shared read is handed to that domain by its App.jsx forRender block');
+  console.log('PASS domain wiring: every plain shared read is provided by its forRender block');
 }
 if (resolve(process.argv[1] ?? '') === fileURLToPath(import.meta.url)) verify();

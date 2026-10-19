@@ -15,6 +15,7 @@ const inputs = {
   'shot.reorder': { shotId: 'shot-a', startFrame: 25 },
   'shot.setCameraRail': { shotId: 'shot-a', points: [{ x: -2, z: 4 }, { x: 2, z: 4 }] },
   'shot.clearCameraRail': { shotId: 'shot-a' },
+  'shot.rename': { shotId: 'shot-a', name: 'Wide' }, 'shot.setCameraMode': { shotId: 'shot-a', mode: 'follow' },
   'shot.createStill': { caption: 'Panel' }, 'shot.setCaption': { shotId: 'shot-a', caption: 'Panel' },
   'shot.setCastOverride': { shotId: 'shot-a', characterId: 'actor-a', override: { x: 1, z: 2, rot: 0 } }, 'shot.setHold': { shotId: 'shot-a', hold: 12 },
   'shot.set': { id: 'shot-a', set: { targetModel: 'seedance-2.5' } },
@@ -158,4 +159,20 @@ test('7: measured writer references shrink, shots baseline entries leave, and ow
   const panel = readFileSync(new URL('../../src/panels/CameraPanel.jsx', import.meta.url), 'utf8');
   assert.ok([...panel.matchAll(/on[A-Z][A-Za-z]+[\s\S]{0,240}?\brun\s*\(/g)].length >= 1);
   assert.deepEqual(JSON.parse(readFileSync(new URL('./parity-pending/shots.json', import.meta.url))).pending, []);
+});
+test('setCameraMode: an agent sets a shot camera to keys after its rail is gone; rail needs a rail', () => {
+  const f = shotsFixture();
+  try {
+    owned(f); seed(f, 'shot.clearCameraRail');
+    const mode = () => f.shots.read().find(shot => shot.id === 'shot-a').camera.mode;
+    assert.equal(f.run('shot.clearCameraRail', { shotId: 'shot-a' }, 'agent').ok, true);
+    assert.equal(mode(), 'follow', 'deleting a rail leaves follow');
+    assert.equal(f.run('shot.setCameraMode', { shotId: 'shot-a', mode: 'rail' }, 'agent').code, 'TARGET_NOT_READY');
+    const keys = f.run('shot.setCameraMode', { shotId: 'shot-a', mode: 'keys' }, 'agent');
+    assert.equal(keys.ok, true, JSON.stringify(keys));
+    assert.equal(mode(), 'keys');
+    assert.equal(f.run('shot.rename', { shotId: 'shot-a', name: 'Wide opener' }, 'agent').ok, true);
+    assert.equal(f.shots.read().find(shot => shot.id === 'shot-a').name, 'Wide opener');
+    console.log('PASS setCameraMode and rename from the agent');
+  } finally { f.dispose(); }
 });
