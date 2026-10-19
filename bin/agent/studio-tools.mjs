@@ -25,7 +25,7 @@ export function createStudioTools({ liveHub, workspaceHandle, session, resolveIm
     const command = validateStudioCommand({ name, args });
     const action = name === "run_action" ? declared.get(command.args.action) : undefined;
     const payload = mutationNames.has(name) && session?.admission
-      ? { name, args: command.args, commandId: session.admission.commandId(), host: session.admission.host, expectedRevision: session.admission.revision, ...(session.admission.turnId ? { turnId: session.admission.turnId } : {}) }
+      ? { name, args: command.args, commandId: session.admission.commandId(), host: session.admission.host, expectedRevision: session.admission.revision, ...(session.admission.turnId ? { turnId: session.admission.turnId } : {}), ...(session.admission.taskId ? { taskId: session.admission.taskId } : {}) }
       : command.args;
     Object.assign(scratch, { refusedRevision: payload.expectedRevision });
     let result;
@@ -38,7 +38,8 @@ export function createStudioTools({ liveHub, workspaceHandle, session, resolveIm
     } catch (error) {
       // A STALE_SCENE re-admits whichever family met it, so the retry the
       // model is told to make is admitted at the live revision.
-      if (session?.admission && (error?.code === "STALE_SCENE" || (mutationNames.has(name) && error?.code === "UNCERTAIN_APPLY"))) scratch.fresh = await session.admission.refresh();
+      // A refresh that fails (the editor went away) keeps the error that happened, not the refresh's.
+      if (session?.admission && (error?.code === "STALE_SCENE" || (mutationNames.has(name) && error?.code === "UNCERTAIN_APPLY"))) scratch.fresh = await session.admission.refresh().catch(() => null);
       throw error;
     }
     if (result?.ok === false) {

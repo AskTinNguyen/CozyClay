@@ -396,7 +396,7 @@ export function createAgentRunner({ models: suppliedModels, sessionStore, tools 
 					const usage = state.active?.usage;
 					if (!usage) return;
 					usage.requests += 1;
-					for (const key of ["input", "output", "cacheRead", "cacheWrite"]) if (Number.isFinite(message?.usage?.[key])) usage[key] += message.usage[key];
+					for (const key of ["input", "output", "cacheRead", "cacheWrite"]) if (Number.isFinite(message?.usage?.[key])) usage[key] += message.usage[key]; if (Number.isFinite(message?.usage?.cost?.total)) state.active.cost = (state.active.cost ?? 0) + message.usage.cost.total;
 				});
 				state.harness.hooks.on("transform_context", (event) => state.lastInput?.surface === "studio" ? budgetStudioRequest(studioContextDiet(event)) : undefined);
 				state.harness.hooks.on("before_payload", ({ model, payload }) => {
@@ -498,7 +498,7 @@ export function createAgentRunner({ models: suppliedModels, sessionStore, tools 
 					const fallback = code === "aborted" ? "The turn was aborted." : code === "truncated" ? "The model stream ended before a terminal response event." : "The model or live editor could not complete this turn.";
 					queue.push({ type: "error", code, message: detail || fallback, ...(status ? { status } : {}) });
 				}
-				queue.push({ type: "done", usage: { ...state.active.usage } });
+				queue.push({ type: "done", usage: { ...state.active.usage }, ...(state.lastInput?.reportCost ? { cost: state.active.cost ?? 0 } : {}) });
 				queue.close();
 			});
 			return () => { for (const unsubscribe of eventUnsubscribers) unsubscribe(); };
