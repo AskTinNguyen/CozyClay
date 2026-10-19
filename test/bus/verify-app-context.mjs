@@ -165,11 +165,13 @@ test('acceptance 5: App provides the facade and its one bus to descendants', () 
   assert.deepEqual(directPorts, []);
   const f = appFixture();
   try {
-    const context = createAppContext({ getBus: () => f.binding.bus });
+    // Reading the bus refreshes the whole binding: a panel's render must not read it (playback renders every frame).
+    let reads = 0;
+    const context = createAppContext({ getBus: () => { reads += 1; return f.binding.bus; } });
     let observed;
     function Consumer() { observed = contextModule.useBus(); return null; }
     renderToStaticMarkup(React.createElement(contextModule.AppContext.Provider, { value: context }, React.createElement(Consumer)));
-    assert.equal(observed, f.binding.bus);
+    assert.equal(reads, 0, 'useBus() during a render does not read the bus');
     const receipt = observed.run('shot.create', {}, { origin: 'ui' });
     assert.equal(receipt.ok, true);
     assert.equal(f.actual.readStudioState().shots.length, 1);
