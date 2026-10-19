@@ -9,6 +9,8 @@ import { bakeTake } from "../../src/motion3/take.js";
 import { graspChecks } from "../../src/motion3/qa/grasp-checks.js";
 import { takeHash } from "./fixtures/take-hash.mjs";
 import { CAN_SCENE, canGripSpec } from "./fixtures/can-grip.mjs";
+import { BALL_SCENE, BALL, ballPickupSpec, MODEL } from "./fixtures/ball-pickup.mjs";
+import { objectPoseAt } from "../../src/motion3/object-pose.js";
 
 let failures = 0;
 function expect(name, condition, detail = "") {
@@ -28,6 +30,20 @@ for (const model of ["y-bot-tpose", "x-bot-tpose"]) {
 	expect(`${model}: the preset grip of before sinks into the can or stops short of it`, offIssues.some(i => i.kind === "FINGER_PEN" || i.kind === "FINGER_GAP"), offIssues.length);
 	expect(`${model}: fix.grasp false bakes the take of before`, takeHash(bakeTake(sk, off.out)) === BEFORE[model], takeHash(bakeTake(sk, off.out)));
 	expect(`${model}: the same spec bakes the same take`, takeHash(bakeTake(sk, on.out)) === takeHash(bakeTake(sk, compileSpec(canGripSpec(), { sk, scene }).out)));
+}
+
+// the session's ball (#816, task 5): it rests in the hand and settles in on the grab
+{
+	const sk = skeletonFor(MODEL), ballScene = motionScene(BALL_SCENE), r = compileSpec(ballPickupSpec(), { sk, scene: ballScene });
+	const issues = graspChecks(sk, r.out), I = sk.index, pos = f => objectPoseAt(r.out, BALL, f).pos, d = (a, b) => Math.hypot(...a.map((v, i) => v - b[i]));
+	expect("ball: no phalanx in it, three fingertips or the thumb and two on it, supported, from the settle on", issues.length === 0, JSON.stringify(issues.slice(0, 3)));
+	expect("ball: still before the grab (f0..f29 within 0.1 mm)", [...Array(30).keys()].every(f => d(pos(f), pos(0)) < 1e-4), d(pos(29), pos(0)));
+	const step = f => d(pos(f + 1), pos(f)), hand = f => d(r.out.frames[f + 1].s.P[I.RightHand], r.out.frames[f].s.P[I.RightHand]);
+	expect("ball: over f30..f34 it moves no faster than 3x the hand plus 1 cm a frame (no snap)", [30, 31, 32, 33].every(f => step(f) <= 3 * hand(f) + 0.01), [30, 31, 32, 33].map(step).join());
+	const palm = f => { const P = r.out.frames[f].s.P; return P[I.RightHand].map((v, i) => (v + P[I.RightHandMiddle1][i]) / 2); };
+	// seated against the knuckles, the fingers round it (a 7.4 cm ball sits about 9 cm out from the palm's middle)
+	expect("ball: its centre stays within the hand (10 cm of the palm's middle) while held (f40..f85)", [40, 50, 60, 70, 85].every(f => d(pos(f), palm(f)) < 0.1), [40, 60, 85].map(f => d(pos(f), palm(f)).toFixed(3)).join());
+	expect("ball: no GRAB and no REACH off its keys", !r.qa.groups.some(g => g.kind === "GRAB" || (g.kind === "REACH" && /off its keys/.test(g.subject))), r.qa.groups.map(g => g.kind).join());
 }
 
 if (failures) { console.log(`${failures} finger contact check(s) failed`); process.exit(1); }

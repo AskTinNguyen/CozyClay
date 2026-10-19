@@ -8,20 +8,22 @@
 // (PHALANX m) against the held object's shapes (shapes.js: a ball is round, not its box):
 //   FINGER_PEN  "<Bone> into <id>": a phalanx's skin deeper than PEN in it
 //   FINGER_GAP  "<side> fingers off <id>": fewer than 3 of the 4 fingertips within GAP of its surface (pinch: the thumb
-//               and the index), and the thumb as well for spherical (a power grip on a can wraps it with the fingers)
+//               and the index); the thumb and two fingers hold too (a tripod: a small ball the ring and little fingers do
+//               not reach)
 //   SUPPORT     "<id> not supported": nothing touching it from below holds its centre over its contacts (within
 //               SUPPORT_TOL across), no thumb presses against the fingers (OPPOSE deg between their contact normals)
 //               and the contacts do not enclose it (their normals no more than ENCLOSE deg apart)
 import { add, scale, dot, norm, apply } from "../compiler/math.js";
 import { isCarried } from "../carried.js";
 import { spanOf, partsOf, objectPoseAt } from "../object-pose.js";
+import { SETTLE, seatsInHand } from "../seat.js";
 import { shapeOf, normalAt, closestPoint, capsuleDepth } from "../shapes.js";
 
-const PHALANX = 0.009, PALM = 0.022, PEN = 0.004, GAP = 0.008, HELD = 0.995, SUPPORT_TOL = 0.01, OPPOSE = 120, ENCLOSE = 150, BELOW = -0.3;
+const PHALANX = 0.009, PALM = 0.022, PEN = 0.004, GAP = 0.008, HELD = 0.995, SUPPORT_TOL = 0.01, OPPOSE = 120, ENCLOSE = 150, BELOW = -0.3, ARRIVED = 0.03;
 const FINGERS = ["Index", "Middle", "Ring", "Pinky"], SIDE = { l: "Left", r: "Right" };
 
 /** The grasp a held object takes when the spec names none: a sphere's hand cups it, a cylinder's wraps it. */
-export function defaultGrasp(scene, id) {
+function defaultGrasp(scene, id) {
 	const parts = partsOf(scene, id), kind = parts.length === 1 ? shapeOf(scene.objects[parts[0]]).kind : "box";
 	return kind === "sphere" ? "spherical" : kind === "cylinder" ? "power" : null;
 }
@@ -30,13 +32,15 @@ export function defaultGrasp(scene, id) {
 export function heldSpans(out) {
 	const { spec, scene } = out.ctx, spans = [];
 	for (const [id, o] of Object.entries(spec.objects ?? {})) {
-		if (!isCarried(o) || ((o.at !== undefined || o.along !== undefined) && o.grasp === undefined)) continue;
+		if (!isCarried(o) || !seatsInHand(spec, o, scene, id)) continue;
 		const k = spec.props?.[o.prop]?.hand, [from, to] = spanOf(out, o);
-		if (k) spans.push({ id, k, grasp: o.grasp ?? defaultGrasp(scene, id), from, to });
+		// judged once the object has settled into the hand (seat.js): the grab itself is the transition
+		if (k) spans.push({ id, k, grasp: o.grasp ?? defaultGrasp(scene, id), from: from + SETTLE + 1, to });
 	}
 	for (const fit of spec.fits ?? []) {
 		const a = spec.anchors?.[fit.anchor];
-		if (a?.kind !== "object" || !a.grasp) continue;
+		// a rim socket (a steering wheel) keeps its rim grip: the fingers do not close on the disc the scene draws (finger-close.js)
+		if (a?.kind !== "object" || !a.grasp || out.ctx.sockets?.get(fit.anchor)?.rim) continue;
 		const ch = `w_${fit.anchor}_${fit.side}`, f0 = out.f0 ?? 0, fingers = out.baked?.[`fingers_${fit.side}`];
 		const grip = f => Object.entries(fingers?.[f] ?? {}).reduce((acc, [p, v]) => acc + (p === "relaxed" ? 0 : v || 0), 0);
 		const held = f => (out.baked?.[ch]?.[f] ?? 0) >= HELD && grip(f) >= HELD;
@@ -81,10 +85,13 @@ function monotoneHull(points) {
 
 function frameIssues(sk, s, h, entries, push, f) {
 	const touch = contacts(handCapsules(sk, s, h.k), entries), side = SIDE[h.k].toLowerCase();
+	// a reach whose hand never got there is REACH's and CONTACT's to report, not the fingers'
+	if (h.rests && touch[0].depth < -ARRIVED) return;
 	for (const c of touch) if (c.finger !== "palm" && c.depth > PEN) push("FINGER_PEN", `${c.bone} into ${h.id}`, f, c.depth, PEN);
 	const tipOn = finger => touch.some(c => c.finger === finger && c.tip && c.depth >= -GAP);
 	const fingersOn = FINGERS.filter(tipOn).length, thumb = tipOn("Thumb");
-	const gripped = h.grasp === "pinch" ? thumb && tipOn("Index") : fingersOn >= 3 && (thumb || h.grasp !== "spherical");
+	// a pinch holds between the thumb and the index; a small ball in a tripod (the thumb and two fingers); else three fingers
+	const gripped = h.grasp === "pinch" ? thumb && tipOn("Index") : fingersOn >= 3 || (thumb && fingersOn >= 2);
 	if (!gripped) push("FINGER_GAP", `${side} fingers off ${h.id}`, f, fingersOn + (thumb ? 1 : 0), h.grasp === "pinch" ? 2 : 3);
 	const on = touch.filter(c => c.depth >= -GAP && c.normal);
 	const c0 = scale(entries.reduce((acc, e) => add(acc, add(e.pos, apply(e.R, [0, e.half[1], 0]))), [0, 0, 0]), 1 / entries.length);

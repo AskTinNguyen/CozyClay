@@ -13,6 +13,8 @@ import { rotateSubtree } from "./skeleton.js";
 import { palmAxes, fingerCurl, fistCurl } from "./limbs.js";
 import { capsuleDepth } from "../shapes.js";
 import { partsOf } from "../object-pose.js";
+import { carriedPose, compose, relative } from "../carried.js";
+import { seatsInHand, seatOffset, restOf } from "../seat.js";
 
 const PHALANX = 0.009, TOUCH = 0.002, STEPS = 8, THUMB_FLEX = 70;
 const FINGERS = ["Index", "Middle", "Ring", "Pinky"];
@@ -60,8 +62,10 @@ function closeJoint(sk, s, j, chain, axis, limit, entries, weight, air = true) {
  * entries (motion-scene entries at this frame) by `weight` 0..1; `preset` is the hand's finger weights (its fingers_<k>
  * channel), from which each joint may close as far as the fist's curl. Answers { touched: the fingers that reached it }.
  */
-export function closeOnShape(sk, s, side, { entries, weight, preset }) {
-	if (!entries?.length || !(weight > 0)) return { touched: [] };
+export function closeOnShape(sk, s, side, { entries: held, stops = [], weight, preset }) {
+	if (!held?.length || !(weight > 0)) return { touched: [] };
+	// a finger stops on what it holds or on what that rests against (a table under a ball)
+	const entries = [...held, ...stops];
 	const sign = side === "Left" ? -1 : 1, J = name => sk.index[`${side}Hand${name}`], touched = [];
 	for (const f of FINGERS) {
 		const joints = [1, 2, 3, 4].map(i => J(`${f}${i}`));
@@ -71,7 +75,7 @@ export function closeOnShape(sk, s, side, { entries, weight, preset }) {
 		// finger lying across a box would go deeper); each joint then closes until the finger touches
 		const pts = joints.map(i => s.P[i]), l0 = scale(palmAxes(sk, s, side).l, sign);
 		const straight = [0, 1, 2].reduce((p, k) => { const R = axisRot(l0, -fingerCurl(preset, f, k)); return p.map((q, i) => (i > k ? add(p[k], apply(R, sub(q, p[k]))) : q)); }, pts);
-		const opens = chainDepth(pts, entries) >= -TOUCH && chainDepth(straight, entries) < chainDepth(pts, entries);
+		const opens = chainDepth(pts, held) >= -TOUCH && chainDepth(straight, held) < chainDepth(pts, held);
 		for (let k = 0; k < 3; k++) {
 			const axis = scale(palmAxes(sk, s, side).l, sign), curl = fingerCurl(preset, f, k), open = opens ? curl : 0;
 			if (open > 0) rotateSubtree(sk, s, joints[k], s.P[joints[k]].slice(), axisRot(axis, -open * weight));
@@ -101,7 +105,7 @@ export function closeOnShape(sk, s, side, { entries, weight, preset }) {
  * that object is not in its hand yet (a carry's hand holds it by its seat, seat.js), as { entries, weight, preset }; null
  * when it reaches for nothing.
  */
-export function heldFor(ctx, c, f, k) {
+export function heldFor(ctx, c, f, k, s) {
 	let best = null;
 	for (const fit of ctx.spec.fits ?? []) {
 		const a = ctx.spec.anchors?.[fit.anchor], w = c[`w_${fit.anchor}_${k}`] ?? 0;
@@ -113,5 +117,24 @@ export function heldFor(ctx, c, f, k) {
 		const grip = Math.min(1, Object.entries(c[`fingers_${k}`] ?? {}).reduce((acc, [p, v]) => acc + (p === "relaxed" ? 0 : v || 0), 0));
 		if (entries.length) best = { entries, weight: closing(w) * grip, preset: c[`fingers_${k}`] };
 	}
-	return best;
+	return best ?? carriedFor(ctx, c, f, k, s);
+}
+
+/** A carry on the grasp path hand k holds at frame f, at its seat on pose s (seat.js), as { entries, weight, preset }. */
+function carriedFor(ctx, c, f, k, s) {
+	const { sk, spec, scene } = ctx;
+	for (const [id, o] of Object.entries(spec.objects ?? {})) {
+		if (!seatsInHand(spec, o, scene, id) || spec.props?.[o.prop]?.hand !== k || !s) continue;
+		// the hand holds it from the grab on (the object eases into its seat meanwhile, settleAt)
+		const [grab, release] = ctx.carrySpan(o), weight = 1;
+		// while the keyed offset is being taken (its grab frame solved without the keys) the hand has nothing seated yet
+		if (f < grab || f > release || ctx.hold?.attaching(id)) continue;
+		const palm = carriedPose(sk, spec, s, { prop: o.prop }, true), rest = restOf(scene, id);
+		const offset = o.keys?.length && ctx.hold ? ctx.hold.attachAt(id, f) : seatOffset(sk, spec, scene, id, o, relative(carriedPose(sk, spec, f === grab ? s : ctx.solvedAt(grab).s, { prop: o.prop }, true), ctx.restingAt(id, grab)));
+		const at = compose(palm, offset);
+		const entries = partsOf(scene, id).map(p => ({ ...scene.objects[p], ...compose(at, relative(rest, scene.objects[p])) }));
+		const near = Object.entries(ctx.objectsAt(f)).filter(([key, e]) => !partsOf(scene, id).includes(key) && e.half && !e.carried && entries.some(h => Math.hypot(...h.pos.map((v, i) => v - e.pos[i])) < 0.25 + Math.hypot(...e.half))).map(([, e]) => e);
+		if (entries.length) return { entries, stops: near, weight, preset: c[`fingers_${k}`] };
+	}
+	return null;
 }

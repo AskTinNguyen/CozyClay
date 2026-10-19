@@ -138,7 +138,7 @@ function hooksFor(ctx, c, f, inFit = false, lead = true, fitSide = null) {
 		// a fit's passes only place the wrist; the final pose (and a plain one) turns the hand onto the body
 		grip: inFit ? undefined : (k, s, diag) => gripHand(ctx, sk, s, SIDES[k], k, c, f, diag),
 		// fingers close on what the hand holds, on the final pose only (finger-close.js)
-		heldShapes: inFit || !ctx.grasp ? undefined : k => heldFor(ctx, c, f, k),
+		heldShapes: inFit || !ctx.grasp ? undefined : (k, s) => heldFor(ctx, c, f, k, s),
 	};
 }
 

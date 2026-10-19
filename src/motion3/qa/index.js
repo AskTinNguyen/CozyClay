@@ -7,6 +7,7 @@ import { generalChecks, QA_LIMITS } from "./checks.js";
 import { styleChecks, floatChecks } from "./style.js";
 import { specChecks } from "./spec-checks.js";
 import { objectChecks } from "./object-checks.js";
+import { graspChecks } from "./grasp-checks.js";
 import { goalChecks } from "./goals.js";
 import { wristIssues } from "./wrist-checks.js";
 import { peopleChecks } from "./people-checks.js";
@@ -35,7 +36,7 @@ function summarizeIssues(issues) {
 export function runMotionQa(sk, out, spec, opts = {}) {
 	const checks = spec.checks ?? {}, goals = goalChecks(out, spec.goals ?? []);
 	const issues = [...generalChecks(sk, out, { allow: checks.allow, limits: checks.limits, mouthPoints: checks.mouthPoints }), ...specChecks(out, checks),
-		...objectChecks(sk, out, spec), ...floatChecks(out, checks),
+		...objectChecks(sk, out, spec), ...graspChecks(sk, out), ...floatChecks(out, checks),
 		...styleChecks(sk, out, checks, { ...QA_LIMITS, ...checks.limits }), ...wristIssues(sk, out), ...peopleChecks(sk, out, checks), ...goals.issues];
 	if (out.f0) for (const i of issues) i.frame += out.f0;
 	const groups = summarizeIssues(issues);

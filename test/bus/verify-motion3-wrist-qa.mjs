@@ -12,7 +12,9 @@ import { applyPatch } from '../../src/motion3/json-patch.js';
 
 const sk = skeletonFor('y-bot-tpose');
 const fx = JSON.parse(readFileSync(new URL('../fixtures/wrist-limit/vending-can.json', import.meta.url), 'utf8'));
-const scene = motionScene(fx.objects), compile = spec => compileSpec({ fps: 24, ...spec }, { sk, scene });
+// the take as the bench compiled it: the can held by its grab-frame offset (fix.grasp false; seated in the hand, #816,
+// it bends the wrist 74 deg), so these pins measure the wrist rule and its repair, not where the can rests
+const scene = motionScene(fx.objects), compile = spec => compileSpec({ fps: 24, ...spec, fix: { ...spec.fix, grasp: false } }, { sk, scene });
 const wristOf = r => r.qa.groups.filter(g => g.kind === 'WRIST');
 const before = compile(fx.spec);
 
