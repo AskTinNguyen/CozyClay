@@ -51,14 +51,18 @@ export function clearStance(sk, scene, c, h) {
 	return null;
 }
 
-/** The world point an anchor definition names on the still scene (world p, an object's local point or its centre), else null. */
+/**
+ * The world point an anchor definition names on the still scene, as anchors.js resolves it: world p; an object's (or a
+ * group's) `local` point, its base pivot without one; with `grasp` and no `local`, the centre of its parts (where a
+ * thin part's socket sits). Null for any other kind.
+ */
 function anchorPoint(scene, a) {
 	if (a?.kind === "world" && Array.isArray(a.p)) return a.p;
 	if (a?.kind !== "object" || !scene) return null;
-	const o = scene.objects?.[a.object];
-	if (o && a.local) return add(o.pos, apply(o.R, a.local));
+	const o = scene.objects?.[a.object] ?? scene.groups?.[a.object];
+	if (!o) return null;
+	if (!a.grasp || a.local) return add(o.pos, apply(o.R, a.local ?? [0, 0, 0]));
 	const parts = partsOf(scene, a.object).map(id => scene.objects[id]).filter(p => p?.half);
-	if (!parts.length) return null;
 	const centres = parts.map(p => add(p.pos, apply(p.R, [0, p.half[1], 0])));
 	return centres.reduce((m, p) => add(m, p.map(v => v / centres.length)), [0, 0, 0]);
 }
