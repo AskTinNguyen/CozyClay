@@ -43,10 +43,12 @@ export function register(registry, ports) {
 	const owner = () => ports.storeDomain('cast');
 	const mounted = () => Boolean(ports.storeDomain?.('cast')) || 'The cast document owner is not mounted.';
 	const character = characterId => owner().read().find(row => row.id === characterId) ?? fail('STALE_TARGET', `Character ${characterId} is not in this scene.`);
+	// Every pose path names only POSE_BONES joints: a pose sent whole, one chosen from the library by id,
+	// and every library entry written (#773).
 	const pose = value => {
-		if (typeof value === 'string') return owner().poses().find(row => row.id === value) ?? fail('STALE_TARGET', `Pose ${value} is not in the library.`);
-		checkPoseBones(value?.bones);
-		return value;
+		const resolved = typeof value === 'string' ? owner().poses().find(row => row.id === value) ?? fail('STALE_TARGET', `Pose ${value} is not in the library.`) : value;
+		checkPoseBones(resolved?.bones);
+		return resolved;
 	};
 	const patch = (characterId, update) => { character(characterId); owner().update(characterId, update); };
 	// A character groups under a scene object that stands in the world. An
@@ -73,8 +75,9 @@ export function register(registry, ports) {
 		'character.setPose': ({ characterId, pose: value, clearMotion }) => { character(characterId); owner().applyPose(characterId, pose(value), clearMotion); },
 		
 		'cast.replace': ({ characters }) => owner().write(characters),
-		'cast.setCustomPoses': ({ poses }) => owner().writeState(before => ({ ...before, customPoses: poses })),
+		'cast.setCustomPoses': ({ poses }) => { for (const entry of poses) checkPoseBones(entry?.bones); owner().writeState(before => ({ ...before, customPoses: poses })); },
 		'cast.savePose': ({ pose, characterId, clearMotion }) => {
+			checkPoseBones(pose?.bones);
 			if (characterId) character(characterId);
 			owner().writeState(before => ({ ...before, customPoses: [...before.customPoses.filter(entry => entry.id !== pose.id), pose] }));
 			if (characterId) owner().applyPose(characterId, pose, clearMotion);
