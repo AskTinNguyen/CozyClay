@@ -22,18 +22,22 @@ function expect(name, condition, detail = "") {
 const spec = JSON.parse(JSON.stringify(EXITCAR_SPEC));
 expect("the spec is plain JSON", JSON.stringify(spec) === JSON.stringify(EXITCAR_SPEC));
 const sk = skeletonFor(CHARACTER.model);
-let t0 = performance.now();
+// CPU time of the main thread, not wall time: tools/run-tests.mjs runs files in parallel, and the
+// wall clock then counts the other files' load (3.0 s under the suite, 1.4 s alone; #810). The
+// compile and QA run on this thread; V8's GC and JIT helper threads are left out.
+const cpuMs = since => { const { user, system } = process.threadCpuUsage(since); return (user + system) / 1000; };
+let t0 = process.threadCpuUsage();
 const out = compileMotion({ fps: 24, ...spec }, { sk, scene: motionScene(SCENE_OBJECTS) });
-const compileMs = performance.now() - t0;
-t0 = performance.now();
+const compileMs = cpuMs(t0);
+t0 = process.threadCpuUsage();
 const qa = runMotionQa(sk, out, spec);
-const qaMs = performance.now() - t0;
-console.log(`compiled ${out.frameCount} frames in ${compileMs.toFixed(0)} ms, QA in ${qaMs.toFixed(0)} ms: ${qa.total} issues in ${qa.groups.length} groups`);
+const qaMs = cpuMs(t0);
+console.log(`compiled ${out.frameCount} frames in ${compileMs.toFixed(0)} ms CPU, QA in ${qaMs.toFixed(0)} ms CPU: ${qa.total} issues in ${qa.groups.length} groups`);
 for (const g of qa.groups) console.log(`  [${g.count}] ${g.kind} ${g.subject} f${g.first}-${g.last} worst ${g.worst} @${g.worstFrame} (limit ${g.limit})`);
 expect("730 frames at 24 fps", out.frameCount === 730 && out.fps === 24);
 // QA WRIST (qa/wrist-checks.js) is clear too: fix.self's elbow turn stops the smoking wrist at its limit (compiler/wrist-clamp.js)
 expect("QA reports 0 issues", qa.ok && qa.total === 0, `${qa.total} issues ${JSON.stringify(qa.groups.slice(0, 2))}`);
-expect("compile + QA stay fast (< 3 s)", compileMs + qaMs < budgetMs(3000), `${(compileMs + qaMs).toFixed(0)} ms`);
+expect("compile + QA stay fast (< 3 s CPU)", compileMs + qaMs < budgetMs(3000), `${(compileMs + qaMs).toFixed(0)} ms CPU`);
 
 // Each declared contact: active on enough frames, and within its tolerance on every one of them.
 function contact(name, active, a, b, tol, minFrames) {
