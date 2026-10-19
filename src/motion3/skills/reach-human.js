@@ -56,7 +56,7 @@ export function earlyTransport(ctx, a) {
 
 /** The world point an anchor rests at before the grab (world, or a scene object's point), or null for one that moves with a body. */
 function restPoint(ctx, a) {
-	if (a?.kind === "world" && Array.isArray(a.p)) return a.p;
+	if (a?.kind === "world" && Array.isArray(a.p)) return a.p.map(Number); // a copy, as in bodyOf
 	const o = a?.kind === "object" ? ctx.scene?.objects?.[a.object] : null;
 	if (!o || [a.object, ...(o.ancestors ?? [])].some(id => movesBy(ctx, id))) return null;
 	return add(o.pos, apply(o.R, a.local ?? [0, o.half?.[1] ?? 0, 0]));
@@ -90,7 +90,9 @@ function bodyOf(ctx, a) {
 	const objects = ctx.scene?.objects ?? {};
 	if (a?.kind === "object") return objects[a.object]?.half ? objects[a.object] : null;
 	if (a?.kind !== "world" || !Array.isArray(a.p)) return null;
-	return Object.values(objects).filter(o => o.half && sdBox(a.p, o) <= 0.01).sort((x, y) => sdBox(a.p, x) - sdBox(a.p, y))[0] ?? null;
+	// a copy: the spec's own (frozen) array passed into the shared vector math deoptimised it for the whole compile (2x)
+	const p = a.p.map(Number);
+	return Object.values(objects).filter(o => o.half && sdBox(p, o) <= 0.01).sort((x, y) => sdBox(p, x) - sdBox(p, y))[0] ?? null;
 }
 
 /** True when, OVER m short of point p toward the character (root r), the hand is still above a surface within BELOW m under p. */
