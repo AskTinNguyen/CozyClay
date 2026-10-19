@@ -114,11 +114,43 @@ const range = (a, b) => Array.from({ length: b - a + 1 }, (_, i) => a + i);
 	expect("a carried object falling while in hand is refused", /fall\.at = 20 is while it is in hand/.test(inHand), inHand);
 	expect("bounce outside 0..0.6 is refused", /bounce must be 0\.\.0\.6/.test(v({ can: { fall: { at: 5, bounce: 0.9 } } })));
 	expect("onto an unknown object is refused", /fall\.onto/.test(v({ can: { fall: { at: 5, onto: "nope" } } })), v({ can: { fall: { at: 5, onto: "nope" } } }));
-	expect("an unknown fall field is refused with the fields", /unknown field "speed".*a fall is \{ at, onto\?, bounce\? \}/.test(v({ can: { fall: { at: 5, speed: 2 } } })), v({ can: { fall: { at: 5, speed: 2 } } }));
+	expect("an unknown fall field is refused with the fields", /unknown field "speed".*a fall is \{ at, onto\?, bounce\?, tumble\? \}/.test(v({ can: { fall: { at: 5, speed: 2 } } })), v({ can: { fall: { at: 5, speed: 2 } } }));
 	expect("a fall needs its frame", /fall\.at must be the whole frame/.test(v({ can: { fall: {} } })));
 	const hinge = v({ can: { pivot: [0, 0, 0], channel: "door", keys: [] } });
 	expect("a hinge with keys says where keys belong", /keys and fall move an object with no pivot, axis or channel/.test(hinge), hinge);
 	expect("a free entry with keys and a fall is valid", v({ can: { keys: [{ f: 2, pos: [0, 1.3, 0.45], rot: Q }], fall: [{ at: 5 }, { at: 30, onto: "shelf", bounce: 0 }], visible: "canVis" } }) === "");
+}
+
+// 6. it comes to rest on a stable face (settle.js): a phone standing on its edge falls flat, a tilted cube lands on a face,
+// a can let go at a slant lies down, an upright can stays up, a box leaning past its edge topples onto its broad side; let
+// go from the hand it does the same; tumble: false keeps the old straight drop; never below the floor, the same every compile
+{
+	const empty = (id, x, y, z) => rec(id, "empty", x, y, z, [1, 1, 1], { footprint: { width: 0, depth: 0 }, height: 0 });
+	const DROPS = [empty("phone", 0, 1.2, 0.6), rec("phoneBody", "cube", 0, 1.05, 0.6, [0.072, 0.15, 0.009], { parent: "phone" }),
+		rec("tiltCube", "cube", -1, 1, 0.6, [0.3, 0.3, 0.3], { rotZ: 20 }), rec("upCan", "cylinder", 2, 1, 0.6, [0.066, 0.12, 0.066]),
+		rec("slantCan", "cylinder", 3, 1, 0.6, [0.066, 0.12, 0.066], { rotZ: 25 }), rec("leanBox", "cube", -3, 1, 0.6, [0.2, 0.5, 0.3], { rotX: 30 })];
+	const dropScene = motionScene(DROPS), ids = ["phone", "tiltCube", "upCan", "slantCan", "leanBox"];
+	const drop = (more = {}) => compileSpec(stand(72, { objects: Object.fromEntries(ids.map(id => [id, { fall: { at: 6, ...more } }])) }), { sk, scene: dropScene }).out;
+	const solid = (out, id, f) => objectBoxesAt(out, id, f).find(b => b.half[0] * b.half[1] * b.half[2] > 0);
+	const centreY = (out, id, f) => { const b = solid(out, id, f); return b.pos[1] + b.R[1][1] * b.half[1]; };
+	const lowY = (out, id, f) => { const b = solid(out, id, f); return Math.min(...[-1, 1].flatMap(x => [0, 2].flatMap(yy => [-1, 1].map(z => b.pos[1] + b.R[1][0] * x * b.half[0] + b.R[1][1] * yy * b.half[1] + b.R[1][2] * z * b.half[2])))); };
+	const upAxis = (out, id, f) => { const R = solid(out, id, f).R; return [0, 1, 2].reduce((a, k) => (Math.abs(R[1][k]) > Math.abs(R[1][a]) ? k : a), 0); };
+	const out = drop();
+	expect("a phone standing on its 9 mm edge falls flat (its thin axis up, centre 4.5 mm over the floor)", upAxis(out, "phone", 71) === 2 && near(centreY(out, "phone", 71), 0.0045, 1e-6), [upAxis(out, "phone", 71), centreY(out, "phone", 71)]);
+	expect("a cube landing on an edge comes down flat on a face", near(centreY(out, "tiltCube", 71), 0.15, 1e-6) && near(Math.abs(solid(out, "tiltCube", 71).R[1][1]), 1, 1e-6), centreY(out, "tiltCube", 71));
+	expect("a can dropped upright stays upright; one let go at a slant lies on its side", upAxis(out, "upCan", 71) === 1 && near(centreY(out, "upCan", 71), 0.06, 1e-6)
+		&& upAxis(out, "slantCan", 71) !== 1 && near(centreY(out, "slantCan", 71), 0.033, 1e-6), [centreY(out, "upCan", 71), centreY(out, "slantCan", 71)]);
+	expect("a tall box leaning past its edge topples onto its broad side", upAxis(out, "leanBox", 71) === 0 && near(centreY(out, "leanBox", 71), 0.1, 1e-6), centreY(out, "leanBox", 71));
+	expect("never below the floor on any frame, and still once it has settled", ids.every(id => range(0, 71).every(f => lowY(out, id, f) >= -1e-6)) && ids.every(id => range(40, 71).every(f => near(centreY(out, id, f), centreY(out, id, 71), 1e-12))));
+	expect("the same poses every compile", ids.every(id => range(0, 71).every(f => JSON.stringify(objectPoseAt(out, id, f)) === JSON.stringify(objectPoseAt(drop(), id, f)))));
+	const straight = drop({ tumble: false });
+	expect("tumble: false drops it straight down as it was (the phone on its edge, the cube tilted)", upAxis(straight, "phone", 71) === 1 && near(centreY(straight, "phone", 71), 0.075, 1e-6) && near(lowY(straight, "tiltCube", 71), 0, 1e-9) && centreY(straight, "tiltCube", 71) > 0.18);
+	const props = { phoneGrip: { hand: "r", origin: ["RightHandIndex2", "RightHandMiddle2"], points: { fingers: [0, 0, 0] } } };
+	const held = compileSpec(stand(96, { props, objects: { phone: { prop: "phoneGrip", grab: 0, release: 30, fall: { at: 31 },
+		keys: [{ f: 0, pos: [0.3, 1.1, 0.4], rot: Q }, { f: 30, pos: [0.3, 1.1, 0.4], rot: Q }] } } }), { sk, scene: dropScene }).out;
+	expect("let go upright from the hand (session 38fbe3c1), the phone lands flat", upAxis(held, "phone", 95) === 2 && near(centreY(held, "phone", 95), 0.0045, 1e-6), [upAxis(held, "phone", 95), centreY(held, "phone", 95)]);
+	const keyed = compileSpec(stand(90, { objects: { tiltCube: { fall: { at: 6 }, keys: [{ f: 60, pos: [-1, 0.5, 0.6], rot: Q }, { f: 80, pos: [-1, 0.8, 0.6], rot: Q }] } } }), { sk, scene: dropScene }).out;
+	expect("keys after the fall take over from where it settled", near(objectPoseAt(keyed, "tiltCube", 59).pos[1], objectPoseAt(keyed, "tiltCube", 50).pos[1], 1e-12) && near(objectPoseAt(keyed, "tiltCube", 89).pos[1], 0.8, 1e-9));
 }
 
 if (failures) { console.error(`${failures} check(s) failed`); process.exit(1); }

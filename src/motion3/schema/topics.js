@@ -81,8 +81,8 @@ export const NOTES = {
 			+ "a left hand on a prop anchor of it turns with it; "
 			+ `the hand eases in and out over ${KEY_BLEND} frames. A REACH group "<id>: n cm off its keys" is what the hand could not reach; `
 			+ "output.observations.held measures every key as drawn (deg off the asked +Y, cm off pos, the drawn +Y, the rot an aim key used).",
-		"free { keys?, fall? } moves what nobody holds: keys at any frame; fall drops it at frame at under gravity onto the still top below (onto: that one; else the floor), "
-			+ "one small bounce (0: none). A carry falls before grab or after release.",
+		"free { keys?, fall? } moves what nobody holds: keys at any frame; fall drops it at frame at onto the still top below (onto: that one; else the floor) "
+			+ "to rest on a stable face, one small bounce (0: none). A carry falls before grab or after release.",
 		"A follow { follow: <ref>, offset?, aim?, visible?, level? } puts any record (an effect, a light, a part) on a body point every frame: "
 			+ "aim sets its +Y (an effect emits along it): up (default), face (forward), a direction or a ref (toward it); offset is metres along its axes after aim. It is no obstacle.",
 		"The editor's motion.keyObject writes one key from a drag (a hinge: its channel key)."],

@@ -15,7 +15,7 @@ import { isFree } from "../free-motion.js";
 import { checkRef } from "../refs.js";
 import { partsOf } from "../object-pose.js";
 
-const KEY = "{ f, pos: [x, y, z], rot: [x, y, z, w] } or { f, pos, aim: [x, y, z], roll? }", FALL = "{ at, onto?, bounce? }";
+const KEY = "{ f, pos: [x, y, z], rot: [x, y, z, w] } or { f, pos, aim: [x, y, z], roll? }", FALL = "{ at, onto?, bounce?, tumble? }";
 const isQuat = q => Array.isArray(q) && q.length === 4 && q.every(Number.isFinite) && Math.abs(Math.hypot(...q) - 1) <= 0.01;
 const isDir = v => isVec3(v) && Math.hypot(...v) > 1e-9;
 
@@ -77,7 +77,7 @@ function frameOk(err, at, v, frames) {
 	return false;
 }
 
-/** objects.<id>.fall (C17): { at, onto?, bounce? } or a list, each on its own frame; a carry falls only out of hand. */
+/** objects.<id>.fall (C17): { at, onto?, bounce?, tumble? } or a list, each on its own frame; a carry falls only out of hand. */
 function validateFalls(err, unknown, at, o, { frames, scene, carry }) {
 	const list = Array.isArray(o.fall) ? o.fall : [o.fall], seen = new Set();
 	if (!list.length) err(`${at}.fall is an empty list; give ${FALL} or a list of them`);
@@ -94,6 +94,7 @@ function validateFalls(err, unknown, at, o, { frames, scene, carry }) {
 		}
 		if (fl.onto !== undefined) objectOk(err, scene, `${fat}.onto`, fl.onto, { groups: true });
 		if (fl.bounce !== undefined && !(Number.isFinite(fl.bounce) && fl.bounce >= 0 && fl.bounce <= 0.6)) err(`${fat}.bounce must be 0..0.6 (the share of its landing speed it bounces back with; 0 lands dead), got ${fmt(fl.bounce)}`);
+		if (fl.tumble !== undefined && typeof fl.tumble !== "boolean") err(`${fat}.tumble must be true (it rolls to rest on a stable face, the default) or false (it drops straight down as it was), got ${fmt(fl.tumble)}`);
 	});
 }
 
