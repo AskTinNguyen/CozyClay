@@ -80,11 +80,17 @@ const STAGING_WORDS = /샷|컷|카메라|커버리지|구도|배치|동선|OTS|�
 export const wantsPlan = ({ text, characterCount, shots, planSeen }) => STAGING_WORDS.test(text || "") || (!planSeen && (characterCount >= 2 || shots >= 1));
 
 
-/** Each Studio prompt message ends with its reply-language reminder (by its own text, so the cached prefix never moves). */
+/**
+ * Each Studio prompt message ends with its reply-language reminder (by its own text, so the cached prefix never moves), and a
+ * long turn repeats it on every REMIND_EVERY-th tool result after the prompt: 9240db36 wrote a note in English 17 results in.
+ */
+const REMIND_EVERY = 8;
 function withLanguageReminders(messages) {
+	let language = null, results = 0;
 	return messages.map(message => {
+		if (message?.role === "toolResult" && language && Array.isArray(message.content) && ++results % REMIND_EVERY === 0) return { ...message, content: [...message.content, { type: "text", text: languageReminder(language) }] };
 		if (message?.role !== "user" || !Array.isArray(message.content) || !message.content.some(part => part?.type === "text" && STUDIO_CONTEXT.test(part.text ?? ""))) return message;
-		const language = replyLanguage(message.content.filter(part => part?.type === "text").map(part => part.text).join("\n"));
+		language = replyLanguage(message.content.filter(part => part?.type === "text").map(part => part.text).join("\n")); results = 0;
 		return language ? { ...message, content: [...message.content, { type: "text", text: languageReminder(language) }] } : message;
 	});
 }

@@ -24,3 +24,15 @@ f.ports.showRefusal = text => shown.push(text);
 assert.equal((await f.bus.run('shot.remove', { shotId: 'target' }, f.request('ui'))).code, 'INVALID_RANGE');
 assert.deepEqual(shown, ['범위 오류']);
 console.log(`PASS bus acceptance 2: English toast refusals for all ${STUDIO_ACTIONS.length} actions, warnings and explicit precedence`);
+// 1c631d0c: a job that answered (motion.compile with install "never" changes nothing) is not refused
+// because a toast showed while it ran: the user entering Pose mode is not the job's refusal.
+{
+  const g = fixture();
+  g.register('ai.prepareShot', () => { g.toast('Pose mode — preview the correction, then apply it to the selected motion block'); return { ...result([]), output: { specId: 'spec-1' } }; }, { readOnly: true });
+  const job = STUDIO_ACTIONS.find(action => action.id === 'ai.prepareShot');
+  const answered = await g.bus.run(job.id, sample(job.input), g.request('agent'));
+  assert.equal(answered.ok, true, JSON.stringify(answered));
+  assert.deepEqual(answered.output, { specId: 'spec-1' });
+  assert.equal(answered.warnings[0]?.code, 'STUDIO_TOAST', 'the toast still rides along as a warning');
+  console.log('PASS a job that answered keeps its answer when a toast shows while it runs');
+}

@@ -191,3 +191,45 @@ assert.deepEqual({ cast: cast.read(), objects: objects.read(), entry: app.histor
 const afterRollback = bus.run("character.add", { character: { id: "character-4" } }, request("run_action", { action: "character.add", args: { character: { id: "character-4" } } }, { turnId: rollbackTurnId }));
 assert.equal(afterRollback.code, "STALE_TARGET", "a cancelled turn admits no more mutations");
 console.log("PASS agent.turn.cancel rolls the whole turn back with no history entry");
+
+// 9240db36: the agent reverts its own edit inside its turn with undo_edit { receiptId }. The newest
+// edit of the turn rolls back to the savepoint before it, the turn stays open and still lands as one
+// entry; an older edit is refused with what to do instead.
+{
+	const preOwn = { cast: cast.read(), objects: objects.read() };
+	const ownTurnId = crypto.randomUUID();
+	const add = (action, args) => bus.run(action, args, request("run_action", { action, args }, { turnId: ownTurnId }));
+	const undo = receiptId => bus.run("edit.undo", { receiptId }, request("run_action", { action: "edit.undo", args: { receiptId } }, { turnId: ownTurnId }));
+	assert.equal(control("agent.turn.begin", ownTurnId).ok, true);
+	const first = add("object.add", { object: { id: "object-5" } }), second = add("character.add", { character: { id: "character-5" } });
+	assert.equal(first.ok && second.ok, true);
+	const older = undo(first.receiptId);
+	assert.equal(older.code, "UNDO_CONFLICT", JSON.stringify(older));
+	assert.match(older.message, new RegExp(second.receiptId), "the refusal names the later edit to undo first");
+	const own = undo(second.receiptId);
+	assert.equal(own.ok, true, `the turn's newest edit is undone inside the turn: ${JSON.stringify(own)}`);
+	assert.equal(own.status, "completed");
+	assert.equal(own.output.undoneReceiptId, second.receiptId);
+	assert.deepEqual(own.affectedIds, ["character-5"]);
+	assert.deepEqual(cast.read(), preOwn.cast, "the character the turn added is gone");
+	assert.deepEqual(objects.read(), [...preOwn.objects, { id: "object-5" }], "the earlier edit of the turn stays");
+	assert.match(undo(second.receiptId).message, new RegExp(`now ${first.receiptId}`), "an edit is undone once; the refusal names the newest one");
+	assert.equal(undo(first.receiptId).ok, true, "then the next older edit is the newest");
+	const third = add("object.add", { object: { id: "object-6" } });
+	assert.equal(third.ok, true);
+	assert.equal(control("agent.turn.mark", ownTurnId).ok, true);
+	assert.equal(undo(third.receiptId).ok, true, "the newest edit is undone even when a script's mark came after it");
+	const inScript = add("object.add", { object: { id: "object-7" } });
+	assert.equal(undo(inScript.receiptId).ok, true, "an edit made inside the script is undone");
+	add("object.add", { object: { id: "object-8" } });
+	assert.equal(control("agent.turn.rollback", ownTurnId).ok, true, "the script's rollback still finds its mark");
+	assert.deepEqual(objects.read(), preOwn.objects, "the rollback removes the script's edits and nothing before them");
+	add("object.add", { object: { id: "object-6" } });
+	const refused = bus.run("edit.undo", {}, request("run_action", { action: "edit.undo", args: {} }, { turnId: ownTurnId }));
+	assert.equal(refused.code, "TARGET_BUSY");
+	assert.match(refused.message, /undo_edit with the receiptId/, "the refusal says how to revert the turn's own edit");
+	const closedOwn = control("agent.turn.finish", ownTurnId);
+	assert.equal(closedOwn.ok && closedOwn.undo.entries, 1, JSON.stringify(closedOwn));
+	assert.deepEqual({ cast: cast.read(), objects: objects.read() }, { cast: preOwn.cast, objects: [...preOwn.objects, { id: "object-6" }] }, "only the kept edit lands");
+	console.log("PASS an agent turn undoes its own newest edit by receipt and still lands as one entry");
+}

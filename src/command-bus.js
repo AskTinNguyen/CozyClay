@@ -3,7 +3,7 @@
 // idempotency. Synchronous UI actions stay synchronous (including user gestures).
 import { HISTORY_LIMIT } from './history.js';
 import { StudioProtocolError, StudioSchemas, validateStudioSchema, validateReceipt, validateStudioIdentity, refusalCode } from './studio-agent-protocol.js';
-import { agentTurnControls, markAgentTurn } from './agent-turn-mark.js';
+import { agentTurnControls, markAgentTurn, turnEditPoint, recordTurnEdit, undoTurnEdit } from './agent-turn-mark.js';
 
 // A batching/retention adapter over the existing object history owner. The
 // native store still owns every snapshot and transition; this tracks only the
@@ -102,12 +102,11 @@ export function createCommandBus({ registry, ports }) {
       finally { agentTurn = null; }
       return transactionReceipt(id, turn, request, turn.before);
     }
-    // Every Studio turn opens a turn transaction (#715), so "undo the last thing" arrives
-    // inside one. Until the turn has authored anything (no session yet) history traversal
-    // is safe: the undo lands as its own entry and a later edit still groups into the turn.
-    // After the first authored edit the turn owns the frontier and traversal waits (#735).
+    // Every Studio turn opens a turn transaction (#715), so "undo the last thing" arrives inside one. Until the
+    // turn has authored (no session yet) history traversal is safe: the undo lands as its own entry (#735).
+    // After that the turn owns the frontier: its own agent may undo its newest edit (agent-turn-mark.js).
     const traversal = id === 'edit.undo' || id === 'edit.redo';
-    if (agentTurn && !id.startsWith('job.') && !(traversal && !agentTurn.session)) fail('TARGET_BUSY', 'Finish the agent turn before traversing history or opening another transaction.');
+    if (agentTurn && !id.startsWith('job.') && !(traversal && !agentTurn.session)) { if (id === 'edit.undo' && request.turnId === agentTurn.txId) return validateReceipt(undoTurnEdit(agentTurn, args, request, before, () => ports.read())); fail('TARGET_BUSY', 'Finish the agent turn before traversing history or opening another transaction.'); }
     if (traversal) {
       const redo = id === 'edit.redo', historyEntryId = ports.history?.(redo);
       const previous = args.receiptId ? ports.receipt(args.receiptId) : historyReceipts.get(historyEntryId)
@@ -358,13 +357,13 @@ export function createCommandBus({ registry, ports }) {
         const deadline = new Promise((_, reject) => controller.signal.addEventListener('abort', () => reject(controller.signal.reason), { once: true }));
         return Promise.race([value, deadline]);
       };
-      const value = entry.kind === 'mutation' ? recordAction(entry.undoDomain, invoke, validated.characterId ?? null) : { result: invoke(), historyEntryId: null };
+      const point = turnEditPoint(turn), value = entry.kind === 'mutation' ? recordAction(entry.undoDomain, invoke, validated.characterId ?? null) : { result: invoke(), historyEntryId: null };
       const finish = ({ result, historyEntryId }) => mapResult(result, output => {
         clearTimer();
         releaseToasts?.(); releaseToasts = null;
-        const refused = toastRefusal();
+        const refused = output?.output === undefined ? toastRefusal() : null; // a job that answered was not refused by a toast that showed meanwhile
         if (refused) throw refused;
-        return remember(receipt(entry, request, before, { ...output, affectedIds: [...new Set([...output.affectedIds, ...nestedIds])] }, historyEntryId ?? committedHistoryId, toasts, turn));
+        return recordTurnEdit(turn, point, remember(receipt(entry, request, before, { ...output, affectedIds: [...new Set([...output.affectedIds, ...nestedIds])] }, historyEntryId ?? committedHistoryId, toasts, turn)));
       });
       const finished = value?.then ? value.then(finish) : finish(value);
       const answer = finished?.then ? finished.catch(rejected) : finished;
