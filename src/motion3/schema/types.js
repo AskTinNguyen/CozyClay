@@ -140,6 +140,7 @@ export const FIX_TYPES = {
 	penetration: { oneOf: [{ type: "boolean" }, { type: "number", minimum: 0, maximum: 0.05 }], default: 0, description: "push hands out of boxes up to this depth, m (true = 0.02)" },
 	self: bool("arms kept out of the body's skin (wrists, elbows)", { default: true }),
 	retime: bool("speed spikes borrow frames from the neighbouring keys", { default: false }),
+	stance: bool("a standIdle stance in a scene body slides out of it (observations.placed)", { default: true }),
 };
 
 export const REF_DOCS = {

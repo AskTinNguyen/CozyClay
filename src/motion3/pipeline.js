@@ -95,6 +95,8 @@ export function compileSpec(sent, { sk, scene }, opts = {}) {
 	if (paced.length) observations.paced = paced;
 	const cut = used.filter(u => u.cut).map(u => `${u.skill}: ${u.cut}`);
 	if (cut.length) observations.cut = cut;
+	const placed = used.filter(u => u.placed).map(u => `${u.skill} f${u.f0}: ${u.placed.why}: at [${u.placed.at.join(", ")}], heading ${u.placed.heading}`);
+	if (placed.length) observations.placed = placed;
 	if (plans.length) observations.planned = plans.map(p => p.note);
 	const timeline = timelineOf(out, { used, spec: expanded }), probes = asked && runProbes(out, asked, { spec: expanded, sk, scene, notes });
 	return { out, qa, observations, spec: resolved, expanded, used, fixed: out.fixed, search, timeline, ...(probes ? { probes } : {}), ...(notes.length ? { notes } : {}),

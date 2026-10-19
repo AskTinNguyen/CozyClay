@@ -7,6 +7,7 @@ import { stateAt } from "../compiler/walk.js";
 import { didYouMean, suggestField } from "../compiler/vocab.js";
 import { USE_FIELDS } from "../schema/fields.js";
 import { SKILL_INFO } from "./info.js";
+import { fixOptions } from "../fix/index.js";
 import { standIdle, walkTo, reachGrip } from "./basic.js";
 import { sitInSeat, exitCar } from "./car.js";
 import { smokeCigarette } from "./smoke.js";
@@ -60,7 +61,8 @@ export function expandUse(spec, { sk, scene, lenient = false, auto = false }) {
 		argsOk(u, i, lenient);
 		if (!Number.isInteger(u.f0) || u.f0 < 0 || u.f0 > spec.frames - 1) bad(`use[${i}].f0 must be an integer frame within 0..${spec.frames - 1}, got ${JSON.stringify(u.f0)}`);
 		const keys = [...skillKeys, ...own];
-		const ctx = { sk, scene, frames: spec.frames, auto, props: { ...merged.props, ...spec.props }, self: spec.fix !== false && spec.fix?.self !== false, f0: u.f0, args: structuredClone(u.args ?? {}), tag, keys, state: structuredClone(stateAt(keys, u.f0)), anchors: { ...merged.anchors, ...spec.anchors } };
+		const ctx = { sk, scene, frames: spec.frames, auto, props: { ...merged.props, ...spec.props }, self: spec.fix !== false && spec.fix?.self !== false, f0: u.f0, args: structuredClone(u.args ?? {}), tag, keys,
+			use: spec.use, index: i, place: fixOptions(spec.fix).stance, state: structuredClone(stateAt(keys, u.f0)), anchors: { ...merged.anchors, ...spec.anchors } };
 		const part = SKILLS[u.skill](ctx), last = Math.max(part.end ?? u.f0, ...part.keys.map(k => k.f));
 		if (last > spec.frames - 1) bad(`${tag} needs ${last - u.f0} frames from f${u.f0} (to f${last}), past the last frame f${spec.frames - 1}; set frames >= ${last + 1} or frames: "auto"`);
 		skillKeys.push(...part.keys.map(k => ({ ...k, src: k.src ?? tag })));
@@ -70,7 +72,7 @@ export function expandUse(spec, { sk, scene, lenient = false, auto = false }) {
 		for (const fit of part.fits ?? []) if (!merged.fits.some(x => same(x, fit))) merged.fits.push(fit);
 		for (const ch of part.channels ?? []) if (!merged.channels.includes(ch)) merged.channels.push(ch);
 		mergeChecks(merged.checks, part.checks);
-		used.push({ skill: u.skill, f0: u.f0, end: part.end, ...(part.paced ? { paced: part.paced } : {}), ...(part.cut ? { cut: part.cut } : {}) });
+		used.push({ skill: u.skill, f0: u.f0, end: part.end, ...(part.paced ? { paced: part.paced } : {}), ...(part.cut ? { cut: part.cut } : {}), ...(part.placed ? { placed: part.placed } : {}) });
 	});
 	const out = { ...spec, keys: [...skillKeys, ...own], anchors: { ...merged.anchors, ...spec.anchors }, props: { ...merged.props, ...spec.props },
 		objects: { ...merged.objects, ...spec.objects } };

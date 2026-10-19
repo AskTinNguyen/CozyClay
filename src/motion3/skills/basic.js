@@ -5,22 +5,35 @@ import { walk } from "../compiler/walk.js";
 import { keyBook, skillError } from "./book.js";
 import { walkEnd } from "./info.js";
 import { GRASP_FINGERS, GRASP_POINTS } from "../compiler/vocab.js";
+import { clearStance, reachStance } from "./stance.js";
 
 /** The fingers' point a reachGrip fits onto its anchor: the finger middles, or where a grasp holds the thing (the palm is -n on the right hand). */
 const graspPoint = (grasp, k) => (GRASP_POINTS[grasp] ? GRASP_POINTS[grasp].map((v, i) => (i === 2 && k === "r" ? -v : v)) : [0, 0, 0]);
 
-/** standIdle({ at: [x, z], heading = 0, until }): a neutral standing pose, arms down (FK). */
+/**
+ * standIdle({ at: [x, z], heading = 0, until }): a neutral standing pose, arms down (FK). Without `at` (and no root
+ * keyed) before a reachGrip it stands within that hand's reach of the anchor, facing it; a stance in a scene body
+ * slides out of it (stance.js). Either says so in `placed`.
+ */
 export function standIdle(ctx) {
 	const { sk, args, state } = ctx, I = sk.index, P = sk.restWorldPos, ank = P[I.LeftFoot][1];
-	const h = args.heading ?? state.yaw ?? 0, base = args.at ?? (state.root ? [state.root[0], state.root[2]] : null);
-	if (!base) skillError(ctx.tag, "needs args.at: [x, z] (no root is keyed before f0)");
+	let h = args.heading ?? state.yaw ?? 0, base = args.at ?? (state.root ? [state.root[0], state.root[2]] : null), placed = null;
+	if (!base) {
+		const auto = reachStance(ctx);
+		if (!auto) skillError(ctx.tag, "needs args.at: [x, z] (no root is keyed before f0), or a reachGrip after it to stand within reach of");
+		({ at: base, heading: h } = auto);
+		placed = { at: base, heading: h, why: `within reach of anchor ${auto.anchor}` };
+	} else if (args.at && ctx.place !== false) {
+		const out = clearStance(sk, ctx.scene, [base[0], base[base.length - 1]], h);
+		if (out) { base = out.at; placed = { at: base, heading: h, why: `moved ${out.moved} m out of a scene body` }; }
+	}
 	const c = [base[0], 0, base[base.length - 1]], R = ry(h), foot = v => { const p = add(c, apply(R, v)); p[1] = ank; return p; };
 	const set = { root: [c[0], P[I.Hips][1] - 0.01, c[2]], yaw: h, pitch: 0, roll: 0, spine_yaw: 0, spine_pitch: 0, spine_roll: 0, head_yaw: 0, head_pitch: 0,
 		foot_l: foot([0.09, 0, -0.03]), foot_r: foot([-0.09, 0, 0.03]), fyaw_l: h, fyaw_r: h, fpitch_l: 0, fpitch_r: 0, knee_l: [0.05, 0, 1], knee_r: [-0.05, 0, 1],
 		armw_l: 0, armw_r: 0, aswing_l: 0, aswing_r: 0, abend_l: 0, abend_r: 0, arm_hang: 1 };
 	const keys = [{ f: ctx.f0, set }];
 	if (args.until !== undefined) keys.push({ f: args.until, set: structuredClone(set) });
-	return { keys, end: args.until ?? ctx.f0 };
+	return { keys, end: args.until ?? ctx.f0, ...(placed ? { placed } : {}) };
 }
 
 /**
