@@ -149,7 +149,7 @@ export function gripHand(ctx, sk, s, side, k, c, f, diag) {
 	// a hand that holds what it carries by a socket keeps the grasp it took on the grab frame
 	if (carry && f > carry.grab) return carry.keyed ? undefined : keepSocketTurn(ctx, sk, s, side, k, carry);
 	if (!on || on.w < 1e-3) return;
-	if (grasp) return socketHand(ctx, sk, s, side, k, c, diag, on, st => effectorAt(sk, ctx.spec, st, side, on.fit.effector ?? {}));
+	if (grasp) return socketHand(ctx, sk, s, side, k, c, diag, on, st => effectorAt(sk, ctx.spec, st, side, on.fit.effector ?? {}), null, f);
 	// a hand that carries something on this frame holds that (its carry's grip), whatever its fit's anchor
 	if (Object.keys(ctx.spec.objects ?? {}).some(id => ctx.spec.objects[id]?.prop && ctx.objectHand?.(id, f) === k && ownGrip(ctx, id, k, f) === null)) return;
 	const now = { s, diag, c }, anchor = ctx.spec.anchors?.[on.fit.anchor];
@@ -166,7 +166,7 @@ export function gripHand(ctx, sk, s, side, k, c, f, diag) {
 	// (socket-grip.js): a power wrap from the side, not the hand over its top with the fingers down along the forearm
 	// (session 7f15b4ae). A carried one keeps its carry's grip, a lying bar or handle the roll rule below.
 	if (axis && Math.abs(axis[1]) > UPRIGHT && !carryOf(ctx, box.id)) {
-		return socketHand(ctx, sk, s, side, k, c, diag, on, st => effectorAt(sk, ctx.spec, st, side, on.fit.effector ?? {}), { w: { p: A, axis }, type: "power" });
+		return socketHand(ctx, sk, s, side, k, c, diag, on, st => effectorAt(sk, ctx.spec, st, side, on.fit.effector ?? {}), { w: { p: A, axis }, type: "power" }, f);
 	}
 	const ax = palmAxes(sk, s, side), roll = norm(flat(ax.l, ax.d));
 	const axT = norm(sub(s.P[h], s.P[fa])), neutral = mul(s.R[fa], mul(T(sk.restWorldRot[fa]), sk.restWorldRot[h]));

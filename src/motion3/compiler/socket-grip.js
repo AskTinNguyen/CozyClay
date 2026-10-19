@@ -60,11 +60,11 @@ export function socketCarry(ctx, k, f) {
 }
 
 /**
- * socketHand(ctx, sk, s, side, k, c, diag, on, effector, implicit): turn the hand of fit `on` ({ fit, w }) into its
+ * socketHand(ctx, sk, s, side, k, c, diag, on, effector, implicit, f): turn the hand of fit `on` ({ fit, w }) into its
  * anchor's socket grasp (see above); effector(st) is the fit's effector point on a pose. `implicit` ({ w, type }) is
- * the world socket and grasp of a fit without one (grip.js: an upright thin body under a plain anchor).
+ * the world socket and grasp of a fit without one (grip.js: an upright thin body under a plain anchor); f the frame.
  */
-export function socketHand(ctx, sk, s, side, k, c, diag, on, effector, implicit = null) {
+export function socketHand(ctx, sk, s, side, k, c, diag, on, effector, implicit = null, f = undefined) {
 	const I = sk.index, a = I[`${side}Arm`], fa = I[`${side}ForeArm`], h = I[`${side}Hand`], plain = s.R[fa];
 	const w = implicit?.w ?? anchorSocket(ctx, on.fit.anchor, s, diag, c, k), F = effector(s), fwd = norm(sub(s.P[h], s.P[fa]));
 	const type = implicit?.type ?? ctx.spec.anchors[on.fit.anchor].grasp, base = socketPalm(side, w, type, fwd, c.yaw);
@@ -74,10 +74,13 @@ export function socketHand(ctx, sk, s, side, k, c, diag, on, effector, implicit 
 	// then the knuckle line tilts on the bar (an oblique grip) up to TILT deg, priced, where the forearm cannot come across it
 	const strain = R => { const t = aimArm(sk, s, side, { pos: F, R }, now, 1, "palm"); return swivel(sk, s, side, t.goal, t.wristAt(t.goal), t.plane, ELBOW_REST).cost; };
 	const col = (M, i) => [M[0][i], M[1][i], M[2][i]], turned = th => mul(axisRot(col(base, 1), th * DEG), base);
-	const free = w.axis && !w.from && type !== "palm", roll = free ? softmin(th => strain(turned(th)) + PULL * (1 - Math.cos(th))) : 0;
-	const rolled = turned(roll), tilted = a => mul(axisRot(col(rolled, 2), a), rolled);
-	const tilt = w.axis && type !== "palm" ? mean(TILTS.map(a => [a, strain(tilted(a)) + SLANT * (a / TILT) ** 2])) : 0;
-	const R = tilted(tilt);
+	const pick = () => {
+		const free = w.axis && !w.from && type !== "palm", roll = free ? softmin(th => strain(turned(th)) + PULL * (1 - Math.cos(th))) : 0;
+		const rolled = turned(roll), tilted = a => mul(axisRot(col(rolled, 2), a), rolled);
+		const tilt = w.axis && type !== "palm" ? mean(TILTS.map(a => [a, strain(tilted(a)) + SLANT * (a / TILT) ** 2])) : 0;
+		return { R: tilted(tilt), roll, tilt };
+	};
+	const { R, roll, tilt } = plannedGrasp(ctx, on.fit.anchor, k, f, pick);
 	const { goal, plane, wristAt } = aimArm(sk, s, side, { pos: F, R }, now, on.w, "palm");
 	const arm = swivel(sk, s, side, goal, wristAt(goal), plane, ELBOW_REST, { w: on.w });
 	let need = { twist: 0, flex: 0, dev: 0 };
@@ -87,6 +90,26 @@ export function socketHand(ctx, sk, s, side, k, c, diag, on, effector, implicit 
 	}
 	diag[`grip_${k}`] = { w: on.w, socket: true, ...need, roll: roll * DEG, tilt };
 	diag[`socket_${k}`] = { rel: mul(T(plain), s.R[h]) };
+}
+
+/**
+ * The grasp frame a reach turns the hand into, chosen once on the reach's first full-weight frame and kept on the
+ * approach to it (ctx.graspPlans, per bake): a person sets the hand's turn for the grasp at its end and keeps it on the way
+ * (end-state comfort), and a choice taken anew every frame flipped between two near-equal rolls as the fingers closed
+ * (a 5.5 cm wrist jump in one frame). pick() chooses it on the pose being solved: { R, roll, tilt }.
+ */
+function plannedGrasp(ctx, name, k, f, pick) {
+	const ch = `w_${name}_${k}`, at = g => ctx.weightAt?.(ch, g) ?? 0;
+	if (!ctx.weightAt || !Number.isInteger(f)) return pick();
+	let a = f, g;
+	while (a > 0 && at(a - 1) > 1e-3) a--;
+	for (g = a; g < ctx.frameCount - 1 && at(g) < 0.999 && at(g + 1) > 1e-3; g++);
+	const key = `${ch}:${a}`;
+	ctx.graspPlans ??= new Map();
+	// from the grasp on, the hand follows what it holds (carried, it moves): the plan covers the approach only
+	if (f >= g) { const plan = pick(); if (f === g) ctx.graspPlans.set(key, plan); return plan; }
+	if (!ctx.graspPlans.has(key)) { ctx.graspPlans.set(key, null); (ctx.hold?.plainFrame ?? ctx.solvedAt)(g); }
+	return ctx.graspPlans.get(key) ?? pick();
 }
 
 /**
