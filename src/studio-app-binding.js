@@ -1,6 +1,7 @@
 // The Studio's agent binding: inspection, admission and the agent's commands
 // over the editor's native state. App.jsx supplies the ports (reads, commits,
 // history, the action registry); this module owns no React or renderer state.
+import { taskTargetPorts } from "./bus-task-targets.js";
 import { createCommandBus } from "./command-bus.js";
 import { readElementDocument, elementReadback, elementPatchArgs, elementTarget, elementPatchReceipt } from "./commands/elements.js";
 import { physicsKeyStamp } from "./motion/physics-review.js";
@@ -220,8 +221,7 @@ export function createStudioAppBinding(ports) {
 			}, recordAction: (...args) => ports.recordAction(...args), beginAction: (...args) => ports.beginAction(...args),
 			readback: actionReadback, remember, receipt: id => receipts.get(id), isRetained: receipt => ports.isRetained(receipt),
 			canUndo: receipt => ports.canUndo(receipt), undo: () => ports.undo(), redo: () => ports.redo(),
-			history: redo => ports.history?.(redo), finishHistoryGesture: () => ports.finishHistoryGesture?.(),
-			readTarget: id => { refresh(); return tokens.get(id)?.token; },
+			history: redo => ports.history?.(redo), finishHistoryGesture: () => ports.finishHistoryGesture?.(), readTarget: id => { refresh(); return tokens.get(id)?.token; }, ...taskTargetPorts(ports),
 			captureToasts: listener => ports.captureToasts?.(listener), showRefusal: message => ports.showRefusal?.(message), emit: event => ports.emitCommandEvent?.(event),
 		} });
 		return actionBus;

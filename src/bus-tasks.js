@@ -1,0 +1,175 @@
+// Tasks: several agents editing one scene at once (parallel Studio tasks, P1; plan in docs). A task holds a scope of
+// keys (bus-task-scopes.js) instead of the whole-scene turn lock: its commands write only inside it, each command
+// commits as its own short entry (the per-command write lock is the document's own composition), and admission reads
+// the scope's target tokens, not the scene revision, so another task's edit elsewhere never makes it stale. Before a
+// key's first write the task keeps its pre-image (ports.snapshotTarget); cancel and undo-task put the pre-images back
+// as one new entry (ports.restoreTargets), which touches no other task's keys. A mark and rollback (a script's start)
+// and undo_edit of the task's newest edit restore the same way. The user's own edits are never refused: the task's
+// next command on a target the user changed answers STALE_TARGET once. Ctrl+Z stops at a running task's entry.
+// A single agent turn (agent.turn.*) is untouched: tasks and a turn never run together.
+import { StudioProtocolError, validateReceipt } from './studio-agent-protocol.js';
+import { commandKeys, keyOfId, scopeConflict, isScopeKey } from './bus-task-scopes.js';
+
+const fail = (code, message) => { throw new StudioProtocolError(code, message); };
+const VERBS = ['begin', 'requestScope', 'mark', 'rollback', 'finish', 'cancel', 'undo'];
+const FINISHED_KEPT = 32;
+const listOf = keys => [...keys].slice(0, 6).join(', ') + (keys.length > 6 ? ` and ${keys.length - 6} more` : '');
+
+export function createBusTasks({ ports, emit }) {
+	const open = new Map(), finished = new Map(), entryTask = new Map();
+	const tokenOf = key => {
+		const [kind, id] = key.split(/:(.*)/s);
+		if (id !== undefined) return ports.readTarget?.(id) ?? 'absent';
+		const state = ports.read();
+		return kind === 'scene' ? `r${state.revision}` : `${kind}:${state.domainRevisions?.[kind === 'timeline' ? 'shot' : kind] ?? 0}`;
+	};
+	const snapshot = key => ({ key, value: ports.snapshotTarget ? ports.snapshotTarget(key) : fail('CAPABILITY_MISSING', 'This editor cannot snapshot task targets.') });
+	// A scene key has no restorable value (documents have no undo): it is left as it is and said so.
+	function restore(task, values, action) {
+		task.skipped = values.filter(v => v.value === null).map(v => v.key);
+		values = values.filter(v => v.value !== null);
+		if (!values.length) return null;
+		if (!ports.restoreTargets) fail('CAPABILITY_MISSING', 'This editor cannot restore task targets.');
+		const { historyEntryId = null } = ports.restoreTargets(values) ?? {};
+		if (historyEntryId) entryTask.set(historyEntryId, task.taskId);
+		task.restored = [...new Set(values.map(({ key }) => key.includes(':') ? key.slice(key.indexOf(':') + 1) : ports.read().host.sceneId))];
+		for (const { key } of values) task.tokens.set(key, tokenOf(key));
+		emit?.({ type: `task.${action}`, taskId: task.taskId, keys: values.map(v => v.key) });
+		return historyEntryId;
+	}
+	function grant(task, keys) {
+		const bad = keys.find(key => !isScopeKey(key));
+		if (bad !== undefined) fail('INVALID_ARGUMENT', `"${bad}" is not a scope key: object:<id>, character:<id>, shot:<id>, stage, timeline or scene.`);
+		const conflict = scopeConflict(task.taskId, keys, open);
+		if (conflict) fail('SCOPE_BUSY', `${conflict}; wait for it, or ask for what is free.`);
+		for (const key of keys) if (!task.keys.has(key)) { task.keys.add(key); task.tokens.set(key, tokenOf(key)); }
+	}
+	function receipt(id, task, request, before, { historyEntryId = null, affectedIds = [], output, warnings = [] } = {}) {
+		const after = ports.read();
+		if (task.skipped?.length) warnings = [...warnings, { code: 'SCOPE_NOT_RESTORED', message: `Left as they are (a document change has no undo): ${listOf(task.skipped)}.` }];
+		task.skipped = null;
+		return validateReceipt({ ok: true, status: 'completed', kind: 'transaction', commandId: request.commandId, receiptId: crypto.randomUUID(), host: before.host,
+			action: id, txId: task.taskId, authored: Boolean(historyEntryId), revision: { before: before.revision, after: after.revision },
+			affectedIds: historyEntryId && !affectedIds.length ? task.restored : affectedIds, delta: [],
+			checks: { coverage: 'task-scope' }, warnings, undo: historyEntryId ? { historyEntryId, entries: 1, canUndoDirect: false } : null,
+			output: { scope: [...task.keys], ...output } });
+	}
+	const ownerOf = (request, taskId) => { if (request.origin !== 'agent' || request.taskId !== taskId) fail('CAPABILITY_MISSING', 'Only the owning task can control it.'); };
+	return {
+		get size() { return open.size; },
+		controls: (object, identifier) => Object.fromEntries(VERBS.map(verb => [`task.${verb}`,
+			verb === 'begin' || verb === 'requestScope'
+				? { ...object({ taskId: identifier, scope: { type: 'array', items: { type: 'string' }, maxItems: 64 } }), properties: { taskId: identifier, scope: { type: 'array', items: { type: 'string' }, maxItems: 64 }, reads: { type: 'array', items: { type: 'string' }, maxItems: 64 }, title: { type: 'string', maxLength: 120 } } }
+				: object({ taskId: identifier })])),
+		/** The open task a request names (null without one); a request naming a closed task is refused. */
+		of(request, id) {
+			if (!request.taskId) return null;
+			const task = open.get(request.taskId);
+			if (!task && !id.startsWith('task.')) fail('STALE_TARGET', `Task ${request.taskId} is not open.`);
+			return task ?? null;
+		},
+		/** task.* controls. `busy` says why no task may begin (an agent turn or a command transaction is open). */
+		control(id, args, request, before, busy) {
+			if (id === 'task.undo') {
+				const task = finished.get(args.taskId) ?? fail('UNDO_EXPIRED', `Task ${args.taskId} is not a finished task this editor still holds.`);
+				const moved = [...task.final].filter(([key, token]) => tokenOf(key) !== token).map(([key]) => key);
+				if (moved.length) fail('UNDO_CONFLICT', `Changed since the task finished: ${listOf(moved)}; undo those first or edit by hand.`);
+				const historyEntryId = restore(task, [...task.pre.values()], 'undone');
+				finished.delete(args.taskId);
+				return receipt(id, task, request, before, { historyEntryId, affectedIds: task.affectedIds });
+			}
+			ownerOf(request, args.taskId);
+			if (id === 'task.begin') {
+				if (busy) fail('TARGET_BUSY', busy);
+				if (open.has(args.taskId) || finished.has(args.taskId)) fail('INVALID_ARGUMENT', `Task ${args.taskId} already exists.`);
+				const task = { taskId: args.taskId, title: args.title ?? '', keys: new Set(), reads: new Set(args.reads ?? []), tokens: new Map(), pre: new Map(), edits: [], notices: [], affectedIds: [] };
+				grant(task, args.scope);
+				open.set(task.taskId, task);
+				emit?.({ type: 'task.begun', taskId: task.taskId, scope: [...task.keys] });
+				return receipt(id, task, request, before);
+			}
+			const task = open.get(args.taskId) ?? fail('STALE_TARGET', `Task ${args.taskId} is not open.`);
+			if (id === 'task.requestScope') { grant(task, args.scope); return receipt(id, task, request, before); }
+			if (id === 'task.mark') { task.mark = { values: [...task.keys].map(snapshot), keys: new Set(task.keys) }; return receipt(id, task, request, before); }
+			if (id === 'task.rollback') {
+				const mark = task.mark ?? fail('STALE_TARGET', 'The task has no mark to roll back to.');
+				task.mark = null;
+				const after = [...task.keys].filter(key => !mark.keys.has(key)).map(key => task.pre.get(key) ?? snapshot(key));
+				const historyEntryId = restore(task, [...mark.values, ...after], 'rolledBack');
+				task.edits = task.edits.filter(edit => edit.mark !== mark);
+				return receipt(id, task, request, before, { historyEntryId });
+			}
+			open.delete(task.taskId);
+			if (id === 'task.cancel') {
+				const historyEntryId = restore(task, [...task.pre.values()], 'cancelled');
+				return receipt(id, task, request, before, { historyEntryId, affectedIds: task.affectedIds });
+			}
+			task.final = new Map([...task.pre.keys()].map(key => [key, tokenOf(key)]));
+			finished.set(task.taskId, task);
+			while (finished.size > FINISHED_KEPT) finished.delete(finished.keys().next().value);
+			emit?.({ type: 'task.finished', taskId: task.taskId });
+			return receipt(id, task, request, before, { affectedIds: task.affectedIds, output: { edits: task.edits.length } });
+		},
+		/**
+		 * Admits a command: a task writes only inside its scope, on targets nobody else changed since it last looked; a
+		 * wire caller outside any task may not write a running task's keys; the UI always may. Answers the point a
+		 * task's edit restores to (undo_edit of it), after keeping each key's first pre-image.
+		 */
+		admit(task, entry, args, request, before) {
+			if (!task && (request.origin === 'ui' || !open.size)) return null;
+			const keys = entry?.id ? commandKeys(entry.id, args, before, entry) : [];
+			if (!task) {
+				const held = keys.find(key => scopeConflict(null, [key], open));
+				if (held) fail('SCOPE_BUSY', `${scopeConflict(null, [held], open)}; this command waits for that task.`);
+				return null;
+			}
+			const outside = keys.filter(key => !task.keys.has(key));
+			if (outside.length) fail('SCOPE_DENIED', `Outside this task's scope: ${listOf(outside)}. Ask for it with task.requestScope, or leave it to the task that holds it.`);
+			const moved = keys.filter(key => task.tokens.has(key) && tokenOf(key) !== task.tokens.get(key));
+			if (moved.length) {
+				for (const key of moved) task.tokens.set(key, tokenOf(key));
+				fail('STALE_TARGET', `${listOf(moved)} changed outside this task (the user, or an undo) since it last looked; read it again, then retry.`);
+			}
+			for (const key of keys) if (!task.pre.has(key)) task.pre.set(key, snapshot(key));
+			return { task, keys, values: keys.map(snapshot), mark: task.mark };
+		},
+		/** Files a task's receipt: ids it created join its scope, it may be undone newest first, readers hear of it. */
+		record(point, recorded) {
+			if (!point || !recorded?.ok) return recorded;
+			const { task } = point, state = ports.read(), warnings = [];
+			for (const id of recorded.affectedIds ?? []) {
+				const key = keyOfId(id, state);
+				if (!key || task.keys.has(key)) continue;
+				if (scopeConflict(task.taskId, [key], open)) warnings.push({ code: 'SCOPE_DENIED', message: `${key} changed outside the task's scope.` });
+				else { task.keys.add(key); if (!point.keys.includes(key)) { task.pre.set(key, { key, value: undefined }); point.values.push({ key, value: undefined }); } }
+			}
+			for (const key of task.keys) task.tokens.set(key, tokenOf(key));
+			if (recorded.authored) {
+				task.edits.push({ receiptId: recorded.receiptId, values: point.values, keys: point.keys, mark: point.mark });
+				task.affectedIds = [...new Set([...task.affectedIds, ...recorded.affectedIds])];
+				if (recorded.undo?.historyEntryId) entryTask.set(recorded.undo.historyEntryId, task.taskId);
+				for (const other of open.values()) for (const key of point.keys) if (other !== task && other.reads.has(key)) {
+					other.notices.push({ code: 'DEPENDENCY_CHANGED', message: `${key}, which this task reads, was changed by task ${task.taskId}.` });
+					emit?.({ type: 'task.dependencyChanged', taskId: other.taskId, key, by: task.taskId });
+				}
+			}
+			const heard = task.notices.splice(0);
+			return heard.length || warnings.length ? { ...recorded, warnings: [...recorded.warnings, ...warnings, ...heard].slice(0, 12) } : recorded;
+		},
+		/** History traversal: undo_edit of a task's newest edit inside it; the UI's undo stops at a running task's entry. */
+		traversal(id, args, request, before, frontier) {
+			const task = request.taskId ? open.get(request.taskId) : null;
+			if (task && id === 'edit.undo') {
+				const at = task.edits.findIndex(edit => edit.receiptId === args.receiptId);
+				if (at < 0) fail('TARGET_BUSY', `Inside a task, undo_edit takes the receiptId of the task's own newest edit${task.edits.length ? ` (now ${task.edits.at(-1).receiptId})` : ''}.`);
+				if (at < task.edits.length - 1) fail('UNDO_CONFLICT', `Later edits of this task come after it; undo them first, newest first: ${task.edits.slice(at + 1).reverse().map(edit => edit.receiptId).join(', ')}.`);
+				const edit = task.edits.pop(), historyEntryId = restore(task, edit.values, 'editUndone');
+				return receipt(id, task, request, before, { historyEntryId, output: { undoneReceiptId: edit.receiptId } });
+			}
+			const owner = open.get(entryTask.get(frontier));
+			if (!task && owner) fail('TARGET_BUSY', `The last edit belongs to running task ${owner.taskId}${owner.title ? ` (${owner.title})` : ''}; cancel or undo it from that task.`);
+			return null;
+		},
+		dispose() { open.clear(); finished.clear(); entryTask.clear(); },
+	};
+}
