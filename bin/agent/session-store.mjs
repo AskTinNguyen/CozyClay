@@ -157,7 +157,7 @@ export function createSessionStore(dir = agentSessionsDir()) {
 				updatedAt: now,
 				sceneName: meta.sceneName ?? previous?.sceneName ?? null,
 				firstText: previous?.firstText || meta.firstText || firstUserText(messages),
-				motionJobIds,
+				motionJobIds, ...((meta.parentId ?? previous?.parentId) ? { parentId: meta.parentId ?? previous.parentId, taskId: meta.taskId ?? previous?.taskId ?? null } : {}),
 			};
 			writeFileSync(metaFile, `${JSON.stringify(next, null, "\t")}\n`, { mode: 0o600 });
 			return next;
@@ -176,7 +176,7 @@ export function createSessionStore(dir = agentSessionsDir()) {
 					catch (error) { if (error?.code !== "ENOENT") throw error; }
 					if (firstLine !== null && !isV2Header(firstLine)) { warnLegacySession(sessionId); return []; }
 					const meta = JSON.parse(readFileSync(join(dir, name), "utf8"));
-					return (!surface || meta.surface === surface) ? [meta] : [];
+					return (!surface || meta.surface === surface) && !meta.parentId ? [meta] : [];
 				} catch { return []; }
 			}).sort((a, b) => Date.parse(b.updatedAt || 0) - Date.parse(a.updatedAt || 0)).slice(0, 50);
 		},

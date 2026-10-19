@@ -25,7 +25,7 @@ export function createStudioTools({ liveHub, workspaceHandle, session, resolveIm
     const command = validateStudioCommand({ name, args });
     const action = name === "run_action" ? declared.get(command.args.action) : undefined;
     const payload = mutationNames.has(name) && session?.admission
-      ? { name, args: command.args, commandId: session.admission.commandId(), host: session.admission.host, expectedRevision: session.admission.revision, ...(session.admission.turnId ? { turnId: session.admission.turnId } : {}) }
+      ? { name, args: command.args, commandId: session.admission.commandId(), host: session.admission.host, expectedRevision: session.admission.revision, ...(session.admission.turnId ? { turnId: session.admission.turnId } : {}), ...(session.admission.taskId ? { taskId: session.admission.taskId } : {}) }
       : command.args;
     Object.assign(scratch, { refusedRevision: payload.expectedRevision });
     let result;

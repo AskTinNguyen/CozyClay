@@ -12,6 +12,7 @@ import { createSessionStore, transcriptFromHistory } from "./session-store.mjs";
 import { createAgentRunner } from "./agent-runner.mjs";
 import { createProviderRoutes } from "./provider-routes.mjs";
 import { STUDIO_SYSTEM_PROMPT_STORYBOARD } from "./studio-prompt.mjs";
+import { studioTransaction } from "./studio-turn-transaction.mjs";
 
 // Values the codex backend accepts for reasoning.effort (its own 400 lists them).
 export const REASONING_EFFORTS = ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"];
@@ -82,54 +83,6 @@ const agentFailureCode = (error, signal, tool = false) => advisory(() => {
 	if (error?.status === 429) return "rate_limited";
 	return tool ? "tool_failed" : "upstream";
 }, tool ? "tool_failed" : "upstream");
-/**
- * One user message is one editor transaction: every Studio turn whose editor
- * reports a previsMode opens agent.turn.begin and closes agent.turn.finish, so
- * all of its mutations land as ONE history entry and one receipt frame. A
- * context without a previsMode runs unwrapped (an editor that predates turn
- * transactions). mark() records where a script starts; rollback() undoes only
- * the edits after it and keeps the turn open, so earlier edits still land.
- */
-const agentTurn = ({ hub, context, turnId, admission }) => {
-	const wrapped = Boolean(context.scene?.previsMode);
-	const host = Object.fromEntries(["workspaceId", "documentEpoch", "sceneId", "sceneEpoch"].map(key => [key, context.host[key]]));
-	const control = async action => {
-		const receipt = await hub.command("run_action", {
-			name: "run_action", args: { action, args: { turnId } }, turnId,
-			commandId: randomUUID(), host, expectedRevision: admission.revision,
-		}, context.host.workspaceHandle);
-		if (!receipt.ok) throw Object.assign(new Error(receipt.message), { code: receipt.code });
-		return receipt;
-	};
-	const open = async () => { await control("agent.turn.begin"); admission.turnId = turnId; };
-	return {
-		mark: async () => (admission.turnId === turnId ? control("agent.turn.mark") : null),
-		async rollback() {
-			if (admission.turnId !== turnId) return null;
-			const receipt = await control("agent.turn.rollback");
-			await admission.refresh();
-			return receipt;
-		},
-		run: start => async function* (input) {
-			if (!wrapped) { yield* start(input); return; }
-			await open();
-			let terminal;
-			try {
-				for await (const frame of start(input)) {
-					if (frame.type === "done") terminal = frame; else yield frame;
-				}
-			} finally {
-				// Finish only the transaction this run opened (a rollback keeps it open).
-				if (admission.turnId === turnId) {
-					delete admission.turnId;
-					const receipt = await control("agent.turn.finish");
-					if (receipt.authored) yield { type: "receipt", receipt };
-				}
-			}
-			if (terminal) yield terminal;
-		},
-	};
-};
 // These existing canvas commands only return a node/edge after publishing a
 // new insertion. Read/focus, generic accepted responses, update no-ops and run
 // outputs (which can echo old values) are deliberately not application proof.
@@ -347,7 +300,7 @@ function liveToolsRuntime(mcpRuntime) {
 // `supervisor` (#728) defaults off only under an injected scripted provider:
 // a test's script is an exact queue of replies, and a review would take one
 // meant for a later turn. The real sidecar never injects one.
-export function createAgentHandler({ auth = defaultAuth, codex, models, codexBaseUrl, cliproxyBaseUrl, env, fauxProvider, handlers, liveHub, mcpRuntime, port, studioRuntime, clock = Date.now, setIntervalImpl = setInterval, clearIntervalImpl = clearInterval, sessionStore: injectedSessionStore, supervisor = !fauxProvider } = {}) {
+export function createAgentHandler({ auth = defaultAuth, codex, models, codexBaseUrl, cliproxyBaseUrl, env, fauxProvider, handlers, liveHub, mcpRuntime, port, studioRuntime, clock = Date.now, setIntervalImpl = setInterval, clearIntervalImpl = clearInterval, sessionStore: injectedSessionStore, supervisor = !fauxProvider, studioTasks = () => process.env.COZYCLAY_STUDIO_TASKS === "on", taskLimits } = {}) {
 	const requestContext = new AsyncLocalStorage();
 	codex ||= defaultClient(auth, requestContext);
 	const runtime = handlers !== undefined || liveHub !== undefined ? Promise.resolve({ handlers: handlers ?? [], liveHub }) : liveToolsRuntime(mcpRuntime);
@@ -525,7 +478,7 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 				if (event.type === "tool.start") replySegment = "";
 				turnFrames.push(event);
 			}
-			emitStudioEvent(value.turnId, event);
+			emitStudioEvent(value.turnId, event); value.observe?.(event);
 		};
 		// The Studio turn is measured exactly like the Workflow turn, correlated by
 		// the turn id the host already owns (the frozen envelope carries no room
@@ -565,7 +518,7 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 				return { ...result, visualStatus: visual.visualStatus, imageId: visual.imageId, revision: visual.revision, receiptId: visual.receiptId, ...(visual.dataUrl ? { dataUrl: visual.dataUrl } : {}) };
 			},
 		}));
-		const turnTransaction = agentTurn({ hub, context: current, turnId: value.turnId, admission });
+		const turnTransaction = studioTransaction({ hub, context: current, turnId: value.turnId, admission, task: value.task, signal: controller.signal, plain: Boolean(value.main) });
 		const script = createScriptTool({ tools: modelTools, signal: controller.signal, emit: send });
 		const scriptTool = {
 			...script,
@@ -586,7 +539,7 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 			if (!captured?.dataUrl?.startsWith("data:image/")) throw new StudioProtocolError("TARGET_NOT_READY", "The current frame has no image bytes.");
 			const match = /^data:([^;]+);base64,(.*)$/.exec(captured.dataUrl);
 			frameObservation = { data: match[2], mimeType: match[1], revision: captured.revision, receiptId: captured.receiptId };
-		} else if ((await import("./studio-context-budget.mjs")).wantsPlan({ text: value.text, characterCount: value.context.scene?.characterCount ?? 0, shots: value.context.shots?.length ?? 0, planSeen: session.planSceneId === value.context.host.sceneId })) {
+		} else if (!value.main && (await import("./studio-context-budget.mjs")).wantsPlan({ text: value.text, characterCount: value.context.scene?.characterCount ?? 0, shots: value.context.shots?.length ?? 0, planSeen: session.planSceneId === value.context.host.sceneId })) {
 			// A staging or coverage request sees the top-view plan, and so does a staged scene's first turn here (once per scene).
 			try {
 				const captured = await hub.command("capture_plan_png", {}, value.context.host.workspaceHandle);
@@ -626,6 +579,7 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 			return send(frame);
 			}
 			if (frame.type === "done") {
+			const correction = value.main?.check(lastReply); if (correction) send({ type: "text.delta", text: correction });
 			if (turnOutcome === "succeeded" && !toolFailed) telemetry.finished("succeeded", null);
 			else telemetry.finished(turnOutcome, turnFailureCode || "tool_failed");
 			// Marked before the done frame leaves, so a client that asks for the
@@ -635,7 +589,7 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 			}
 			send(frame);
 		};
-		const persistenceMeta = { sceneName: value.context?.scene?.name ?? value.context?.sceneName ?? null, firstText: value.text };
+		const persistenceMeta = { sceneName: value.context?.scene?.name ?? value.context?.sceneName ?? null, firstText: value.text, ...(value.task ? { parentId: value.task.parentId, taskId: value.task.taskId } : {}) };
 		const modelKey = value.model || (fauxProvider ? `${fauxProvider.provider?.id || fauxProvider.provider || "faux"}/scripted` : "gpt-6-astra");
 		let runner = studioRunners.get(value.sessionId);
 		if (!runner) {
@@ -646,8 +600,8 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 			if (!session.modelSession) session.modelSession = await runner.openSession(value.sessionId, { surface: "studio" });
 			for await (const frame of turnTransaction.run(input => session.modelSession.start(input))({
 				surface: "studio", sessionId: value.sessionId, model: modelKey, effort: value.effort,
-				text: value.text, attachments: value.attachments, contextText: encodeStudioContext(value.context), frameObservation,
-				context: value.context, tools: [...modelTools, scriptTool], systemPrompt: value.context.scene?.previsMode === "storyboard" ? STUDIO_SYSTEM_PROMPT_STORYBOARD : undefined, signal: controller.signal, emit: send,
+				text: value.text, attachments: value.attachments, contextText: encodeStudioContext(value.context) + (value.main?.contextText() ?? ""), frameObservation,
+				reportCost: Boolean(value.task || value.main), context: value.context, tools: value.main ? value.main.tools({ studio: modelTools, hub, admission }) : [...modelTools, scriptTool], systemPrompt: value.main?.systemPrompt ?? (value.context.scene?.previsMode === "storyboard" ? STUDIO_SYSTEM_PROMPT_STORYBOARD : undefined), signal: controller.signal, emit: send,
 				meta: persistenceMeta,
 				quotaEvent: headers => codex?.parseQuotaHeaders ? quotaEvent(codex, headers) : { type: "quota", plan: null, primary: { usedPercent: null, windowMinutes: null, resetAt: null }, credits: { has: null } },
 			})) emitFrame(frame);
@@ -680,6 +634,12 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 		})();
 		return true;
 	};
+	// Lazy, like every src/ import here: the minimal legacy-sidecar package omits src/.
+	let taskRoutesReady;
+	const taskRoutes = async (...args) => (await (taskRoutesReady ??= import("./studio-task-routes.mjs").then(({ createStudioTaskRoutes }) => createStudioTaskRoutes({ enabled: studioTasks, handleStudioTurn, studioSessions, studioOwnerTokens, emitStudioEvent, writeStudioStream, parseCookies, json, readBody, limits: taskLimits,
+		newRecord: () => ({ next: 0, events: [], listeners: new Set(), terminal: false }),
+		validateEnvelope: async value => (await import("../../src/studio-agent-protocol.js")).validateStudioTurnEnvelope(value),
+		readContext: async host => studioRuntime?.readContext ? studioRuntime.readContext(host) : authoritativeStudioContext({ context: { host } }, (await runtime).liveHub || liveHub) }))))(...args);
 	const handle = async (req, res, path = new URL(req.url, "http://127.0.0.1").pathname) => {
 		if (!path.startsWith("/agent/")) return false;
 		if (port !== undefined && !allowAgentOrigin(req, typeof port === "function" ? port() : port)) {
@@ -820,6 +780,7 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 			}
 			return true;
 		}
+		if (path === "/agent/main" || path.startsWith("/agent/main/") || path.startsWith("/agent/task/")) { if (studioTasks()) return taskRoutes(req, res, path); json(res, 404, { error: "not found" }); return true; }
 		if (req.method !== "POST" || !["/agent/turn", "/agent/stop"].includes(path)) {
 			json(res, 404, { error: "not found" }); return true;
 		}
