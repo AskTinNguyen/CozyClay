@@ -28,9 +28,9 @@ expect("its grasp issues start no earlier than the grab (f30) and run to the end
 const now = compileSpec(ballPickupSpec(), { sk, scene });
 expect("the ball is judged with the spherical grasp a ball takes", heldSpans(now.out).some(h => h.id === BALL && h.grasp === "spherical" && h.k === "r"));
 
-// fix.grasp false: today's judgement, nothing new
+// fix.grasp false: the preset grip is judged as the carry grasp physics would seat (its hint turns grasp back on)
 const off = compileSpec(ballPickupSpec({ fix: { grasp: false } }), { sk, scene });
-expect("fix.grasp false judges no grasp", kinds(off).length === 0, line(kinds(off)));
+expect("fix.grasp false: the preset grip on the ball is a grasp issue", kinds(off).some(g => /^FINGER_|^SUPPORT$/.test(g.kind)), line(kinds(off)));
 
 // a hand that holds nothing: the same reach without the carry
 const empty = ballPickupSpec(); delete empty.objects;

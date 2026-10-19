@@ -4,7 +4,9 @@
 // and a fit on an object anchor with grasp while it holds (its weight and its fingers' grip at least HELD: the reach has
 // arrived and the skill has the hand closed; the object
 // still rests where it stands, so SUPPORT does not judge it). A carry pinned with at/along and no
-// grasp type (a cigarette, a lighter) keeps its preset grip and is not judged here. The fingers are phalanx capsules
+// grasp type (a cigarette, a lighter) keeps its preset grip and is not judged here. With fix.grasp false the carries it
+// would seat are judged as they are held (the preset grip; qa/hints-grasp.js turns grasp back on); fix: false judges none.
+// The fingers are phalanx capsules
 // (PHALANX m) against the held object's shapes (shapes.js: a ball is round, not its box):
 //   FINGER_PEN  "<Bone> into <id>": a phalanx's skin deeper than PEN in it
 //   FINGER_GAP  "<side> fingers off <id>": fewer than 3 of the 4 fingertips within GAP of its surface (pinch: the thumb
@@ -30,8 +32,9 @@ function defaultGrasp(scene, id) {
 
 /** The held carries and grasp fits, each { id, k (hand), grasp, from, to } in absolute frames, with the frames a fit weighs in. */
 export function heldSpans(out) {
-	const { spec, scene } = out.ctx, spans = [];
+	const { spec: asked, scene } = out.ctx, spans = [], spec = asked.fix?.grasp === false ? { ...asked, fix: { ...asked.fix, grasp: true } } : asked;
 	for (const [id, o] of Object.entries(spec.objects ?? {})) {
+		// the carries grasp physics seats (with fix.grasp false: the ones it would)
 		if (!isCarried(o) || !seatsInHand(spec, o, scene, id)) continue;
 		const k = spec.props?.[o.prop]?.hand, [from, to] = spanOf(out, o);
 		// judged once the object has settled into the hand (seat.js): the grab itself is the transition
@@ -106,7 +109,8 @@ function frameIssues(sk, s, h, entries, push, f) {
 
 /** FINGER_PEN, FINGER_GAP and SUPPORT issues of every held span (frames index out.frames, as every check's). */
 export function graspChecks(sk, out) {
-	if (out.ctx.spec.fix === false || out.ctx.spec.fix?.grasp === false) return [];
+	// fix.grasp false is judged too: the hand that keeps its preset grip is what its hint turns grasp back on for
+	if (out.ctx.spec.fix === false) return [];
 	const issues = [], f0 = out.f0 ?? 0, push = (kind, msg, i, value, limit) => issues.push({ kind, msg, frame: i, value: +value.toFixed(4), limit });
 	for (const h of heldSpans(out)) {
 		for (let f = Math.max(h.from, f0); f <= Math.min(h.to, f0 + out.frames.length - 1); f++) {

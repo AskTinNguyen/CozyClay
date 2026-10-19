@@ -12,6 +12,8 @@ import { carried } from "../compiler/limbs.js";
 import { resolveAnchor } from "../compiler/anchors.js";
 import { CAPSULES, segPoints, sdBox } from "./geometry.js";
 import { refDistance } from "../refs.js";
+import { seatsInHand } from "../seat.js";
+import { handOf } from "../object-pose.js";
 
 export function pointOf(out, f, ref) {
 	const { s, diag, c } = out.frames[f], [kind, rest] = ref.split(/:(.*)/s);
@@ -22,6 +24,12 @@ export function pointOf(out, f, ref) {
 }
 
 /** The part a contact target "anchor:<name>" holds by when that anchor takes a grasp (its socket's owner, else its object), else null. */
+/** The carry on the grasp path (seat.js) the hand of prop point `ref` holds at absolute frame f, or null (#816). */
+function seatedIn(out, ref, f) {
+	const prop = /^prop:([^.]+)\./.exec(ref)?.[1], k = out.ctx.spec.props?.[prop]?.hand, { spec, scene } = out.ctx;
+	return k ? Object.keys(spec.objects ?? {}).find(id => seatsInHand(spec, spec.objects[id], scene, id) && handOf(out, id, f) === k) ?? null : null;
+}
+
 function graspPart(out, ref) {
 	const [kind, name] = ref.split(/:(.*)/s), a = kind === "anchor" ? out.ctx.spec.anchors?.[name] : null;
 	if (a?.kind !== "object" || !a.grasp) return null;
@@ -46,7 +54,8 @@ export function specChecks(out, checks = {}) {
 			// on a grasp's anchor the fingers close on the held part wherever the grasp turned them round it: they are on it
 			// when they are on its surface (as goals' near on an object), not on one point of it (session 7f15b4ae: 0.4 cm
 			// on the cup, read as 5.3 cm from the anchor)
-			const held = graspPart(out, k.target), e = held ? refDistance(out, f, k.point, `object:${held}`) ?? len(sub(a, b)) : len(sub(a, b));
+			// and a hand that holds a thing resting in its palm (seat.js) has its fingers on that thing's surface
+			const held = graspPart(out, k.target) ?? seatedIn(out, k.point, f + (out.f0 ?? 0)), e = held ? refDistance(out, f, k.point, `object:${held}`) ?? len(sub(a, b)) : len(sub(a, b));
 			if (e > (k.tol ?? 0.01)) push("CONTACT", `${k.name}: ${(e * 100).toFixed(1)} cm apart`, f, e, k.tol ?? 0.01);
 		}
 		for (const k of checks.orient ?? []) if (active(out, f, k.when)) {

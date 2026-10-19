@@ -117,7 +117,8 @@ export const loadHints = {
 		const local = otherFace(X.out, id, Math.max(grab, Math.min(g.worstFrame, spanOf(X.out, o)[1])));
 		if (!local) return plain;
 		const name = `${id}Other`;
-		const anchor = { kind: "object", object: id, local, grasp: "power" };
+		// a big face takes the flat palm against it (a power grip's thumb would go into the box)
+		const anchor = { kind: "object", object: id, local, grasp: "palm" };
 		return { ...plain, fix: { ops: user => [user.anchors ? { op: "add", path: `/anchors/${name}`, value: anchor } : { op: "add", path: "/anchors", value: { [name]: anchor } },
 			{ op: "add", path: "/use/-", value: { skill: "reachGrip", f0: Math.max(0, grab - REACH), args: { anchor: name, side: "l", reach: Math.min(REACH, grab) || 1, hold: Math.max(1, spanOf(X.out, o)[1] - grab), release: 1 } } }] } };
 	},

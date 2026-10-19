@@ -13,8 +13,7 @@ import { rotateSubtree } from "./skeleton.js";
 import { palmAxes, fingerCurl, fistCurl } from "./limbs.js";
 import { capsuleDepth } from "../shapes.js";
 import { partsOf } from "../object-pose.js";
-import { carriedPose, compose, relative } from "../carried.js";
-import { seatsInHand, seatOffset, restOf } from "../seat.js";
+import { seatsInHand } from "../seat.js";
 
 const PHALANX = 0.009, TOUCH = 0.002, STEPS = 8, THUMB_FLEX = 70;
 const FINGERS = ["Index", "Middle", "Ring", "Pinky"];
@@ -122,17 +121,15 @@ export function heldFor(ctx, c, f, k, s) {
 
 /** A carry on the grasp path hand k holds at frame f, at its seat on pose s (seat.js), as { entries, weight, preset }. */
 function carriedFor(ctx, c, f, k, s) {
-	const { sk, spec, scene } = ctx;
+	const { spec, scene } = ctx;
 	for (const [id, o] of Object.entries(spec.objects ?? {})) {
 		if (!seatsInHand(spec, o, scene, id) || spec.props?.[o.prop]?.hand !== k || !s) continue;
 		// the hand holds it from the grab on (the object eases into its seat meanwhile, settleAt)
 		const [grab, release] = ctx.carrySpan(o), weight = 1;
 		// while the keyed offset is being taken (its grab frame solved without the keys) the hand has nothing seated yet
 		if (f < grab || f > release || ctx.hold?.attaching(id)) continue;
-		const palm = carriedPose(sk, spec, s, { prop: o.prop }, true), rest = restOf(scene, id);
-		const offset = o.keys?.length && ctx.hold ? ctx.hold.attachAt(id, f) : seatOffset(sk, spec, scene, id, o, relative(carriedPose(sk, spec, f === grab ? s : ctx.solvedAt(grab).s, { prop: o.prop }, true), ctx.restingAt(id, grab)));
-		const at = compose(palm, offset);
-		const entries = partsOf(scene, id).map(p => ({ ...scene.objects[p], ...compose(at, relative(rest, scene.objects[p])) }));
+		// where it is on this pose (object-pose.js: easing into its seat over the settle, as it is drawn), not the full seat
+		const entries = partsOf(scene, id).map(p => ({ ...scene.objects[p], ...ctx.objectPose(p, f, { s }) }));
 		const near = Object.entries(ctx.objectsAt(f)).filter(([key, e]) => !partsOf(scene, id).includes(key) && e.half && !e.carried && entries.some(h => Math.hypot(...h.pos.map((v, i) => v - e.pos[i])) < 0.25 + Math.hypot(...e.half))).map(([, e]) => e);
 		if (entries.length) return { entries, stops: near, weight, preset: c[`fingers_${k}`] };
 	}
