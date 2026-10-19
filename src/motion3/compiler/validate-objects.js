@@ -7,7 +7,7 @@
 // of the body. A free entry { keys?, fall?, visible?, level? } (C17: no prop, no follow, no hinge field) moves a body or a
 // group on its own: world pose keys over the whole take, and gravity falls; a carry takes fall too, before its grab
 // or from its release on. Fields: schema/fields.js OBJECT_FIELDS, OBJECT_KEY_FIELDS, FALL_FIELDS. See validate.js.
-import { isVec3, fmt, didYouMean } from "./vocab.js";
+import { isVec3, fmt, didYouMean, GRASPS } from "./vocab.js";
 import { objectOk } from "./validate-common.js";
 import { OBJECT_FIELDS, OBJECT_KEY_FIELDS, FALL_FIELDS } from "../schema/fields.js";
 import { isSwitch, isFollow, movesRecord } from "../carried.js";
@@ -15,7 +15,7 @@ import { isFree } from "../free-motion.js";
 import { checkRef } from "../refs.js";
 import { partsOf } from "../object-pose.js";
 
-const KEY = "{ f, pos: [x, y, z], rot: [x, y, z, w] } or { f, pos, aim: [x, y, z], roll? }", FALL = "{ at, onto?, bounce?, tumble? }";
+const KEY = "{ f, pos: [x, y, z], rot: [x, y, z, w] } or { f, pos, aim: [x, y, z], roll? }", FALL = "{ at, onto?, bounce?, tumble?, v? }";
 const isQuat = q => Array.isArray(q) && q.length === 4 && q.every(Number.isFinite) && Math.abs(Math.hypot(...q) - 1) <= 0.01;
 const isDir = v => isVec3(v) && Math.hypot(...v) > 1e-9;
 
@@ -94,8 +94,21 @@ function validateFalls(err, unknown, at, o, { frames, scene, carry }) {
 		}
 		if (fl.onto !== undefined) objectOk(err, scene, `${fat}.onto`, fl.onto, { groups: true });
 		if (fl.bounce !== undefined && !(Number.isFinite(fl.bounce) && fl.bounce >= 0 && fl.bounce <= 0.6)) err(`${fat}.bounce must be 0..0.6 (the share of its landing speed it bounces back with; 0 lands dead), got ${fmt(fl.bounce)}`);
+		if (fl.v !== undefined && !((carry && fl.v === "hand") || isVec3(fl.v))) err(`${fat}.v must be [vx, vy, vz] m/s (the velocity it leaves with)${carry ? " or \"hand\" (the velocity the hand gives it at the release)" : ""}, got ${fmt(fl.v)}`);
 		if (fl.tumble !== undefined && typeof fl.tumble !== "boolean") err(`${fat}.tumble must be true (it rolls to rest on a stable face, the default) or false (it drops straight down as it was), got ${fmt(fl.tumble)}`);
 	});
+}
+
+/** A grasp that starts like the given one (4+ letters: "sphere" -> spherical), else the nearest by edit distance. */
+const prefixLen = (a, b) => { let i = 0; while (i < a.length && a[i] === b[i]) i += 1; return i; };
+function graspHint(given) {
+	const text = String(given), best = GRASPS.reduce((a, b) => (prefixLen(b, text) > prefixLen(a, text) ? b : a));
+	return prefixLen(best, text) >= 4 ? `; did you mean "${best}"?` : didYouMean(text, GRASPS);
+}
+
+/** mass (kg): what the object weighs, for the arm that holds it (#816). */
+function massOk(err, at, o) {
+	if (o.mass !== undefined && !(Number.isFinite(o.mass) && o.mass >= 0.01 && o.mass <= 60)) err(`${at}.mass must be kg in 0.01..60, got ${fmt(o.mass)}`);
 }
 
 /** visible and level name channels (C15): visible shows the record above 0.5, level scales its light, glow and effect rate. */
@@ -110,6 +123,7 @@ export function validateObjects(spec, err, { sk, scene, frames = spec.frames, un
 		// a switch and a follow take any record (a light, an effect); the others a body or a group
 		if ((kind !== "switch" && kind !== "follow") || !scene?.others?.[id]) objectOk(err, scene, at, id, { groups: true });
 		for (const f of Object.keys(o ?? {})) if (!fields.includes(f) && !(kind === "hinge" && (f === "keys" || f === "fall"))) unknown(`${at} (${kind}) has unknown field "${f}"${didYouMean(f, fields)}; fields: ${fields.join(", ")}`);
+		massOk(err, at, o);
 		if (kind === "follow") {
 			validateFollow(spec, err, { sk, scene }, at, o);
 			channelsOk(err, at, o);
@@ -129,6 +143,7 @@ export function validateObjects(spec, err, { sk, scene, frames = spec.frames, un
 		if (kind === "carry") {
 			if (!spec.props?.[o.prop]) err(`${at}.prop "${o.prop}" is not in spec.props`);
 			for (const f of ["at", "along"]) if (o[f] !== undefined && !isVec3(o[f])) err(`${at}.${f} must be [d, l, n] along the palm axes, got ${fmt(o[f])}`);
+			if (o.grasp !== undefined && !GRASPS.includes(o.grasp)) err(`${at}.grasp must be one of ${GRASPS.join(", ")}${graspHint(o.grasp)}, got ${fmt(o.grasp)}`);
 			channelsOk(err, at, o);
 			if (frameOk(err, `${at}.grab`, o.grab, frames) && frameOk(err, `${at}.release`, o.release, frames)
 				&& o.grab !== undefined && o.release !== undefined && !(o.grab < o.release)) err(`${at}: grab (${o.grab}) must come before release (${o.release})`);

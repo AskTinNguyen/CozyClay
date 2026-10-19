@@ -103,8 +103,9 @@ const channels = [...VEC_CHANNELS, ...NUM_CHANNELS, ...MAP_CHANNELS].filter(ch =
 const skillOnly = [...SKILL_CHANNELS].filter(ch => named(ch, ess.types.channels));
 expect("essentials names every channel (a left/right pair as x_l|r) but the skill-keyed ones", channels.length === 0 && skillOnly.length === 0, [...channels, ...skillOnly].join());
 expect("essentials names every ref kind", REF_KINDS.every(k => ess.types.refs.includes(`${k}:`)), ess.types.refs);
-// flip (a tumble no first spec needs) is in topic skills only: essentials has no room for it (describe.js FIRST_SPEC_SKIP)
-expect("essentials lists exactly SKILL_NAMES but flip, each with needs, frames, adds and every arg typed", JSON.stringify(ess.skills.map(s => s.name)) === JSON.stringify(SKILL_NAMES.filter(n => n !== "flip"))
+// flip and hitReaction (a tumble, a body thrown by a hit: no first spec needs them) are in topic skills only: essentials has no room
+// for them (describe.js FIRST_SPEC_SKIP; hitReaction left it when grasp, mass and fall.v joined, #816)
+expect("essentials lists exactly SKILL_NAMES but flip and hitReaction, each with needs, frames, adds and every arg typed", JSON.stringify(ess.skills.map(s => s.name)) === JSON.stringify(SKILL_NAMES.filter(n => n !== "flip" && n !== "hitReaction"))
 	&& ess.skills.every(s => s.needs === SKILL_INFO[s.name].needs && s.frames === SKILL_INFO[s.name].frames && s.adds === SKILL_INFO[s.name].adds
 		&& Object.keys(SKILL_INFO[s.name].args).every(a => named(a, s.args))));
 const rg = ess.skills.find(s => s.name === "reachGrip").args;

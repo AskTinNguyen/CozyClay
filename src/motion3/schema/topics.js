@@ -77,12 +77,12 @@ export const NOTES = {
 		"A group (Empty) id moves all its parts; at/along pin a group's root to the palm too (an object.createKit kit). A carried object is an obstacle for the body and the scene.",
 		"A switch { visible?, level? } (no prop, no hinge field) moves nothing: it shows or hides any record (a part, a light, an effect) and sets its level, 0..4 light, glow and effect strength "
 			+ "(an unkeyed level reads 1). Hiding a group hides its parts. A carry takes level too.",
-		"keys pose a carried object in the world while it is in hand (grab <= f <= release): pos is its base (a group: its root), rot a quaternion [x, y, z, w], "
-			+ "or aim [x, y, z] the direction its +Y points (a bat's barrel), turned from how the hand holds it there, plus roll degrees about aim; no roll: the roll the arm holds most easily. "
-			+ `The object leads and the whole arm follows (the elbow swings, the forearm turns, the wrist adds the rest within ${Object.entries(WRIST_LIMITS).map(([k, [lo, hi]]) => `${k} ${lo}..${hi}`).join(", ")} deg; dev + toward the thumb); `
+		"keys pose a carried object in the world while in hand: pos its base (a group: its root), rot a quaternion [x, y, z, w], "
+			+ "or aim [x, y, z] where its +Y points (a bat's barrel) plus roll degrees about it (none: the roll the arm holds most easily). "
+			+ `The object leads and the arm follows (elbow, forearm, then the wrist within ${Object.entries(WRIST_LIMITS).map(([k, [lo, hi]]) => `${k} ${lo}..${hi}`).join(", ")} deg; dev + toward the thumb); `
 			+ "a left hand on a prop anchor of it turns with it; "
-			+ `the hand eases in and out over ${KEY_BLEND} frames. A REACH group "<id>: n cm off its keys" is what the hand could not reach; `
-			+ "output.observations.held measures every key as drawn (deg off the asked +Y, cm off pos, the drawn +Y, the rot an aim key used).",
+			+ `the hand eases in and out over ${KEY_BLEND} frames. REACH "<id>: n cm off its keys" is what the hand could not reach; `
+			+ "observations.held measures each key as drawn.",
 		"free { keys?, fall? } moves what nobody holds: keys at any frame; fall drops it at frame at onto the still top below (onto: that one; else the floor) "
 			+ "to rest on a stable face, one small bounce (0: none). A carry falls before grab or after release.",
 		"A follow { follow: <ref>, offset?, aim?, visible?, level? } puts any record (an effect, a light, a part) on a body point every frame: "
