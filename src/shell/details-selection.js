@@ -3,6 +3,7 @@
 import { ko } from "../locale.js";
 import { sceneObjectNameDisplayKo, HIERARCHY_INSPECTOR_TITLES, CHARACTER_MODEL_LABELS } from "../app-stage.jsx";
 import { CUTOUT_KIND, EMPTY_KIND, SCULPT_KIND } from "../scene-objects.js";
+import { TEXT_KIND } from "../text/text-record.js";
 import { LIGHT_KIND } from "../object-look.js";
 
 const characterIndexForRow = (rowId, characters) => rowId === "characterA" ? 0
@@ -17,7 +18,7 @@ export function detailsSelection({ selectedHierarchyId: id, selectedSceneObject,
 	if (selectedSceneObject) {
 		const { renderer, light } = selectedSceneObject;
 		if (renderer === LIGHT_KIND) return { name: sceneObjectNameDisplayKo(selectedSceneObject.name), type: `${ko("Light", "조명")} · ${light?.type === "spot" ? ko("Spot", "스포트") : ko("Point", "점")}` };
-		const kind = renderer === CUTOUT_KIND ? ko("Cutout", "컷아웃") : renderer === EMPTY_KIND ? ko("Empty", "빈 오브젝트") : renderer === SCULPT_KIND ? ko("Sculpt", "조형") : ko("Mesh", "메시");
+		const kind = renderer === CUTOUT_KIND ? ko("Cutout", "컷아웃") : renderer === EMPTY_KIND ? ko("Empty", "빈 오브젝트") : renderer === SCULPT_KIND ? ko("Sculpt", "조형") : renderer === TEXT_KIND ? ko("Text", "텍스트") : ko("Mesh", "메시");
 		return { name: sceneObjectNameDisplayKo(selectedSceneObject.name), type: `${renderer === EMPTY_KIND ? ko("Node", "노드") : ko("Prop", "소품")} · ${kind}` };
 	}
 	if (rigSelection) {

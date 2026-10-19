@@ -148,6 +148,7 @@ function makeCase(entry) {
 		if (field === "light") Object.assign(input, { renderer: "light", light: { type: "spot", color: "#FFAA00", intensity: 40, range: 12, angle: 35, softness: 0.5, shadow: true, flicker: 0.2, aim: { x: 0, y: 0, z: 1 } } });
 		if (field === "glow") input.glow = { color: "#ff5a1f", intensity: 6, halo: 2 };
 		if (field === "effect") Object.assign(input, { renderer: "effect", effect: { preset: "fire", rate: 12 } });
+		if (field === "text") Object.assign(input, { renderer: "text", text: { value: "Authored words", size: 0.5, depth: 0.04, align: "left" } });
 		return {
 			input,
 			output: normalizeSceneObject(input),
@@ -226,6 +227,7 @@ const expected = new Map([
 	["object.light", { type: "spot", color: "#ffaa00", intensity: 40, range: 12, angle: 35, softness: 0.5, shadow: true, flicker: 0.2, aim: { x: 0, y: 0, z: 1 } }],
 	["object.glow", { color: "#ff5a1f", intensity: 6, halo: 2 }],
 	["object.effect", ["fire", 12, true]],
+	["object.text", { value: "Authored words", size: 0.5, depth: 0.04, align: "left" }],
 ]);
 
 let verified = 0;
@@ -252,7 +254,8 @@ const sample = {
 	vec3: () => ({ x: 1, y: 2, z: 3 }),
 	string: () => "sample text",
 	object: (entry) => (entry.path === "object.light" ? { type: "point", intensity: 0.45, flicker: 0.6, aim: null }
-		: entry.path === "object.effect" ? { preset: "smoke", rate: 30, wind: { x: 0.1 } } : { color: "#ff5a1f", intensity: 6, halo: 2 }),
+		: entry.path === "object.effect" ? { preset: "smoke", rate: 30, wind: { x: 0.1 } }
+			: entry.path === "object.text" ? { value: "CozyClay", size: 0.4, depth: 0, align: "center" } : { color: "#ff5a1f", intensity: 6, halo: 2 }),
 	array: (entry) => (entry.path === "object.path"
 		? { points: [{ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 1 }] }
 		: entry.path === "shot.cameraKeys"

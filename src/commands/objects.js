@@ -24,7 +24,7 @@ const PATCH_HINTS = { scale: 'use scaleX, scaleY, scaleZ', rotY: 'use rot for ya
 const mutation = (id, label, input) => ({ id, label, description: label, kind: 'mutation', undoDomain: 'objects', input });
 const semantic = [
 	mutation('object.set', 'Set object fields', setInput),
-	mutation('object.add', 'Add object', input({ kind: { type: 'string' }, placement, name: { type: 'string' }, parent: id, first: { type: 'boolean' } }, ['kind'])),
+	mutation('object.add', 'Add object', input({ kind: { type: 'string' }, placement, name: { type: 'string' }, parent: id, first: { type: 'boolean' }, text: setInput.properties.set.properties.text }, ['kind'])),
 	// A clay prop from a recipe of soft parts (docs/sculpt-from-image.md). With `id` it re-sculpts that
 	// sculpt in place (one undo); without, it creates one. The recipe is checked by sculpt-recipe.js.
 	{ ...mutation('object.sculpt', 'Sculpt a clay prop from a recipe', input({ recipe: { type: 'object', properties: {}, additionalProperties: true }, edits: { type: 'array', minItems: 1, maxItems: 48, items: { type: 'object', properties: {}, additionalProperties: true } }, id, name: { type: 'string', maxLength: 240 }, placement, parent: id }, [])),
@@ -75,7 +75,7 @@ export function register(registry, ports) {
 		'object.add': args => {
 			const before = owned().read();
 			if (args.parent !== undefined) objectOf(args.parent);
-			const object = createSceneObject(args.kind, before, args.placement);
+			const object = createSceneObject(args.kind, before, args.placement, args.text);
 			if (!object) fail('INVALID_ARGUMENT', `Unknown object kind: ${args.kind}`);
 			const placed = updateSceneObject([object], object.id, { ...(args.placement ?? {}), ...(args.name === undefined ? {} : { name: args.name }) })[0];
 			// `first`: the Outliner lists Props in record order, so a UI-made object

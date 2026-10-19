@@ -26,6 +26,7 @@ import { GREY_BOX } from "./object-colors.js";
 import { isEffectivelyHidden } from "./object-hidden.js";
 import { objectSize } from "./object-size.js";
 import { EFFECT_ENTRY, effectFields } from "./effects/effect-record.js";
+import { TEXT_ENTRY, TEXT_KIND, textFields, textPatch } from "./text/text-record.js";
 import { LIGHT_KIND, LIGHT_MENU_ENTRIES, lightLibraryEntry, objectLookFields, objectLookPatch } from "./object-look.js";
 export { OBJECT_COLORS, normalizeObjectColor, rememberObjectColor, readStoredObjectColors, writeStoredObjectColors } from "./object-colors.js";
 export { isEffectivelyHidden };
@@ -175,10 +176,10 @@ export function isEmptyObject(object) {
 	return object?.renderer === EMPTY_KIND || object?.renderer === LIGHT_KIND;
 }
 
-/** The catalogue grouped for the create menu: the library plus the empty, the
- * two practical lights and the effect emitter, which are creatable but have no
- * footprint to satisfy the library's contract. */
-export const OBJECT_MENU_ENTRIES = Object.freeze([EMPTY_ENTRY, ...OBJECT_LIBRARY, ...LIGHT_MENU_ENTRIES, EFFECT_ENTRY]);
+/** The catalogue grouped for the create menu: the library plus the empty, a
+ * text, the two practical lights and the effect emitter, which are creatable
+ * but have no fixed footprint to satisfy the library's contract. */
+export const OBJECT_MENU_ENTRIES = Object.freeze([EMPTY_ENTRY, ...OBJECT_LIBRARY, TEXT_ENTRY, ...LIGHT_MENU_ENTRIES, EFFECT_ENTRY]);
 
 /** Every kind that can exist in a scene: the catalogue you can create from,
  * plus the kinds that arrive by import and so are deliberately absent from the
@@ -190,6 +191,7 @@ function objectLibraryEntry(kind) {
 	if (kind === SCULPT_KIND) return SCULPT_ENTRY;
 	if (kind === EMPTY_KIND) return EMPTY_ENTRY;
 	if (kind === EFFECT_ENTRY.kind) return EFFECT_ENTRY;
+	if (kind === TEXT_KIND) return TEXT_ENTRY;
 	return OBJECT_LIBRARY.find((entry) => entry.kind === kind) ?? lightLibraryEntry(kind);
 }
 
@@ -300,8 +302,9 @@ export function sceneObjectIdFromHierarchy(hierarchyId) {
  * A fresh object of `kind`, named and identified uniquely against `existing`.
  * `placement` seeds the floor position (the caller drops it in front of the
  * camera); everything else starts neutral so the first drag is predictable.
+ * `text` seeds a text record's words (text-record.js); other kinds ignore it.
  */
-export function createSceneObject(kind, existing = [], placement = {}) {
+export function createSceneObject(kind, existing = [], placement = {}, text = undefined) {
 	// Cutouts and meshes come from an import, never from the catalogue:
 	// without an asset id the record has nothing to draw.
 	if (kind === CUTOUT_KIND || kind === MESH_KIND || kind === SCULPT_KIND) return null;
@@ -342,6 +345,8 @@ export function createSceneObject(kind, existing = [], placement = {}) {
 		supportY: Number.isFinite(entry.supportY) ? entry.supportY : entry.height,
 		...objectLookFields({}, entry),
 		...effectFields({ renderer: kind }),
+		// A text's words and the box measured from them (src/text/text-record.js).
+		...textFields({ renderer: kind, text }),
 	};
 }
 
@@ -552,6 +557,7 @@ export function objectPatchFields(object) {
 	if (object?.renderer === CUTOUT_KIND) fields.push("assetId", "sourceAssetId", "matteAssetId", "matteScale", "height", "aspect", "width", "stretch");
 	if (object?.renderer === MESH_KIND) fields.push("clay", "assetId", "height");
 	if (object?.renderer === SCULPT_KIND) fields.push("recipe");
+	if (object?.renderer === TEXT_KIND) fields.push("text");
 	return fields;
 }
 
@@ -856,8 +862,8 @@ export function updateSceneObject(objects, id, patch) {
 				Object.assign(update, sculptStandingBox(normalized.recipe));
 			}
 		}
-		// Light and glow merge over the record's own and are repaired (object-look.js).
-		Object.assign(update, objectLookPatch(object, patch));
+		// Light, glow and a text's words merge over the record's own and are repaired (object-look.js, text-record.js).
+		Object.assign(update, objectLookPatch(object, patch), textPatch(object, patch));
 		if (!Object.keys(update).length) return object;
 		changed = true;
 		return { ...object, ...update };
@@ -1090,6 +1096,8 @@ export function normalizeSceneObject(record) {
 		...objectLookFields(record, entry),
 		// An effect record's emitter (src/effects/effect-record.js).
 		...effectFields(record),
+		// A text's words; its box is measured from them (src/text/text-record.js).
+		...textFields(record),
 	};
 }
 

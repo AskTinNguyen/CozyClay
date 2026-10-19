@@ -16,6 +16,8 @@ import { sceneObjectCarryMatrixAt, sceneObjectTravelMatrixAt, trackShown, travel
 import * as THREE from "three";
 import { GIZMO_LAYER } from "./dualview.jsx";
 import { CUTOUT_KIND, MESH_KIND, EMPTY_KIND, EMPTY_MARKER_SIZE, SCULPT_KIND } from "./scene-objects.js";
+import { TEXT_KIND } from "./text/text-record.js";
+import { TextObject } from "./text/text-object.jsx";
 import { buildSculptGroup, disposeSculptGroup } from "./sculpt-geometry.js";
 import { subscribeToAssetTexture } from "./scene-asset-cache.js";
 import { ImportedMesh } from "./imported-mesh.jsx";
@@ -199,8 +201,7 @@ const EMPTY_AXES = [
 function EmptyMarker() {
 	const half = EMPTY_MARKER_SIZE / 2;
 	const axes = useMemo(() => {
-		const positions = [];
-		const colors = [];
+		const positions = [], colors = [];
 		const color = new THREE.Color();
 		for (const axis of EMPTY_AXES) {
 			positions.push(-axis.to[0] * half, -axis.to[1] * half, -axis.to[2] * half, axis.to[0] * half, axis.to[1] * half, axis.to[2] * half);
@@ -213,9 +214,7 @@ function EmptyMarker() {
 		return geometry;
 	}, [half]);
 	useEffect(() => () => axes.dispose(), [axes]);
-	const onLayer = (node) => {
-		if (node) node.layers.set(GIZMO_LAYER);
-	};
+	const onLayer = (node) => node?.layers.set(GIZMO_LAYER);
 	return (
 		<group userData={{ emptyMarker: true }}>
 			<lineSegments ref={onLayer} geometry={axes} renderOrder={997} frustumCulled={false}>
@@ -242,6 +241,7 @@ function SceneObjectContent({ object, depthRank = 0 }) {
 	if (renderer === CUTOUT_KIND) return <Cutout object={object} />;
 	if (renderer === MESH_KIND) return <ImportedMesh object={object} />;
 	if (renderer === SCULPT_KIND) return <Sculpt object={object} depthRank={depthRank} />;
+	if (renderer === TEXT_KIND) return <TextObject object={object} />;
 	if (renderer === "car") return <Car color={autoColor ?? color} autoColor={autoColor} />;
 	if (renderer === "small-plane") return <SmallPlane autoColor={autoColor} />;
 	if (renderer === "chair") return <Chair autoColor={autoColor} />;
