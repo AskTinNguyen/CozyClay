@@ -115,8 +115,8 @@ export function riderOf(out, id) {
 	return best?.mover ?? null;
 }
 
-/** The solved frame at absolute f: out.frames, or solved once on demand outside a window. */
-function frameAt(out, f) {
+/** The solved frame at absolute f: out.frames, or solved once on demand outside a window (or ahead of the frame being solved). */
+export function frameAt(out, f) {
 	const own = out.frames[f - (out.f0 ?? 0)];
 	if (own) return own;
 	if (!solved.has(out)) solved.set(out, new Map());

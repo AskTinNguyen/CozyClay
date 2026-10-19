@@ -9,18 +9,20 @@
 //   { kind: "object",   object: "Car_Door_L", local: [x,y,z] }  point fixed to a scene object or group where it is at
 //                       that frame (hinged, carried, following; object-pose.js objectPoseAt), in its own axes
 //   { kind: "landmark", name: "mouth" }                     measured face landmark on the Head bone
-//   { kind: "prop",     prop: "cig", point: "tip", offset: [x,y,z] }  a point on a prop held by the other hand
+//   { kind: "prop",     prop: "cig", point: "tip", offset: [x,y,z] }  a point on a prop held by the other hand; while
+//                       that hand does not hold the object it carries, the point stays on that object (propOnCarry)
 //   { kind: "person",   person: "char-b", bone: "LeftArm", offset: [x,y,z] }  world offset from another character's joint
 //                       where its installed take has it at that frame (people.js)
 // spec.props = { name: { hand: "r", origin: ["RightHandIndex2", "RightHandMiddle2"],
 //                        points: { name: [d, l, n] } } }   offsets along the palm axes (m)
-import { add, sub, scale, len, apply, ry } from "./math.js";
+import { add, sub, scale, len, apply, ry, T } from "./math.js";
 import { bonePoint } from "./skeleton.js";
 import { palmAxes } from "./limbs.js";
 import { SIDES } from "./pose.js";
 import { HAND_CLEAR, keepOut } from "../body.js";
 import { groupsOf } from "../scene.js";
 import { personJoint, peopleList } from "../people.js";
+import { isCarried } from "../carried.js";
 
 function armReach(sk, k) {
 	const side = SIDES[k], P = sk.restWorldPos, I = sk.index;
@@ -84,7 +86,7 @@ function anchorPoint(ctx, a, name, s, diag, c, side) {
 		case "object": { const o = objectFrame(ctx, a, name, { s, diag, c }, side); return add(o.pos, apply(o.R, a.local ?? [0, 0, 0])); }
 		case "landmark": return bonePoint(s, I.Head, sk.landmarks[a.name] ?? (() => { throw new Error(`MOTION_SPEC_INVALID: unknown landmark "${a.name}"`); })());
 		case "prop": {
-			const p = diag.props?.[a.prop]?.[a.point];
+			const p = propOnCarry(ctx, a, name, diag?.frame) ?? diag.props?.[a.prop]?.[a.point];
 			if (!p) throw new Error(`MOTION_SPEC_INVALID: anchor "${name}" needs prop ${a.prop}.${a.point}, which is held by an arm solved later`);
 			return add(p, a.offset ?? [0, 0, 0]);
 		}
@@ -95,6 +97,32 @@ function anchorPoint(ctx, a, name, s, diag, c, side) {
 		}
 		default: throw new Error(`MOTION_SPEC_INVALID: anchor "${name}" has unknown kind "${a.kind}"`);
 	}
+}
+
+/**
+ * A point of a prop on a hand that carries an object, at a frame that hand does not hold it: where the point sits on
+ * the object at the grab (or the release) nearest in time, carried with the object (at rest before the grab, let go
+ * after the release). In hand the point rides the palm; before the grab the palm still turns into its grip (and after
+ * the release out of it), and a point held off it swept through the other arm's reach: session 02263581's barbell put
+ * the left hand on a point 55 cm off the right palm, and the left elbow jumped 28 cm in a frame at the grab and the
+ * release. Read off the object, the point is where the left hand takes the bar, and meets the palm's at the grab. null
+ * when no carry of that hand applies (the palm's point is used).
+ */
+function propOnCarry(ctx, a, name, f) {
+	const hand = ctx.spec.props?.[a.prop]?.hand;
+	if (!hand || f === undefined || !ctx.solvedAt || !ctx.carrySpan) return null;
+	let pick = null;
+	for (const [id, o] of Object.entries(ctx.spec.objects ?? {})) {
+		if (!isCarried(o) || ctx.spec.props?.[o.prop]?.hand !== hand) continue;
+		const [grab, release] = ctx.carrySpan(o);
+		if (f >= grab && f <= release) return null;
+		const at = f < grab ? grab : release;
+		if (!pick || Math.abs(f - at) < Math.abs(f - pick.at)) pick = { id, at };
+	}
+	if (!pick) return null;
+	const there = nested(ctx, name, pick.id, pick.at, () => ctx.solvedAt(pick.at).diag.props?.[a.prop]?.[a.point]);
+	const was = ctx.objectPose(pick.id, pick.at), now = ctx.objectPose(pick.id, f);
+	return there && was && now ? add(now.pos, apply(now.R, apply(T(was.R), sub(there, was.pos)))) : null;
 }
 
 /** Points of every prop held by hand k, in world space, written to diag.props. */

@@ -4,7 +4,8 @@
 //   between keys    a cubic Hermite on pos and the same in rotation-vector space on rot (squad
 //                   like), Catmull-Rom tangents through inner keys, zero at the first and last key
 //   around the span the hand blends from the plain carry into the keyed span over KEY_BLEND frames
-//                   (inside grab..release; smoothstep), so nothing jumps
+//                   (inside grab..release; smoothstep), so nothing jumps; keys that start within KEY_BLEND frames
+//                   of the grab with a grip off where the hand is turn the hand onto it before (holdHook approach)
 //   the object leads the hand: compile.js asks holdHook for the palm frame the keys put the grip
 //                   at, palm = key o attach^-1, and pose.js solves the hand to it (compiler/hold.js)
 // The object itself is still drawn in the hand (object-pose.js): the residual is what the arm
@@ -25,6 +26,8 @@ import { chooseGrip, between, thinBody } from "./grip-choice.js";
 export const KEY_BLEND = 8;
 // the frames a hand takes to turn into a chosen grip before its grab and out of it after its release (grip-choice.js)
 const GRAB_EASE = 12;
+// how far (m, deg) the grip keys put the hand on at the grab may be from where the reach brought it before the hand turns onto it first
+const OFF_GRIP = { m: 0.01, deg: 5 };
 
 const smooth = x => x * x * (3 - 2 * x);
 /** [grab, release] in absolute frames of `out` (object-pose.js spanOf, kept here to stay out of its import cycle). */
@@ -203,6 +206,33 @@ export function holdHook(ctx, out, solvePlain, solveLed) {
 		const h = heldAt(id, o, f);
 		return { w: 1, palm: h ? { pos: add(scale(grip.pos, 1 - h.w), scale(h.palm.pos, h.w)), R: between(grip.R, h.palm.R, h.w) } : grip, measure, pole };
 	};
+	// keys that lead from the grab frame, or from fewer than KEY_BLEND frames after it, put the hand on their grip at once (or
+	// within those frames: palm = first key o attach^-1). Where that grip is not where the hand would be at the first key (an
+	// at/along offset of the agent's choosing: bench session cb2503b5's cup, 13.6 cm in the grab frame; keys two frames after
+	// the grab: 7146050f's box), the hand turns onto it over the GRAB_EASE frames up to the first key instead, as onto a chosen
+	// grip (gripAround): before the grab with the object at rest, after it carrying the object there. A grip within OFF_GRIP
+	// of where the hand would be changes nothing.
+	const offGrips = new WeakMap();
+	const offGrip = (id, o, grip) => {
+		if (!offGrips.has(out.baked)) offGrips.set(out.baked, new Map());
+		const cache = offGrips.get(out.baked), had = cache.get(id);
+		if (had && had.map === out.timeMap) return had.off;
+		attaching.add(id);
+		let palm;
+		try { palm = palmOf(o, solvePlain(Math.max(spanIn(out, o)[0], Math.round(curveIn(out, id).t[0]))).s); } finally { attaching.delete(id); }
+		const turn = relative(palm, grip).R, deg = Math.acos(Math.min(1, Math.max(-1, (turn[0][0] + turn[1][1] + turn[2][2] - 1) / 2))) * 180 / Math.PI;
+		const off = Math.hypot(...sub(grip.pos, palm.pos)) > OFF_GRIP.m || deg > OFF_GRIP.deg;
+		cache.set(id, { map: out.timeMap, off });
+		return off;
+	};
+	const approach = (id, o, f) => {
+		const curve = curveIn(out, id), [grab, release] = spanIn(out, o), t0 = Math.max(grab, Math.round(curve.t[0]));
+		if (!(f < t0 && f >= t0 - GRAB_EASE) || t0 - grab >= KEY_BLEND || t0 > release) return null;
+		const grip = compose(keyedPose(curve, t0), invert(attach(id)));
+		if (!offGrip(id, o, grip)) return null;
+		const w = smooth(1 - (t0 - f) / GRAB_EASE);
+		return w > 1e-3 ? { w, palm: grip, measure: s => palmOf(o, s), pole: planOf(id, o).get(t0) } : null;
+	};
 	// a release within KEY_BLEND frames of the last key: the hands finish easing out of the keys after it (weight from the last
 	// key), the holding hand from the palm they gave it at the release (the object stays where it was let go), each hand with
 	// the elbow pole (and the second hand the roll) planned for the release frame
@@ -217,7 +247,7 @@ export function holdHook(ctx, out, solvePlain, solveLed) {
 	// the hand that holds a keyed carry follows its keys
 	const lead = (k, f, s, c) => {
 		for (const [id, o] of held) {
-			const pre = spec.props?.[o.prop]?.hand === k ? gripAround(id, o, f) ?? easeOut(id, o, f) : null;
+			const pre = spec.props?.[o.prop]?.hand === k ? gripAround(id, o, f) ?? approach(id, o, f) ?? easeOut(id, o, f) : null;
 			if (pre) return pre;
 			const h = spec.props?.[o.prop]?.hand === k ? heldAt(id, o, f) : null;
 			if (h) return { ...h, pole: planOf(id, o).get(f) };
