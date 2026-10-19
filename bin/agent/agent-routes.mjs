@@ -586,13 +586,13 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 			if (!captured?.dataUrl?.startsWith("data:image/")) throw new StudioProtocolError("TARGET_NOT_READY", "The current frame has no image bytes.");
 			const match = /^data:([^;]+);base64,(.*)$/.exec(captured.dataUrl);
 			frameObservation = { data: match[2], mimeType: match[1], revision: captured.revision, receiptId: captured.receiptId };
-		} else if (value.context.scene?.characterCount >= 2 || (value.context.shots?.length ?? 0) >= 1 || /샷|컷|카메라|커버리지|OTS|투샷|프레임|shot|camera|coverage|two-shot|framing/i.test(value.text || "")) {
-			// A staging or coverage request also sees the top-view plan; without it the turn just runs.
+		} else if ((await import("./studio-context-budget.mjs")).wantsPlan({ text: value.text, characterCount: value.context.scene?.characterCount ?? 0, shots: value.context.shots?.length ?? 0, planSeen: session.planSceneId === value.context.host.sceneId })) {
+			// A staging or coverage request sees the top-view plan, and so does a staged scene's first turn here (once per scene).
 			try {
 				const captured = await hub.command("capture_plan_png", {}, value.context.host.workspaceHandle);
 				const match = /^data:([^;]+);base64,(.*)$/.exec(captured?.dataUrl ?? "");
 				if (!match) throw new Error("The plan capture has no image bytes.");
-				frameObservation = { kind: "plan", data: match[2], mimeType: match[1], revision: captured.revision ?? value.context.revision?.scene ?? null, receiptId: captured.receiptId };
+				frameObservation = { kind: "plan", data: match[2], mimeType: match[1], revision: captured.revision ?? value.context.revision?.scene ?? null, receiptId: captured.receiptId }; session.planSceneId = value.context.host.sceneId;
 			} catch (error) {
 				console.warn(`[agent] plan observation skipped: ${error.message}`);
 			}

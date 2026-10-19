@@ -193,7 +193,7 @@ function receiptSummary(value) {
 }
 
 const ATTACHMENT_LABEL = "User attachment ";
-const FRAME_OBSERVATION_LABEL = "Studio frame observation";
+const OBSERVATION_LABEL = /^Studio (frame|plan) observation\b/; // the editor's own frame or top-view plan, never the user's text
 
 /** A pasted picture the sidecar put in front of the turn text (#367): its label
  * plus the inline image, or the label alone when the image was too large to keep. */
@@ -274,7 +274,7 @@ export function transcriptFromHistory(history = []) {
 	const flushPiAttachments = (text = "") => {
 		const attachments = piPendingAttachments.filter((entry) => entry.dataUrl);
 		piPendingAttachments = [];
-		const isFrame = text.startsWith(FRAME_OBSERVATION_LABEL);
+		const isFrame = OBSERVATION_LABEL.test(text);
 		if (isFrame) {
 			if (attachments.length) transcript.push({ kind: "user", attachments });
 			return;
