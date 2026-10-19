@@ -46,7 +46,7 @@ The camera tutorial seeds a compiled walk, so you can scrub the timeline, drive 
 
 ## Demo
 
-https://github.com/user-attachments/assets/92895b76-7e5e-4e5c-9838-cb42137ba6f9
+https://github.com/user-attachments/assets/00f28c2f-e8e2-43eb-b253-b6c2436e1818
 
 ## What you can do
 
