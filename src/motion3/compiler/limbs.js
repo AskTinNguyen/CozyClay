@@ -164,10 +164,17 @@ const FINGER_PRESETS = {
 // thumb side (+), by preset weight; the index leads the thumb round one side, the little finger the other.
 const SPREAD = { spherical: { Index: 9, Middle: 2, Ring: -5, Pinky: -12 } };
 
+/** Degrees phalanx k (0..2) of finger f curls at preset weights `weights` (blended over relaxed). */
+export function fingerCurl(weights, f, k) {
+	const base = FINGER_PRESETS.relaxed;
+	return base[f][k] + Object.entries(weights ?? {}).reduce((acc, [p, w]) => acc + (w || 0) * ((FINGER_PRESETS[p]?.[f]?.[k] ?? base[f][k]) - base[f][k]), 0);
+}
+/** The fist's curl of phalanx k of finger f: as far as a finger closes. */
+export const fistCurl = (f, k) => FINGER_PRESETS.fist[f][k];
+
 /** Blend presets by weight over `relaxed` and curl every finger toward the palm. */
 export function fingers(sk, s, side, weights) {
-	const base = FINGER_PRESETS.relaxed, sign = side === "Left" ? -1 : 1;
-	const curl = (f, k) => base[f][k] + Object.entries(weights ?? {}).reduce((acc, [p, w]) => acc + (w || 0) * ((FINGER_PRESETS[p]?.[f]?.[k] ?? base[f][k]) - base[f][k]), 0);
+	const sign = side === "Left" ? -1 : 1, curl = (f, k) => fingerCurl(weights, f, k);
 	for (const f of ["Index", "Middle", "Ring", "Pinky"]) {
 		const spread = Object.entries(weights ?? {}).reduce((acc, [p, w]) => acc + (w || 0) * (SPREAD[p]?.[f] ?? 0), 0), j = sk.index[`${side}Hand${f}1`];
 		if (spread && j !== undefined) rotateSubtree(sk, s, j, s.P[j].slice(), axisRot(palmAxes(sk, s, side).n, spread));

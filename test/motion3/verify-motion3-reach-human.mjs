@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import { compileSpec } from "../../src/motion3/pipeline.js";
 import { motionScene } from "../../src/motion3/scene.js";
 import { skeletonFor } from "../../src/motion3/rigs/index.js";
+import { signedDistance } from "../../src/motion3/shapes.js";
 
 const check = (name, fn) => { fn(); console.log(`ok - ${name}`); };
 const sub = (a, b) => a.map((v, i) => v - b[i]), len = a => Math.hypot(...a), dot = (a, b) => a.reduce((s, v, i) => s + v * b[i], 0);
@@ -37,9 +38,11 @@ for (const rig of ["y-bot-tpose", "x-bot-tpose"]) {
 	check(`${rig}: the wrist's speed peaks early, about a third into the reach, and the slow approach takes the rest`, () => assert.ok(m.peakAt <= 0.45 && m.peakAt >= 0.2, `${m.peakAt}`));
 	// a can (6.6 cm) fits both rigs' open hands with the margin (Y Bot 11.5 cm, X Bot 9.7 cm; the 8 cm cup only the Y Bot's)
 	check(`${rig}: the hand stays open wider than a can through the fast transport, then closes on it in the slow approach`, () => {
-		const can = rec("cylinder", "cylinder", -0.18, 0.75, 0.42, 0.066, 0.122, 0.066), c = measure(sk, run(sk, [TABLE, can], spec({ kind: "object", object: "cylinder", local: [0, 0.06, 0], grasp: "power" })), cupMid);
+		const can = rec("cylinder", "cylinder", -0.18, 0.75, 0.42, 0.066, 0.122, 0.066), took = run(sk, [TABLE, can], spec({ kind: "object", object: "cylinder", local: [0, 0.06, 0], grasp: "power" })), c = measure(sk, took, cupMid);
 		for (let f = F0; f <= F0 + Math.round(0.38 * REACH); f++) assert.ok(c.aperture(f) >= 0.066 + 0.015, `f${f} ${c.aperture(f)}`);
-		assert.ok(c.aperture(F0 + REACH) < c.aperture(F0) - 0.02, `${c.aperture(F0 + REACH)}`);
+		// closes on it: the aperture shrinks, or (fingers that stop on the can, #816) the thumb and index tips are on its side
+		const end = took.out.frames[F0 + REACH].s.P, onCan = b => signedDistance(took.out.ctx.objectsAt(F0 + REACH).cylinder, end[sk.index[b]]) - 0.009 <= 0.008;
+		assert.ok(c.aperture(F0 + REACH) < c.aperture(F0) - 0.02 || (onCan("RightHandThumb4") && onCan("RightHandIndex4")), `${c.aperture(F0 + REACH)}`);
 	});
 	check(`${rig}: the head turns to the cup before the hand gets there and stays on it`, () => {
 		assert.ok(m.gaze(F0) > 45, `start ${m.gaze(F0)}`);
