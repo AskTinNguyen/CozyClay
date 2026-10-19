@@ -109,6 +109,20 @@ test('cast: a character groups only under an object that is in the scene (#655)'
   } finally { f.dispose(); }
 });
 
+test('cast: a pose with a bone outside POSE_BONES is refused and leaves the cast as it was (#773)', () => {
+  const f = castFixture();
+  try {
+    owned(f);
+    const before = structuredClone(f.cast.read());
+    const refused = f.run('character.setPose', { characterId: 'actor-a', pose: { id: 'probe', bones: { mixamorigRightArm: [0, 0, 1] } } }, 'agent');
+    assert.equal(refused.code, 'INVALID_ARGUMENT');
+    assert.match(refused.message, /mixamorigRightArm.*rArm/);
+    assert.equal(f.run('character.set', { id: 'actor-a', set: { pose: { id: 'probe', bones: { __probe__: [0, 0, 0] } } } }, 'agent').code, 'INVALID_ARGUMENT');
+    assert.deepEqual(f.cast.read(), before);
+    ok(f.run('character.setPose', { characterId: 'actor-a', pose: { id: 'probe', bones: { rArm: [0, 0, 1] } } }, 'agent'));
+  } finally { f.dispose(); }
+});
+
 test('cast: moving an object carries the characters grouped under it, in one undo (#655)', () => {
   const f = castFixture();
   try {

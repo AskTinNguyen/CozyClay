@@ -2,7 +2,7 @@
 // name their character explicitly, so they run the same way whichever
 // character is active and whatever mode the editor is in.
 import { studioActionDeclaration } from "../studio-actions.js";
-import { characterOf, fail, changedIds } from "./shared.js";
+import { characterOf, fail, changedIds, checkPoseBones } from "./shared.js";
 import { elementSetSchema, registerElementSet } from './elements.js';
 import './elements/character.js';
 import { createCharacterEntry, CHARACTER_KIND_IDS, POSTURES, PROXY_FIGURE_MODEL, isProxyFigure } from '../scenes.js';
@@ -43,7 +43,11 @@ export function register(registry, ports) {
 	const owner = () => ports.storeDomain('cast');
 	const mounted = () => Boolean(ports.storeDomain?.('cast')) || 'The cast document owner is not mounted.';
 	const character = characterId => owner().read().find(row => row.id === characterId) ?? fail('STALE_TARGET', `Character ${characterId} is not in this scene.`);
-	const pose = value => typeof value === 'string' ? owner().poses().find(row => row.id === value) ?? fail('STALE_TARGET', `Pose ${value} is not in the library.`) : value;
+	const pose = value => {
+		if (typeof value === 'string') return owner().poses().find(row => row.id === value) ?? fail('STALE_TARGET', `Pose ${value} is not in the library.`);
+		checkPoseBones(value?.bones);
+		return value;
+	};
 	const patch = (characterId, update) => { character(characterId); owner().update(characterId, update); };
 	// A character groups under a scene object that stands in the world. An
 	// object a character carries is refused: it rides a bone, not a route.

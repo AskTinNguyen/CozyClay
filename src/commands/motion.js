@@ -1,6 +1,6 @@
 // Motion and IK commands share one per-character authored-intent owner.
 import { STUDIO_IK_CHAIN_TRACKS, studioActionDeclaration } from "../studio-actions.js";
-import { fail, characterOf } from "./shared.js";
+import { fail, characterOf, checkPoseBones } from "./shared.js";
 import { elementSetSchema, registerElementSet } from './elements.js';
 import { registerTiming, timingDeclarations } from './motion-timing.js';
 import './elements/motion.js';
@@ -41,6 +41,7 @@ export function register(registry, ports) {
 	for (const declaration of tools) registry.register({ ...declaration, available: mounted, run(args) {
 		characterOf(ports, args.characterId);
 		if (args.frame >= ports.state().frameCount) fail('INVALID_RANGE', 'IK frame is outside the timeline.');
+		checkPoseBones(args.pose.bones);
 		for (const angles of Object.values(args.pose.bones)) if (!Array.isArray(angles) || angles.length !== 3 || !angles.every(Number.isFinite)) fail('INVALID_ARGUMENT', 'Pose bones require three finite rotation angles.');
 		owner().keyPose(args.characterId, args.frame, args.pose);
 		return { affectedIds: [args.characterId], summary: declaration.label };
