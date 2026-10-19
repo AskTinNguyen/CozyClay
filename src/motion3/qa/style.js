@@ -68,9 +68,12 @@ export function popChecks(sk, out, L, push) {
 	}
 }
 
-/** True when a declared support (checks.supports) carries the body at frame f. */
+/** Trunk capsules that rest a body on the floor (lying, sitting on it): within this of the floor, the floor carries it. */
+const FLOOR_REST = ["hips", "torso_lo", "torso_hi"], FLOOR_TOL = 0.04;
+/** True when the floor under the trunk or a declared support (checks.supports) carries the body at frame f. */
 function supported(out, f, supports) {
 	const { P } = out.frames[f].s, I = out.ctx.sk.index;
+	if (CAPSULES.some(([part, a, b, r]) => FLOOR_REST.includes(part) && Math.min(P[I[a]][1], P[I[b]][1]) - r < FLOOR_TOL)) return true;
 	return supports.some(sp => {
 		const box = out.objectsAt(f)[sp.object], cap = CAPSULES.find(c => c[0] === (sp.part ?? "hips"));
 		return box && cap && Math.min(...segPoints(P[I[cap[1]]], P[I[cap[2]]]).map(p => sdBox(p, box))) - cap[3] < (sp.tol ?? 0.04);

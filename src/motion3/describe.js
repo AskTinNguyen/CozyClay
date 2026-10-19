@@ -81,7 +81,7 @@ const SCHEMAS = {
 	probes: () => listOf({ ...objectOf(PROBE_FIELDS, PROBE_TYPES, "probes", ["name"]), ...oneOfRequired(["distance", "position"]) }, { maxItems: 16 }),
 	channels: () => ({ type: "object", description: "key.set: channel -> value",
 		properties: Object.fromEntries([...VEC_CHANNELS, ...NUM_CHANNELS, ...MAP_CHANNELS].filter(ch => !SKILL_CHANNELS.has(ch)).map(ch => [ch, channelSchema(ch)])),
-		patternProperties: { "^w_.+_[lr]$": { type: "number", minimum: 0, maximum: 1, description: rangeOf("w_a_l")[3] }, "_vis$": { type: "number", description: "shown above 0.5" } },
+		patternProperties: { "^w_.+_[lr]$": { type: "number", minimum: 0, maximum: 1, description: rangeOf("w_a_l")[3] }, "_vis$": { type: "number", description: "shown > 0.5" } },
 		additionalProperties: { type: "number", description: "spec.channels, an object's or a check's when" } }),
 	refs: () => ({ type: "string", oneOf: REF_KINDS.map(k => ({ pattern: `^${k}:`, description: typeOf(REF_DOCS, k, "refs") })) }),
 	fix: () => ({ oneOf: [{ const: false }, objectOf(FIX_KEYS, FIX_TYPES, "fix")] }),

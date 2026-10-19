@@ -186,7 +186,7 @@ for (const line of [
 	"keys[7] (f66) sets w_handel_l, but there is no anchor \"handel\"; did you mean \"w_handle_l\"?",
 	"anchors.grip_l: an anchor name may not end in _l or _r",
 	"generators[0].heading must be [h0, h1] in degrees (yaw 0 faces +Z and + turns toward +X), got [125]",
-	"fpitch_r = 95 is outside -60..90 (toe-down pitch in degrees: + lifts the heel (the toes stay flat), - lifts the toes)",
+	"fpitch_r = 95 is outside -60..90 (toe-down pitch, deg: + lifts the heel (toes flat), - lifts the toes)",
 ]) expect(`validator: ${line.slice(0, 60)}`, msg.includes(line), msg);
 expect("validator: a foot target at the floor names the ankle convention", reject(s => { s.keys[0].set.foot_l = [0.65, 0, 0.4]; }).includes("foot_l y = 0 puts the ankle into the floor; foot_* is the ANKLE target"));
 expect("validator: checks.zzz is named, not a crash, with skills present", /checks\.zzz is not a check \(checks: /.test(reject(s => { s.use = [{ skill: "sitInSeat", f0: 0, args: { car: "Car" } }]; s.checks.zzz = 1; })));
