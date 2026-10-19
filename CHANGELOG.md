@@ -2,6 +2,35 @@
 
 ## Unreleased
 
+## 3.0.2 - 2026-10-19
+
+Fixes from an audit of the latest Studio agent sessions, and a grasp round.
+
+Agent
+
+- A scene-document read answers each take's specId instead of its whole
+  source (460k → 4k characters on a large scene); a character named in
+  `ids` gets its spec once. A read of several kinds stays under 90,000
+  characters and lists what it left out in `omitted`; one tool result is
+  cut at 100,000 characters.
+- `undo_edit` reverts the agent's own newest edit inside its message; the
+  message still lands as one undo step.
+- A job that answered keeps its answer when a toast appears meanwhile
+  (a compile no longer fails because the user entered Pose mode).
+- The reply-language reminder repeats during long messages.
+
+Objects and motion
+
+- New `text` object: words in one action, flat (any script) or extruded
+  (Latin), with a bundled font loaded only when needed.
+- A prop let go on a moving body (a truck seat, a hinged lid) rides it.
+- An object anchor takes `grasp` (power, pinch, hook, palm) and an optional
+  socket: the compiler turns the hand by the object's part (a bar, a grip,
+  a magazine) or a stored `object.grasp` socket; two hands put a grasp
+  anchor on each part, and a group can be an anchor.
+- No pop when a carry's keys take the hand at the grab, and a prop point on
+  the carrying hand stays on the object outside the carry.
+
 ## 3.0.1 - 2026-10-19
 
 Fixes from an audit of recent Studio agent sessions.
