@@ -2,8 +2,8 @@
 // Lane reach (grasp round 2): reachGrip moves like a person's reach to grasp (src/motion3/skills/reach-human.js).
 // Session 7f15b4ae ("컵만들고 컵 손으로 잡아봐", the installed spec): the wrist's speed peaked late (57 % of the reach),
 // the fingers closed from the first frame (thumb tip to index tip 11.5 -> 3 cm by mid-reach, under the 8 cm cup) and
-// the head never turned to the cup (66 deg off). Pins: an early-peaked transport, the hand open wider than the cup to
-// the late close, the head on the cup before the hand, one planned grasp turn (no wrist jump), the old ease for a wide
+// the head never turned to the cup (66 deg off). Pins: an early-peaked transport ending in a slow approach, the hand open
+// wider than a can through the transport, the head on the cup before the hand, one planned grasp turn (no wrist jump), the old ease for a wide
 // box and for a reach to a moving prop, and a head the spec keys left alone.
 import assert from "node:assert/strict";
 import { compileSpec } from "../../src/motion3/pipeline.js";
@@ -36,16 +36,19 @@ for (const rig of ["y-bot-tpose", "x-bot-tpose"]) {
 	const sk = skeletonFor(rig), session = run(sk, [TABLE, CUP], spec({ kind: "world", p: cupMid })), m = measure(sk, session, cupMid);
 	check(`${rig}: the wrist's speed peaks early, about a third into the reach, and the slow approach takes the rest`, () => assert.ok(m.peakAt <= 0.45 && m.peakAt >= 0.2, `${m.peakAt}`));
 	// a can (6.6 cm) fits both rigs' open hands with the margin (Y Bot 11.5 cm, X Bot 9.7 cm; the 8 cm cup only the Y Bot's)
-	check(`${rig}: the hand stays open wider than a can until late in the reach, then closes on it`, () => {
+	check(`${rig}: the hand stays open wider than a can through the fast transport, then closes on it in the slow approach`, () => {
 		const can = rec("cylinder", "cylinder", -0.18, 0.75, 0.42, 0.066, 0.122, 0.066), c = measure(sk, run(sk, [TABLE, can], spec({ kind: "object", object: "cylinder", local: [0, 0.06, 0], grasp: "power" })), cupMid);
-		for (let f = F0; f <= F0 + Math.round(0.68 * REACH); f++) assert.ok(c.aperture(f) >= 0.066 + 0.015, `f${f} ${c.aperture(f)}`);
+		for (let f = F0; f <= F0 + Math.round(0.38 * REACH); f++) assert.ok(c.aperture(f) >= 0.066 + 0.015, `f${f} ${c.aperture(f)}`);
 		assert.ok(c.aperture(F0 + REACH) < c.aperture(F0) - 0.02, `${c.aperture(F0 + REACH)}`);
 	});
 	check(`${rig}: the head turns to the cup before the hand gets there and stays on it`, () => {
 		assert.ok(m.gaze(F0) > 45, `start ${m.gaze(F0)}`);
 		for (const f of [F0 + 9, F0 + REACH, F0 + REACH + 20]) assert.ok(m.gaze(f) < 25, `f${f} ${m.gaze(f)}`);
 	});
-	check(`${rig}: the session's take is no worse in QA (3 problems before)`, () => assert.ok(session.qa.problems <= 3, `${session.qa.problems}`));
+	check(`${rig}: the session's take is no worse in QA: its 2 problems (REACH, CONTACT), no hand in the cup`, () => {
+		assert.ok(session.qa.problems <= 2, session.qa.groups.map(g => `${g.kind}:${g.subject}`).join(" | "));
+		assert.ok(!session.qa.groups.some(g => g.kind === "COLLIDE"), session.qa.groups.map(g => `${g.kind}:${g.subject}`).join(" | "));
+	});
 }
 
 const sk = skeletonFor("y-bot-tpose"), I = sk.index;

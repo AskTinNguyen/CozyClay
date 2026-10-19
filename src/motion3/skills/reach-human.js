@@ -3,8 +3,8 @@
 //              longer deceleration (about two thirds) is the slow approach onto the object (time to peak velocity 33 %
 //              of movement time: Paulignan et al., Exp Brain Res 1991, doi:10.1007/BF00231858). A minimum-jerk bell
 //              (Flash & Hogan 1985) on time warped by t^WARP puts the peak at 0.5^(1/WARP) of the reach.
-//   grasp      the hand stays open wider than the object through most of the transport and closes onto it only
-//              late: the maximum grip aperture comes at about two thirds to three quarters of the movement (Jeannerod,
+//   grasp      the hand stays open wider than the object through the transport and closes onto it in the slow
+//              approach: the maximum grip aperture comes at about two thirds to three quarters of the movement (Jeannerod,
 //              J Mot Behav 1984; Hu et al., Exp Brain Res 2005), and it scales with the object's size (Marteniuk et al.,
 //              Hum Mov Sci 1990), a couple of centimetres wider than the object (MARGIN). These rigs' relaxed hands are
 //              already open (thumb tip to index tip: Y Bot 11.5 cm, X Bot 9.7 cm) and there is no wider preset: a thing
@@ -12,7 +12,9 @@
 //              reach, then closed on it; a wider one closes along the reach as before, or the open fingers would sweep
 //              into it on the way (a 10 cm box: 6 cm deep). So does a thing that sits more than OVER m in from the near
 //              edge of what it stands on: the open fingertips hang below the hand and dragged across the table top on the
-//              way (a cup 12 cm in, bench S8); the hand that plans an arc over the table is the next step.
+//              way (a cup 12 cm in, bench S8). CLOSE is 0.4, earlier than a person's: the hand comes straight in, and the
+//              open fingertips (about 8 cm past the finger middles) went into a cup wrapped from the side when they
+//              stayed open later (1.5 cm at 0.7); a hand that plans an arc around the thing is the next step.
 //   gaze       the eyes go to the grasp point before the hand gets there and stay on it until the hand has it
 //              (Johansson et al., J Neurosci 2001;21:6917). The rigs have no eyes: the head turns HEAD_SHARE of the
 //              way, done by GAZE of the reach, held through the hold, back by the end of the release.
@@ -22,11 +24,17 @@ import { fingers } from "../compiler/limbs.js";
 import { sdBox } from "../qa/geometry.js";
 
 const WARP = 0.65, ARM_WARP = 0.75, HEAD_SHARE = 0.75, MARGIN = 0.025, KNEE = 0.1, OVER = 0.08, BELOW = 0.12;
-export const CLOSE = 0.7, GAZE = 0.3;
-const TRANSPORT = [0.15, 0.3, 0.45, 0.6, 0.75, 0.9];
+export const CLOSE = 0.4, GAZE = 0.3;
+const TRANSPORT = [0.15, 0.3, 0.45, 0.6, 0.7, 0.8, 0.9];
 const minJerk = t => t * t * t * (10 - 15 * t + 6 * t * t);
 /** The share of the way the hand has come at fraction t of the reach. */
-const transport = (t, warp) => minJerk(Math.pow(Math.min(1, Math.max(0, t)), warp));
+// two phases: the fast transport covers NEAR of the way by SLOW of the time, the low-velocity approach the rest while the
+// fingers close (about half the movement time is that slow approach after peak deceleration, Paulignan et al. 1991)
+const NEAR = 0.9, SLOW = 0.7;
+const transport = (t, warp) => {
+	const u = Math.min(1, Math.max(0, t));
+	return u < SLOW ? NEAR * minJerk(Math.pow(u / SLOW, warp)) : NEAR + (1 - NEAR) * minJerk((u - SLOW) / (1 - SLOW));
+};
 /**
  * Inner keys of the transport for a reach of n frames: [frame from f0, the target's share, the arm's IK share]. The arm's
  * IK weight follows a milder bell (ARM_WARP): the hand is the blend of the two, and the target's bell alone on an arm
