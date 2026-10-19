@@ -94,9 +94,9 @@ export const FREE_TYPES = { keys: AS_CARRY, fall: AS_CARRY };
 export const OBJECT_TYPES = {
 	pivot: ref("vec3", "world hinge point"), axis: ref("vec3", "default +Y"), channel: str("angle channel, deg"),
 	prop: str("spec.props name: it rides that hand"), at: ref("vec3", "palm offset [d, l, n]"), along: ref("vec3", "+Y on the palm, fixed"),
-	visible: str("channel: shown > 0.5"), level: str("channel: strength 0..4"), grab: int("hand takes it", { default: 0 }), release: int("let go (else the end)"),
+	visible: str("channel: shown > 0.5"), level: str("channel: strength 0..4"), grab: int("hand takes it", { default: 0 }), release: int("let go (else end)"),
 	keys: { type: "array", items: { type: "object", properties: Object.fromEntries(OBJECT_KEY_FIELDS.map(f => [f, OBJECT_KEY_TYPES[f]])), required: ["f", "pos"], additionalProperties: false },
-		description: "world pose at f; the hand follows" },
+		description: "world pose at f; hand follows" },
 	fall: { ...FALL, description: "or a list; topic objects" },
 	follow: ref("ref"), offset: ref("vec3"), aim: { oneOf: [{ enum: ["face", "up"] }, { $ref: "#/$defs/vec3" }, { $ref: "#/$defs/ref" }], default: "up" },
 };
@@ -143,7 +143,7 @@ export const FIX_TYPES = {
 };
 
 export const REF_DOCS = {
-	joint: "joint:<Bone>", bone: "bone:<Bone> (= joint:)", prop: "prop:<prop>.<point> (origin always exists)",
+	joint: "joint:<Bone>", bone: "bone:<Bone> (= joint:)", prop: "prop:<prop>.<point> (origin exists)",
 	anchor: "anchor:<name>", landmark: "landmark:mouth", object: "object:<id>[.center|.top|.base], a body or group; bare = its surface in a distance",
 	person: "person:<id>.<Bone>",
 };
