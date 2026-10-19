@@ -115,12 +115,15 @@ export function trackLevel(id, frame, take) {
 }
 
 /**
- * True while a compiled take holds the record in a hand (a grabbed cup): its track is in world
- * space then, so the carry from its own parents (the table it stood on) is cut, like `attach`.
+ * True while a compiled take holds the record in a hand (a grabbed cup), or the record rides a
+ * moving body after its release (`world`, take.js): its track is in world space then, so the
+ * carry from its own parents (the table it stood on) is cut, like `attach`.
  */
 function held(id, frame, take) {
 	const track = take?.objectTracks?.get?.(id);
-	return !!track?.hold && track.hold[trackFrame(track, frame)] === 1;
+	if (!track) return false;
+	const at = trackFrame(track, frame);
+	return track.hold?.[at] === 1 || track.world?.[at] === 1;
 }
 
 /** The record's own route sample (or compiled track) as a matrix, or null when it does not travel. */
