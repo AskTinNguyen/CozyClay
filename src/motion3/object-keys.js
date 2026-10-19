@@ -21,6 +21,7 @@ import { polePlan, smoothPath, smoothed } from "./hold-plan.js";
 import { secondGrip, secondHold, gripGate } from "./second-hand.js";
 import { SIDES } from "./compiler/pose.js";
 import { chooseGrip, between, thinBody } from "./grip-choice.js";
+import { graspedBy } from "./compiler/socket-grip.js";
 
 /** Frames over which the hand blends into and out of the keyed span. */
 export const KEY_BLEND = 8;
@@ -111,8 +112,8 @@ export function holdHook(ctx, out, solvePlain, solveLed) {
 	if (!held.length) return null;
 	const palmOf = (o, s) => carriedPose(sk, spec, s, { prop: o.prop }), attached = new WeakMap(), attaching = new Set();
 	const restAt = (id, f) => ctx.restingAt?.(id, f) ?? scene?.objects?.[id] ?? groupsOf(scene)[id];
-	// a keyed carry of a thin body (a cup, a can, a bar) whose grip is free (no at/along, no orient: false, no keyed wrist at
-	// the grab) keeps the grip its keyed path holds most comfortably (grip-choice.js), solved on the plain frames with the
+	// a keyed carry of a thin body (a cup, a can, a bar) whose grip is free (no at/along, no orient: false, no grasp fit, no keyed
+	// wrist at the grab) keeps the grip its keyed path holds most comfortably (grip-choice.js), solved on the plain frames with the
 	// body read at rest; a box keeps the grip grip.js gives it at the grab
 	const choices = new WeakMap(), mapped = f => (out.timeMap ? Math.round(out.timeMap(f)) : f);
 	// chosen once per compile (the first bake): the fixes' rebakes move the body a little, the carry's keys not at all
@@ -121,7 +122,7 @@ export function holdHook(ctx, out, solvePlain, solveLed) {
 		const cache = choices.get(out), o = spec.objects[id], k = spec.props?.[o.prop]?.hand, grab = spanIn(out, o)[0], b = out.baked ?? {};
 		if (cache.has(id)) return cache.get(id);
 		cache.set(id, null);
-		const free = k && o.at === undefined && o.along === undefined && (o.grab !== undefined || !scene?.objects?.[id]) && thinBody(scene, id) && !(spec.fits ?? []).some(fit => fit.side === k && fit.orient === false)
+		const free = k && o.at === undefined && o.along === undefined && (o.grab !== undefined || !scene?.objects?.[id]) && thinBody(scene, id) && !(spec.fits ?? []).some(fit => fit.side === k && fit.orient === false) && !graspedBy(spec, scene, id, k)
 			&& !["wtwist", "wflex"].some(ch => Math.abs(b[`${ch}_${k}`]?.[grab] ?? 0) > 1e-3)
 			// keys that start after the grab: the body rides the hand from where it rests, which only today's grip meets exactly
 			&& mapped(Math.min(...o.keys.map(key => key.f))) <= grab;

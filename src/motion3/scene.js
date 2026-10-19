@@ -7,7 +7,8 @@
 // and scene.others (take-source.js), so the groups are rebuilt from the entries: groupsOf.
 // `others` lists the records with no box (an Empty, a light, an effect, a plane) by id with their
 // renderer and ancestors: a switch entry (C15) may name them, and a skill finds a kit's lit parts
-// there. A body that glows (record.glow) says so (`glow: true`).
+// there. A body that glows (record.glow) says so (`glow: true`); a record's grasp sockets (record.grasp,
+// ../object-grasp.js) ride along for the hand (sockets.js).
 import { objectSize } from "../object-size.js";
 import { mul, rx, ry, rz } from "./compiler/math.js";
 
@@ -50,11 +51,11 @@ export function motionScene(objects = []) {
 		if (!o || o.hidden) continue;
 		const size = objectSize(o), up = ancestorsOf(o, byId);
 		if (NO_BODY.has(o.renderer) || !(size.width > 0 && size.height > 0 && size.depth > 0)) {
-			others[o.id] = { renderer: o.renderer, ancestors: up.map(p => p.id) };
+			others[o.id] = { renderer: o.renderer, ancestors: up.map(p => p.id), ...(o.grasp ? { grasp: o.grasp } : {}) };
 			continue;
 		}
 		out[o.id] = { name: o.name, renderer: o.renderer, ...poseOf(o), half: [size.width / 2, size.height / 2, size.depth / 2],
-			ancestors: up.map(p => p.id), ...(up.length ? { ancestorPoses: up.map(poseOf) } : {}), ...(o.glow ? { glow: true } : {}) };
+			ancestors: up.map(p => p.id), ...(up.length ? { ancestorPoses: up.map(poseOf) } : {}), ...(o.glow ? { glow: true } : {}), ...(o.grasp ? { grasp: o.grasp } : {}) };
 	}
 	return { objects: out, groups: groupsOf({ objects: out }), others };
 }

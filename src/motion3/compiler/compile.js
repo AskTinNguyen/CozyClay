@@ -187,6 +187,7 @@ export function compileMotion(spec, { sk, scene }, opts = {}) {
 		rebake(keys) {
 			out.keys = keys;
 			out.baked = bakeChannels(keys, frameCount, flowOptions(spec.flow));
+			ctx.socketTurns = new Map();
 			steadyHead(out.baked, keys, frameCount);
 			// a held pose breathes and shifts its weight (idle.js): offsets solveFrame adds, contacts and out.baked stay as keyed
 			ctx.idle = idleLayer(out.baked, { spec, sk, frameCount });
