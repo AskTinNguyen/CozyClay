@@ -3,6 +3,8 @@
 // The pedestrian a truck hits mid-walk, a sweep of pushes, and a two-person push (B is shoved by A, then A's hands
 // are on B's chest through person anchors before the shove).
 import { compileSpec } from "../../src/motion3/pipeline.js";
+import { runCompileJob } from "../../src/motion3/compile-job.js";
+import { takeSource, normalizeTakeSource, compileTakeSource } from "../../src/domains/motion/take-source.js";
 import { bakeTake } from "../../src/motion3/take.js";
 import { motionScene } from "../../src/motion3/scene.js";
 import { skeletonFor } from "../../src/motion3/rigs/index.js";
@@ -39,6 +41,9 @@ for (const [sk, rig] of [[yb, "Y Bot"], [xb, "X Bot"]]) for (const args of [{ di
 let refusal = "";
 try { stand(yb, { speed: 3 }); } catch (error) { refusal = error.message; }
 expect("without dir or from it is refused and says what it needs", /args\.dir/.test(refusal) && /args\.from/.test(refusal), refusal);
+refusal = "";
+try { stand(yb, { dir: [0, -1], speed: -5 }); } catch (error) { refusal = error.message; }
+expect("a negative speed is refused", /speed/.test(refusal), refusal);
 
 // 3. a two-person push: A (Y Bot, at the origin facing +z) shoves B (X Bot, 0.55 m in front, facing A) at f30
 const A = { id: "char-a", subject: "Mina", model: "y-bot-tpose", x: 0, y: 0, z: 0, rot: 0 }, B = { id: "char-b", subject: "Jiwoo", model: "x-bot-tpose", x: 0, y: 0, z: 0.55, rot: 180 };
@@ -51,6 +56,10 @@ const bSpec = { ...spec0, frames: 90, use: [{ skill: "standIdle", f0: 0, args: {
 const shoved = compileSpec(bSpec, { sk: xb, scene: sceneFor("char-b") });
 takes["char-b"] = bakeTake(xb, shoved.out, atB, { spec: bSpec });
 const bRest = shoved.out.frames[89].s.P[xb.index.Hips];
+const bJob = runCompileJob({ model: "x-bot-tpose", scene: sceneFor("char-b"), spec: bSpec, bake: { ...atB, prompt: "" } });
+const bSource = normalizeTakeSource(JSON.parse(JSON.stringify(takeSource(bJob.take, []))));
+expect("B's saved take keeps A's hips its from read and compiles back bit for bit without A's take", bJob.take.people?.["char-a"]?.names.join() === "Hips" && takeHash(compileTakeSource(bSource)) === takeHash(bJob.take),
+	JSON.stringify(bJob.take.people && Object.keys(bJob.take.people)));
 expect("B, shoved from A, falls away from A on the back and lies still, QA clean (A's body included)", shoved.qa.ok && bRest[2] > 1.2 && shoved.out.frames[89].c.pitch === -90, `${groups(shoved)} rest ${bRest}`);
 // A's palm goes where B's chest is when the shove lands (B's installed take), then lets go as B flies
 const shoveAt = personJoint(sceneFor("char-a"), "char-b", "Spine2", 30).map((v, i) => v + [0, -0.05, -0.15][i]);

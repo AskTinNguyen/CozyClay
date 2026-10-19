@@ -60,17 +60,17 @@ export const peopleList = scene => Object.entries(scene?.people ?? {}).map(([id,
 /**
  * What a take keeps of the people so that its saved source compiles the same again without the others' takes
  * (take-source.js): only the joints its person anchors and refs name (anywhere in the spec: anchors, a skill's
- * define, goals, probes), as plain arrays (a saved project is JSON), or null.
+ * define, goals, probes; a bare person:<id> in a skill's from is that person's Hips), as plain arrays (a saved project is JSON), or null.
  */
 export function keptPeople(scene, spec) {
 	const want = new Map(), keep = (id, b) => {
 		const p = scene?.people?.[id], bone = p && resolveBone(skeletonFor(p.rig), b).bone;
 		if (bone) want.set(id, new Set([...(want.get(id) ?? []), bone]));
 	};
-	const walk = v => {
-		if (typeof v === "string") { const m = /^person:([^.]+)\.(.+)$/.exec(v); if (m) keep(m[1], m[2]); }
-		else if (Array.isArray(v)) v.forEach(walk);
-		else if (v && typeof v === "object") { if (v.kind === "person") keep(v.person, v.bone); Object.values(v).forEach(walk); }
+	const walk = (v, key) => {
+		if (typeof v === "string") { const m = /^person:([^.]+)(?:\.(.+))?$/.exec(v); if (m && (m[2] || key === "from")) keep(m[1], m[2] ?? "Hips"); }
+		else if (Array.isArray(v)) v.forEach(x => walk(x));
+		else if (v && typeof v === "object") { if (v.kind === "person") keep(v.person, v.bone); for (const [k, x] of Object.entries(v)) walk(x, k); }
 	};
 	walk(spec);
 	if (!want.size) return null;

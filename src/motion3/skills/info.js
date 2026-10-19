@@ -74,7 +74,7 @@ export const SKILL_INFO = {
 	},
 	hitReaction: {
 		args: { dir: xz("[x, z] the way the body is thrown"), from: str("or what hits it: object:<id> | person:<id> (thrown away from it)"),
-			speed: num("launch speed, m/s (a shove 2, a car at 30 km/h about 8)", { default: 4 }), land: { enum: ["back", "front"], description: "default: back when hit from the front" } },
+			speed: num("launch speed, m/s (a shove 2, a car at 30 km/h about 8)", { default: 4, exclusiveMinimum: 0 }), land: { enum: ["back", "front"], description: "default: back when hit from the front" } },
 		needs: "a pose; dir or from", frames: "~40", adds: ["keys: thrown to rest"], example: { f0: 10, args: { dir: [0, -1], speed: 3 } },
 	},
 };

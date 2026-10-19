@@ -60,7 +60,9 @@ export function hitReaction(ctx) {
 		if (at) from[k] = { at, v: was ? at.map((x, i) => x - was[i]) : [0, 0, 0] };
 	}
 	const yaw0 = state.yaw ?? 0, [dx, dz] = pushOf(ctx, root0);
-	const speed = args.speed ?? 4, up = Math.min(2.5, Math.max(0.8, 0.3 * speed));
+	const speed = args.speed ?? 4;
+	if (!(Number.isFinite(speed) && speed > 0)) skillError(ctx.tag, `args.speed must be a launch speed above 0 m/s, got ${JSON.stringify(args.speed)}`);
+	const up = Math.min(2.5, Math.max(0.8, 0.3 * speed));
 	// pushed against the way it faces (a hit from the front) it lands on its back; "land" overrides
 	const facing = apply(ry(yaw0), [0, 0, 1]), back = (args.land ?? (dx * facing[0] + dz * facing[2] <= 0 ? "back" : "front")) === "back";
 	const head = Math.atan2(dx, dz) * 180 / Math.PI, yawT = back ? head + 180 : head, turn = wrap(yawT - yaw0), pitchT = back ? -90 : 90;
