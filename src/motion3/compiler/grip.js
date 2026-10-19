@@ -34,7 +34,7 @@ import { sdBox } from "../qa/geometry.js";
 import { partsOf } from "../object-pose.js";
 import { graspAnchor, socketCarry, socketHand, keepSocketTurn, ownWrist } from "./socket-grip.js";
 
-const NEAR = 0.06, THIN = 0.045, ALIGN = 0.3, PREFER = 30, DEG = 180 / Math.PI, ITER = 2, UP = [0, 1, 0];
+const NEAR = 0.06, UPRIGHT = 0.8, THIN = 0.045, ALIGN = 0.3, PREFER = 30, DEG = 180 / Math.PI, ITER = 2, UP = [0, 1, 0];
 const cols = (a, b, c) => [[a[0], b[0], c[0]], [a[1], b[1], c[1]], [a[2], b[2], c[2]]];
 const flat = (v, n) => sub(v, scale(n, dot(v, n)));
 
@@ -97,7 +97,7 @@ function bodyAt(ctx, f, k, A, anchor, now) {
 	// the same with keys or without), and no other body takes its place
 	const carry = best && carryOf(ctx, best.id);
 	if (!best || (carry?.side === k && ownGrip(ctx, carry.key, k, f) === null)) return null;
-	return anchor?.kind === "object" || best.d <= NEAR ? best.box : null;
+	return anchor?.kind === "object" || best.d <= NEAR ? { ...best.box, id: best.id } : null;
 }
 
 const AXES = [0, 1, 2];
@@ -162,6 +162,12 @@ export function gripHand(ctx, sk, s, side, k, c, f, diag) {
 	const measure = st => ({ pos: effectorAt(sk, ctx.spec, st, side, on.fit.effector ?? {}), R: (({ d, l, n }) => cols(d, l, n))(palmAxes(sk, st, side)) });
 	const I = sk.index, a = I[`${side}Arm`], fa = I[`${side}ForeArm`], h = I[`${side}Hand`];
 	const long = thinAxis(box.half), axis = long >= 0 ? apply(box.R, AXES.map(i => (i === long ? 1 : 0))) : null;
+	// an upright thin body (a cup, a can) under a plain anchor that nothing carries is held the way a grasp holds it
+	// (socket-grip.js): a power wrap from the side, not the hand over its top with the fingers down along the forearm
+	// (session 7f15b4ae). A carried one keeps its carry's grip, a lying bar or handle the roll rule below.
+	if (axis && Math.abs(axis[1]) > UPRIGHT && !carryOf(ctx, box.id)) {
+		return socketHand(ctx, sk, s, side, k, c, diag, on, st => effectorAt(sk, ctx.spec, st, side, on.fit.effector ?? {}), { w: { p: A, axis }, type: "power" });
+	}
 	const ax = palmAxes(sk, s, side), roll = norm(flat(ax.l, ax.d));
 	const axT = norm(sub(s.P[h], s.P[fa])), neutral = mul(s.R[fa], mul(T(sk.restWorldRot[fa]), sk.restWorldRot[h]));
 	const twist = wristNeed(neutral, s.R[h], axT, apply(mul(neutral, T(s.R[h])), ax.l)).twist;

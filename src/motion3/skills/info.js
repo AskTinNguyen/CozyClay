@@ -19,7 +19,7 @@ const walkArgs = Object.fromEntries(WALK_FIELDS.filter(f => f !== "type" && f !=
 
 export const SKILL_INFO = {
 	standIdle: {
-		args: { at: xz("[x, z] world m; default the root keyed before f0"), heading: num("degrees (yaw); default the keyed yaw"), until: int("hold the pose to this frame") },
+		args: { at: xz("[x, z] world m; default the root keyed before f0, else within reach of the next reachGrip's anchor (output.observations.placed); a stance in a body slides out of it"), heading: num("degrees (yaw); default the keyed yaw"), until: int("hold the pose to this frame") },
 		needs: "args.at, or a root keyed before f0", frames: "1 (to args.until when given)",
 		adds: ["keys: a standing pose, FK arms down"], example: { f0: 0, args: { at: [0, 0], heading: 0 } },
 		place: { at: 0.03 },

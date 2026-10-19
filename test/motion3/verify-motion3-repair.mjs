@@ -81,8 +81,9 @@ const character = { id: "char-1", model: "x-bot-tpose", subject: "Cascy", x: 0, 
 const objects = [{ id: "post", name: "Post", renderer: "cube", x: 0.16, y: 0.9, z: 0, rot: 0, rotX: 0, rotZ: 0, scaleX: 0.1, scaleY: 0.6, scaleZ: 0.6, footprint: { width: 1, depth: 1 }, height: 1 }];
 const registry = createStudioAppActions({ state: () => ({ characters: [character], objects, frameCount: 60 }), storeDomain: name => (name === "motion" ? owner : null) });
 const unwrap = x => x?.output ?? x;
-const plain = unwrap(registry.run("motion.compile", { characterId: "char-1", spec: stand(), install: false }));
-const out = unwrap(registry.run("motion.compile", { characterId: "char-1", spec: stand(), repair: { rounds: 2 } }));
+// fix.stance off: on, the compiler slides a stance out of the post itself (verify-motion3-stance-grasp.mjs)
+const plain = unwrap(registry.run("motion.compile", { characterId: "char-1", spec: stand({ fix: { stance: false } }), install: false }));
+const out = unwrap(registry.run("motion.compile", { characterId: "char-1", spec: stand({ fix: { stance: false } }), repair: { rounds: 2 } }));
 const take = takes.get("char-1");
 console.log(`  command: ${plain.qa.total} issues -> ${out.qa.total}; repair ${json(out.repair)}`);
 expect("motion.compile repair: fewer issues, the report is in the output", out.repair?.applied?.length >= 1 && out.qa.total < plain.qa.total, json(out.repair));

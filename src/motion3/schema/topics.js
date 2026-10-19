@@ -109,6 +109,6 @@ export const NOTES = {
 		"object:<id> takes a body or a group (the box around its parts); in a distance a bare object:<id> means its surface.",
 		"Goals and probes take every kind; spec.checks keep joint:, prop: and anchor:."],
 	fix: [`spec.fix keys: ${FIX_KEYS.join(", ")}; false turns all off. output.fixed reports what each one changed.`,
-		"reach, slide and self are on by default; penetration and retime are opt-in.",
+		"reach, slide, self and stance are on by default; penetration and retime are opt-in.",
 		"self keeps the arms out of the body on its fitted skin (QA BODY measures the same skin): wrist targets inside it go onto it, elbows turn about the shoulder-wrist line, a hand a little inside is pushed out. A fit's target (the mouth) is never moved; what is left is BODY, with checks.allow { part, object: <body part>, depth } for a contact meant to touch (a hand on a knee)."],
 };

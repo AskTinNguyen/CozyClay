@@ -38,8 +38,10 @@ export const RIFLE = [["rifle", "Rifle", "empty", null, ...at(0, 0), 1, 1, 1, 0,
 	["stand", "Stand", "cube", null, 0.12, 0, Z0, 0.3, Y0 - 0.12, 0.6]].map(rec);
 
 /** The rifle spec: the right hand takes the pistol grip, the left the magazine, then a walk; keys carry the rifle along `path(f)`. */
+// The stand reaches under the feet at the stance (it holds the rifle, the test is the hands): fix.stance off keeps the
+// stance where the session's was (skills/stance.js would slide it 0.2 m back out of the stand).
 export const rifleSpec = (grasp, keys) => ({
-	schema: "cozyclay.motion-spec.v1", fps: 24, frames: 200,
+	schema: "cozyclay.motion-spec.v1", fps: 24, frames: 200, fix: { stance: false },
 	use: [{ skill: "standIdle", f0: 0, args: { at: [0, 0], heading: 0 } },
 		{ skill: "reachGrip", f0: 8, args: { anchor: "grip", side: "r", reach: 22, hold: 158, define: { kind: "object", object: "pgrip", ...(grasp ? { grasp } : { local: [0, 0.06, 0] }) } } },
 		{ skill: "reachGrip", f0: 12, args: { anchor: "fore", side: "l", reach: 24, hold: 152, define: { kind: "object", object: "mag", ...(grasp ? { grasp } : { local: [0, 0.08, 0] }) } } },

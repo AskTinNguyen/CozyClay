@@ -60,13 +60,14 @@ export function socketCarry(ctx, k, f) {
 }
 
 /**
- * socketHand(ctx, sk, s, side, k, c, diag, on, effector): turn the hand of fit `on` ({ fit, w }) into its anchor's
- * socket grasp (see above); effector(st) is the fit's effector point on a pose.
+ * socketHand(ctx, sk, s, side, k, c, diag, on, effector, implicit): turn the hand of fit `on` ({ fit, w }) into its
+ * anchor's socket grasp (see above); effector(st) is the fit's effector point on a pose. `implicit` ({ w, type }) is
+ * the world socket and grasp of a fit without one (grip.js: an upright thin body under a plain anchor).
  */
-export function socketHand(ctx, sk, s, side, k, c, diag, on, effector) {
+export function socketHand(ctx, sk, s, side, k, c, diag, on, effector, implicit = null) {
 	const I = sk.index, a = I[`${side}Arm`], fa = I[`${side}ForeArm`], h = I[`${side}Hand`], plain = s.R[fa];
-	const w = anchorSocket(ctx, on.fit.anchor, s, diag, c, k), F = effector(s), fwd = norm(sub(s.P[h], s.P[fa]));
-	const type = ctx.spec.anchors[on.fit.anchor].grasp, base = socketPalm(side, w, type, fwd, c.yaw);
+	const w = implicit?.w ?? anchorSocket(ctx, on.fit.anchor, s, diag, c, k), F = effector(s), fwd = norm(sub(s.P[h], s.P[fa]));
+	const type = implicit?.type ?? ctx.spec.anchors[on.fit.anchor].grasp, base = socketPalm(side, w, type, fwd, c.yaw);
 	const measure = st => ({ pos: effector(st), R: cols(palmAxes(sk, st, side)) }), now = measure(s);
 	// free to roll about its axis (no `from`): the roll the arm holds most easily, the Boltzmann mean of ROLLS rolls pulled
 	// lightly toward the fingers on the forearm's line, so the hand closes on the bar from the side the arm comes from
@@ -84,7 +85,7 @@ export function socketHand(ctx, sk, s, side, k, c, diag, on, effector) {
 		twoBone(sk, s, a, fa, h, wristAt(i ? s.R[h] : goal), arm.pole, ELBOW_REST, "elbow");
 		need = orient(sk, s, side, h, fa, goal);
 	}
-	diag[`grip_${k}`] = { w: on.w, socket: true, ...need };
+	diag[`grip_${k}`] = { w: on.w, socket: true, ...need, roll: roll * DEG, tilt };
 	diag[`socket_${k}`] = { rel: mul(T(plain), s.R[h]) };
 }
 

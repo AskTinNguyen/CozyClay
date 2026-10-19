@@ -46,13 +46,14 @@ expect("skill key cause: add /keys/- at the worst frame, foot_r moved up toward 
 	&& add.value.f === reach.worstFrame && Array.isArray(add.value.set.foot_r) && add.value.set.foot_r[1] > 0.1, json(reach?.patch));
 expect("the appended key leaves the agent's keys alone", applyPatch(deep, reach.patch).keys.length === 4 && json(applyPatch(deep, reach.patch).keys.slice(0, 3)) === json(deep.keys));
 
-// 3. A standIdle stance pushed sideways: the patch moves use[0].args.at, not a key.
-const post = { objects: { Post: { pos: [0.16, 0.9, 0], R: I3(), half: [0.05, 0.3, 0.3] } } };
-r = compile(stand(), post);
+// 3. A standIdle stance pushed sideways: the patch moves use[0].args.at, not a key (fix.stance off: on, the compiler
+// slides the stance out itself, verify-motion3-stance-grasp.mjs).
+const post = { objects: { Post: { pos: [0.16, 0.9, 0], R: I3(), half: [0.05, 0.3, 0.3] } } }, unplaced = () => stand({ fix: { stance: false } });
+r = compile(unplaced(), post);
 const hips = r.qa.groups.find(g => g.subject === "hips x Post");
 console.log(`  stance into a post: ${json(hips?.patch)}`);
 expect("standIdle cause: replace /use/0/args/at, moved away from the post", hips?.patch?.[0]?.op === "replace" && hips.patch[0].path === "/use/0/args/at" && hips.patch[0].value[0] < -0.05 && hips.patch[0].value[1] === 0, json(hips?.patch));
-expect("applying it clears the hips hit", !compile(applyPatch(stand(), hips.patch), post).qa.groups.some(g => g.subject === "hips x Post"));
+expect("applying it clears the hips hit", !compile(applyPatch(unplaced(), hips.patch), post).qa.groups.some(g => g.subject === "hips x Post"));
 
 // 4. A hand 1.5 cm into a board: the hint's fix.penetration suggestion is the patch.
 const held = fix => stand({ fix, keys: [{ f: 0, set: { armw_r: 1, hand_r: [-0.22, 1.1, 0.32], elbow_r: [-0.5, -1, -0.3] } }, { f: 30, set: { hand_r: [-0.22, 1.1, 0.36] } }, { f: 59, set: { hand_r: [-0.22, 1.1, 0.32] } }] });
