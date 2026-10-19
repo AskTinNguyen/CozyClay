@@ -141,7 +141,7 @@ async function issue398(handle) {
 		const schema = studioToolSchemas().find(tool => tool.name === "patch_elements").parameters;
 		const branches = schema.properties.ops.items.oneOf;
 		const expected = {
-			"character.position": [[-4, 0, -4], [4, 240, 4]],
+			"character.position": [[-240, 0, -240], [240, 240, 240]],
 			"object.position": [[-240, 0, -240], [240, 240, 240]],
 			"object.rotation": [[-180, -180, -180], [180, 180, 180]],
 			"object.scale": [[0.01, 0.01, 0.01], [100, 100, 100]],

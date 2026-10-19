@@ -12,7 +12,7 @@ import { buildStudioContext, physicsFingerprintInput, studioEntityCursor, valida
 import { createStudioCommandJournal, framingChecks, localTransformReadback, placementChecks, sampledFramingResult, studioObjectCatalogue } from "./studio-agent-commands.js";
 import { verifyInstalledTake } from "./studio-agent-motion.js"; import { objectRowBounds } from "./studio-entity-bounds.js"; import { exportFramingInto } from "./studio-export-framing.js";
 import { shotGeometryFacts } from "./studio-geometry-facts.js"; import { KIT_CATALOGUE } from "./kits/index.js";
-import { STUDIO_TOOL_FAMILIES, StudioProtocolError, validateReceipt, validateStudioCommand, validateStudioIdentity } from "./studio-agent-protocol.js";
+import { STUDIO_TOOL_FAMILIES, StudioProtocolError, validateReceipt, validateStudioCommand, validateStudioIdentity, refusalCode } from "./studio-agent-protocol.js";
 import { studioVisual, verifyLighting } from "./studio-motion-visual.js";
 import { withEffectState } from "./effects/state.js"; import { hdrEnvironmentCatalogue } from "./stage-hdr-library.js";
 
@@ -165,7 +165,7 @@ export function createStudioAppBinding(ports) {
 		// the first 120 characters the protocol carries.
 		const words = [...String(error?.message ?? "").trim()];
 		return validateReceipt({ ok: false, commandId: request.commandId, host: request.host ?? request.binding?.host,
-			code: error.code ?? "INVALID_ARGUMENT", phase, affectedIds: [], expectedTargets: [], currentTargets: [], mutated: false,
+			code: refusalCode(error), phase, affectedIds: [], expectedTargets: [], currentTargets: [], mutated: false,
 			preserved: { authoredState: "unchanged" }, recovery: { action: "inspect", retryAllowed: false },
 			...(words.length ? { message: words.length > 120 ? `${words.slice(0, 119).join("")}…` : words.join("") } : {}) });
 	}

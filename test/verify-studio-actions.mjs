@@ -18,14 +18,15 @@ const castActions = ["character.move"];
 const waypointActions = ["character.addWaypoint", "character.moveWaypoint", "character.removeWaypoint", "character.clearWaypoints"];
 const ikKeyActions = ["character.setIkKey", "character.removeIkKey", "character.clearIkKeys"];
 const attachActions = ["object.attach", "object.detach"];
-const railActions = ["shot.setCameraRail", "shot.clearCameraRail"];
+const railActions = ["shot.setCameraRail", "shot.clearCameraRail", "shot.setCameraMode"];
+const shotNameActions = ["shot.rename"];
 const viewActions = ["view.setPartColours", "view.setGuideMode", "view.setInset", "view.setGhosts"];
 const exportActions = ["export.shotVideo"];
 const sceneActions = ["scene.create", "scene.duplicate", "scene.rename", "scene.delete", "scene.switch"];
 const projectActions = ["project.save", "project.exportAsAnimation"];
 const assetActions = ["asset.import"];
 const aiActions = ["ai.prepareShot"];
-assert.deepEqual([...STUDIO_ACTION_IDS].sort(), [...firstBatch, ...castActions, ...waypointActions, ...ikKeyActions, ...attachActions, ...railActions, ...viewActions, ...exportActions, ...sceneActions, ...projectActions, ...assetActions, ...aiActions].sort());
+assert.deepEqual([...STUDIO_ACTION_IDS].sort(), [...firstBatch, ...castActions, ...waypointActions, ...ikKeyActions, ...attachActions, ...railActions, ...shotNameActions, ...viewActions, ...exportActions, ...sceneActions, ...projectActions, ...assetActions, ...aiActions].sort());
 assert.deepEqual([...STUDIO_ACTION_KINDS], ["mutation", "transient", "job", "document"]);
 assert.ok(Object.isFrozen(STUDIO_ACTIONS));
 for (const action of STUDIO_ACTIONS) {

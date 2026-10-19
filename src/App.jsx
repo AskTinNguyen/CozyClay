@@ -1282,7 +1282,7 @@ export default function App() {
 	const [inspectorActionsOpen, setInspectorActionsOpen] = useState(false);
 
 	const objectsDomain = useObjects(appContext.forRender({
-		get animatedSceneObjects() { return animatedSceneObjects; },
+		get animatedSceneObjects() { return animatedSceneObjects; }, get attachFrameRef() { return attachFrameRef; },
 		get castMemberOf() { return castMemberOf; },
 		get charIdFromHierarchyId() { return charIdFromHierarchyId; },
 		get characters() { return characters; },

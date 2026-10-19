@@ -15,6 +15,7 @@ const inputs = {
  'shot.create': {}, 'shot.split': { shotId: 'shot-1' }, 'shot.duplicate': { shotId: 'shot-1' }, 'shot.remove': { shotId: 'shot-1' },
  'shot.setRange': { shotId: 'shot-1', range: { startFrame: 1, endFrameExclusive: 15 } }, 'shot.reorder': { shotId: 'shot-1', startFrame: 2 },
  'shot.setCameraRail': { shotId: 'shot-1', points: [{ x: -2, z: 4 }, { x: 3, z: 4 }] }, 'shot.clearCameraRail': { shotId: 'shot-1' },
+ 'shot.setCameraMode': { shotId: 'shot-1', mode: 'follow' }, 'shot.rename': { shotId: 'shot-1', name: 'Renamed' },
  'shot.createStill': { caption: 'Panel' }, 'shot.setCaption': { shotId: 'shot-1', caption: 'Panel' },
  'shot.setCastOverride': { shotId: 'shot-1', characterId: 'actor-a', override: { x: 1, z: 2, rot: 0 } }, 'shot.setHold': { shotId: 'shot-1', hold: 24 },
  'character.move': { characterId: 'actor-a', x: 1, z: 0, rot: 0 },

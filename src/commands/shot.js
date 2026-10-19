@@ -22,10 +22,9 @@ const number = { type: 'number' };
 const frame = { type: 'integer', minimum: 0 };
 const input = (properties, required = Object.keys(properties)) => ({ type: 'object', properties, required, additionalProperties: false });
 const mutation = (id, label, schema, description = label) => ({ id, label, description, kind: 'mutation', undoDomain: 'shot', input: schema });
-const existing = ['shot.create', 'shot.createStill', 'shot.setCaption', 'shot.setCastOverride', 'shot.setHold', 'shot.split', 'shot.duplicate', 'shot.remove', 'shot.setRange', 'shot.setCameraRail', 'shot.clearCameraRail', 'shot.reorder'].map(studioActionDeclaration);
+const existing = ['shot.create', 'shot.createStill', 'shot.setCaption', 'shot.setCastOverride', 'shot.setHold', 'shot.split', 'shot.duplicate', 'shot.remove', 'shot.setRange', 'shot.setCameraRail', 'shot.clearCameraRail', 'shot.setCameraMode', 'shot.rename', 'shot.reorder'].map(studioActionDeclaration);
 const extra = [
   mutation('shot.set', 'Set shot fields', elementSetSchema('shot')),
-  mutation('shot.rename', 'Rename shot', input({ shotId: id, name: { type: 'string', maxLength: 240 } })),
   mutation('shot.setCamera', 'Set camera block', input({ shotId: id, patch: { type: 'object', properties: {}, additionalProperties: true } })),
   mutation('shot.addKey', 'Add camera key', input({ shotId: id, frame })),
   mutation('shot.moveKey', 'Move camera key', input({ shotId: id, keyId: id, frame })),
@@ -159,6 +158,11 @@ export function register(registry, ports) {
       patchShot(shotId, shot => ({ ...shot, camera: removeCameraRail(shot.camera) }));
     },
     'shot.rename': ({ shotId, name }) => { shotOf(shotId); owner().write(current => renameShot(current, shotId, name)); },
+    'shot.setCameraMode': ({ shotId, mode }) => {
+      const shot = shotOf(shotId);
+      if (mode === 'rail' && !createCameraBlock(shot.camera).cameraRail) fail('TARGET_NOT_READY', `${shot.name || shotId} has no camera rail; lay one with shot.setCameraRail.`);
+      patchShot(shotId, row => ({ ...row, camera: updateCameraBlock(row.camera, { mode }) }));
+    },
     'shot.setCamera': ({ shotId, patch }) => patchShot(shotId, shot => ({ ...shot, camera: updateCameraBlock(shot.camera, patch) })),
     'shot.addKey': ({ shotId, frame }) => {
       const shot = shotOf(shotId), target = Math.min(owner().state().frameCount - 1, frame);
