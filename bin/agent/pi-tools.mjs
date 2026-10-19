@@ -14,6 +14,17 @@ function publicResult(result) {
 	return Object.fromEntries(Object.entries(result).filter(([key]) => key !== "dataUrl"));
 }
 
+// One tool result rides whole in every later model call of its turn (studio-context-budget.mjs shrinks only older ones),
+// so a result past this many characters is cut, with a note on how to ask for less. A scene-document read once
+// answered 470k characters, ~300k tokens a call for the rest of that turn.
+export const RESULT_CHARS = 100_000;
+export function resultText(details) {
+	const text = JSON.stringify(details ?? null);
+	if (text.length <= RESULT_CHARS) return text;
+	return `${text.slice(0, RESULT_CHARS)} … [cut: this result is ${text.length} characters, over the ${RESULT_CHARS}-character limit for one tool result. `
+		+ "Ask for less: name ids, select kinds, page with cursor, or read it inside a script and return only what you need.]";
+}
+
 function recoveryHint(error) {
 	const recovery = error?.receipt?.recovery;
 	if (!recovery?.action || recovery.action === "none") return "";
@@ -54,7 +65,7 @@ export function toAgentTools(tools, { emit, signal, labels = STUDIO_TOOL_LABELS 
 					const result = await tool.handler(params, { signal: executeSignal, toolCallId, emit });
 					const details = publicResult(result);
 					const image = result && typeof result === "object" && !Array.isArray(result) && result.dataUrl ? dataUrlImage(result.dataUrl) : null;
-					const content = [{ type: "text", text: JSON.stringify(details ?? null) }];
+					const content = [{ type: "text", text: resultText(details) }];
 					if (image) content.push(image);
 					return { content, details };
 				} catch (error) {
