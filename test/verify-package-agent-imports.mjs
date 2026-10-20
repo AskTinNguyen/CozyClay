@@ -20,6 +20,8 @@ import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+// Repo-relative with `/` on every platform, so the `mcp/` cut-off also holds on Windows.
+const repoPath = (file) => relative(root, file).replaceAll("\\", "/");
 const roots = [
 	"bin/cozyclay.mjs",
 	...readdirSync(join(root, "bin", "agent")).filter((name) => name.endsWith(".mjs")).map((name) => `bin/agent/${name}`),
@@ -52,12 +54,12 @@ function walk(file, chain) {
 	seen.set(file, chain);
 	for (const specifier of specifiers(file)) {
 		if (specifier === "three" || specifier.startsWith("three/")) {
-			offenders.push([...chain, file].map((entry) => relative(root, entry)).join(" -> ") + ` -> ${specifier}`);
+			offenders.push([...chain, file].map(repoPath).join(" -> ") + ` -> ${specifier}`);
 			continue;
 		}
 		if (!specifier.startsWith(".")) continue;
 		const target = resolveRelative(file, specifier);
-		if (!target || relative(root, target).startsWith("mcp/")) continue;
+		if (!target || repoPath(target).startsWith("mcp/")) continue;
 		walk(target, [...chain, file]);
 	}
 }

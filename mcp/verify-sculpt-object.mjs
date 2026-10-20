@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { decodePng, encodePng, readImageFromPath } from "./image-file.mjs";
 
 import { mcpToolCategory } from "../src/execution-telemetry.js";
@@ -105,7 +106,7 @@ const jpegPath = join(tmpdir(), `cozyclay-sculpt-ref-${process.pid}.jpg`);
 writeFileSync(jpegPath, (await import("jpeg-js")).default.encode({ width: w, height: h, data: rgba }, 90).data);
 const viaJpeg = JSON.parse((await compare.handler({ id: "sculpt-2", reference: jpegPath, yaw: 0 })).content[0].text);
 assert.ok(viaJpeg.iou > 0.9, `a JPEG reference scores too (${viaJpeg.iou})`);
-assert.ok((await readImageFromPath(new URL("../docs/images/cozyclay-logo.png", import.meta.url).pathname)).width > 0, "a real PNG from the repo decodes");
+assert.ok((await readImageFromPath(fileURLToPath(new URL("../docs/images/cozyclay-logo.png", import.meta.url)))).width > 0, "a real PNG from the repo decodes");
 
 /* ---------------------------------------------------- live editor ---- */
 

@@ -13,6 +13,8 @@
  */
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const SERVER = fileURLToPath(new URL("./server.mjs", import.meta.url));
@@ -21,7 +23,7 @@ const client = new Client({ name: "cozyclay-mcp-verify", version: "1.0.0" });
 await client.connect(new StdioClientTransport({
 	command: "node",
 	args: [SERVER],
-	env: { ...process.env, COZYCLAY_PROJECT_ROOT: new URL(".", import.meta.url).pathname },
+	env: { ...process.env, COZYCLAY_PROJECT_ROOT: fileURLToPath(new URL(".", import.meta.url)) },
 }));
 
 let failures = 0;
@@ -250,9 +252,9 @@ check("prompt carries both subjects", prompt.includes("detective") && prompt.inc
 
 /* ------------------------------- round-trip ------------------------------ */
 
-const file = new URL("./.verify-project.cclayproject", import.meta.url).pathname;
-const symlink = new URL("./.verify-project-link.cclayproject", import.meta.url).pathname;
-const hardlink = new URL("./.verify-project-hardlink.cclayproject", import.meta.url).pathname;
+const file = fileURLToPath(new URL("./.verify-project.cclayproject", import.meta.url));
+const symlink = fileURLToPath(new URL("./.verify-project-link.cclayproject", import.meta.url));
+const hardlink = fileURLToPath(new URL("./.verify-project-hardlink.cclayproject", import.meta.url));
 const fs = await import("node:fs/promises");
 await call("save_project", { path: file, name: "Verify" });
 check("save refuses implicit overwrite", (await call("save_project", { path: file })).startsWith("Could not write"), "overwrite unexpectedly succeeded");
@@ -262,7 +264,7 @@ check("project round-trips the cast", reopened.includes("detective") && reopened
 check("project round-trips the set", reopened.includes("Chair"), reopened);
 await import("node:fs/promises").then((fs) => fs.unlink(file).catch(() => {}));
 
-check("outside project root is rejected", (await call("open_project", { path: "/tmp/nope.cclayproject" })).includes("direct children of configured project root"));
+check("outside project root is rejected", (await call("open_project", { path: join(tmpdir(), "nope.cclayproject") })).includes("direct children of configured project root"));
 check("wrong extension is rejected", (await call("open_project", { path: "/etc/hosts" })).includes("must end in .cclayproject"));
 // Stay outside the configured project root (mcp/), but on the clone's filesystem:
 // a system temp directory may be on another volume, where hard links fail with EXDEV.
@@ -270,11 +272,17 @@ const outsideDir = await fs.mkdtemp(new URL("../.verify-outside-", import.meta.u
 try {
 	const outside = `${outsideDir}/sentinel.cclayproject`;
 	await fs.writeFile(outside, "outside sentinel", { mode: 0o600 });
-	await fs.symlink(outside, symlink);
-	check("open refuses final symlink", (await call("open_project", { path: symlink })).startsWith("Could not read"), "symlink open unexpectedly succeeded");
-	check("save refuses final symlink", (await call("save_project", { path: symlink, overwrite: true })).startsWith("Could not write"), "symlink overwrite unexpectedly succeeded");
-	check("symlink target remains byte-identical", await fs.readFile(outside, "utf8") === "outside sentinel");
-	await fs.unlink(symlink);
+	// Windows creates symlinks only with Developer Mode or elevation; the hard-link checks still run.
+	const linked = await fs.symlink(outside, symlink).then(() => true, (error) => {
+		if (process.platform === "win32" && error.code === "EPERM") return false;
+		throw error;
+	});
+	if (linked) {
+		check("open refuses final symlink", (await call("open_project", { path: symlink })).startsWith("Could not read"), "symlink open unexpectedly succeeded");
+		check("save refuses final symlink", (await call("save_project", { path: symlink, overwrite: true })).startsWith("Could not write"), "symlink overwrite unexpectedly succeeded");
+		check("symlink target remains byte-identical", await fs.readFile(outside, "utf8") === "outside sentinel");
+		await fs.unlink(symlink);
+	} else console.log("SKIP final-symlink checks: this Windows account cannot create symlinks");
 	await fs.link(outside, hardlink);
 	check("external hard-link fixture has two links", (await fs.stat(hardlink)).nlink === 2);
 	check("open refuses external hard link", (await call("open_project", { path: hardlink })).startsWith("Could not read"), "hard-link open unexpectedly succeeded");

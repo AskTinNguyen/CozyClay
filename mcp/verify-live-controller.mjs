@@ -311,7 +311,8 @@ try {
 
 	const record = publishLiveEndpoint({ port: hub.port, token: TOKEN, owner: "mcp" });
 	const endpointPath = liveEndpointPath(hub.port);
-	assert.equal(statSync(endpointPath).mode & 0o777, 0o600, "the endpoint file carries a token, so only its owner may read it");
+	// NTFS has no POSIX permission bits (every file reads back 0o666), so the 0600 checks are POSIX-only.
+	if (process.platform !== "win32") assert.equal(statSync(endpointPath).mode & 0o777, 0o600, "the endpoint file carries a token, so only its owner may read it");
 	assert.deepEqual(readLiveEndpoint(hub.port), record);
 	assert.equal(record.pid, process.pid);
 	assert.equal(record.owner, "mcp");
@@ -343,7 +344,7 @@ try {
 	assert.equal(owned.owner, "mcp");
 	assert.equal(owned.port, ownedPort);
 	assert.match(owned.token, /^[a-f0-9]{64}$/, "the token is minted per hub start");
-	assert.equal(statSync(ownedPath).mode & 0o777, 0o600);
+	if (process.platform !== "win32") assert.equal(statSync(ownedPath).mode & 0o777, 0o600);
 	// Subscribe before shutting down, so the removal cannot be missed.
 	const removed = withTimeout(new Promise((resolve) => {
 		const watcher = watch(liveDirectory, (_event, filename) => {
@@ -376,7 +377,7 @@ const agent = createAgentHandler({
 try {
 	const launcher = await waitForEndpoint(agentPort);
 	assert.equal(launcher.owner, "cozyclay");
-	assert.equal(statSync(liveEndpointPath(agentPort)).mode & 0o777, 0o600);
+	if (process.platform !== "win32") assert.equal(statSync(liveEndpointPath(agentPort)).mode & 0o777, 0o600);
 	const controller = await connectController(`ws://127.0.0.1:${agentPort}/live`, { type: "hello", role: "controller", version: 1, token: launcher.token });
 	const described = await controller.request({ type: "tool", name: "describe_scene", args: {} });
 	assert.equal(described.ok, true, JSON.stringify(described));

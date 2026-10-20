@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 const REPO = new URL("../..", import.meta.url);
 const npm = process.platform === "win32" ? "npm.cmd" : "npm";
@@ -22,7 +23,8 @@ assert.equal(manifest.engines?.node, ">=22.19.0", "engines.node must require Nod
 await import("@earendil-works/pi-ai/providers/faux");
 await import("@earendil-works/pi-agent-core");
 
-const packed = spawnSync(npm, ["pack", "--dry-run", "--json", "--ignore-scripts"], { cwd: REPO.pathname, encoding: "utf8" });
+// Node refuses to spawn a .cmd without a shell on Windows (EINVAL); the arguments are constants.
+const packed = spawnSync(npm, ["pack", "--dry-run", "--json", "--ignore-scripts"], { cwd: fileURLToPath(REPO), encoding: "utf8", shell: process.platform === "win32" });
 assert.equal(packed.error, undefined, `npm pack could not start: ${packed.error?.message}`);
 assert.equal(packed.status, 0, packed.stderr);
 const listing = JSON.parse(packed.stdout);

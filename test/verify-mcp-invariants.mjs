@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, extname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -227,8 +228,13 @@ function packages() {
 	};
 }
 
+// NTFS has no executable bit, so on Windows read the mode git will publish from the index.
+function indexMode(path) {
+	return Number.parseInt(execFileSync("git", ["ls-files", "--stage", "--", path], { cwd: ROOT, encoding: "utf8" }).split(" ")[0], 8);
+}
+
 function entrypointModes() {
-	return Object.fromEntries(EXECUTABLE_ENTRYPOINTS.map((path) => [path, statSync(resolve(ROOT, path)).mode]));
+	return Object.fromEntries(EXECUTABLE_ENTRYPOINTS.map((path) => [path, process.platform === "win32" ? indexMode(path) : statSync(resolve(ROOT, path)).mode]));
 }
 
 function runChecks(sources, manifest, modes) {
