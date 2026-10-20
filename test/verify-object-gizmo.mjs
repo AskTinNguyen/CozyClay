@@ -192,10 +192,10 @@ await sleep(1500);
 await openCreateMenu();
 const catalogue = await evaluate("[...document.querySelectorAll('.v2-outliner .hierarchy-context-menu .add-object-item')].map(b => b.textContent)");
 expect(
-	"the catalogue lists primitives and set pieces",
-	["Cube", "Sphere", "Capsule", "Cylinder", "Cone", "Plane", "Chair", "Car"].every((label) =>
+	"the catalogue lists the primitives and no retired set pieces",
+	["Cube", "Sphere", "Capsule", "Cylinder", "Cone", "Plane"].every((label) =>
 		catalogue.some((entry) => entry.startsWith(label)),
-	),
+	) && !catalogue.some((entry) => /^(Chair|Car|Plane \(aircraft\))/.test(entry)),
 	JSON.stringify(catalogue),
 );
 
@@ -520,7 +520,7 @@ expect("the bird's-eye board drives the same object record", afterPlan.Position[
 // A fresh object stays axis-aligned even when the view is somewhere else
 // entirely — creation must not inherit the camera's yaw.
 await drag({ x: 300, y: 300 }, { x: 460, y: 320 }, { button: "right" });
-await addObject("Chair");
+await addObject("Capsule");
 expect("an object created from a swung camera is still unrotated", JSON.stringify((await transform()).Rotation) === "[0,0,0]", JSON.stringify(await transform()));
 await click("document.querySelector('.inspector-actions-trigger')");
 await waitFor("document.querySelectorAll('.inspector-actions-menu button').length > 0");
@@ -584,18 +584,18 @@ const expandProps = async () => {
 // case 1: a saved scene survives a reload (the debounced save has fired)
 await clearSceneKeys();
 await reloadPage();
-await addObject("Chair");
+await addObject("Capsule");
 await sleep(700); // past the 400 ms debounce
 await reloadPage();
 await expandProps();
 expect(
 	"the scene survives a reload",
-	await evaluate("[...document.querySelectorAll('.hierarchy-label')].some(n => n.textContent.startsWith('Chair'))"),
+	await evaluate("[...document.querySelectorAll('.hierarchy-label')].some(n => n.textContent.startsWith('Capsule'))"),
 );
 
 // case 2: the reloaded record is a real object, not a label
 await expandProps();
-await click("[...document.querySelectorAll('.hierarchy-row')].find(b => b.textContent.includes('Chair'))");
+await click("[...document.querySelectorAll('.hierarchy-row')].find(b => b.textContent.includes('Capsule'))");
 // the gizmo must be mounted AND its screen positions settled (one render
 // frame) before the drag below grabs the X arrow by coordinate
 await waitFor("(() => { const h = window.__gizmoHandles().find(e => e.axis === 'x'); return !!h && window.__gizmoPick(Math.round(h.x), Math.round(h.y)) === 'x'; })()");
@@ -622,7 +622,7 @@ const edited = await transform(); // what the flush MUST persist
 await evaluate("window.dispatchEvent(new Event('pagehide'))");
 await reloadPage(); // inside the 400 ms window
 await expandProps();
-await click("[...document.querySelectorAll('.hierarchy-row')].find(b => b.textContent.includes('Chair'))");
+await click("[...document.querySelectorAll('.hierarchy-row')].find(b => b.textContent.includes('Capsule'))");
 // the selection commit mounts the gizmo; poll for it
 await waitFor("window.__gizmoHandles().length > 0");
 const afterHideReload = await transform();
@@ -801,12 +801,12 @@ await reloadPage();
 
 // Plan §11.3: End drops the selection straight down onto the highest support
 // top whose footprint it overlaps, or the floor. Two objects created from the
-// same camera position land on the same x/z, so the chair's 0.6 m footprint
+// same camera position land on the same x/z, so the capsule's 0.7 m footprint
 // sits fully inside the cube's 1 m one, and the cube's top is y = 1.
 await addObject("Cube");
-await addObject("Chair");
+await addObject("Capsule");
 
-// Raise the chair clear of the cube (2.5 > 1) by typing into the Position Y
+// Raise the capsule clear of the cube (2.5 > 1) by typing into the Position Y
 // field; blur commits the draft as one atomic entry.
 const posRow = "(() => { const r = [...document.querySelectorAll('.inspector-pane .vec3-row')].filter(r => !r.closest('.subject-box')).find(r => r.querySelector('.vec3-label').textContent === 'Position'); return r; })()";
 const pastBeforeY = await evaluate("window.__sceneHistory().past");
@@ -855,8 +855,8 @@ expect("undo after a drop restores the previous height", (await transform()).Pos
 // travel commits alone and cannot fold into an unrelated entry, and the
 // producer is torn down rather than left live; PlanBoard selects before it
 // begins, and camera grips never open a scene transaction. State entering
-// this section: Cube + Chair exist, the Chair is selected in the shot view
-// with the move tool active. Delete runs last: it removes the Chair.
+// this section: Cube + Capsule exist, the Capsule is selected in the shot view
+// with the move tool active. Delete runs last: it removes the Capsule.
 
 /** Press on a gizmo handle and apply `ticks` real move ticks, leaving the
  * pointer down so the caller can interrupt the stream mid-drag. Returns
@@ -902,7 +902,7 @@ const positionInput = (index) => `(() => { const r = [...document.querySelectorA
  * shot camera — the only DOM handle on the camera's position */
 const cameraDistance = () => evaluate("document.querySelector('span[title=\"camera to subject\"]')?.textContent ?? ''");
 
-// The drop section left the Chair at Y = 2.5 — above the default camera's
+// The drop section left the Capsule at Y = 2.5 — above the default camera's
 // frame, where its gizmo renders off-screen and a press cannot reach the
 // arrow. Rest it back on the Cube top (End) so the lifecycle cases below
 // actually grab a live handle. One atomic entry; the cases read `past`
@@ -910,7 +910,7 @@ const cameraDistance = () => evaluate("document.querySelector('span[title=\"came
 await pressKey("End", "End");
 await waitFor(`${positionInput(1)} === 1`);
 // the camera-puck flight above leaves the pose wherever the plan drag took
-// it; the Chair's gizmo can project under the bird's-eye inset pane, where a
+// it; the Capsule's gizmo can project under the bird's-eye inset pane, where a
 // real press never reaches the canvas. Reset to the shot preset, then park
 // the inset in the stage's lower-left so it cannot occlude the handle.
 await openRecenter();
@@ -922,7 +922,7 @@ globalThis.stageBox = await evaluate("(() => { const r = document.querySelector(
 	await drag(insetTag, stageBox);
 	await sleep(300);
 }
-expect("the lifecycle section starts with the Chair back on the Cube", (await transform()).Position[1] === 1, JSON.stringify(await transform()));
+expect("the lifecycle section starts with the Capsule back on the Cube", (await transform()).Position[1] === 1, JSON.stringify(await transform()));
 
 // pointercancel mid-drag COMMITS: pointer loss is not intent to discard.
 const pastBeforeCancel = await evaluate("window.__sceneHistory().past");
@@ -1045,19 +1045,19 @@ expect("the store is settled after a mid-drag undo", await evaluate("window.__sc
 // A selection change mid-drag settles the open drag first: the applied
 // travel becomes its own entry, the stale pointer stream dies, and the new
 // selection never sees a stray tick.
-const chairBeforeSwitch = await transform(); // the Chair is selected from the undo case
+const capsuleBeforeSwitch = await transform(); // the Capsule is selected from the undo case
 await click("[...document.querySelectorAll('.hierarchy-row')].find(b => b.textContent.includes('Cube'))");
 await waitFor("window.__gizmoHandles().length > 0");
 const cubeBeforeSwitch = await transform();
-await click("[...document.querySelectorAll('.hierarchy-row')].find(b => b.textContent.includes('Chair'))");
+await click("[...document.querySelectorAll('.hierarchy-row')].find(b => b.textContent.includes('Capsule'))");
 await waitFor("window.__gizmoHandles().length > 0");
 const pastBeforeSwitch = await evaluate("window.__sceneHistory().past");
 const switchEnd = await dragHeld(await grabX(), { dx: 160 });
 const switchTravelled = await transform();
 expect(
 	"the selection-change case applies real travel before the switch",
-	Math.abs(switchTravelled.Position[0] - chairBeforeSwitch.Position[0]) > 0.1,
-	`${JSON.stringify(chairBeforeSwitch)} -> ${JSON.stringify(switchTravelled)}`,
+	Math.abs(switchTravelled.Position[0] - capsuleBeforeSwitch.Position[0]) > 0.1,
+	`${JSON.stringify(capsuleBeforeSwitch)} -> ${JSON.stringify(switchTravelled)}`,
 );
 await click("[...document.querySelectorAll('.hierarchy-row')].find(b => b.textContent.includes('Cube'))");
 await waitFor(`window.__sceneHistory().past === ${pastBeforeSwitch + 1}`);
@@ -1079,7 +1079,7 @@ expect(
 );
 await mouse("mouseReleased", switchEnd.x + 120, switchEnd.y);
 // re-select the first object: its travel was committed, not rolled back
-await click("[...document.querySelectorAll('.hierarchy-row')].find(b => b.textContent.includes('Chair'))");
+await click("[...document.querySelectorAll('.hierarchy-row')].find(b => b.textContent.includes('Capsule'))");
 await waitFor("window.__gizmoHandles().length > 0");
 expect(
 	"the first object's travel survives the switch byte-for-byte",
@@ -1091,7 +1091,7 @@ expect("the store is settled after a selection change", await evaluate("window._
 // PlanBoard selects BEFORE it begins: dragging an unselected object's puck
 // must select it AND still record exactly one entry — a begin-then-select
 // order would settle the fresh token and split or lose the entry (§6.4).
-const chairForPlan = await transform(); // the Chair, now away from the Cube
+const capsuleForPlan = await transform(); // the Capsule, now away from the Cube
 const pastBeforePlan = await evaluate("window.__sceneHistory().past");
 await click("[...document.querySelectorAll('.hierarchy-row')].find(b => b.textContent.includes('Cube'))");
 await waitFor("window.__gizmoHandles().length > 0");
@@ -1100,20 +1100,20 @@ await waitFor("window.__gizmoHandles().length > 0");
 // puck is driven in the inset itself: PLAN_EXTENT (12.4 m) maps to half
 // its shorter side, same as the bird's-eye case above.
 const planRect = await evaluate("(() => { const b = document.querySelector('.vp-inset').getBoundingClientRect(); return { left: b.left, top: b.top, width: b.width, height: b.height, scale: Math.min(b.width, b.height) / 2 / 12.4 }; })()");
-const chairPuck = {
-	x: Math.round(planRect.left + planRect.width / 2 + chairForPlan.Position[0] * planRect.scale),
-	y: Math.round(planRect.top + planRect.height / 2 + chairForPlan.Position[2] * planRect.scale),
+const capsulePuck = {
+	x: Math.round(planRect.left + planRect.width / 2 + capsuleForPlan.Position[0] * planRect.scale),
+	y: Math.round(planRect.top + planRect.height / 2 + capsuleForPlan.Position[2] * planRect.scale),
 };
-await drag(chairPuck, { x: chairPuck.x, y: chairPuck.y + 60 });
+await drag(capsulePuck, { x: capsulePuck.x, y: capsulePuck.y + 60 });
 await waitFor(`window.__sceneHistory().past === ${pastBeforePlan + 1}`);
 expect(
 	"dragging an unselected plan puck selects the object",
-	await evaluate("[...document.querySelectorAll('.hierarchy-row-wrap.selected .hierarchy-label')].some(n => n.textContent === 'Chair')"),
+	await evaluate("[...document.querySelectorAll('.hierarchy-row-wrap.selected .hierarchy-label')].some(n => n.textContent === 'Capsule')"),
 );
 expect(
 	"a plan drag of an unselected object moves it",
-	(await transform()).Position[2] > chairForPlan.Position[2] + 0.2,
-	`${JSON.stringify(chairForPlan)} -> ${JSON.stringify(await transform())}`,
+	(await transform()).Position[2] > capsuleForPlan.Position[2] + 0.2,
+	`${JSON.stringify(capsuleForPlan)} -> ${JSON.stringify(await transform())}`,
 );
 expect(
 	"a plan drag of an unselected object is exactly one entry",
@@ -1121,11 +1121,11 @@ expect(
 	JSON.stringify(await evaluate("window.__sceneHistory()")),
 );
 await pressKeyCombo("z", "KeyZ", 2); // Ctrl+Z: one entry, one undo
-await waitFor(`${positionInput(2)} === ${chairForPlan.Position[2]}`);
+await waitFor(`${positionInput(2)} === ${capsuleForPlan.Position[2]}`);
 expect(
 	"one undo restores the unselected-object plan drag",
-	JSON.stringify((await transform()).Position) === JSON.stringify(chairForPlan.Position),
-	`${JSON.stringify(chairForPlan.Position)} -> ${JSON.stringify((await transform()).Position)}`,
+	JSON.stringify((await transform()).Position) === JSON.stringify(capsuleForPlan.Position),
+	`${JSON.stringify(capsuleForPlan.Position)} -> ${JSON.stringify((await transform()).Position)}`,
 );
 
 // Camera grips never open a scene transaction: navigation must not enter
@@ -1157,12 +1157,12 @@ expect("the store stays settled after a camera drag", await evaluate("window.__s
 // Delete mid-drag: the atomic action settles the open drag first, so the
 // travel commits as its own entry and the removal as a second — the two can
 // never fold into one. The producer dies with the drag: further pointer
-// movement resurrects nothing. (Last: it removes the Chair.)
-await click("[...document.querySelectorAll('.hierarchy-row')].find(b => b.textContent.includes('Chair'))");
+// movement resurrects nothing. (Last: it removes the Capsule.)
+await click("[...document.querySelectorAll('.hierarchy-row')].find(b => b.textContent.includes('Capsule'))");
 await waitFor("window.__gizmoHandles().length > 0");
 // The camera-puck flight above leaves the pose wherever the plan drag
-// took it, and from there the chair's gizmo projects into the bottom
-// letterbox band where no press is pickable. Park the chair near the
+// took it, and from there the capsule's gizmo projects into the bottom
+// letterbox band where no press is pickable. Park the capsule near the
 // stage centre first, then recenter, then wait out the camera glide —
 // the projected handles must hold still before a grab point is read.
 for (const [index, value] of [[0, 0.5], [2, 0.5]]) {
@@ -1195,10 +1195,10 @@ expect(
 	`${JSON.stringify(deleteBefore)} -> ${JSON.stringify(await transform())}`,
 );
 await pressKey("Delete", "Delete");
-await waitFor("[...document.querySelectorAll('.hierarchy-label')].every(n => n.textContent !== 'Chair') && window.__gizmoHandles().length === 0");
+await waitFor("[...document.querySelectorAll('.hierarchy-label')].every(n => n.textContent !== 'Capsule') && window.__gizmoHandles().length === 0");
 expect(
 	"Delete mid-drag removes the dragged object",
-	await evaluate("[...document.querySelectorAll('.hierarchy-label')].every(n => n.textContent !== 'Chair')"),
+	await evaluate("[...document.querySelectorAll('.hierarchy-label')].every(n => n.textContent !== 'Capsule')"),
 );
 expect("Delete mid-drag leaves no gizmo behind", await evaluate("window.__gizmoHandles().length === 0"));
 expect(
@@ -1214,7 +1214,7 @@ await mouse("mouseMoved", deleteEnd.x + 160, deleteEnd.y);
 await sleep(60);
 expect(
 	"the stale stream after Delete resurrects nothing",
-	await evaluate(`[...document.querySelectorAll('.hierarchy-label')].every(n => n.textContent !== 'Chair') && window.__gizmoHandles().length === 0 && window.__sceneHistory().past === ${pastBeforeDelete + 2}`),
+	await evaluate(`[...document.querySelectorAll('.hierarchy-label')].every(n => n.textContent !== 'Capsule') && window.__gizmoHandles().length === 0 && window.__sceneHistory().past === ${pastBeforeDelete + 2}`),
 	JSON.stringify(await evaluate("window.__sceneHistory()")),
 );
 await mouse("mouseReleased", deleteEnd.x + 160, deleteEnd.y);

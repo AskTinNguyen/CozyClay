@@ -1,0 +1,38 @@
+/* The Shot Camera card's focal-length scrub (lens-scrub.jsx): the mm value
+   over a thin track, in the card header where the read-only lens used to be. */
+.dock-lens-scrub {
+	flex: none;
+	display: inline-flex;
+	flex-direction: column;
+	align-items: flex-end;
+	gap: 3px;
+	padding: 3px 6px;
+	border-radius: 6px;
+	color: var(--label, var(--text-2));
+	font: 500 11px var(--sans);
+	font-variant-numeric: tabular-nums;
+	cursor: ew-resize;
+	user-select: none;
+	touch-action: none;
+}
+.dock-lens-value { line-height: 1; white-space: nowrap; }
+.dock-lens-track {
+	position: relative;
+	width: 44px;
+	height: 2px;
+	border-radius: 1px;
+	background: var(--hairline, rgba(127, 127, 127, .3));
+	overflow: hidden;
+}
+.dock-lens-fill {
+	position: absolute;
+	inset: 0 auto 0 0;
+	background: var(--text-3, currentColor);
+}
+.dock-lens-scrub:hover,
+.dock-lens-scrub.dragging { color: var(--select); background: var(--chip-fill); }
+.dock-lens-scrub:hover .dock-lens-fill,
+.dock-lens-scrub.dragging .dock-lens-fill { background: var(--select); }
+.dock-lens-scrub:focus-visible { outline: 2px solid var(--select); outline-offset: 1px; }
+.dock-lens-scrub[aria-disabled="true"] { cursor: default; opacity: .45; background: none; color: var(--label, var(--text-2)); }
+.dock-lens-scrub[aria-disabled="true"] .dock-lens-fill { background: none; }

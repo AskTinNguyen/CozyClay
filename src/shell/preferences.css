@@ -203,8 +203,7 @@
 .v2-preferences .v2-preferences__select:focus-visible,
 .v2-preferences .v2-preferences__toggle:focus-visible,
 .v2-preferences .v2-preferences__primary-button:focus-visible,
-.v2-preferences .v2-preferences__reset:focus-visible,
-.v2-preferences .v2-preferences__help button:focus-visible {
+.v2-preferences .v2-preferences__reset:focus-visible {
 	outline: none;
 	box-shadow: var(--prefs-focus-ring, 0 0 0 1px var(--select, #e8a33d));
 }
@@ -504,36 +503,6 @@
 	background: transparent;
 	color: var(--text-2, #9b9ba1);
 	font: 500 var(--prefs-secondary-size, 11px) var(--mono, 'JetBrains Mono');
-}
-
-.v2-preferences .v2-preferences__help {
-	padding-top: var(--sp-3, 16px);
-}
-
-.v2-preferences .v2-preferences__help h4 {
-	margin: 0 0 var(--sp-1, 8px);
-	color: var(--text-3, #636369);
-	font-size: var(--prefs-secondary-size, 11px);
-	font-weight: 500;
-	letter-spacing: 0;
-	text-transform: none;
-}
-
-.v2-preferences .v2-preferences__help button {
-	min-height: var(--h-control, 28px);
-	padding: 0 var(--sp-2, 12px);
-	border: 0;
-	border-radius: var(--r-1, 4px);
-	background: var(--field-fill, var(--surface-raised, #1e1e21));
-	color: var(--text-2, #9b9ba1);
-	font: inherit;
-	font-size: var(--prefs-secondary-size, 11px);
-	cursor: pointer;
-}
-
-.v2-preferences .v2-preferences__help button:hover {
-	background: var(--surface-raised, #1e1e21);
-	color: var(--text-1, #e4e4e7);
 }
 
 .v2-preferences .v2-preferences__motion-setup {

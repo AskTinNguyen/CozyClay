@@ -196,7 +196,7 @@ export default function MenuBar({ preferences }) {
 		? panelCount ? "" : noPanels
 		: shots.length ? "" : ko("Add a shot first — a pack describes one cut", "샷을 먼저 추가하세요 — 팩은 컷 하나를 설명합니다");
 
-	// The camera tutorial's handoff opens Export directly; its flyout lives in File.
+	// Export's flyout lives in File, so an open Export menu opens File.
 	useEffect(() => {
 		if (exportMenuOpen) setOpen("file");
 	}, [exportMenuOpen]);
@@ -534,14 +534,6 @@ export default function MenuBar({ preferences }) {
 		),
 		help: (
 			<>
-				<button
-					type="button"
-					role="menuitem"
-					className="menubar-item"
-					onClick={item(() => window.dispatchEvent(new CustomEvent("cozyclay:camera-tutorial", { detail: { open: true, source: "help" } })))}
-				>
-					<span className="menubar-item-label">{ko("Tutorial", "튜토리얼")}</span>
-				</button>
 				<button type="button" role="menuitem" className="menubar-item" onClick={item(() => setDialog("shortcuts"))}>
 					<span className="menubar-item-label">{ko("Keyboard shortcuts", "단축키")}</span>
 				</button>

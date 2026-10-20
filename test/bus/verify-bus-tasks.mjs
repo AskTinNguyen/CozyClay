@@ -13,7 +13,7 @@ const ok = receipt => { assert.equal(receipt.ok, true, JSON.stringify(receipt));
 const refused = (receipt, code) => { assert.equal(receipt.ok, false, JSON.stringify(receipt)); assert.equal(receipt.code, code, receipt.message); return receipt; };
 function setup() {
   const f = objectsFixture(), id = kind => f.store.current.objects.find(o => o.renderer === kind || o.id === kind).id;
-  const ids = { cube: id('cube'), sphere: id('sphere'), chair: id('chair') };
+  const ids = { cube: id('cube'), sphere: id('sphere'), cylinder: id('cylinder') };
   // A task's command carries no fresh scene revision: another task's edits move it all the time.
   const task = taskId => (action, args = {}) => f.run(action, args, 'agent', { taskId, expectedRevision: 0 });
   const begin = (taskId, scope, extra = {}) => task(taskId)('task.begin', { taskId, scope, ...extra });
@@ -33,8 +33,8 @@ test('two tasks edit disjoint objects at once; a busy key waits; outside the sco
     refused(begin('task-c', [`object:${ids.cube}`]), 'SCOPE_BUSY');
     refused(move(a, ids.sphere, 9), 'SCOPE_DENIED');
     refused(a('task.requestScope', { taskId: 'task-a', scope: [`object:${ids.sphere}`] }), 'SCOPE_BUSY');
-    ok(a('task.requestScope', { taskId: 'task-a', scope: [`object:${ids.chair}`] }));
-    ok(move(a, ids.chair, 4));
+    ok(a('task.requestScope', { taskId: 'task-a', scope: [`object:${ids.cylinder}`] }));
+    ok(move(a, ids.cylinder, 4));
     refused(move((action, args) => f.run(action, args, 'agent'), ids.cube, 5), 'SCOPE_BUSY');
     ok(a('task.finish', { taskId: 'task-a' })); ok(b('task.finish', { taskId: 'task-b' }));
   } finally { f.dispose(); }
@@ -81,7 +81,7 @@ test("cancel restores only the task's keys and removes what it created; undo-tas
     ok(move(a, ids.cube, 1));
     const made = ok(a('object.duplicate', { objectId: ids.cube }));
     assert.equal(f.store.current.objects.length, count + 1);
-    const madeId = made.affectedIds.find(id => ![ids.cube, ids.sphere, ids.chair].includes(id));
+    const madeId = made.affectedIds.find(id => ![ids.cube, ids.sphere, ids.cylinder].includes(id));
     ok(move(a, madeId, 6));
     ok(move(b, ids.sphere, 2));
     const cancelled = ok(a('task.cancel', { taskId: 'task-a' }));
@@ -92,11 +92,11 @@ test("cancel restores only the task's keys and removes what it created; undo-tas
     ok(b('task.finish', { taskId: 'task-b' }));
     ok(move((action, args) => f.run(action, args, 'ui'), ids.sphere, 8));
     refused(f.run('task.undo', { taskId: 'task-b' }), 'UNDO_CONFLICT');
-    ok(begin('task-c', [`object:${ids.chair}`]));
-    ok(move(task('task-c'), ids.chair, 3));
+    ok(begin('task-c', [`object:${ids.cylinder}`]));
+    ok(move(task('task-c'), ids.cylinder, 3));
     ok(task('task-c')('task.finish', { taskId: 'task-c' }));
     const undone = ok(f.run('task.undo', { taskId: 'task-c' }));
-    assert.notEqual(x(ids.chair), 3); assert.ok(undone.authored);
+    assert.notEqual(x(ids.cylinder), 3); assert.ok(undone.authored);
     refused(f.run('task.undo', { taskId: 'task-c' }), 'UNDO_EXPIRED');
   } finally { f.dispose(); }
 });
@@ -105,14 +105,14 @@ test("a mark and its rollback; undo_edit of the task's newest edit; a reader hea
   const { f, ids, task, begin, x, move } = setup();
   try {
     const a = task('task-a'), b = task('task-b');
-    ok(begin('task-a', [`object:${ids.cube}`, `object:${ids.chair}`]));
+    ok(begin('task-a', [`object:${ids.cube}`, `object:${ids.cylinder}`]));
     ok(begin('task-b', [`object:${ids.sphere}`], { reads: [`object:${ids.cube}`] }));
     ok(move(a, ids.cube, 1));
     ok(a('task.mark', { taskId: 'task-a' }));
-    ok(move(a, ids.cube, 2)); ok(move(a, ids.chair, 5));
+    ok(move(a, ids.cube, 2)); ok(move(a, ids.cylinder, 5));
     ok(a('task.rollback', { taskId: 'task-a' }));
-    assert.equal(x(ids.cube), 1, 'back to the mark'); assert.notEqual(x(ids.chair), 5);
-    const newest = ok(move(a, ids.cube, 4)), older = ok(move(a, ids.chair, 6));
+    assert.equal(x(ids.cube), 1, 'back to the mark'); assert.notEqual(x(ids.cylinder), 5);
+    const newest = ok(move(a, ids.cube, 4)), older = ok(move(a, ids.cylinder, 6));
     refused(a('edit.undo', { receiptId: newest.receiptId }), 'UNDO_CONFLICT');
     ok(a('edit.undo', { receiptId: older.receiptId }));
     ok(a('edit.undo', { receiptId: newest.receiptId }));
@@ -144,12 +144,12 @@ test('the panel hears a task\'s scope grow and the user editing inside it (task.
   try {
     const a = task('task-a');
     ok(begin('task-a', [`object:${ids.cube}`], { title: 'cube' }));
-    ok(a('task.requestScope', { taskId: 'task-a', scope: [`object:${ids.chair}`] }));
+    ok(a('task.requestScope', { taskId: 'task-a', scope: [`object:${ids.cylinder}`] }));
     ok(move((action, args) => f.run(action, args, 'ui'), ids.cube, 7));
     ok(move((action, args) => f.run(action, args, 'ui'), ids.sphere, 8));
     ok(a('task.finish', { taskId: 'task-a' }));
     assert.deepEqual(heard.map(event => event.type), ['task.begun', 'task.scope', 'task.userEdit', 'task.finished']);
-    assert.deepEqual(heard[1].scope, [`object:${ids.cube}`, `object:${ids.chair}`]);
+    assert.deepEqual(heard[1].scope, [`object:${ids.cube}`, `object:${ids.cylinder}`]);
     assert.deepEqual(heard[2], { type: 'task.userEdit', taskId: 'task-a', keys: [`object:${ids.cube}`] }, 'only the edit inside the scope is told');
   } finally { stop(); f.dispose(); }
 });

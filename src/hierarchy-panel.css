@@ -326,13 +326,27 @@
 	outline: var(--outliner-border-width, 1px) solid var(--select, #e8a33d);
 }
 
+/* The context menu is portaled to <body> inside this layer, which keeps the
+   `.v2-outliner` style scope without a box of its own (hierarchy-panel.jsx).
+   It and the scene switcher's list share the popover tokens (themes.css). */
+.v2-outliner.v2-outliner-layer {
+	display: contents;
+}
+
+.v2-outliner .hierarchy-context-menu,
+.dropdown-menu.hierarchy-scene-menu {
+	z-index: var(--z-popover, 90);
+	border: var(--outliner-border-width, 1px) solid var(--popover-border, var(--row-divider, #1d1d20));
+	border-radius: var(--popover-radius, 6px);
+	background: var(--popover-surface, var(--surface-raised, #1e1e21));
+	-webkit-backdrop-filter: var(--popover-blur, none);
+	backdrop-filter: var(--popover-blur, none);
+	box-shadow: var(--popover-shadow, 0 8px 24px rgba(0, 0, 0, .45));
+}
+
 .v2-outliner .hierarchy-context-menu {
 	min-width: var(--outliner-menu-width, 220px);
 	padding: var(--outliner-menu-padding, 4px);
-	border: var(--outliner-border-width, 1px) solid var(--row-divider, #1d1d20);
-	border-radius: var(--r-2, 6px);
-	background: var(--surface-raised, #1e1e21);
-	box-shadow: 0 var(--sp-1, 8px) var(--sp-3, 16px) var(--overlay, rgba(12,12,13,.78));
 }
 
 .v2-outliner .hierarchy-context-item {

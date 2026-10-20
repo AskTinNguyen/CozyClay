@@ -30,7 +30,7 @@ try {
   ({ AppContext } = await server.ssrLoadModule('/src/app-context.js'));
   for (const name of ['ObjectTransformPanel', 'PropsPanel']) objectPanels[name] = (await server.ssrLoadModule(`/src/panels/${name}.jsx`)).default;
 } finally { await server.close(); }
-export function objectsFixture(initial = ['cube', 'sphere', 'chair'].map(kind => createSceneObject(kind))) {
+export function objectsFixture(initial = ['cube', 'sphere', 'cylinder'].map(kind => createSceneObject(kind))) {
   const f = stageFixture(), app = f.scope.appContext;
   let objects;
   app.updatePorts({ read: f.actual.readStudioState, bounds: f.actual.studioBounds, revision: f.revision, poses: () => f.poses,

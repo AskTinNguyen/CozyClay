@@ -2,6 +2,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { createScrubGesture } from "./ui-scrub.js";
 import { isImeComposing } from "./ime.js";
+import { usePopover } from "./popover.js";
 
 // Custom dropdown, structurally matched to the reference (`.dropdown`,
 // `dd-caret`, `dropdown-menu`, `dropdown-item`, `dd-check`) with the keyboard
@@ -13,7 +14,7 @@ import { isImeComposing } from "./ime.js";
 // scroll pane, so an in-place absolute menu gets clipped to the card's
 // height (the pose foldout is ~70 px tall against a ~290 px menu). Scrolling
 // or resizing while open closes the menu instead of chasing the trigger.
-export function Dropdown({ value, options, onChange, ariaLabel }) {
+export function Dropdown({ value, options, onChange, ariaLabel, menuClassName = "" }) {
 	const [open, setOpen] = useState(false);
 	const [highlight, setHighlight] = useState(-1);
 	const rootRef = useRef(null);
@@ -25,19 +26,10 @@ export function Dropdown({ value, options, onChange, ariaLabel }) {
 	const selectedIndex = options.findIndex((o) => o.value === value);
 	const selected = selectedIndex >= 0 ? options[selectedIndex] : null;
 
-	// Close on any mousedown outside the dropdown; the portaled menu is not
-	// inside rootRef, so it is checked separately. Effect cleanup also covers
-	// unmounting while open.
-	useEffect(() => {
-		if (!open) return;
-		const onDocMouseDown = (e) => {
-			if (rootRef.current?.contains(e.target)) return;
-			if (menuRef.current?.contains(e.target)) return;
-			setOpen(false);
-		};
-		document.addEventListener("mousedown", onDocMouseDown);
-		return () => document.removeEventListener("mousedown", onDocMouseDown);
-	}, [open]);
+	// Close on any mousedown outside the dropdown (the portaled menu is not
+	// inside rootRef, so it is checked separately) and when another shell
+	// popover opens. Effect cleanup also covers unmounting while open.
+	usePopover(open, () => setOpen(false), [rootRef, menuRef]);
 
 	// Position the portaled menu from the trigger: below when it fits, above
 	// otherwise, height capped to the free space. Scroll and resize close the
@@ -136,12 +128,12 @@ export function Dropdown({ value, options, onChange, ariaLabel }) {
 			</button>
 			{open && menuBox && createPortal(
 				<div
-					className="dropdown-menu"
+					className={"dropdown-menu " + menuClassName}
 					ref={menuRef}
 					id={listId}
 					role="listbox"
 					aria-activedescendant={highlight >= 0 && highlight < options.length ? `${uid}-opt-${highlight}` : undefined}
-					style={{ position: "fixed", zIndex: 80, ...menuBox, overflowY: "auto" }}
+					style={{ position: "fixed", zIndex: "var(--z-popover, 90)", ...menuBox, overflowY: "auto" }}
 					onKeyDown={onKeyDown}
 				>
 					{options.map((opt, i) => (

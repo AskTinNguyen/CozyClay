@@ -28,7 +28,6 @@ npx -y cozyclay --no-star
 - It is ready when it prints `CozyClay is running at http://127.0.0.1:5180/app/`.
 - It opens the default browser. Add `--no-open` when there is no screen, and give the user the URL.
 - `--port 5200` serves on another port. Use it when the output is `port 5180 is taken`.
-- `--scene city-block` opens a ready-made starter set instead of an empty room.
 - `--no-star` stops the "star the repo" question when the process exits. An agent cannot answer it.
 
 For a permanent install, run `npm install -g cozyclay`. Then `cclay` and `cozyclay` are the same

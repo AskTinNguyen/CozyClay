@@ -10,7 +10,9 @@ const CACHE_PREFIX = "cozyclay-pwa-";
 // v7: force-refresh the asset cache — v6 clients were holding a stale app shell
 // (the html-flex crash-screen regression) and never re-fetching it.
 // v8: CozyClay 3 drops the shipped walk clip (motion is compiled in the studio).
-const CACHE_NAME = `${CACHE_PREFIX}v8`;
+// v9: start-screen template thumbnails (public/thumbs, tools/render-start-thumbs.mjs).
+// v10: the City Block starter and its thumbnails are removed.
+const CACHE_NAME = `${CACHE_PREFIX}v10`;
 // The installable app is the studio, not the landing page.
 const APP_SHELL = "/app/";
 const CORE_ASSETS = [
@@ -26,6 +28,8 @@ const CORE_ASSETS = [
 	"./fonts/inter-latin.woff2",
 	"./models/x-bot-tpose.fbx",
 	"./models/y-bot-tpose.fbx",
+	"./thumbs/blank-stage-light.webp",
+	"./thumbs/blank-stage-dark.webp",
 ];
 
 async function cacheResponse(cache, request, response) {

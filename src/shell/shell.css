@@ -24,6 +24,9 @@
 		--shell-center-left: calc(var(--shell-left) + var(--shell-gap) * 2);
 		--shell-center-right: calc(var(--shell-right) + var(--shell-gap) * 2);
 		--shell-center-bottom: calc(var(--shell-dock) + var(--shell-status-h) + var(--shell-dock-bottom) + var(--shell-gap));
+		/* Top edge of the open stage: the cut-out the frame mask leaves under the
+		   top bar (.workspace::after). */
+		--shell-stage-top: calc(var(--shell-gap) * 2 + 40px);
 		/* The shot card's picture. The slot is the room the card leaves between
 		   its 48px head and the 84px of ratios + footer under it; the picture is
 		   the shot aspect fitted into that slot and centred in it, so the stage
@@ -242,7 +245,7 @@
 		   this frame through their glass, and on the darker --surface-0 they
 		   went a step darker than designed. */
 		background: var(--shell-frame, var(--surface-panel));
-		--shell-view-top: calc(var(--shell-gap) * 2 + 40px);
+		--shell-view-top: var(--shell-stage-top);
 		--shell-cut-w: calc(100% - var(--shell-center-left) - var(--shell-center-right));
 		--shell-view-h: max(0px, calc(100% - var(--shell-view-top) - var(--shell-center-bottom)));
 		--shell-shot-w: var(--shot-pic-w);
@@ -268,6 +271,20 @@
 	}
 	.app[data-dock-tab="assets"]:not([data-embed-mode]) .workspace::after,
 	.app[data-shot-look]:not([data-embed-mode]) .workspace::after { --shell-shot-w: 0px; --shell-shot-h: 0px; }
+	/* Look through: the panels and the frame mask cover the canvas outside the
+	   open stage, and inside it the tool rails (44px, a gutter off each side,
+	   glass.css) and the top-centre exit pill (styles.css) float over it. The
+	   shot pane is the open stage less those bands, the same on both sides so
+	   its centre is the stage centre. DualRender fits the shot aspect into
+	   this pane, centred, with bars (fitAspect); the gizmo and the guides map
+	   onto the same rect. Drawn under the panels or the rails, the frame lost
+	   picture the export keeps. */
+	.app[data-shot-look]:not([data-embed-mode]) .vp-main,
+	.app[data-shot-look]:not([data-embed-mode]) .shot-guides.lookthrough {
+		--shot-look-x: calc(var(--shell-gap) * 2 + 44px);
+		--shot-look-y: 36px;
+		inset: calc(var(--shell-stage-top) + var(--shot-look-y)) calc(var(--shell-center-right) + var(--shot-look-x)) calc(var(--shell-center-bottom) + var(--shot-look-y)) calc(var(--shell-center-left) + var(--shot-look-x));
+	}
 	.app[data-dock-tab="assets"]:not([data-embed-mode]) .vp-shot-preview,
 	.app[data-dock-tab="assets"]:not([data-embed-mode]) .shell-camera-splitter { display: none; }
 

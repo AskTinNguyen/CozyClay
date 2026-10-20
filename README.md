@@ -54,8 +54,7 @@ npx cozyclay
 ```
 
 That is the whole install. You need Node.js 22.19 or newer and a Chromium browser. You do not need
-a GPU, Python or a model download. The studio opens at `http://127.0.0.1:5180/app/`. Add
-`--scene city-block` to start on a ready-made street set.
+a GPU, Python or a model download. The studio opens at `http://127.0.0.1:5180/app/`.
 
 > **Asking an AI agent to set it up?** Give it this repository link. Its instructions are in
 > [`INSTALL_FOR_AGENTS.md`](INSTALL_FOR_AGENTS.md).
@@ -64,7 +63,7 @@ a GPU, Python or a model download. The studio opens at `http://127.0.0.1:5180/ap
 
 | | |
 | --- | --- |
-| **Stage** | Build the set from primitives and set pieces. Add rigged characters, or capsule stand-ins when nobody needs to move a limb. Fly the view like a 3D editor. |
+| **Stage** | Build the set from primitives. Add rigged characters, or capsule stand-ins when nobody needs to move a limb. Fly the view like a 3D editor. |
 | **Move** | Describe the action. The agent writes a motion spec, and a deterministic compiler in the browser bakes every frame. QA checks collisions, foot slide, reach and hand contact before you see it. |
 | **Shoot** | Put shots on a timeline, draw dolly rails, look through the lens. Each shot knows the limits of the video model you target. |
 | **Export** | Keyframe pack (first and last frame, greybox clip, camera, prompt), mp4, depth and normal passes, contact sheet, OTIO cut list. |

@@ -59,7 +59,7 @@ const shots = [{
 		objects: [{
 			id: "chair",
 			name: "Chair",
-			renderer: "chair",
+			renderer: "cylinder",
 			x: 2,
 			y: 0,
 			z: -1,

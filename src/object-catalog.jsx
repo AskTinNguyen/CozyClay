@@ -4,7 +4,6 @@ import { EMPTY_KIND, OBJECT_MENU_ENTRIES } from "./scene-objects.js";
 
 const GROUP_LABELS_KO = {
 	Primitives: "기본 도형",
-	"Set pieces": "세트 소품",
 	Lights: "조명",
 	Effects: "효과",
 	Text: "텍스트",
@@ -18,9 +17,6 @@ const OBJECT_LABELS_KO = {
 	Cylinder: "원기둥",
 	Cone: "원뿔",
 	Plane: "평면",
-	Chair: "의자",
-	Car: "자동차",
-	"Plane (aircraft)": "비행기",
 	"Point light": "점 조명",
 	"Spot light": "스포트 조명",
 	Light: "조명",

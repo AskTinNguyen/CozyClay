@@ -72,7 +72,7 @@ for (const origin of origins) {
     assert.deepEqual(['scaleX', 'scaleY', 'scaleZ'].map(key => f.objects.read()[0][key]), [100, 100, 100]);
     assert.equal(f.run('edit.undo', { receiptId: clamped.receiptId }).status, 'undone');
     const before = structuredClone(f.objects.read()), depth = f.objects.documentStore.depths().past;
-    const deleted = changed(f.run('object.remove', { ids: ['cube', 'sphere', 'chair'] }, 'agent'));
+    const deleted = changed(f.run('object.remove', { ids: ['cube', 'sphere', 'cylinder'] }, 'agent'));
     assert.deepEqual(f.objects.read(), []);
     assert.equal(f.objects.documentStore.depths().past, depth + 1);
     assert.equal(f.run('edit.undo', { receiptId: deleted.receiptId }).status, 'undone');

@@ -4,7 +4,7 @@
 
 ## Pages
 
-- [Home](https://cozyclay.org/): what it does, demo reels, an in-browser playground with a seven-step camera tutorial, quick start.
+- [Home](https://cozyclay.org/): what it does, demo reels, an in-browser playground running the studio, quick start.
 - [Greybox to AI video](https://cozyclay.org/greybox-to-video/): why a grey blockout is the most reliable input to a video model, and the block-then-generate workflow.
 - [Previs software compared](https://cozyclay.org/previs-software/): free, open source and browser-based previs tools side by side.
 - [Seedance 2.5 camera control](https://cozyclay.org/seedance-camera-control/): getting the same camera every take with a reference clip instead of camera prompts.

@@ -72,7 +72,7 @@ const viewportSky = `(() => { const canvas = document.querySelector("#stage canv
 
 expect("the studio is ready", await waitFor("!!window.__cozyclay?.runStudioAction && !!window.__cozyclay?.rigA", 60000));
 await sleep(1200);
-await evaluate(`(() => { const c = window.__cozyclay; c.runStudioAction("object.add", { kind: "chair", placement: { x: 0.85, z: -0.35, rot: -30 } }); c.runStudioAction("object.add", { kind: "cube", placement: { x: -0.75, z: -0.5 } }); return true; })()`);
+await evaluate(`(() => { const c = window.__cozyclay; c.runStudioAction("object.add", { kind: "cylinder", placement: { x: 0.85, z: -0.35, rot: -30 } }); c.runStudioAction("object.add", { kind: "cube", placement: { x: -0.75, z: -0.5 } }); return true; })()`);
 await sleep(800);
 const studio = await evaluate(shotFrame);
 expect("the studio frame is the bright workbench", studio.meanLuma > 0.3, JSON.stringify(studio));

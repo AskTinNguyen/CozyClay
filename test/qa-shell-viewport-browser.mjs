@@ -170,11 +170,11 @@ for (const [mode, spec] of Object.entries(G1)) {
 		const head = el.querySelector('.vp-shot-preview-tag').getBoundingClientRect();
 		return { visible: !el.hidden && getComputedStyle(el).display !== 'none' && r.width > 0, width: r.width, header: head.height, text: el.querySelector('[data-testid=shot-preview-header]')?.textContent.trim() };
 	})()`);
+	// The preview fills the dock's Shot Camera frame, so it shows in every
+	// mode: hidden, the frame was a hole onto the editor view (Pose, Motion).
+	expect(`${mode}: the camera preview inset is visible`, inset.visible && inset.width > 0, JSON.stringify(inset));
 	if (mode === "scene" || mode === "camera") {
-		expect(`${mode}: the camera preview inset is visible`, inset.visible && inset.width > 0, JSON.stringify(inset));
 		expect(`${mode}: the inset header names the shot and lens`, inset.header > 0 && /^Shot_A\s*\d+mm$/.test(inset.text ?? ""), JSON.stringify(inset));
-	} else {
-		expect(`${mode}: the camera preview inset is hidden`, !inset.visible, JSON.stringify(inset));
 	}
 }
 writeFileSync(`${outputDir}/task-10-modes.json`, JSON.stringify(modeReport, null, 2));

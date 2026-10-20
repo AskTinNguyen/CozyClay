@@ -287,7 +287,8 @@
 	cursor: pointer;
 }
 
-.agent-menu button:hover { background: var(--agent-hover, #2b3040); color: var(--agent-text-strong, #f5f7ff); }
+.agent-menu button[disabled] { opacity: 0.45; cursor: not-allowed; }
+.agent-menu button:not([disabled]):hover { background: var(--agent-hover, #2b3040); color: var(--agent-text-strong, #f5f7ff); }
 
 /* --- account strip ----------------------------------------------------- */
 
@@ -868,6 +869,18 @@
 
 /* The second way in on the signed-out card: a key or a server of one's own. */
 .agent-state-card .agent-use-key { align-self: center; }
+
+/* No agent server behind the page: a quiet status (icon + words), not an alert. */
+.agent-offline-icon { align-self: center; color: var(--agent-text-muted); }
+.agent-offline-card code {
+	padding: 0 var(--agent-space-1);
+	border-radius: var(--agent-radius-sm);
+	background: var(--agent-bg-sunken);
+	color: var(--agent-text);
+	font-size: var(--agent-font-sm);
+}
+.agent-offline-retry { align-self: center; display: inline-flex; align-items: center; gap: var(--agent-space-2); }
+.agent-signin-error { align-self: center; max-width: 32ch; }
 
 .agent-primary-button {
 	align-self: center;

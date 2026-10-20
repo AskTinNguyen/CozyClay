@@ -6,7 +6,7 @@ import { DEFAULT_SENSOR_FORMAT, SENSOR_FORMATS } from "./shot.js";
 import { normalizeStableItems } from "./stable-items.js";
 
 import { elementByPath } from "./studio-elements.js";
-import { wrapAngle } from "./scene-objects.js";
+import { wrapAngle } from "./scene-objects.js"; import { retireObjectKind } from "./retired-kinds.js";
 import { normalizeTakeSource } from "./domains/motion/take-source.js";
 import { createKeyLight, normalizeLighting } from "./stage-lighting.js";
 // The timeline clock lives in timeline-fps.js (three-free, so the agent
@@ -373,7 +373,8 @@ function repairScene(record, existing, fallbackNumber, fallbackStage, legacyCloc
 	return {
 		id: record.id,
 		name: uniqueName(typeof record.name === "string" ? record.name : `SCENE ${String(fallbackNumber).padStart(2, "0")}`, existing),
-		objects: record.objects.filter(plainObject).map((object) => cloneValue(object)),
+		// A kind this build no longer ships opens as the cube that stands in for it.
+		objects: record.objects.filter(plainObject).map((object) => retireObjectKind(cloneValue(object))),
 		// The shot document is a sealed envelope with its OWN version, and it
 		// migrates its own frames when its reader opens it.
 		shotDocument: cloneValue(record.shotDocument ?? null),
@@ -412,7 +413,7 @@ export function readSceneDocument(raw, legacyRaw = null) {
 				return { status: "corrupt", document: createSceneDocument(), dropped: 0, quarantineRaw: legacyRaw };
 			}
 			const document = createSceneDocument();
-			document.scenes[0].objects = legacy.objects.filter(plainObject).map((object) => cloneValue(object));
+			document.scenes[0].objects = legacy.objects.filter(plainObject).map((object) => retireObjectKind(cloneValue(object)));
 			return { status: "migrated", document, dropped: legacy.objects.length - document.scenes[0].objects.length };
 		}
 		return { status: "absent", document: createSceneDocument(), dropped: 0 };

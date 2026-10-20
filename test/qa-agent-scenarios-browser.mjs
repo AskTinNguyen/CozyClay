@@ -181,7 +181,7 @@ await scenario("S1", "sight", async (result) => {
 await scenario("S2", "remove", async (result) => {
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
   const names = [`QA remove alpha ${suffix}`, `QA remove beta ${suffix}`];
-  const created = names.map((name, index) => live(["arrange-objects", "--op", JSON.stringify({ op: "create", source: { kind: "chair" }, name, position: { relativeTo: "char-a", basis: "subject", side: index === 0 ? "left" : "right", gapM: 1 + index, support: "floor" } })]));
+  const created = names.map((name, index) => live(["arrange-objects", "--op", JSON.stringify({ op: "create", source: { kind: "cylinder" }, name, position: { relativeTo: "char-a", basis: "subject", side: index === 0 ? "left" : "right", gapM: 1 + index, support: "floor" } })]));
   const ids = created.map((row) => row.affectedIds?.[0] ?? row.id).filter(Boolean);
   if (ids.length !== 2) throw new Error(`Could not identify both created object ids: ${JSON.stringify(created)}`);
   result.before = state();

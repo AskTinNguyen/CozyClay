@@ -136,11 +136,6 @@ const EVENT_PROPERTIES = Object.freeze({
 	"playground:first_action": ["action_kind"],
 	"playground:first_edit": ["edit_kind", "definition_version"],
 	"activation:completed": ["activation_path"],
-	"tutorial:started": ["surface", "tutorial_version", "start_source"],
-	"tutorial:step_entered": ["surface", "tutorial_version", "step_kind"],
-	"tutorial:step_completed": ["surface", "tutorial_version", "step_kind", "elapsed_bucket"],
-	"tutorial:completed": ["surface", "tutorial_version", "elapsed_bucket"],
-	"tutorial:dismissed": ["surface", "tutorial_version", "step_kind"],
 	"sculpt_run": ["outcome", "rounds", "final_iou", "duration_ms", "had_target"],
 	...EXECUTION_TELEMETRY_PROPERTY_KEYS,
 });
@@ -148,7 +143,7 @@ const FEATURE_NAMES = new Set([
 	"pose_edit", "pose_save", "camera_fly", "orbit", "dolly_rail", "crane_graph", "timeline_scrub",
 	"prompt_block_add", "shot_add", "shot_cut", "export_pose", "export_frame", "export_video",
 	"export_depth_video", "export_keyframe_pack", "fal_motion_open",
-	"mcp_connected", "auto_color", "plan_view", "camera_tutorial",
+	"mcp_connected", "auto_color", "plan_view",
 ]);
 // `site` and `playground` arrive through `npx cozyclay --via <source>` from the
 // landing page's copy commands; the others are the first-launch prompt answers.
@@ -175,13 +170,6 @@ const EXPORT_PROPERTY_VALUES = Object.freeze({
 	surface: new Set(["studio", "workflow", "embed"]),
 	duration_bucket: new Set(["lt1s", "1-3s", "3-10s", "10-30s", "gte30s"]),
 	failure_code: EXPORT_FAILURE_CODES,
-});
-const TUTORIAL_PROPERTY_VALUES = Object.freeze({
-	surface: new Set(["studio", "playground"]),
-	tutorial_version: new Set([1]),
-	start_source: new Set(["query", "settings", "landing"]),
-	step_kind: new Set(["fly", "walk", "dolly", "orbit", "shot", "rail", "play"]),
-	elapsed_bucket: new Set(["lt1s", "1-3s", "3-10s", "10-30s", "gte30s"]),
 });
 // Sculpt mode (#739): one sculpt_run per finished run. Numbers only: no
 // reference image, recipe, part name or sculpt id ever rides along.
@@ -320,7 +308,6 @@ export function sanitizeProps(event, props) {
 				if (typeof props[key] !== "string" || !/^[a-f0-9]{32}$/.test(props[key])) continue;
 			} else if (!MOTION_PROPERTY_VALUES[key]?.has(props[key])) continue;
 		}
-		if (event.startsWith("tutorial:") && !TUTORIAL_PROPERTY_VALUES[key]?.has(props[key])) continue;
 		if (event.startsWith("workflow:") || event.startsWith("agent:") || event.startsWith("mcp:")) {
 			if (key === "run_id" || key === "turn_id" || key === "request_id") {
 				if (typeof props[key] !== "string" || !/^[a-f0-9]{32}$/.test(props[key])) continue;

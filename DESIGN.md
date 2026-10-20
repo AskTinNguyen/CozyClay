@@ -82,14 +82,6 @@ borders; the surface value does the work.
 - Destructive rail deletion uses a red hover/focus cue and an explicit text
   label; no icon-only or right-click-only deletion.
 - Keyboard focus must remain visible.
-- The camera tutorial's existing card owns the first-shot handoff: one primary
-  Export action and one Continue editing dismissal. It uses existing panel,
-  border, text and accent tokens, 8 px gaps and the 11 px control scale. Only
-  buttons take pointer input. The existing Export popover owns delivery and
-  keyboard focus; no second menu or modal is introduced.
-- The hosted tutorial reuses its completion area for the edited-project
-  download and local Studio instructions. Continue editing keeps the iframe
-  alive. Pending/error/download-requested states use text, not animation.
 - Full-Body editing is direct and frame-addressed: `Cut` splits at the
   playhead, while each resulting green segment owns a compact speed selector.
   Speed changes redraw the segment width immediately; there is no decorative
@@ -239,8 +231,6 @@ snapping and a read-only hotkeys list.
   health. It preserves the scene and prompt blocks, scrolls within the viewport,
   wraps commands, and keeps controls reachable at 390 px. Status uses polite
   announcements, visible keyboard focus and immediate state changes.
-- `.camera-tutorial-handoff`: the contextual action row inside the existing
-  tutorial; it wraps at narrow widths and has visible keyboard focus.
 
 ## 6. Floating-glass shell and themes (#570)
 

@@ -64,13 +64,11 @@ const evaluate = async (expression) => {
 };
 await send("Page.enable");
 // The harness seeds a project session, which skips the startup chooser this
-// suite tests. Clear it (and the camera tutorial a fresh origin opens) itself
-// so CI needs no extra env.
+// suite tests. Clear it itself so CI needs no extra env.
 await evaluate(`(() => {
 	localStorage.removeItem("cozyclay.project-session.v1");
 	localStorage.removeItem("${SCENES_STORAGE_KEY}");
 	localStorage.removeItem("${PREVIOUS_SCENES_STORAGE_KEY}");
-	localStorage.setItem("cozyclay.camera-tutorial-terminal.v1", JSON.stringify({ dismissed: true }));
 })()`);
 const loaded = waitForPageLoad();
 await send("Page.reload", { ignoreCache: true });
@@ -133,9 +131,9 @@ await setInput('[data-testid="start-project-name"]', "alley_chase_v2");
 expect("the entered name re-enables Create", await waitFor("document.querySelector('[data-testid=start-create]')?.disabled === false"));
 await screenshot("task-17-compare.png");
 
-// The sample card is selected by default and opens the sample scene; the
-// first-run guide belongs to the blank path.
-await evaluate("document.querySelector('[data-template-id=blank-stage]').click()");
+// The "+ New project" card is the one blank entry; the first-run guide belongs to it.
+await evaluate("document.querySelector('[data-testid=start-new-project-card]').click()");
+await setInput('[data-testid="start-project-name"]', "alley_chase_v2");
 await evaluate("document.querySelector('[data-testid=start-create]').click()");
 expect("Create opens the editor", await waitFor("!document.querySelector('.project-browser') && !!document.querySelector('.timeline')"));
 const editorName = await evaluate("document.querySelector('.project-menu-trigger')?.textContent || ''");

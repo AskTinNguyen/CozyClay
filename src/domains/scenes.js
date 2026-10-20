@@ -208,9 +208,8 @@ export function useScenes(appContext) {
 	// A first-run author should choose a document (or explicitly start a named
 	// local draft). Keep this as a light startup sheet so the studio remains
 	// inspectable while the choice is pending; it never traps the topbar.
-	// ?tutorial=camera opens the starter scene itself (#209), so the chooser is
-	// suppressed the same way a ?scene= launch suppresses it.
-	const [projectStartupOpen, setProjectStartupOpen] = useState(() => !appContext.shared.playgroundMode && !appContext.shared.cameraTutorialQuery && !playgroundSceneUrl(globalThis.location?.search) && !loadProjectSession()?.name);
+	// A ?scene= launch opens its starter instead of the chooser.
+	const [projectStartupOpen, setProjectStartupOpen] = useState(() => !appContext.shared.playgroundMode && !playgroundSceneUrl(globalThis.location?.search) && !loadProjectSession()?.name);
 
 	const [projectManifest, setProjectManifest] = useState({ items: [], totals: { embedded: 0, external: 0, missing: 0, bytes: 0 }, missing: [] });
 
@@ -400,10 +399,6 @@ export function useScenes(appContext) {
 		if (!["valid", "migrated"].includes(checked.status)) throw new StudioProtocolError("INVALID_ARGUMENT", "Invalid project scene document.");
 		project = { ...project, scenesDocument: checked.document };
 		appContext.shared.studioDocumentEpochRef.current = crypto.randomUUID();
-		appContext.shared.tutorialProjectEpochRef.current += 1;
-		appContext.shared.tutorialSeedEpochRef.current = null;
-		appContext.shared.setTutorialSeedPending(false);
-		appContext.shared.setCameraTutorialHandoff(null);
 		appContext.shared.exportShotIdRef.current = null;
 		const source = project.scenesDocument;
 				// A project FILE carries its own scene document and never passes the
@@ -425,25 +420,16 @@ export function useScenes(appContext) {
 		domain.setDirty(false);
 		storeProjectSession(project.name, projectPrevisMode);
 		setProjectStartupOpen(false);
-		// Whatever document this is, it is no longer the scene the tutorial opened
-		// for itself; startCameraTutorial re-arms the flag after its own open.
-		appContext.shared.tutorialStarterRef.current = false;
 		setProjectManifest(resourceManifest({ scenesDocument: doc, workflow: resolvedWorkflow, poseLibrary: mergedCustomPoses, assets: project.assets ?? [], workflowOutputRefs }));
 		track("project:opened", { age_bucket: bucketProjectAge(Date.now() - (project.savedAt ?? Date.now())) });
 	}
 
 	/** Open a bundled starter scene as a fresh, saveable project. Used by the
-	 * first-run dialog and by `npx cozyclay --scene <id>` (`?scene=`), which is
-	 * how the landing-page tutorial hands people into the local studio. */
+	 * first-run dialog and by `npx cozyclay --scene <id>` (`?scene=`). */
 	async function openStarterScene(id, source = "starter", context = null, name = null) {
 		if (source === "starter" && domain.dirtyStore.read("projectDirty") && !window.confirm(ko("Discard unsaved changes and start a new project?", "저장되지 않은 변경사항을 버리고 새 프로젝트를 시작할까요?"))) return false;
-		const before = source === "tutorial" ? collectProjectSnapshot("Tutorial") : null;
-		const epoch = appContext.shared.tutorialProjectEpochRef.current;
 		const url = playgroundSceneUrl(`?scene=${encodeURIComponent(id)}`);
 		const project = url ? await fetchSceneProject(url) : null;
-		// A pending tutorial fetch has no authority over work authored/opened
-		// while it was loading, including an unnamed project.
-		if (source === "tutorial" && (epoch !== appContext.shared.tutorialProjectEpochRef.current || before !== collectProjectSnapshot("Tutorial"))) return false;
 		if (!project) {
 			appContext.notify(ko("That starter scene is not in this build", "이 빌드에는 그 시작 장면이 없어요"));
 			return false;
@@ -596,11 +582,6 @@ export function useScenes(appContext) {
 	}
 
 	function openScene(scene, nextScenes) {
-		appContext.shared.tutorialProjectEpochRef.current += 1;
-		appContext.shared.tutorialSeedEpochRef.current = null;
-		appContext.shared.setTutorialSeedPending(false);
-		appContext.shared.setCameraTutorial(false);
-		appContext.shared.setCameraTutorialHandoff(null);
 		appContext.shared.exportShotIdRef.current = null;
 		appContext.shared.studioSceneEpochRef.current = crypto.randomUUID();
 		const shotState = restoredShotState(scene);

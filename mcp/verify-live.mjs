@@ -112,7 +112,7 @@ cases.receipts = async () => {
 			path: { points: [{ x: 0, z: 0 }, { x: 2, z: 2 }], face_travel: false } }), "object.update");
 		const updated = s.f.objects.read().find(row => row.id === id);
 		assert.deepEqual([updated.x, updated.rot, updated.rotX, updated.rotZ, updated.scaleX, updated.scaleY, updated.hidden, updated.path.faceTravel], [3, 30, 10, 5, 2, 3, true, false]);
-		const parent = receipt(await s.call("place_object", { kind: "chair" }), "object.add").affectedIds[0];
+		const parent = receipt(await s.call("place_object", { kind: "cylinder" }), "object.add").affectedIds[0];
 		receipt(await s.call("group_objects", { parent, children: [id] }), "object.group");
 		assert.equal(s.f.objects.read().find(row => row.id === id).parent, parent);
 		receipt(await s.call("group_objects", { parent: null, children: [id] }), "object.ungroup");
@@ -202,7 +202,7 @@ cases.batch = async () => {
 	};
 	try {
 		const before = structuredClone(s.f.objects.read()), depth = s.f.objects.store.depths().past;
-		const ops = ["cube", "chair", "sphere"].map((kind, i) => ({ name: "place_object", args: { kind, x: i + 1 } }));
+		const ops = ["cube", "cylinder", "sphere"].map((kind, i) => ({ name: "place_object", args: { kind, x: i + 1 } }));
 		let offset = s.events.length;
 		const batch = receipt(await s.call("apply_batch", { ops, label: "Three edits", atomic: true, stopOnError: false }), "objects.batch");
 		assert.equal(batch.undo.entries, 1);

@@ -40,7 +40,6 @@ const interceptionErrors = [];
 const analyticsRequests = [];
 let patchedResponses = 0;
 let fixtureProject;
-let hostedSeed = false;
 const fixturePath = "/scenes/qa-first-edit.cclayproject";
 const send = (method, params = {}) => new Promise((resolve, reject) => {
 	const id = ++nextId;
@@ -70,16 +69,13 @@ async function interceptResponse(params) {
 	const path = new URL(params.request.url).pathname;
 	if (path === "/src/analytics.js") return patchSink(params);
 	// Stable network fixtures, not editor mocks: a healthy optional sidecar
-	// prevents automatic demo motion racing pose-only sessions. The tutorial
-	// still fetches and seeds the real bundled walk regardless of bridge state.
-	// The homepage seed models an unavailable HTTP endpoint, as checkBridge
-	// classifies HTTP status rather than a payload-level ok flag.
+	// prevents automatic demo motion racing pose-only sessions.
 	// Playground uses its real preset parser/boot; it never reads Studio storage.
 	assert.ok(path === "/ardy/health" || path === fixturePath, "known fixture boundary");
 	const body = path === fixturePath ? fixtureProject
-		: hostedSeed ? { reason: "QA hosted site has no bridge" } : { ok: true, host: "qa", device: "cpu" };
+		: { ok: true, host: "qa", device: "cpu" };
 	assert.ok(body, "Playground fixture was prepared before navigation");
-	return send("Fetch.fulfillRequest", { requestId: params.requestId, responseCode: path === "/ardy/health" && hostedSeed ? 503 : 200,
+	return send("Fetch.fulfillRequest", { requestId: params.requestId, responseCode: 200,
 		responseHeaders: [{ name: "Content-Type", value: "application/json" }],
 		body: Buffer.from(JSON.stringify(body)).toString("base64") });
 }
@@ -139,8 +135,7 @@ async function expectEvents(surface, kind, label) {
 	assert.equal(await b.evaluate("!!window.__cozyclayAnalytics?.instance"), false, "real analytics SDK stays disabled");
 	console.log(`PASS ${surface} ${label}: ${JSON.stringify(actual)}`);
 }
-async function fresh(surface, { tutorial = false } = {}) {
-	hostedSeed = tutorial && surface === "playground";
+async function fresh(surface) {
 	await b.navigate(`${b.base.origin}/favicon.ico`);
 	await b.evaluate(`(() => {
 		localStorage.clear();
@@ -166,22 +161,19 @@ async function fresh(surface, { tutorial = false } = {}) {
 	url.search = "";
 	if (surface === "playground") {
 		url.searchParams.set("embed", "playground");
-		url.searchParams.set("scene", tutorial ? "city-block" : fixturePath);
+		url.searchParams.set("scene", fixturePath);
 	}
-	if (tutorial && surface === "craft") url.searchParams.set("tutorial", "camera");
 	const before = patchedResponses;
 	await b.navigate(url);
 	await b.ready();
 	assert.ok(patchedResponses > before, "fresh App mount loaded the intercepted analytics module");
 	assert.equal(await b.evaluate("document.querySelector('.app').dataset.embedMode === 'playground'"), surface === "playground");
 	assert.deepEqual(interceptionErrors, []);
-	if (!tutorial) {
-		const restored = await projectScene();
-		assert.equal(restored.id, sceneId, "storage fixture really restored");
-		assert.equal(restored.shotDocument.shots[0].id, shotId, "rail/navigation setup restores a shot, never adds one");
-		assert.equal(await b.evaluate("!!window.__cozyclay.motion"), false, "pose-only fixture has no motion to clear");
-		await expectEvents(surface, null, "restored pose, library and shot are not edits");
-	}
+	const restored = await projectScene();
+	assert.equal(restored.id, sceneId, "storage fixture really restored");
+	assert.equal(restored.shotDocument.shots[0].id, shotId, "rail/navigation setup restores a shot, never adds one");
+	assert.equal(await b.evaluate("!!window.__cozyclay.motion"), false, "pose-only fixture has no motion to clear");
+	await expectEvents(surface, null, "restored pose, library and shot are not edits");
 }
 async function applyPose(id) {
 	await b.change("document.querySelector('[data-node-id=characterA]')?.getAttribute('aria-selected') === 'true'", () =>
@@ -283,38 +275,6 @@ async function navigationSession(surface) {
 	await expectEvents(surface, null, "look-through entry/exit emits no edit");
 	await screenshot(`${surface}-navigation-only`);
 }
-async function tutorialSession(surface) {
-	await fresh(surface, { tutorial: true });
-	// Studio has its native tutorial; the homepage Playground bootstraps the
-	// preset and hosted walk without the Studio-only ?tutorial=camera entry.
-	await b.arm(`!!window.__cozyclay.motion && window.__cozyclay.frameCount === 432${surface === "craft"
-		? " && window.__cozyclayTutorialSource === 'query' && !!document.querySelector('[data-testid=camera-tutorial]')" : ""}`);
-	await b.settled();
-	// The motion payload can arrive while the new character still suspends
-	// the Canvas. Wait for the actual rig and a draw, not merely its data.
-	await b.ready();
-	await b.evaluate(`new Promise((resolve, reject) => {
-		const meshes = [];
-		window.__cozyclay.rigA.traverse((object) => {
-			if (object.isMesh) meshes.push([object, object.onAfterRender]);
-		});
-		const cleanup = () => {
-			clearTimeout(timer);
-			for (const [mesh, original] of meshes) mesh.onAfterRender = original;
-		};
-		const timer = setTimeout(() => { cleanup(); reject(new Error('tutorial character did not render')); }, 30000);
-		for (const [mesh, original] of meshes) mesh.onAfterRender = function (...args) {
-			original.apply(this, args);
-			cleanup();
-			resolve(true);
-		};
-	})`);
-	assert.ok((await projectScene()).objects.length > 0, "tutorial seeded its real starter props");
-	assert.equal(await b.evaluate("window.__cozyclay.tlFrame"), 0, "tutorial seed stays on frame zero");
-	await expectEvents(surface, null, "tutorial scene and walk-take auto-seeding emit no edit");
-	await screenshot(`${surface}-tutorial-seed`);
-}
-
 let failures = 0;
 try {
 	await b.send("Emulation.setDeviceMetricsOverride", { width: 1600, height: 1000, deviceScaleFactor: 1, mobile: false });
@@ -332,7 +292,7 @@ try {
 		// unhide it or call an edit hook and mislabel that as real UI coverage.
 		const scenarios = [
 			...(surface === "craft" ? [["pose-only", poseSession]] : []),
-			["rail-only", railSession], ["navigation-only", navigationSession], ["tutorial-seed", tutorialSession],
+			["rail-only", railSession], ["navigation-only", navigationSession],
 		];
 		for (const [name, scenario] of scenarios) {
 			try { await scenario(surface); }
@@ -349,9 +309,9 @@ try {
 	assert.deepEqual(interceptionErrors, [], "every analytics interception succeeded");
 	assert.deepEqual(analyticsRequests, [], "no real analytics network requests were attempted");
 	console.log(`PASS analytics observation: ${patchedResponses} intercepted modules; no SDK enabled or analytics requests attempted`);
-	console.log("COVERAGE NOTE Playground hides pose authoring: pose-only UI is tested in Studio; rail, navigation and tutorial startup are tested on both surfaces.");
+	console.log("COVERAGE NOTE Playground hides pose authoring: pose-only UI is tested in Studio; rail and navigation are tested on both surfaces.");
 	console.log(`Screenshots: ${shotDir}`);
-	console.log(`qa-first-edit-browser: ${failures ? `${failures} FAILED scenarios` : 'all 7 real-surface scenarios passed'}`);
+	console.log(`qa-first-edit-browser: ${failures ? `${failures} FAILED scenarios` : 'all 5 real-surface scenarios passed'}`);
 	process.exitCode = failures ? 1 : 0;
 } finally {
 	for (const request of pending.values()) clearTimeout(request.timer);

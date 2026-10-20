@@ -293,9 +293,6 @@ try {
 	await send("Network.enable");
 	await send("Page.enable");
 	await send("Runtime.enable");
-	// A fresh profile auto-opens the first-run camera tutorial (#586), whose seed
-	// installs a take a few seconds after the rig is ready and races the first edit.
-	await send("Page.addScriptToEvaluateOnNewDocument", { source: 'localStorage.setItem("cozyclay.camera-tutorial-terminal.v1", JSON.stringify({ dismissed: true }));' });
 	await send("Page.navigate", { url: `http://127.0.0.1:${vitePort}/app/` });
 
 	client = new Client({ name: "cozyclay-live-batch-verify", version: "1.0.0" });
@@ -381,7 +378,7 @@ try {
 		stopOnError: true,
 		ops: [
 			{ name: "place_object", args: { kind: "cube", x: 1, z: 2 } },
-			{ name: "place_object", args: { kind: "chair", x: -2, z: 1 } },
+			{ name: "place_object", args: { kind: "cylinder", x: -2, z: 1 } },
 			{ name: "place_object", args: { kind: "sphere", x: 0, z: -1 } },
 		],
 	});
@@ -414,7 +411,7 @@ try {
 		stopOnError: true,
 		ops: [
 			{ name: "place_object", args: { kind: "cube", x: 3 } },
-			{ name: "place_object", args: { kind: "chair", x: 4 } },
+			{ name: "place_object", args: { kind: "cylinder", x: 4 } },
 			{ name: "update_object", args: { id: "missing-object", x: 5 } },
 		],
 	});

@@ -24,6 +24,7 @@ import { MESH_DEFAULT_HEIGHT, MESH_HEIGHT_MIN } from "./scene-mesh.js";
 import { normalizeSculptRecipe, sculptStandingBox } from "./sculpt-recipe.js";
 import { GREY_BOX } from "./object-colors.js";
 import { isEffectivelyHidden } from "./object-hidden.js";
+import { retireObjectKind } from "./retired-kinds.js";
 import { objectSize } from "./object-size.js";
 import { EFFECT_ENTRY, effectFields } from "./effects/effect-record.js";
 import { TEXT_ENTRY, TEXT_KIND, textFields, textPatch } from "./text/text-record.js";
@@ -65,8 +66,7 @@ const snapTo = (value, step) => Number((step > 0 ? Math.round(value / step) * st
  * object stands (used for the selection box and the gizmo's height).
  *
  * Primitives are grey-box grey on purpose: a blockout stands in for something
- * else, and a tinted maquette reads as a finished prop. The hand-built set
- * pieces keep their clay colours because they ARE the thing they depict.
+ * else, and a tinted maquette reads as a finished prop.
  */
 export const OBJECT_LIBRARY = [
 	{ kind: "cube", label: "Cube", group: "Primitives", footprint: { width: 1, depth: 1 }, height: 1, color: GREY_BOX },
@@ -75,11 +75,6 @@ export const OBJECT_LIBRARY = [
 	{ kind: "cylinder", label: "Cylinder", group: "Primitives", footprint: { width: 1, depth: 1 }, height: 1, color: GREY_BOX },
 	{ kind: "cone", label: "Cone", group: "Primitives", footprint: { width: 1, depth: 1 }, height: 1, color: GREY_BOX },
 	{ kind: "plane", label: "Plane", group: "Primitives", footprint: { width: 2, depth: 2 }, height: 0, color: GREY_BOX },
-	// supportY is the walkable surface, which can differ from the object's
-	// bounding height (a chair's back rises above its seat).
-	{ kind: "chair", label: "Chair", group: "Set pieces", footprint: { width: 0.6, depth: 0.6 }, height: 1.15, supportY: 0.495, color: "#b9855d" },
-	{ kind: "car", label: "Car", group: "Set pieces", footprint: { width: 1.8, depth: 4.5 }, height: 1.4, color: "#d98770" },
-	{ kind: "small-plane", label: "Plane (aircraft)", group: "Set pieces", footprint: { width: 3.4, depth: 3.6 }, height: 1.4, color: "#7896a4" },
 ];
 
 /**
@@ -994,6 +989,7 @@ function objectOpacity(value) {
 
 export function normalizeSceneObject(record) {
 	if (!record || typeof record !== "object" || Array.isArray(record)) return null;
+	record = retireObjectKind(record);
 	const entry = objectLibraryEntry(record.renderer);
 	if (!entry) return null;
 	if (typeof record.id !== "string" || !record.id) return null;

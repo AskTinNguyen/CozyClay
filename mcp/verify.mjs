@@ -146,7 +146,7 @@ check("place_character hidden false clears the cast marker", !shownCastLine.incl
 
 /* --------------------------------- the set ------------------------------- */
 
-const placed = await call("place_object", { kind: "chair", x: -1.2, z: 0.6, facing: 30 });
+const placed = await call("place_object", { kind: "cylinder", x: -1.2, z: 0.6, facing: 30 });
 const objectId = placed.match(/as (\S+)\./)?.[1];
 check("place_object returns an id", Boolean(objectId), placed.split("\n")[0]);
 check("update_object accepts the id", (await call("update_object", { id: objectId, scale: 1.4 })).startsWith("Updated"));
@@ -261,7 +261,7 @@ check("save refuses implicit overwrite", (await call("save_project", { path: fil
 check("save allows explicit overwrite", (await call("save_project", { path: file, overwrite: true })).startsWith("Saved"), "explicit overwrite failed");
 const reopened = await call("open_project", { path: file });
 check("project round-trips the cast", reopened.includes("detective") && reopened.includes("courier"), reopened);
-check("project round-trips the set", reopened.includes("Chair"), reopened);
+check("project round-trips the set", reopened.includes("Cylinder"), reopened);
 await import("node:fs/promises").then((fs) => fs.unlink(file).catch(() => {}));
 
 check("outside project root is rejected", (await call("open_project", { path: join(tmpdir(), "nope.cclayproject") })).includes("direct children of configured project root"));

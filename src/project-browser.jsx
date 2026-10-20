@@ -14,21 +14,16 @@ import {
 	storeProjectsDirectory,
 	DEFAULT_PREVIS_MODE,
 } from "./project.js";
+import { BrandMark, TemplateThumb } from "./project-browser-art.jsx";
 import "./project-browser.css";
 
 const APP_VERSION = packageInfo.version;
-const CATEGORIES = ["All", "Film", "Dialogue", "Action", "Vehicle"];
-const BLANK_TEMPLATE = Object.freeze({
-	id: "blank-stage",
-	name: "Blank Stage",
-	category: "All",
-	description: "An empty stage for blocking a new shot.",
-	kind: "blank",
-	code: "NEW",
-});
+// The "+" card is the one blank entry: an empty stage under a fresh name (no
+// starterId, so Create takes the blank path). Its preview is the blank-stage render.
+const NEW_PROJECT = Object.freeze({ id: "new-project", thumbId: "blank-stage", kind: "blank", defaultName: "Untitled Project", get name() { return ko("New project", "새 프로젝트"); }, get description() { return ko("Start from an empty stage.", "빈 무대에서 시작합니다."); } });
 
 // The two project modes the New view offers.
-// Storyboard starts from an empty stage only; Animation keeps every template.
+// Storyboard starts from an empty stage only; Animation also offers the starters.
 const MODE_OPTIONS = [
 	{
 		id: "storyboard",
@@ -46,6 +41,9 @@ const MODE_OPTIONS = [
 // path. The v2 chooser already has the name, so this short-lived handoff seeds
 // the existing ProjectNameDialog and lets its normal submit path commit it.
 let pendingProjectName = null;
+function stagePendingProjectName(name) {
+	pendingProjectName = name;
+}
 
 function formatDate(value) {
 	const date = new Date(value);
@@ -58,10 +56,8 @@ function sampleTemplate(scene) {
 		id: `sample-${scene.id}`,
 		starterId: scene.id,
 		name: scene.name,
-		category: "Action",
 		description: scene.blurb,
 		kind: "sample",
-		code: "SAMPLE",
 	};
 }
 
@@ -103,20 +99,17 @@ export function ProjectNameDialog({ open, initialName = "My Project", onCancel, 
 
 /**
  * v2 start / project screen. Recent projects still come from the browser-local
- * project store, while today's starter scenes become the template cards.
+ * project store, while the bundled starter scenes (none today) become template
+ * cards before the "+" card.
  */
 export default function ProjectBrowser({ currentName, onOpen, onOpenFile, onNew, onClose, startup = false, starters = [], onStarter }) {
 	const starterTemplates = useMemo(() => starters.map(sampleTemplate), [starters]);
 	const [previsMode, setPrevisMode] = useState(DEFAULT_PREVIS_MODE);
-	const templates = useMemo(
-		() => (previsMode === "storyboard" ? [BLANK_TEMPLATE] : [BLANK_TEMPLATE, ...starterTemplates]),
-		[previsMode, starterTemplates],
-	);
-	const defaultTemplate = starterTemplates[0] ?? BLANK_TEMPLATE;
+	const templates = previsMode === "storyboard" ? [] : starterTemplates;
+	const defaultTemplate = starterTemplates[0] ?? NEW_PROJECT;
 	const [activeNav, setActiveNav] = useState(startup ? "new" : "recent");
-	const [category, setCategory] = useState("All");
 	const [selectedTemplateId, setSelectedTemplateId] = useState(defaultTemplate.id);
-	const [name, setName] = useState(currentName || defaultTemplate.name || "My Project");
+	const [name, setName] = useState(currentName || defaultTemplate.defaultName || defaultTemplate.name || "My Project");
 	const [frameRate, setFrameRate] = useState("24");
 	const [units, setUnits] = useState("Meters");
 	const [recents, setRecents] = useState([]);
@@ -156,15 +149,14 @@ export default function ProjectBrowser({ currentName, onOpen, onOpenFile, onNew,
 
 	// File › New reaches this screen with unsaved work, so Create can be refused
 	// by the discard confirmation. A name left behind then must not seed a later
-	// Save's name dialog once the screen closes.
+	// Save's name dialog once the screen closes. The clear waits for the end of
+	// the commit: a Create that closes this screen opens the name dialog in the
+	// same commit, and its effect takes the name first.
 	useEffect(() => () => {
-		pendingProjectName = null;
+		queueMicrotask(() => stagePendingProjectName(null));
 	}, []);
 
-	const selectedTemplate = templates.find((template) => template.id === selectedTemplateId) ?? templates[0];
-	const visibleTemplates = category === "All"
-		? templates
-		: templates.filter((template) => template.category === "All" || template.category === category);
+	const selectedTemplate = templates.find((template) => template.id === selectedTemplateId) ?? NEW_PROJECT;
 	const canCreate = name.trim().length > 0;
 	const createReason = ko("Enter a project name to create a project", "프로젝트를 만들려면 이름을 입력하세요");
 	const locationLabel = folder?.name || ko("Browser project store", "브라우저 프로젝트 저장소");
@@ -201,17 +193,17 @@ export default function ProjectBrowser({ currentName, onOpen, onOpenFile, onNew,
 	const selectTemplate = (template) => {
 		setSelectedTemplateId(template.id);
 		// A name the previous card (or the open project) filled in follows the new card; a typed one stays.
-		setName((current) => !current.trim() || current.trim() === selectedTemplate?.name || current.trim() === currentName ? template.name : current);
+		setName((current) => !current.trim() || [selectedTemplate?.name, selectedTemplate?.defaultName, currentName].includes(current.trim()) ? template.defaultName ?? template.name : current);
 	};
 
 	const choosePrevisMode = (mode) => {
 		setPrevisMode(mode);
 		// Storyboard offers the blank stage only, so a starter selection cannot
 		// survive the switch.
-		if (mode !== "storyboard" || selectedTemplate?.id === BLANK_TEMPLATE.id) return;
-		setSelectedTemplateId(BLANK_TEMPLATE.id);
+		if (mode !== "storyboard" || !selectedTemplate?.starterId) return;
+		setSelectedTemplateId(NEW_PROJECT.id);
 		// A name the starter card filled in would now describe the wrong stage.
-		setName((current) => (current.trim() === selectedTemplate?.name ? BLANK_TEMPLATE.name : current));
+		setName((current) => (current.trim() === selectedTemplate?.name ? NEW_PROJECT.defaultName : current));
 	};
 
 	const createProject = (event) => {
@@ -222,7 +214,7 @@ export default function ProjectBrowser({ currentName, onOpen, onOpenFile, onNew,
 			onStarter?.(selectedTemplate.starterId, projectName, { previsMode: "animation" });
 			return;
 		}
-		pendingProjectName = projectName;
+		stagePendingProjectName(projectName);
 		onNew(projectName, { previsMode });
 	};
 
@@ -234,7 +226,6 @@ export default function ProjectBrowser({ currentName, onOpen, onOpenFile, onNew,
 	const navItems = [
 		{ id: "recent", label: ko("Recent", "최근") },
 		{ id: "new", label: ko("New Project", "새 프로젝트") },
-		{ id: "samples", label: ko("Samples", "샘플") },
 		{ id: "learn", label: ko("Learn", "배우기") },
 	];
 
@@ -243,7 +234,7 @@ export default function ProjectBrowser({ currentName, onOpen, onOpenFile, onNew,
 			<div className={`v2-start-window project-browser${startup ? " startup" : ""}`} role="dialog" aria-modal="true" aria-label={ko("Choose project", "프로젝트 선택")}>
 				<nav className="v2-start-nav" aria-label={ko("Project navigation", "프로젝트 탐색")}>
 					<div className="v2-start-brand">
-						<span className="v2-start-brand-mark" aria-hidden="true" />
+						<BrandMark />
 						<strong>CozyClay</strong>
 					</div>
 					<div className="v2-start-nav-list">
@@ -265,7 +256,7 @@ export default function ProjectBrowser({ currentName, onOpen, onOpenFile, onNew,
 				<main className="v2-start-main">
 					<div className="v2-start-main-head">
 						<div className="v2-start-title-row">
-							<h1>{activeNav === "recent" ? ko("Recent", "최근") : activeNav === "samples" ? ko("Samples", "샘플") : activeNav === "learn" ? ko("Learn", "배우기") : ko("New Project", "새 프로젝트")}</h1>
+							<h1>{activeNav === "recent" ? ko("Recent", "최근") : activeNav === "learn" ? ko("Learn", "배우기") : ko("New Project", "새 프로젝트")}</h1>
 							{activeNav !== "new" && <button type="button" className="v2-start-close x" onClick={onClose} aria-label={ko("Close", "닫기")}>×</button>}
 						</div>
 						{activeNav === "new" && (
@@ -282,22 +273,6 @@ export default function ProjectBrowser({ currentName, onOpen, onOpenFile, onNew,
 									>
 										<strong>{option.label()}</strong>
 										<span>{option.blurb()}</span>
-									</button>
-								))}
-							</div>
-						)}
-						{(activeNav === "new" || activeNav === "samples") && (
-							<div className="v2-start-tabs" role="tablist" aria-label={ko("Template categories", "템플릿 카테고리")}>
-								{CATEGORIES.map((entry) => (
-									<button
-										type="button"
-										key={entry}
-										role="tab"
-										aria-selected={category === entry}
-										className={`v2-start-tab${category === entry ? " active" : ""}`}
-										onClick={() => setCategory(entry)}
-									>
-										{ko(entry, entry === "All" ? "전체" : entry === "Film" ? "영화" : entry === "Dialogue" ? "대화" : entry === "Action" ? "액션" : "차량")}
 									</button>
 								))}
 							</div>
@@ -327,7 +302,7 @@ export default function ProjectBrowser({ currentName, onOpen, onOpenFile, onNew,
 					) : (
 						<>
 							<div className="v2-start-template-grid" role="list" aria-label={ko("Project templates", "프로젝트 템플릿")}>
-								{visibleTemplates.map((template) => (
+								{templates.map((template) => (
 									<button
 										type="button"
 										role="listitem"
@@ -337,15 +312,20 @@ export default function ProjectBrowser({ currentName, onOpen, onOpenFile, onNew,
 										onClick={() => selectTemplate(template)}
 										onDoubleClick={() => template.starterId && onStarter?.(template.starterId)}
 									>
-										<span className={`v2-start-template-art ${template.kind}`} aria-hidden="true">
-											<span className="v2-start-template-code">{template.code}</span>
-										</span>
+										<span className={`v2-start-template-art ${template.kind}`}><TemplateThumb id={template.starterId ?? template.id} /></span>
 										<span className="v2-start-template-copy">
 											<strong>{template.name}</strong>
 											<span>{template.description}</span>
 										</span>
 									</button>
 								))}
+								<button type="button" role="listitem" className={`v2-start-add-card${selectedTemplate?.id === NEW_PROJECT.id ? " selected" : ""}`} data-testid="start-new-project-card" onClick={() => { selectTemplate(NEW_PROJECT); requestAnimationFrame(() => nameInputRef.current?.select()); }}>
+									<span className="v2-start-add-art" aria-hidden="true"><svg viewBox="0 0 20 20" width="20" height="20"><path d="M10 3.5v13M3.5 10h13" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg></span>
+									<span className="v2-start-template-copy">
+										<strong>{ko("New project", "새 프로젝트")}</strong>
+										<span>{ko("Start from an empty stage", "빈 무대에서 시작")}</span>
+									</span>
+								</button>
 							</div>
 
 							<div className="v2-start-recent-block">
@@ -357,15 +337,11 @@ export default function ProjectBrowser({ currentName, onOpen, onOpenFile, onNew,
 							</div>
 						</>
 					)}
-					{activeNav !== "recent" && activeNav !== "learn" && (
-						<div className="v2-start-file-actions">
-							<button type="button" className="v2-start-file-button" onClick={onOpenFile}>{ko("Open project file…", "프로젝트 파일 열기…")}</button>
-						</div>
-					)}
+					{activeNav !== "recent" && activeNav !== "learn" && <div className="v2-start-file-actions"><button type="button" className="v2-start-file-button" onClick={onOpenFile}>{ko("Open project file…", "프로젝트 파일 열기…")}</button></div>}
 				</main>
 
 				<aside className="v2-start-preview" data-testid="start-project-preview" aria-label={ko("Project preview", "프로젝트 미리보기")}>
-					<div className={`v2-start-preview-art ${selectedTemplate?.kind || "blank"}`} aria-hidden="true" />
+					<div className={`v2-start-preview-art ${selectedTemplate?.kind || "blank"}`}><TemplateThumb id={selectedTemplate.starterId ?? selectedTemplate.thumbId} /></div>
 					<div className="v2-start-preview-copy">
 						<strong>{selectedTemplate?.name}</strong>
 						<span>{selectedTemplate?.description}</span>

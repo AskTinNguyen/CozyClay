@@ -34,7 +34,6 @@ const waitFor = async (expression, ms = 60000) => {
 	return false;
 };
 if (!(await waitFor("!!(window.__cozyclay?.rigA && window.__cozyclay?.motion)"))) throw new Error("motion/rig never became ready");
-await evaluate(`document.querySelector(".camera-tutorial-close")?.click()`);
 await evaluate(`(() => {
 	const target = [...document.querySelectorAll("button,[role=button]")].find((node) => /^Character 1(?:Cast)?$|^인물 1(?:인물)?$/.test(node.textContent.trim()));
 	target?.click();

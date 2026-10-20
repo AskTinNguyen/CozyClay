@@ -170,11 +170,17 @@ assert.notEqual(multiSceneMigration.document.scenes[0].stage, multiSceneMigratio
 multiSceneMigration.document.scenes[0].stage.characters[0].x = -3;
 assert.equal(multiSceneMigration.document.scenes[1].stage.characters[0].x, 6, "migrated scenes own independent actor envelopes");
 
-const legacyObjects = [{ id: "hero-chair", renderer: "chair", x: 3 }, { id: "car", renderer: "car", nested: { untouched: true } }];
+const legacyObjects = [{ id: "hero-lamp", renderer: "lamp", x: 3 }, { id: "bike", renderer: "bike", nested: { untouched: true } }];
 const migrated = readSceneDocument(null, JSON.stringify({ version: 1, objects: legacyObjects }));
 assert.equal(migrated.status, "migrated");
 assert.equal(migrated.document.scenes.length, 1);
 assert.deepEqual(migrated.document.scenes[0].objects, legacyObjects, "legacy user work survives byte-shaped migration");
+// A kind this build no longer ships (car, chair, small plane) opens as the cube
+// that stands in for it, with its id, transform and other fields kept.
+const retired = readSceneDocument(null, JSON.stringify({ version: 1, objects: [{ id: "car", renderer: "car", x: 3, nested: { untouched: true } }] }));
+const [standIn] = retired.document.scenes[0].objects;
+assert.equal(standIn.renderer, "cube", "a retired kind opens as a cube");
+assert.deepEqual([standIn.id, standIn.x, standIn.scaleX, standIn.scaleY, standIn.scaleZ, standIn.nested], ["car", 3, 1.8, 1.4, 4.5, { untouched: true }], "the stand-in keeps the record and its size");
 assert.equal(migrated.document.scenes[0].name, "SCENE 01");
 
 assert.equal(readSceneDocument("{broken").status, "corrupt");

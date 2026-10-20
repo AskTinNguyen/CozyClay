@@ -95,7 +95,7 @@ for (const [command, args] of Object.entries(cases)) for (const origin of ['ui',
     edit('character.addWaypoint', { characterId: 'actor-a', frame: 24, position: { x: 1, z: 0 } });
     edit('object.set', { id: 'cube', set: { position: { x: 3, y: 0, z: 0 } } });
     edit('stage.setStyle', { style: 'Last stage edit' });
-    edit('object.remove', { ids: ['sphere', 'chair'] });
+    edit('object.remove', { ids: ['sphere', 'cylinder'] });
     for (let index = receipts.length - 1; index >= 0; index--) {
       assert.equal(f.actual.canUndoStudioReceipt(receipts[index]), true, `undo frontier ${index}`);
       assert.equal(f.run('edit.undo', { receiptId: receipts[index].receiptId }).status, 'undone');

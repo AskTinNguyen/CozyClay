@@ -37,11 +37,7 @@ assert.equal(createProjectDocument({ scenesDocument }).previsMode, "animation", 
 assert.equal(readProjectDocument(JSON.stringify(storyboard)).project.previsMode, "storyboard", "a v5 round trip keeps the mode");
 
 // (b) an older file without the field reads as animation, unchanged otherwise.
-const cityBlock = text("../public/scenes/city-block.cclayproject");
-const cityBlockRead = readProjectDocument(cityBlock);
-assert.equal(cityBlockRead.ok, true);
-assert.equal(cityBlockRead.project.previsMode, "animation");
-assert.ok(JSON.parse(cityBlock).version < 5 && !("previsMode" in JSON.parse(cityBlock)), "the bundled starter is a pre-v5 file without the field");
+const preV5 = JSON.stringify((({ previsMode: _mode, ...rest }) => ({ ...rest, version: 4 }))(storyboard));
 for (const version of [2, 3, 4]) {
 	const legacy = { ...storyboard, version };
 	delete legacy.previsMode;
@@ -88,7 +84,7 @@ try {
 	assert.equal(f.project.metadata().previsMode, "storyboard", "a scene edit keeps the project mode");
 	assert.equal((await f.run("project.new", { name: "Bad", previsMode: "bogus" })).ok, false, "the bus refuses an unknown mode");
 
-	ok(await f.run("project.open", { serialized: cityBlock }));
+	ok(await f.run("project.open", { serialized: preV5 }));
 	assert.equal(f.project.metadata().previsMode, "animation", "opening a pre-v5 file applies animation");
 	assert.equal(session().previsMode, "animation");
 	ok(await f.run("project.open", { serialized: fixture }));

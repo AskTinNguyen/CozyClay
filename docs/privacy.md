@@ -149,8 +149,7 @@ contribute to each other's first-edit funnel.
 
 Camera navigation (including look-through fly, orbit, and wheel dolly),
 playback/scrubbing, passive scene or project loading, initialization,
-restoration, tutorial auto-seeding, failed/no-op commands, and undo/redo do
-not qualify. Explicitly recording a camera key or authoring a shot or rail
+restoration, failed/no-op commands, and undo/redo do not qualify. Explicitly recording a camera key or authoring a shot or rail
 does qualify; moving a viewing camera alone does not.
 
 The legacy `craft:first_action` / `playground:first_action` streams retain

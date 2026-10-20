@@ -13,6 +13,16 @@
 		--float-head: 48px;
 		--sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "IBM Plex Sans", "Pretendard", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, "Segoe UI", Helvetica, Arial, sans-serif;
 		--mono: "SF Mono", ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, Consolas, monospace;
+		/* Shell popovers (project menu, dropdowns, Outliner context menu): one
+		   solid surface and one layer above every panel and rail. They are
+		   portaled to <body> and exclusive (src/popover.js), so the open one is
+		   always on top. The top bar's menus use the same layer. */
+		--z-popover: 90;
+		--popover-surface: var(--surface-raised);
+		--popover-border: var(--row-divider);
+		--popover-radius: var(--r-2, 6px);
+		--popover-blur: none;
+		--popover-shadow: 0 8px 24px rgba(0,0,0,.45);
 	}
 
 	/* Dark: the v2 surfaces with a deep clay-orange accent and shaded panels. */
@@ -73,6 +83,9 @@
 		--surface-bar: #f4f4f6;
 		--surface-panel: #f7f7f9;
 		--surface-raised: #ffffff;
+		--popover-surface: rgba(255,255,255,.96);
+		--popover-blur: blur(24px) saturate(1.6);
+		--popover-shadow: 0 10px 30px rgba(30,32,40,.16), 0 1px 3px rgba(30,32,40,.08);
 		--surface-active: #e4e4e9;
 		--field: #ececf0;
 		--field-deep: #e6e6eb;
