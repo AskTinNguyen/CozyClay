@@ -3,11 +3,8 @@
 </p>
 
 <p align="center">
-  <em>Block a scene, pose the cast, cut the camera — in a browser tab.</em>
-</p>
-
-<p align="center">
-  Created and maintained by <a href="https://github.com/HaD0Yun">Doyun</a> at <a href="https://github.com/NomaDamas">NomaDamas</a>.
+  <b>Make the scene first. Then make it a video.</b><br>
+  <em>Open source previs in a browser tab: block the set, move the cast, cut the camera, hand the shot to an AI video model.</em>
 </p>
 
 <p align="center">
@@ -20,217 +17,98 @@
 <p align="center">
   <a href="https://cozyclay.org/#try">Try it in the browser</a> ·
   <a href="#quick-start">Quick start</a> ·
-  <a href="#what-you-can-do">Features</a> ·
-  <a href="#ai-control">AI control</a> ·
-  <a href="#workflow-canvas">Workflow</a> ·
-  <a href="#controls">Controls</a> ·
-  <a href="#documentation">Docs</a> ·
-  <a href="https://github.com/NomaDamas/CozyClay/issues">Issues</a>
+  <a href="INSTALL_FOR_AGENTS.md">Guide for AI agents</a> ·
+  <a href="#docs">Docs</a> ·
+  <a href="CHANGELOG.md">Changelog</a>
 </p>
 
----
+<table>
+  <tr>
+    <td width="50%"><video src="https://github.com/user-attachments/assets/00f28c2f-e8e2-43eb-b253-b6c2436e1818" controls muted width="100%"></video></td>
+    <td width="50%"><video src="https://github.com/user-attachments/assets/4c9b1e29-4803-435c-8305-f2c899fb1c2c" controls muted width="100%"></video></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Top: the greybox blocked in CozyClay. Bottom: the AI video made from it.</sub></td>
+    <td align="center"><sub>Same idea, a parkour jump: the blocking holds the timing and the camera.</sub></td>
+  </tr>
+</table>
 
-CozyClay is a browser-based previs studio built with Three.js and React Three Fiber. Block a scene, pose the cast, cut the camera on a timeline, then hand the same shot to an AI video model (Seedance, Kling, Veo, or your own) as a first frame, a reference clip, or a prompt — all from one local workspace. The keyframe pack's greybox clip is the input Seedance 2.5 documents as white-model control: "Use the white-model reference video as the sole guide for camera movement, pacing, framing, subject motion, and blocking" (seed.bytedance.com/en/seedance2_5). MiniMax H3, Wan 3.0, LTX Desktop and fal render-to-real take the same plain RGB clip.
+## Why
 
-```bash
-npx cozyclay
+AI video costs money per take, and one miss means paying again. A text prompt cannot hold a
+whole scene: where everyone stands, how they move, where the camera is, when it cuts.
+
+CozyClay lets you make those decisions first, in 3D, where they are cheap to change. Then the video
+model gets the shot as a first frame, a greybox reference clip and a prompt that describes the
+real framing. It follows the blocking instead of guessing.
+
+```mermaid
+flowchart LR
+  S["Stage<br/>set + cast"] --> M["Motion<br/>compiled + QA"] --> C["Camera<br/>shots + cuts"] --> E["Export<br/>frame · clip · prompt"] --> V["AI video model"]
 ```
-
-That is the whole install. Not sure yet? **[Try it in the browser first](https://cozyclay.org/#try)** — the studio runs live in the page — then keep going on your machine.
-
-New motion is compiled in the browser from a motion spec — no GPU box or sidecar needed.
-
-## Demo
-
-https://github.com/user-attachments/assets/00f28c2f-e8e2-43eb-b253-b6c2436e1818
-
-## What you can do
-
-|  | |
-| --- | --- |
-| **Stage a scene** | Create primitives, then move, rotate and scale them with the transform strip's gizmo. Cast people from **Assets › Characters**: a rigged character you can pose and animate, or a **Capsule figure** — a rigless stand-in with one posture (stand, sit or lie) chosen in Details, for blocking where nobody needs to move their limbs. Capsule figures follow root paths and per-panel placements like any character but refuse pose, IK and motion tools, with the reason in the tooltip. Grid snapping is a preference, not a law — hold `Ctrl` mid-drag to invert it. A bird's-eye Top-View drives 2D root waypoints for character paths. **View ▾** on the viewport bar holds the reference grid and Auto Color — Blender's random viewport color, so twenty grey blockout boxes stay tellable apart without touching the colors you authored (captures include the display colors while it is on). |
-| **Fly the camera** | Right-drag flies (WASD walks, Q/E cranes), middle-drag pans, Alt+drag orbits the selection, click selects, `F` frames — the muscle memory you already have from a 3D editor. Fly, pan and orbit lock the pointer for the hold, so the view can turn past the window edge. Selecting the camera switches to Camera mode. **Look through** in the Shot monitor puts you behind the shot camera with the same bindings; click the on-screen **Shot camera** indicator or press `Esc` to return to the free camera. |
-| **Cut and move the camera** | Add shots on the timeline, draw a dolly rail on the Top-View, set speed, height and crane, and preview the move through the shot camera. Each shot carries a **Target model** (Seedance 2.5, Kling 2, Veo 3, self-hosted MiniMax-H3) and is flagged when the cut runs past that model's limits. |
-| **Export for AI video** | One **Export ▾** menu: a keyframe pack (first/last frame, clip, camera JSON, prompt, README) as a zip, an mp4 of the shot, depth + normal conditioning passes, a storyboard contact sheet, and an OTIO cut list. Seedance 2.5 reads the pack's greybox clip as its white-model reference video, and MiniMax H3, Wan 3.0, LTX Desktop and fal render-to-real accept the same clip. The **Shot Prompt** turns the framing into a structured prompt for the model you picked. |
-| **Undo anything** | Every scene mutation goes through one history store: a drag, a scrub, an inspector edit, an agent's camera key is exactly one undo entry. `Esc` cancels an in-flight drag and restores the pre-drag transform. |
-| **Compile motion** | The agent writes a motion spec — key poses, hand anchors, props, walks, hinged doors — and a deterministic compiler bakes every frame on the X Bot or Y Bot rig, then QA measures collisions, foot slide, reach and the contacts the spec declares ([`docs/motion3-agent-guide.md`](docs/motion3-agent-guide.md)). A compiled take is saved as its spec and replays identically; sparse IK keys and range pins correct any frame on top. |
-| **Direct it with an AI** | Open the **Agent panel** (`Cmd/Ctrl+B`), sign in with your ChatGPT account, and ask for a shot in plain language; the conversation survives reloads and you can paste a reference screenshot into it. Or connect Claude — or any MCP client — or drive the Studio from a terminal with `cclay live`. All three place the cast, frame "a low wide profile", compile motion, and the viewport moves in front of you. See [AI control](#ai-control). |
-
-## Modes
-
-A project is either a **Storyboard** or an **Animation**. Pick it on the start screen (the badge in the top bar shows which one you are in); a project keeps its mode when saved and reopened.
-
-| | Storyboard | Animation |
-| --- | --- | --- |
-| **Choose it when** | You want a row of still panels: framing, who stands where, a caption and a hold per panel | You want moving shots: motion on a timeline, camera moves, takes |
-| **Timeline** | The **Board** dock tab: one card per panel with a greybox thumbnail, caption, hold, duplicate, delete and drag-to-reorder | Shots on the timeline, with the compiled take |
-| **Cast** | Rigged characters or capsule figures; each panel can keep its own placement ("Use stage placement" clears it) | Rigged characters with Pose and Motion mode; capsule figures for blocking |
-| **Motion tools** | Hidden: no Motion mode (`4`) | Available |
-| **Agent** | **Agent · Storyboard** builds one panel per request and never generates motion | The full Studio tool set |
-| **Exports** | **Stylize** a panel through the image route, **Send to Workflow** (the stylized image or the greybox) from its card, plus the Export ▾ menu: **Contact sheet (PNG)**, **Panel pack (zip)**, **All panels (zip)**, **Animatic (mp4)**, **Cut list (OTIO)** and **Depth + normal (PNG)**; File ▸ **Export as Animation project…** turns the panels into an Animation. There is no keyframe pack or shot video in a storyboard | Export ▾: keyframe pack, mp4, depth + normal passes, contact sheet, OTIO cut list |
-
-Start in Storyboard when you are deciding what the shots are, then open the idea as an Animation when it needs motion.
 
 ## Quick start
 
-You need Node.js 22.19 or newer, npm or bun, and a Chromium-based browser.
-
 ```bash
 npx cozyclay
-# or
-bunx cozyclay
 ```
 
-That downloads the built studio and opens it at `http://127.0.0.1:5180/app/`. Nothing to compile, no dependency tree to install. Useful flags: `--port 5200`, `--no-open`, `--no-motion`, `--scene <id>` (start on a bundled starter scene instead of an empty room; the build ships none today, and an unknown id opens the studio as usual).
+That is the whole install. You need Node.js 22.19 or newer and a Chromium browser. You do not need
+a GPU, Python or a model download. The studio opens at `http://127.0.0.1:5180/app/`.
 
-A global install gives you `cclay`, the same command with less typing. Once a day the launcher checks npm for a newer release and prints a one-line notice after the studio is up; it stays quiet when you're current or offline. `cclay update` installs the latest release, and `--no-update-check` skips the check entirely.
+> **Asking an AI agent to set it up?** Give it this repository link. Its instructions are in
+> [`INSTALL_FOR_AGENTS.md`](INSTALL_FOR_AGENTS.md).
 
-### From source
+## What you can do
 
-```bash
-git clone https://github.com/NomaDamas/CozyClay.git
-cd CozyClay
-npm install
-npm run dev
-```
+| | |
+| --- | --- |
+| **Stage** | Build the set from primitives. Add rigged characters, or capsule stand-ins when nobody needs to move a limb. Fly the view like a 3D editor. |
+| **Move** | Describe the action. The agent writes a motion spec, and a deterministic compiler in the browser bakes every frame. QA checks collisions, foot slide, reach and hand contact before you see it. |
+| **Shoot** | Put shots on a timeline, draw dolly rails, look through the lens. Each shot knows the limits of the video model you target. |
+| **Export** | Keyframe pack (first and last frame, greybox clip, camera, prompt), mp4, depth and normal passes, contact sheet, OTIO cut list. |
+| **Storyboard** | Prefer stills? A Storyboard project is a row of panels with captions, an animatic and a contact sheet. |
+| **Undo anything** | Every edit, including each change the agent makes, is one undo step. |
 
-Open `http://127.0.0.1:5180/app/` for the Studio (the root redirects there) and `http://127.0.0.1:5180/workflow/` for the Workflow canvas. `npm run dev` starts the studio together with its local OAuth and agent sidecar; `npm run dev:ui` starts the browser UI alone.
+## Direct it with AI
 
-## AI control
+The same scene can be driven from three places, live, while you watch the viewport.
 
-Three surfaces drive the same scene, live, through one hub: a chat panel in the Studio, an MCP server for external assistants, and a terminal CLI.
-
-### Agent panel in the Studio
-
-**View ▾ → Panels → Agent panel** (or `Cmd/Ctrl+B`) opens a chat column that signs in with your ChatGPT account (Codex OAuth; the token lives in `~/.config/cozyclay/`) and works the scene in front of you:
-
-> "Put a detective and a courier in an alley, give me a low wide profile shot,
-> then make her stand up from the chair, sprint, and trip."
-
-- Every change comes back as a receipt that highlights the Inspector and hierarchy rows it touched, and `Cmd/Ctrl+Z` takes it back like any other edit.
-- The conversation is stored under `~/.config/cozyclay/agent-sessions/` and resumes across reloads and restarts; **History** lists earlier sessions.
-- Paste or drop up to four images into the composer — a reference frame, a storyboard panel — and they go with the turn.
-- The agent has nine Studio tool families, from `inspect_studio` and `arrange_characters` to `patch_elements`, which sets any declared authored field (a character's tint, a shot's target model, the key light) by path. How it turns a pasted video prompt into blocking — what it asks, infers, or leaves empty — is the rule in [`docs/agent-prompt-to-scene.md`](docs/agent-prompt-to-scene.md).
-
-The panel is not tied to ChatGPT. Models come from six providers: ChatGPT (your Codex sign-in), Anthropic, OpenAI, Google Gemini, OpenRouter and CLIProxyAPI. A model id reads `provider/model`, so you pick one in the dropdown and that is where the turn goes. The five API-key providers take a key from an environment variable (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY` or `GOOGLE_API_KEY`, `OPENROUTER_API_KEY`, `CLIPROXY_API_KEY`) or from `~/.config/cozyclay/providers.json`, written at mode 0600 and never echoed back by any route; ChatGPT still signs in the way it always did. On the Workflow canvas you can steer a turn while it runs instead of stopping it. Conversations are saved in a new transcript format, so sessions recorded before this version are ignored rather than converted: the old files stay on disk, unread. The provider table, the key routes, the steer route and the session format are in [`docs/agent-cli.md`](docs/agent-cli.md).
-
-The agent runs on [pi](https://github.com/earendil-works/pi), an open-source agent harness: `@earendil-works/pi-ai` and `@earendil-works/pi-agent-core` (MIT) are the only runtime dependencies the package declares, and the sidecar loads them lazily, when a turn starts.
-
-The same panel sits on the right of the Workflow canvas, where it builds and runs canvas nodes.
-
-### MCP server
-
-The studio ships an [MCP](https://modelcontextprotocol.io) server, so any MCP client can drive it — the same scene, the same viewport:
+| Surface | Start | For |
+| --- | --- | --- |
+| **Agent panel** | `Cmd/Ctrl+B` in the studio | Chat in the studio. Sign in with ChatGPT or use your own key (Anthropic, OpenAI, Gemini, OpenRouter, CLIProxyAPI). |
+| **MCP server** | `npx -y cozyclay mcp` | Claude Desktop, Claude Code, Cursor or any MCP client. |
+| **Terminal** | `cclay live status --wait` | Coding agents that drive a running studio, JSON in and out. |
 
 ```json
-{
-  "mcpServers": {
-    "cozyclay": {
-      "command": "npx",
-      "args": ["-y", "cozyclay", "mcp"]
-    }
-  }
-}
+{ "mcpServers": { "cozyclay": { "command": "npx", "args": ["-y", "cozyclay", "mcp"] } } }
 ```
 
-Drop that into `claude_desktop_config.json` (or any MCP client config) and restart the client. The first run automatically installs the MCP SDK's 95-package tree; opening the studio never waits on it, so those dependencies are fetched only when you actually want the server.
+## From source
 
-- **Editor open?** Tool calls move the visible viewport — camera, cast, set, compiled motion on the timeline.
-- **No editor?** Scene and project tools run headless: block scenes, derive film vocabulary ("wide shot · right profile · knee level · 24mm"), render AI video prompts, and write `.cclayproject` files. `capture_frame` and `apply_batch` require the live editor.
+```bash
+git clone https://github.com/NomaDamas/CozyClay.git && cd CozyClay
+npm install
+npm run dev     # http://127.0.0.1:5180/app/
+npm test
+```
 
-Tools, transports and the live-control protocol are documented in [`mcp/README.md`](mcp/README.md).
-
-### From a terminal
-
-`cclay live` is a small CLI that reads the scene, places and moves things, frames and keys shots, patches declared fields (`cclay live patch --target stage --set '{"keyLight.intensity":2.4}'`), verifies the result with a capture PNG, and undoes by receipt — one JSON object per command, stable error codes, no browser of your own required (only the studio tab itself). It is the intended surface for a coding agent that has to manage a running Studio. The full guide, with three worked sessions against a real editor, is in [`docs/agent-cli.md`](docs/agent-cli.md).
-
-## Workflow canvas
-
-The Workflow canvas at `http://127.0.0.1:5180/workflow/` is a node editor around the Studio: a **CozyClay Scene** node with a live viewport that previews the shot camera, a **Shot Prompt** node that builds a structured prompt from the capture, **Image** nodes (versions, A/B, pinned references) and a **Video** node that runs through your own ComfyUI (`COZYCLAY_COMFY_URL`) or fal (`FAL_KEY`) — bring your own key, nothing is proxied. Graphs are saved in the browser and execute locally.
-
-## Controls
-
-| Input | Action |
-| --- | --- |
-| Right-drag | Look around (fly) |
-| RMB + WASD | Walk while flying |
-| RMB + Q/E | Crane down / up |
-| RMB + Shift | Boost fly speed 2.6× |
-| Middle-drag | Pan |
-| Alt + drag | Orbit the selection |
-| Scroll | Dolly; while flying, sets the fly speed instead |
-| Click | Select; empty space clears |
-| Transform strip | Move / rotate / scale tool, snap |
-| Ctrl/Cmd (during drag) | Invert grid snapping |
-| Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z | Undo / redo |
-| Esc | Cancel the in-flight drag |
-| End | Drop the selection to the surface |
-| Ctrl/Cmd+D | Duplicate the selection |
-| Delete / Backspace | Delete the selection |
-| F | Frame the selection |
-| Look through / Esc | Fly / leave the shot camera |
-| Cmd/Ctrl+B | Show / hide the Agent panel |
-
-Every control's home is recorded in [`docs/studio-ui-ia.md`](docs/studio-ui-ia.md), with the rule behind each placement.
-
-## Documentation
+## Docs
 
 | Read | For |
 | --- | --- |
-| [`docs/motion3-agent-guide.md`](docs/motion3-agent-guide.md) | How the agent writes a motion spec, compiles it and reads QA |
-| [`docs/agent-cli.md`](docs/agent-cli.md) | Driving the Studio from a terminal with `cclay live` |
-| [`docs/agent-prompt-to-scene.md`](docs/agent-prompt-to-scene.md) | The ask / infer / omit rule the Agent follows when turning a video prompt into blocking, and the one-panel-per-request rule in storyboards |
-| [`mcp/README.md`](mcp/README.md) | MCP tools, transports, and the live-control protocol |
-| [`docs/studio-ui-ia.md`](docs/studio-ui-ia.md) | Where every Studio control lives and why |
-| [`docs/privacy.md`](docs/privacy.md) | The full analytics disclosure: events, identifiers, opt-out, internal QA marking |
-| [`workers/api/README.md`](workers/api/README.md) | The cozyclay.org API Worker: sign-in and the hosted video-model route |
-| [`docs/releasing.md`](docs/releasing.md) | Publishing a signed npm release |
-| [`CHANGELOG.md`](CHANGELOG.md) | What changed in each release |
+| [`INSTALL_FOR_AGENTS.md`](INSTALL_FOR_AGENTS.md) | Install, run and connect, written for AI agents |
+| [`docs/motion3-agent-guide.md`](docs/motion3-agent-guide.md) | Motion specs, compile and QA |
+| [`docs/agent-cli.md`](docs/agent-cli.md) | `cclay live`, model providers, sessions |
+| [`mcp/README.md`](mcp/README.md) | MCP tools and the live protocol |
+| [`docs/studio-ui-ia.md`](docs/studio-ui-ia.md) | Every control and where it lives |
+| [`docs/privacy.md`](docs/privacy.md) | Anonymous telemetry and how to turn it off (`cclay telemetry off`) |
+| [`AGENTS.md`](AGENTS.md) | Contribution rules |
 
-Longer reads on the site: [Greybox to AI video](https://cozyclay.org/greybox-to-video/), [Seedance 2.5 camera control](https://cozyclay.org/seedance-camera-control/), [Camera control for AI video](https://cozyclay.org/ai-camera-control/), [Previs software compared](https://cozyclay.org/previs-software/).
+Found a bug or want a feature? [Open an issue](https://github.com/NomaDamas/CozyClay/issues).
 
-## Validate
+## License
 
-| Command | Covers |
-| --- | --- |
-| `npm run test:history` | Undo/redo store and transaction coordinator |
-| `npm run test:scene-objects` | Scene-object model |
-| `npm run test:hierarchy` | Hierarchy panel model |
-| `npm run test:objects` | Gizmo interaction in a real browser — needs `npm run dev:ui` in another shell |
-| `npm run test:theme` / `test:appearance` / `test:layout` | UI theme, appearance, layout |
-| `npm run test:lifecycle` | Dev-server process lifecycle |
-| `npm run test:ardy` | IK pipeline, range pins and timeline helpers |
-| `node tools/run-tests.mjs` | Every Node verification file (what CI runs) |
-| `QA_URL=… CDP_PORT=… OUT=/tmp/count npm run qa:browser -- node tools/qa/studio-control-count.mjs` | Simultaneously visible controls per mode (budget: Scene ≤35 / Camera ≤38 / Motion ≤52) |
-| `cd mcp && npm install && npm run verify` | MCP server over real stdio — all 420 framing combinations |
-| `cd mcp && npm run verify:live` | Live-control protocol against a fake editor (same `npm install` first) |
-| `npm run build` | Production build |
-
-Ad-hoc browser QA, while a dev server is available (the browser opens the studio at `/app/`):
-
-```bash
-npm run qa:browser -- node <qa-script>
-```
-
-## Contributing
-
-Found something broken, or want a feature? [Open an issue](https://github.com/NomaDamas/CozyClay/issues) — bug reports with a repro are the most useful thing you can send. Contributions are accepted under `AGPL-3.0-or-later`.
-
-**Repository hygiene.** Generated motion archives, QA output, build output, logs and local runtime artifacts are not source files and must not be committed. Keep `artifacts/`, `dist/`, `.gjc/` and `.npz` files local.
-
-Every runtime library except the two agent packages (`@earendil-works/pi-ai`, `@earendil-works/pi-agent-core`) intentionally lives in `devDependencies`, because the published npm package ships the prebuilt `dist/`, so `npx cozyclay` must not install the studio's dependency tree.
-
-## Analytics & privacy
-
-Anonymous usage counts, no cookies, no recordings, never your project content — on the hosted site via PostHog and in the official npm package, which prints the disclosure once on first launch. Source checkouts, forks, dev servers, CI and tests send nothing.
-
-```bash
-cclay telemetry status
-cclay telemetry off
-```
-
-`COZYCLAY_TELEMETRY=0` or `DO_NOT_TRACK=1` disables collection for a launch; **Settings ▾ → Privacy** is the same switch inside the Studio. The event list, what each identifier is, how internal QA traffic is marked and the first-edit definition are in [`docs/privacy.md`](docs/privacy.md).
-
-## License & credits
-
-GNU Affero General Public License v3.0 or later — see [`LICENSE`](LICENSE) and the transition details in [`LICENSING.md`](LICENSING.md). Modified network services must offer their users the corresponding source. Third-party projects retain their own licenses and copyright; see [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+AGPL-3.0-or-later. See [`LICENSE`](LICENSE), [`LICENSING.md`](LICENSING.md) and
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md). Made by [Doyun](https://github.com/HaD0Yun) at
+[NomaDamas](https://github.com/NomaDamas).

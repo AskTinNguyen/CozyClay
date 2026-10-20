@@ -57,6 +57,8 @@ jobs:
               .write();
 
   lint:
+    if: needs.changes.outputs.source == 'true'
+    needs: changes
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

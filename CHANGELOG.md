@@ -16,6 +16,12 @@ Removed
   analytics events, and the seven-step tutorial and project download on the
   home-page playground (which now opens a blank stage).
 
+Docs
+
+- The README is short again: install, what it does, the three AI surfaces, docs.
+- `INSTALL_FOR_AGENTS.md` is the install, run and connect guide for an AI agent given the
+  repository link. It ships in the npm package.
+
 ## 3.0.3 - 2026-10-20
 
 Grasp round 2, from a user's own cup, ball and steering-wheel sessions on 3.0.2.
