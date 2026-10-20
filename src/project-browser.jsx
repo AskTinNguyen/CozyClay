@@ -149,9 +149,11 @@ export default function ProjectBrowser({ currentName, onOpen, onOpenFile, onNew,
 
 	// File › New reaches this screen with unsaved work, so Create can be refused
 	// by the discard confirmation. A name left behind then must not seed a later
-	// Save's name dialog once the screen closes.
+	// Save's name dialog once the screen closes. The clear waits for the end of
+	// the commit: a Create that closes this screen opens the name dialog in the
+	// same commit, and its effect takes the name first.
 	useEffect(() => () => {
-		pendingProjectName = null;
+		queueMicrotask(() => stagePendingProjectName(null));
 	}, []);
 
 	const selectedTemplate = templates.find((template) => template.id === selectedTemplateId) ?? NEW_PROJECT;

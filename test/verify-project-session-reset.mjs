@@ -44,7 +44,8 @@ try {
 			request.onsuccess = () => resolve(request.result);
 			request.onerror = () => reject(request.error);
 		});
-		const records = await new Promise((resolve, reject) => {
+		// A compiled take (v3) lives in the scene document; the store only exists once a clip was saved.
+		const records = !db.objectStoreNames.contains("motions") ? [] : await new Promise((resolve, reject) => {
 			const request = db.transaction("motions", "readonly").objectStore("motions").getAllKeys();
 			request.onsuccess = () => resolve(request.result);
 			request.onerror = () => reject(request.error);
@@ -85,7 +86,8 @@ try {
 			request.onsuccess = () => resolve(request.result);
 			request.onerror = () => reject(request.error);
 		});
-		const records = await new Promise((resolve, reject) => {
+		// A compiled take (v3) lives in the scene document; the store only exists once a clip was saved.
+		const records = !db.objectStoreNames.contains("motions") ? [] : await new Promise((resolve, reject) => {
 			const request = db.transaction("motions", "readonly").objectStore("motions").getAllKeys();
 			request.onsuccess = () => resolve(request.result);
 			request.onerror = () => reject(request.error);

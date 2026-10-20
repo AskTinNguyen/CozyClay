@@ -239,7 +239,7 @@ await click("[data-testid=menu-agent]");
 await click("[data-testid=menu-help]");
 await waitFor("!!document.querySelector('.menubar-menu[data-menu=help]')");
 expect("Help holds Keyboard shortcuts, About", (await evaluate("[...document.querySelectorAll('.menubar-menu[data-menu=help] [role=menuitem]')].map((i) => i.textContent).join('|')")) === "Keyboard shortcuts|About Cozy Clay");
-await click(".menubar-menu[data-menu=help] [role=menuitem]:nth-child(2)");
+await click(".menubar-menu[data-menu=help] [role=menuitem]:nth-child(1)");
 expect("Keyboard shortcuts opens its dialog", await waitFor("!!document.querySelector('.menubar-dialog[data-dialog=shortcuts]')").catch(() => false));
 await screenshot("task-9-shortcuts.png");
 await click(".menubar-dialog-close");
