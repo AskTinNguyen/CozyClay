@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { fileURLToPath } from 'node:url';
 import { build } from 'vite';
 import { useDocumentStore, useDocumentDomain } from '../../src/store/use-document-store.js';
 import { documentFixture } from './document-store-fixture.mjs';
@@ -19,16 +20,16 @@ try {
   assert.deepEqual(render(), { revision: 2, stage: 4, cast: 7 });
   assert.deepEqual(store.getSnapshot().slices, { stage: { intensity: 4 }, shot: { frame: 0 }, cast: 7 });
   const entries = {
-    store: new URL('../../src/document-store.js', import.meta.url).pathname,
-    runtime: new URL('../../src/store/runtime-adapters.js', import.meta.url).pathname,
-    react: new URL('../../src/store/use-document-store.js', import.meta.url).pathname,
+    store: fileURLToPath(new URL('../../src/document-store.js', import.meta.url)),
+    runtime: fileURLToPath(new URL('../../src/store/runtime-adapters.js', import.meta.url)),
+    react: fileURLToPath(new URL('../../src/store/use-document-store.js', import.meta.url)),
   };
   // Bundle the public owner/projection surface independently of App.
   const bundle = await build({ configFile: false, logLevel: 'silent', build: { write: false, minify: false,
     lib: { entry: entries, formats: ['es'] }, rollupOptions: { external: ['react', 'three'] } } });
   const output = (Array.isArray(bundle) ? bundle : [bundle]).flatMap(result => result.output);
   for (const [name, entry] of Object.entries(entries)) {
-    assert.ok(output.some(chunk => chunk.type === 'chunk' && chunk.facadeModuleId === entry && chunk.exports.length > 0), `bundled ${name} entry exports its API`);
+    assert.ok(output.some(chunk => chunk.type === 'chunk' && chunk.facadeModuleId?.replaceAll('\\', '/') === entry.replaceAll('\\', '/') && chunk.exports.length > 0), `bundled ${name} entry exports its API`);
   }
 } finally { bus.dispose(); store.dispose(); }
 console.log('PASS document store 8: React external-store reads and all new public modules bundle for the browser');

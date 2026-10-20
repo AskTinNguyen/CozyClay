@@ -10,7 +10,8 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const baselinePath = join(root, "tools", "eslint-baseline.json");
 
-const run = spawnSync(join(root, "node_modules", ".bin", "eslint"), [".", "--format", "json"], {
+// Run the package's JS entry through node: the .bin shim is a .cmd on Windows, which spawnSync cannot start without a shell.
+const run = spawnSync(process.execPath, [join(root, "node_modules", "eslint", "bin", "eslint.js"), ".", "--format", "json"], {
 	cwd: root,
 	encoding: "utf8",
 	maxBuffer: 512 * 1024 * 1024,

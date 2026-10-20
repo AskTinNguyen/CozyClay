@@ -275,7 +275,7 @@ function verificationFiles(directory) {
 		.flatMap((entry) => {
 			const path = join(directory, entry.name);
 			if (entry.isDirectory()) return entry.name === "node_modules" ? [] : verificationFiles(path);
-			return entry.isFile() && /^verify(-.*)?\.mjs$/.test(entry.name) ? [relative(".", path)] : [];
+			return entry.isFile() && /^verify(-.*)?\.mjs$/.test(entry.name) ? [relative(".", path).replaceAll("\\", "/")] : [];
 		})
 		.sort();
 }

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /** The dev launcher, Vite build, and browser client share one loopback live port. */
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { createServer } from "node:net";
 import { fileURLToPath } from "node:url";
 import { liveControlUrl } from "../src/live-control.js";
@@ -63,7 +63,9 @@ const waitForOutput = (child, pattern, label, milliseconds) => {
 const terminate = async (child) => {
 	if (child.exitCode !== null || child.signalCode !== null) return;
 	const exited = new Promise((resolve) => child.once("exit", resolve));
-	process.kill(-child.pid, "SIGTERM");
+	// Windows has no process groups; taskkill /T takes the launcher's Vite and hub children with it.
+	if (process.platform === "win32") spawnSync("taskkill", ["/pid", String(child.pid), "/T", "/F"]);
+	else process.kill(-child.pid, "SIGTERM");
 	await withTimeout(exited, "dev-full cleanup").catch(() => process.kill(-child.pid, "SIGKILL"));
 };
 

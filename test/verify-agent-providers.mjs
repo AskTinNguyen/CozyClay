@@ -6,6 +6,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const rootDir = mkdtempSync(join(tmpdir(), "cozyclay-agent-providers-"));
+// NTFS has no POSIX permission bits (every file reads back 0o666), so the mode checks are POSIX-only.
+const assertMode = (path, mode, message) => {
+	if (process.platform !== "win32") assert.equal(statSync(path).mode & 0o777, mode, message);
+};
 const configDir = join(rootDir, "new-config");
 const authFile = join(configDir, "codex-auth.json");
 process.env.COZYCLAY_CONFIG_DIR = configDir;
@@ -40,16 +44,16 @@ const request = (path, init = {}) => fetch(`${origin}${path}`, { ...init, header
 
 let response = await request("/agent/providers/anthropic", { method: "PUT", body: JSON.stringify({ key: "anthropic-secret-value" }) });
 assert.equal(response.status, 200);
-assert.equal(statSync(configDir).mode & 0o777, 0o700);
-assert.equal(statSync(join(configDir, "providers.json")).mode & 0o777, 0o600);
+assertMode(configDir, 0o700);
+assertMode(join(configDir, "providers.json"), 0o600);
 console.log("PASS newly created config parent is mode 700 and providers.json is mode 600");
 const existingConfigDir = join(rootDir, "existing-config");
 mkdirSync(existingConfigDir, { recursive: true, mode: 0o755 });
 chmodSync(existingConfigDir, 0o755);
 process.env.COZYCLAY_CONFIG_DIR = existingConfigDir;
 assert.equal((await (await request("/agent/providers/openai", { method: "PUT", body: JSON.stringify({ key: "existing-parent-secret" }) })).status), 200);
-assert.equal(statSync(existingConfigDir).mode & 0o777, 0o755);
-assert.equal(statSync(join(existingConfigDir, "providers.json")).mode & 0o777, 0o600);
+assertMode(existingConfigDir, 0o755);
+assertMode(join(existingConfigDir, "providers.json"), 0o600);
 console.log("PASS existing config parent mode 755 is preserved and providers.json is mode 600");
 process.env.COZYCLAY_CONFIG_DIR = configDir;
 response = await request("/agent/providers");
@@ -79,7 +83,7 @@ let changes = 0;
 auth.onAuthChange(() => { changes += 1; });
 await fileStore.modify("openai-codex", async () => ({ type: "oauth", access: "access-token", refresh: "refresh-token", expires: Date.now() + 3600000 }));
 assert.deepEqual(await fileStore.read("openai-codex"), { type: "oauth", access: "access-token", refresh: "refresh-token", expires: (await auth.readStored()).expires_at });
-assert.equal(statSync(authFile).mode & 0o777, 0o600);
+assertMode(authFile, 0o600);
 assert.equal(changes, 1);
 const models = await providers.createModels({ credentials: fileStore });
 assert.equal((await models.getAuth("openai-codex")).auth.apiKey, "access-token");
@@ -136,7 +140,7 @@ assert.ok((await envStore.list()).some((entry) => entry.providerId === "openai-c
 
 	keys.setKey("anthropic", "sk-ant-x");
 	assert.deepEqual(keys.readKeys(), { anthropic: "sk-ant-x" }, "setKey repairs the corrupt file");
-	assert.equal(statSync(corruptFile).mode & 0o777, 0o600, "the repaired file is still mode 0600");
+	assertMode(corruptFile, 0o600, "the repaired file is still mode 0600");
 	console.log("PASS setKey repairs a corrupt providers.json and keeps it mode 0600");
 
 	process.env.COZYCLAY_CONFIG_DIR = previousConfigDir;
@@ -187,7 +191,7 @@ assert.ok((await envStore.list()).some((entry) => entry.providerId === "openai-c
 	keys.setKey("openai", "sk-new");
 	const afterSet = JSON.parse(readFileSync(invalidFile, "utf8"));
 	assert.deepEqual(afterSet, { openai: "sk-new" }, "setKey writes exactly the new map, discarding the invalid file");
-	assert.equal(statSync(invalidFile).mode & 0o777, 0o600, "setKey keeps the file mode 0600");
+	assertMode(invalidFile, 0o600, "setKey keeps the file mode 0600");
 	console.log("PASS setKey(...) after an invalid file writes exactly the new map at 0600");
 
 	// a valid map still round-trips with no warn

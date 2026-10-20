@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { closeSync, copyFileSync, ftruncateSync, mkdirSync, openSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { mcpToolCategory } from "../src/execution-telemetry.js";
 import { ASSET_MAX_SOURCE_BYTES } from "../src/scene-assets.js";
@@ -16,10 +16,10 @@ const glbPath = fixture("unit-cube.glb");
 const objPath = fixture("unit-cube.obj");
 const fbxPath = fixture("unit-cube.fbx");
 
-const abs = "/tmp/stove.glb";
+const abs = resolve(tmpdir(), "stove.glb");
 assert.equal(normalizeMeshPath(abs), abs);
-assert.equal(normalizeMeshPath(`file://${abs}`), abs);
-assert.equal(normalizeMeshPath("~/Downloads/stove.glb", { home: "/home/tester" }), "/home/tester/Downloads/stove.glb");
+assert.equal(normalizeMeshPath(pathToFileURL(abs).href), abs);
+assert.equal(normalizeMeshPath("~/Downloads/stove.glb", { home: "/home/tester" }), resolve("/home/tester", "Downloads", "stove.glb"));
 assert.equal(normalizeMeshPath("~other/foo", { home: "/home/tester" }), resolve("~other/foo"));
 assert.equal(mcpToolCategory("import_mesh"), "scene_write");
 
@@ -168,14 +168,24 @@ assert.equal(rejectedDir.isError, true);
 assert.equal(commands.some(isImport), false);
 
 const linkPath = join(tmpdir(), `cozy-mesh-link-${process.pid}.glb`);
+// Windows creates symlinks only with Developer Mode or elevation.
+let linked = true;
 try {
 	symlinkSync(glbPath, linkPath);
-	commands.length = 0;
-	const rejectedLink = await importMesh.handler({ path: linkPath });
-	assert.equal(rejectedLink.isError, true);
-	assert.equal(commands.some(isImport), false);
-} finally {
-	try { unlinkSync(linkPath); } catch {}
+} catch (error) {
+	if (process.platform !== "win32" || error.code !== "EPERM") throw error;
+	linked = false;
+	console.log("SKIP symlink rejection: this Windows account cannot create symlinks");
+}
+if (linked) {
+	try {
+		commands.length = 0;
+		const rejectedLink = await importMesh.handler({ path: linkPath });
+		assert.equal(rejectedLink.isError, true);
+		assert.equal(commands.some(isImport), false);
+	} finally {
+		try { unlinkSync(linkPath); } catch {}
+	}
 }
 
 setLiveHub(null);

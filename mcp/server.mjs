@@ -175,6 +175,9 @@ if (httpFlag === -1) {
 	setLiveHub(hub);
 	configureLiveHub(hub, liveToken);
 	await server.connect(new StdioServerTransport());
+	// A client ends a stdio session by closing stdin. Exit then, so the exit hooks
+	// remove the endpoint file even where SIGTERM cannot be caught (Windows).
+	process.stdin.once("end", () => process.exit(0));
 } else {
 	// Tools execute in the stdio children, not this HTTP front. Each child tries
 	// to own the one editor port; the winner is live and later sessions see the

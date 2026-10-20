@@ -11,7 +11,8 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const baselinePath = join(root, 'tools', 'knip-baseline.json');
 
 // knip exits 1 when it finds issues; only a missing/unparseable report is a failure.
-const run = spawnSync(join(root, 'node_modules', '.bin', 'knip'), ['--reporter', 'json', '--no-progress'], {
+// Run the package's JS entry through node: the .bin shim is a .cmd on Windows, which spawnSync cannot start without a shell.
+const run = spawnSync(process.execPath, [join(root, 'node_modules', 'knip', 'bin', 'knip.js'), '--reporter', 'json', '--no-progress'], {
 	cwd: root,
 	encoding: 'utf8',
 	maxBuffer: 256 * 1024 * 1024,
