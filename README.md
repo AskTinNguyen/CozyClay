@@ -3,7 +3,8 @@
 </p>
 
 <p align="center">
-  <em>Block a scene, pose the cast, cut the camera, in a browser tab.</em>
+  <b>Make the scene first. Then make it a video.</b><br>
+  <em>Open source previs in a browser tab: block the set, move the cast, cut the camera, hand the shot to an AI video model.</em>
 </p>
 
 <p align="center">
@@ -15,51 +16,70 @@
 
 <p align="center">
   <a href="https://cozyclay.org/#try">Try it in the browser</a> ·
+  <a href="#quick-start">Quick start</a> ·
   <a href="INSTALL_FOR_AGENTS.md">Guide for AI agents</a> ·
   <a href="#docs">Docs</a> ·
-  <a href="CHANGELOG.md">Changelog</a> ·
-  <a href="https://github.com/NomaDamas/CozyClay/issues">Issues</a>
+  <a href="CHANGELOG.md">Changelog</a>
 </p>
 
----
+<table>
+  <tr>
+    <td width="50%"><video src="https://github.com/user-attachments/assets/00f28c2f-e8e2-43eb-b253-b6c2436e1818" controls muted width="100%"></video></td>
+    <td width="50%"><video src="https://github.com/user-attachments/assets/4c9b1e29-4803-435c-8305-f2c899fb1c2c" controls muted width="100%"></video></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Top: the greybox blocked in CozyClay. Bottom: the AI video made from it.</sub></td>
+    <td align="center"><sub>Same idea, a parkour jump: the blocking holds the timing and the camera.</sub></td>
+  </tr>
+</table>
 
-CozyClay is open source previs software that runs in your browser. Stage a scene, pose
-characters, compile their motion, cut the camera on a timeline, then export the same shot to an AI
-video model as a first frame, a greybox reference clip or a prompt.
+## Why
+
+AI video costs money per take, and one miss means paying again. A text prompt cannot hold a
+whole scene: where everyone stands, how they move, where the camera is, when it cuts.
+
+CozyClay lets you make those decisions first, in 3D, where they are cheap to change. Then the video
+model gets the shot as a first frame, a greybox reference clip and a prompt that describes the
+real framing. It follows the blocking instead of guessing.
+
+```mermaid
+flowchart LR
+  S["Stage<br/>set + cast"] --> M["Motion<br/>compiled + QA"] --> C["Camera<br/>shots + cuts"] --> E["Export<br/>frame · clip · prompt"] --> V["AI video model"]
+```
+
+## Quick start
 
 ```bash
 npx cozyclay
 ```
 
-That is the whole install: Node.js 22.19+, a Chromium browser, no GPU. It opens
-`http://127.0.0.1:5180/app/`. Add `--scene city-block` to start on a ready-made set.
+That is the whole install. You need Node.js 22.19 or newer and a Chromium browser. You do not need
+a GPU, Python or a model download. The studio opens at `http://127.0.0.1:5180/app/`. Add
+`--scene city-block` to start on a ready-made street set.
 
-> **Asking an AI agent to install it?** Give it this repository link. The agent instructions are
-> in [`INSTALL_FOR_AGENTS.md`](INSTALL_FOR_AGENTS.md).
+> **Asking an AI agent to set it up?** Give it this repository link. Its instructions are in
+> [`INSTALL_FOR_AGENTS.md`](INSTALL_FOR_AGENTS.md).
 
-https://github.com/user-attachments/assets/00f28c2f-e8e2-43eb-b253-b6c2436e1818
+## What you can do
 
-## What it does
+| | |
+| --- | --- |
+| **Stage** | Build the set from primitives and set pieces. Add rigged characters, or capsule stand-ins when nobody needs to move a limb. Fly the view like a 3D editor. |
+| **Move** | Describe the action. The agent writes a motion spec, and a deterministic compiler in the browser bakes every frame. QA checks collisions, foot slide, reach and hand contact before you see it. |
+| **Shoot** | Put shots on a timeline, draw dolly rails, look through the lens. Each shot knows the limits of the video model you target. |
+| **Export** | Keyframe pack (first and last frame, greybox clip, camera, prompt), mp4, depth and normal passes, contact sheet, OTIO cut list. |
+| **Storyboard** | Prefer stills? A Storyboard project is a row of panels with captions, an animatic and a contact sheet. |
+| **Undo anything** | Every edit, including each change the agent makes, is one undo step. |
 
-- **Stage**: primitives, set pieces, rigged characters and capsule stand-ins, with a gizmo and
-  editor-style fly camera.
-- **Motion**: the agent writes a motion spec, and a deterministic in-browser compiler bakes every
-  frame. QA checks collisions, foot slide, reach and hand contact.
-- **Camera**: shots on a timeline, dolly rails, look-through, per-shot target model limits.
-- **Export**: keyframe pack, mp4, depth and normal passes, contact sheet, OTIO cut list, shot
-  prompt.
-- **Storyboard or Animation**: still panels with captions, or moving shots with takes.
-- **Undo anything**: every edit, including the agent's, is one undo step.
+## Direct it with AI
 
-## AI control
+The same scene can be driven from three places, live, while you watch the viewport.
 
 | Surface | Start | For |
 | --- | --- | --- |
-| Agent panel | `Cmd/Ctrl+B` in the studio | Chat with ChatGPT sign-in or your own key (Anthropic, OpenAI, Gemini, OpenRouter, CLIProxyAPI) |
-| MCP server | `npx -y cozyclay mcp` | Claude Desktop, Claude Code, Cursor, any MCP client |
-| Terminal | `cclay live status --wait` | Coding agents that drive a running studio |
-
-MCP config:
+| **Agent panel** | `Cmd/Ctrl+B` in the studio | Chat in the studio. Sign in with ChatGPT or use your own key (Anthropic, OpenAI, Gemini, OpenRouter, CLIProxyAPI). |
+| **MCP server** | `npx -y cozyclay mcp` | Claude Desktop, Claude Code, Cursor or any MCP client. |
+| **Terminal** | `cclay live status --wait` | Coding agents that drive a running studio, JSON in and out. |
 
 ```json
 { "mcpServers": { "cozyclay": { "command": "npx", "args": ["-y", "cozyclay", "mcp"] } } }
@@ -82,9 +102,11 @@ npm test
 | [`docs/motion3-agent-guide.md`](docs/motion3-agent-guide.md) | Motion specs, compile and QA |
 | [`docs/agent-cli.md`](docs/agent-cli.md) | `cclay live`, model providers, sessions |
 | [`mcp/README.md`](mcp/README.md) | MCP tools and the live protocol |
-| [`docs/studio-ui-ia.md`](docs/studio-ui-ia.md) | Where every control lives |
-| [`docs/privacy.md`](docs/privacy.md) | Anonymous telemetry and opt-out (`cclay telemetry off`) |
+| [`docs/studio-ui-ia.md`](docs/studio-ui-ia.md) | Every control and where it lives |
+| [`docs/privacy.md`](docs/privacy.md) | Anonymous telemetry and how to turn it off (`cclay telemetry off`) |
 | [`AGENTS.md`](AGENTS.md) | Contribution rules |
+
+Found a bug or want a feature? [Open an issue](https://github.com/NomaDamas/CozyClay/issues).
 
 ## License
 
