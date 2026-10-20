@@ -2,6 +2,7 @@ import { constants as fsConstants } from "node:fs";
 import { open as openFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { ASSET_MAX_SOURCE_BYTES } from "../src/scene-assets.js";
 import { classifyMeshBytes, meshMimeForKind } from "../src/mesh-sniff.js";
@@ -12,7 +13,8 @@ export function normalizeMeshPath(raw, { home = homedir() } = {}) {
 	if (path.startsWith("file:")) {
 		try {
 			const url = new URL(path);
-			if (url.protocol === "file:") path = decodeURIComponent(url.pathname);
+			// On Windows the pathname of file:///D:/x is /D:/x; fileURLToPath drops that leading slash.
+			if (url.protocol === "file:") path = process.platform === "win32" ? fileURLToPath(url) : decodeURIComponent(url.pathname);
 		} catch {
 			path = path.replace(/^file:\/\//, "");
 		}
