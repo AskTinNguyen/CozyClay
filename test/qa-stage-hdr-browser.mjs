@@ -46,7 +46,7 @@ expect("the studio is ready", await ready());
 await sleep(1200);
 const ids = await evaluate("window.__cozyclay.objects.map((o) => o.id)");
 if (ids.length) await act("object.remove", { ids });
-await act("object.add", { kind: "chair", placement: { x: 0.65, z: -0.2, rot: -30 } });
+await act("object.add", { kind: "cylinder", placement: { x: 0.65, z: -0.2, rot: -30 } });
 await sleep(800);
 
 // 1. Presets without an HDR: the export frame's md5, per preset.

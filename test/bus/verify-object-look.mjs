@@ -61,7 +61,7 @@ test("glow is optional on any record, and null removes it", () => {
 	assert.equal(Object.hasOwn(normalizeSceneObject(plain), "glow"), false, "an old record comes back without the key");
 	const loaded = loadScene(serializeScene([normalizeSceneObject(plain)]));
 	assert.deepEqual(loaded.objects[0], normalizeSceneObject(plain), "old scenes round-trip unchanged");
-	for (const renderer of ["sphere", "car", "empty", "light"]) {
+	for (const renderer of ["sphere", "cylinder", "empty", "light"]) {
 		const glowing = normalizeSceneObject({ id: renderer, renderer, glow: { intensity: 6 } });
 		assert.equal(glowing.glow.intensity, 6, `${renderer} keeps its glow`);
 		assert.deepEqual(normalizeSceneObject(glowing), glowing, `${renderer} is a fixed point`);

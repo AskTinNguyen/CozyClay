@@ -25,7 +25,7 @@ try {
   const depth = f.objects.store.depths().past;
   const batchReceipt = await f.run('objects.batch', { atomic: true, ops: [
     { name: 'update_object', args: { id: 'cube', x: 7 } },
-    { name: 'remove_object', args: { id: 'chair' } },
+    { name: 'remove_object', args: { id: 'cylinder' } },
     { name: 'group_objects', args: { parent: 'sphere', children: [placed.id] } },
   ] });
   const batch = batchReceipt.output;

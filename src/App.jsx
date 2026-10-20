@@ -42,7 +42,6 @@ import { browserSculptImages } from "./commands/sculpt-images.js";
 import { sculptAgentClient, sculptModelLabel } from "./sculpt-mode.js";
 import { useSculptMode } from "./use-sculpt-mode.js";
 import { useFirstSuccessPrompt } from "./use-first-success-prompt.js";
-import { useCameraTutorial } from "./use-camera-tutorial.js";
 import { useEmbedBridge } from "./use-embed-bridge.js";
 import { useAssetShelf } from "./use-asset-shelf.js";
 import { StudioProtocolError } from "./studio-agent-protocol.js";
@@ -120,9 +119,6 @@ import {
 import ProjectBrowser, { ProjectNameDialog } from "./project-browser.jsx";
 import FirstSuccessGuide from "./first-success-guide.jsx";
 import UseCaseQuestion from "./use-case-question.jsx";
-import { CameraTutorial } from "./camera-tutorial.jsx";
-import { createTutorialAnalytics } from "./tutorial-analytics.js";
-import { cameraTutorialSuppressed, createFirstShotHandoff, rememberCameraTutorialTerminal } from "./first-shot-handoff.js";
 import ObjectGizmo from "./object-gizmo.jsx";
 import { useHeldObjectEdit } from "./held-object-edit.jsx";
 
@@ -141,7 +137,7 @@ import {
 	pathMetrics,
 	strokeToPathPoints,
 } from "./object-path.js";
-import { carriedPointAt, sceneObjectsAt } from "./object-travel.js"; import { objectTracksOf } from "./motion3/object-tracks.js"; import { tutorialWalkSpec } from "./tutorial-walk.js"; import { ViewGhosts } from "./view-ghosts.jsx"; import { DraftGhost } from "./draft-ghost.jsx";
+import { carriedPointAt, sceneObjectsAt } from "./object-travel.js"; import { objectTracksOf } from "./motion3/object-tracks.js"; import { ViewGhosts } from "./view-ghosts.jsx"; import { DraftGhost } from "./draft-ghost.jsx";
 import { routeOwnerFor } from "./route-owner.js";
 import {
 	analyticsActive,
@@ -157,7 +153,7 @@ import {
 } from "./analytics.js";
 import { ko, isKo } from "./locale.js";
 import { characterCapabilities, kindRefusal, proxyFigureBounds } from "./character-kind.js";
-import { STARTER_SCENES } from "./starter-scenes.js";
+import { STARTER_SCENES, resolveSceneParam } from "./starter-scenes.js";
 import { PART_COLOURS } from "./part-colours.js";
 import {
 	DEFAULT_POSE,
@@ -381,35 +377,9 @@ export default function App() {
 		getBus: () => studioBindingRef.current.bus,
 		notify: (...args) => setToast(...args),
 	}));
-	const { embedMode, playgroundMode, playgroundHint, setPlaygroundHint, playgroundExportRef } = useEmbedBridge();
-	const { cameraTutorialEntry, cameraTutorialQuery, cameraTutorial, setCameraTutorial, cameraTutorialAnalytics, cameraTutorialAttempt, setCameraTutorialAttempt, cameraTutorialHandoff, setCameraTutorialHandoff, cameraTutorialCompletedRef, exportMenuTriggerRef, exportShotIdRef, cameraTutorialStep, setCameraTutorialStep, startCameraTutorialRef, cameraTutorialStarted, tutorialStarterRef, tutorialLoadingRef, tutorialProjectEpochRef, tutorialSeedEpochRef, tutorialSeedPending, setTutorialSeedPending } = useCameraTutorial({ embedMode, playgroundMode });
-	useEffect(() => {
-		if (!cameraTutorialQuery || cameraTutorialStarted.current) return;
-		// Storyboard projects never auto-open the seven-step camera tutorial.
-		if (scenesDomain.previsMode === "storyboard") return;
-		cameraTutorialStarted.current = true;
-		void startCameraTutorialRef.current?.({ source: cameraTutorialEntry });
-	}, [cameraTutorialQuery, cameraTutorialEntry]);
-	useEffect(() => {
-		const onTutorial = (event) => {
-			if (event.detail?.open === false) {
-				setCameraTutorial(false);
-				cameraTutorialAnalytics.current?.dismiss();
-				rememberCameraTutorialTerminal(cameraTutorialCompletedRef.current ? "completed" : "dismissed");
-				tutorialProjectEpochRef.current += 1;
-				setTutorialSeedPending(false);
-				setCameraTutorialHandoff(null);
-				return;
-			}
-			if (scenesDomain.previsMode === "storyboard") return;
-			void startCameraTutorialRef.current?.({ source: event.detail?.source ?? "settings" });
-		};
-		window.addEventListener("cozyclay:camera-tutorial", onTutorial);
-		return () => window.removeEventListener("cozyclay:camera-tutorial", onTutorial);
-	}, []);
-	useEffect(() => {
-		if (cameraTutorial) trackFeature("camera_tutorial");
-	}, [cameraTutorial]);
+	const { embedMode, playgroundMode } = useEmbedBridge();
+	const exportMenuTriggerRef = useRef(null);
+	const exportShotIdRef = useRef(null);
 	useEffect(() => {
 		if (!embedMode) return undefined;
 		// The Workflow page's Scene node embeds the studio as its preview, so the
@@ -472,7 +442,7 @@ export default function App() {
 	if (!firstEditRef.current) {
 		const firstEdit = createFirstEditTracker(track);
 		// Observe the existing semantic boundary once, even after its telemetry
-		// gate is satisfied. The tutorial/semantic hook itself stays unchanged.
+		// gate is satisfied. The semantic hook itself stays unchanged.
 		firstEditRef.current = (surface, domain, before, after) => {
 			if (before !== after) sceneRevisionRef.current += 1;
 			studioBindingRef.current?.invalidate(domain, before, after);
@@ -493,8 +463,6 @@ export default function App() {
 	// One semantic hook for authored UI and programmatic mutations. Passive
 	// setters intentionally bypass it (navigation, load, seed, restore, history).
 	const markSemanticEdit = (domain, before, after) => {
-		tutorialProjectEpochRef.current += 1;
-		if (tutorialSeedEpochRef.current !== null) setTutorialSeedPending(false);
 		return firstEditRef.current(playgroundMode ? "playground" : "craft", domain, before, after);
 	};
 	const craftActionTrackedRef = useRef(false);
@@ -506,31 +474,11 @@ export default function App() {
 		track(playgroundMode ? "playground:first_action" : "craft:first_action", { action_kind: actionKind });
 	};
 	useEffect(() => {
-		if (!playgroundMode) return undefined;
+		if (!playgroundMode) return;
 		track("playground:opened");
 		// The landing page keeps a loading veil over the iframe until the
 		// studio has actually mounted; a bare `load` fires far too early.
 		window.parent?.postMessage({ type: "cozyclay:playground-ready" }, "*");
-		// Camera gestures feed the landing page's tutorial checklist, and the
-		// checklist points back at one control (the shot look-through) by hint.
-		const onNav = (event) => window.parent?.postMessage({ type: "cozyclay:playground-nav", kind: event.detail?.kind, key: event.detail?.key ?? null }, "*");
-		const onSignal = (event) => window.parent?.postMessage({ type: "cozyclay:playground-nav", kind: event.detail?.kind }, "*");
-		window.addEventListener("cozyclay:playground-signal", onSignal);
-		const onHint = (event) => {
-			if (event.source !== window.parent || event.origin !== window.location.origin) return;
-			if (event.data?.type === "cozyclay:playground-hint") setPlaygroundHint(typeof event.data.kind === "string" ? event.data.kind : null);
-			if (event.data?.type === "cozyclay:playground-export") {
-				// The visitor keeps what they made: the landing page turns this
-				// into a .cclayproject download they can open after npx cozyclay.
-				playgroundExportRef.current?.("City Block").then(
-					(serialized) => window.parent?.postMessage({ type: "cozyclay:playground-export-result", serialized }, "*"),
-					(error) => window.parent?.postMessage({ type: "cozyclay:playground-export-result", error: String(error?.message ?? error) }, "*"),
-				);
-			}
-		};
-		window.addEventListener("cozyclay:nav", onNav);
-		window.addEventListener("message", onHint);
-		return () => { window.removeEventListener("cozyclay:nav", onNav); window.removeEventListener("cozyclay:playground-signal", onSignal); window.removeEventListener("message", onHint); };
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 	const [startup] = useState(loadSceneStartup);
@@ -649,29 +597,9 @@ export default function App() {
 	// bridge read this global, and the render path is still PlayView's.
 	globalThis.playMode = preview;
 	const playMode = preview;
-	// #441 moved shot authoring into commands and dropped the Shot and Rail
-	// signals the landing checklist waits for. Read them from the authored state,
-	// as the studio tutorial does (#586): a shot added here, and a rail drawn.
-	// Declared before the play signal: a drawn rail starts playback in the same
-	// commit, and the checklist expects Rail before Play.
-	const playgroundShotCount = useRef(null);
-	useEffect(() => {
-		if (!playgroundMode) return;
-		if (playgroundShotCount.current !== null && shots.length > playgroundShotCount.current) {
-			window.parent?.postMessage({ type: "cozyclay:playground-nav", kind: "shot" }, "*");
-		}
-		playgroundShotCount.current = shots.length;
-	}, [playgroundMode, shots.length]);
-	const playgroundRailReady = playgroundMode && shots.some((shot) => Array.isArray(shot.camera?.cameraRail) && shot.camera.cameraRail.length >= 2);
-	useEffect(() => {
-		if (playgroundRailReady) window.parent?.postMessage({ type: "cozyclay:playground-nav", kind: "rail" }, "*");
-	}, [playgroundRailReady]);
 	// Preview is the player for the finished motion: entering starts playback,
 	// leaving pauses it. The editor view stays the manipulation surface.
 	const [tlPlaying, setTlPlaying] = useState(false);
-	useEffect(() => {
-		if (playgroundMode && tlPlaying) window.parent?.postMessage({ type: "cozyclay:playground-nav", kind: "play" }, "*");
-	}, [playgroundMode, tlPlaying]);
 	const cameraPreviewEndRef = useRef(null);
 	// Once the operator touches the viewport, the physical camera stays in
 	// their hands. Follow/Rail only take it back through an explicit Preview or
@@ -684,9 +612,6 @@ export default function App() {
 	// The Workflow page embeds this Studio as the Scene node's preview; that
 	// preview must show what the node captures on Run: the shot camera's view.
 	const [lookThroughShot, setLookThroughShot] = useState(embedMode);
-	useEffect(() => {
-		if (playgroundMode && lookThroughShot) window.parent?.postMessage({ type: "cozyclay:playground-nav", kind: "shot" }, "*");
-	}, [playgroundMode, lookThroughShot]);
 	useEffect(() => {
 		if (!lookThroughShot || embedMode) return undefined;
 		const onKey = (event) => {
@@ -1165,7 +1090,6 @@ export default function App() {
 		get tlFrameRef() { return tlFrameRef; },
 		
 		
-		get tutorialProjectEpochRef() { return tutorialProjectEpochRef; },
 		get waitForRig() { return waitForRig; },
 		get waypointMode() { return waypointMode; },
 		get waypoints() { return waypoints; },
@@ -1392,7 +1316,6 @@ export default function App() {
 	const scenesDomain = useScenes(appContext.forRender({
 		get activeSceneIdRef() { return activeSceneIdRef; },
 		get actorStageRef() { return actorStageRef; },
-		get cameraTutorialQuery() { return cameraTutorialQuery; },
 		get customPoses() { return customPoses; },
 		get dirtyRef() { return dirtyRef; },
 		get exportShotIdRef() { return exportShotIdRef; },
@@ -1414,8 +1337,6 @@ export default function App() {
 		get saveFailureToastRef() { return saveFailureToastRef; },
 		get setActiveCharacterId() { return setActiveCharacterId; },
 		get setActiveWaypointId() { return setActiveWaypointId; },
-		get setCameraTutorial() { return setCameraTutorial; },
-		get setCameraTutorialHandoff() { return setCameraTutorialHandoff; },
 		get setFirstSuccessGuideOpen() { return setFirstSuccessGuideOpen; },
 		get setHasCharSheet() { return setHasCharSheet; },
 		get setMovePlaying() { return setMovePlaying; },
@@ -1428,7 +1349,6 @@ export default function App() {
 		get setShots() { return setShots; },
 		get setTlFrame() { return setTlFrame; },
 		get setTlFrameCount() { return setTlFrameCount; },
-		get setTutorialSeedPending() { return setTutorialSeedPending; },
 		get setWaypoints() { return setWaypoints; },
 		get setWorkspaceLayout() { return setWorkspaceLayout; },
 		get shotDocumentRef() { return shotDocumentRef; },
@@ -1439,9 +1359,6 @@ export default function App() {
 		get studioDocumentEpochRef() { return studioDocumentEpochRef; },
 		get studioHistoryRef() { return studioHistoryRef; },
 		get studioSceneEpochRef() { return studioSceneEpochRef; },
-		get tutorialProjectEpochRef() { return tutorialProjectEpochRef; },
-		get tutorialSeedEpochRef() { return tutorialSeedEpochRef; },
-		get tutorialStarterRef() { return tutorialStarterRef; },
 		get castDomain() { return castDomain; },
 		get objectsDomain() { return objectsDomain; },
 	}));
@@ -1820,11 +1737,6 @@ export default function App() {
 
 	const [mode, setMode] = useState("image");
 	const [imageModel, setImageModel] = useState("gpt_image_2");
-
-	useEffect(() => {
-		if (playgroundMode && movePlaying) window.parent?.postMessage({ type: "cozyclay:playground-nav", kind: "play" }, "*");
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [playgroundMode, movePlaying]);
 
 	// Object travel-path drawing: the same Top-View stroke gesture as the rail,
 	// aimed at the selected object instead of the shot camera.
@@ -2348,96 +2260,18 @@ export default function App() {
 		};
 	}, []);
 
-	const tutorialInitialSnapshotRef = useRef(null);
-	if (tutorialInitialSnapshotRef.current === null) tutorialInitialSnapshotRef.current = collectProjectSnapshot("Tutorial");
-
-	playgroundExportRef.current = collectProjectSerialized;
-
-	function closeCameraTutorial(reason = null) {
-		const terminal = reason ?? (cameraTutorialCompletedRef.current ? "completed" : "dismissed");
-		rememberCameraTutorialTerminal(terminal);
-		tutorialProjectEpochRef.current += 1;
-		setTutorialSeedPending(false);
-		cameraTutorialHandoff?.dismiss();
-		setCameraTutorialHandoff(null);
-		cameraTutorialAnalytics.current?.dismiss();
-		cameraTutorialAnalytics.current = null;
-		cameraTutorialCompletedRef.current = false;
-		setCameraTutorial(false);
-		setCameraTutorialStep(null);
-	}
-
-	function openExportMenuForShot(shotId) {
-		const target = shots.find((entry) => entry.id === shotId);
-		if (!target) return;
-		exportShotIdRef.current = target.id;
-		const trigger = exportMenuTriggerRef.current;
-		if (trigger) {
-			const box = trigger.getBoundingClientRect();
-			const menuWidth = Math.min(340, window.innerWidth - 16);
-			setExportMenuAnchor({
-				top: box.bottom + 6,
-				right: Math.min(Math.max(8, window.innerWidth - box.right), Math.max(8, window.innerWidth - menuWidth - 8)),
-			});
-		}
-		setExportMenuOpen(true);
-		cameraTutorialHandoff?.dismiss();
-		setCameraTutorialHandoff(null);
-	}
-
-	/** The camera tutorial's single entry (#209), for both /app/?tutorial=camera
-	 * and the Settings ▾ item.
-	 *
-	 * The seven steps teach Shot / Rail / Play, which need a set and somebody
-	 * moving through it. On cozyclay.org they get both for free: the landing
-	 * playground opens the city-block starter and the hosted-demo seed below
-	 * loads the walk take because a statically served build has no motion
-	 * bridge. A local session HAS a bridge, so that seed is skipped and the
-	 * tutorial used to open on whatever was loaded — usually an empty room.
-	 * This puts the studio in the landing page's state explicitly. */
-	async function startCameraTutorial({ source = "settings" } = {}) {
-		if (embedMode || playgroundMode || tutorialLoadingRef.current) return;
-		// QA hook, same spirit as window.__cozyclayRenders: which door the tutorial
-		// came in by, so a headless run can prove both of them land here.
-		window.__cozyclayTutorialSource = source;
-		// Only a pristine, newly created document receives the sample. An
-		// existing project (even unnamed), or a restart, keeps all current work.
-		const seed = !tutorialStarterRef.current && startupCreatedScene && projectName === null
-			&& !projectDirty && !cameraTutorialSuppressed()
-			&& tutorialInitialSnapshotRef.current === collectProjectSnapshot("Tutorial");
-		if (seed) {
-			tutorialLoadingRef.current = true;
-			try {
-				const opened = await openStarterScene("city-block", "tutorial");
-				if (opened) {
-					tutorialStarterRef.current = true;
-					tutorialSeedEpochRef.current = tutorialProjectEpochRef.current;
-					setTutorialSeedPending(true);
-					exitPreview();
-					setTlFrame(0);
-				}
-			} finally {
-				tutorialLoadingRef.current = false;
-			}
-		}
-		setProjectStartupOpen(false);
-		setFirstSuccessGuideOpen(false);
-		setCameraTutorialHandoff(createFirstShotHandoff());
-		// Explicit start, including while already open, resets the existing
-		// done/walked component state. Passive renders never create an attempt.
-		cameraTutorialAnalytics.current = createTutorialAnalytics({ surface: "studio", startSource: source });
-		setCameraTutorialAttempt((attempt) => attempt + 1);
-		setCameraTutorial(true);
-		cameraTutorialCompletedRef.current = false;
-	}
-	startCameraTutorialRef.current = startCameraTutorial;
-
 	const starterOpened = useRef(false);
 	useEffect(() => {
 		if (starterOpened.current || playgroundMode) return;
 		const requested = new URLSearchParams(globalThis.location?.search || "").get("scene");
 		if (!requested) return;
 		starterOpened.current = true;
+		// An id this build does not ship (a removed starter, a typo) is ignored:
+		// the studio opens as it would without ?scene=.
+		if (!resolveSceneParam(requested)) {
+			console.warn(`cozyclay: ?scene=${requested} is not a starter scene in this build; ignored.`);
+			return;
+		}
 		void openStarterScene(requested, "launch");
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
@@ -3263,16 +3097,6 @@ export default function App() {
 		);
 	}
 
-	// Observe the existing export UI boundary, independently of telemetry.
-	// The first transition covers ordinary menu exports and fast failures too;
-	// progress updates do not write storage on every encoded frame.
-	const hasExportAttempt = exportStatus !== null;
-	useEffect(() => {
-		if (!hasExportAttempt) return;
-		rememberCameraTutorialTerminal("export_started");
-		setCameraTutorialHandoff(null);
-	}, [hasExportAttempt]);
-
 	function downloadOtioCutList() {
 		if (!shots.length) {
 			setToast(ko("Add at least one Shot before exporting OTIO", "OTIO를 내보내려면 샷을 하나 이상 추가하세요"));
@@ -3771,22 +3595,6 @@ export default function App() {
 		if (startupCreatedScene) track("scene:created", { scene_source: "startup" });
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
-
-	// The camera tutorial's seed (#209). startCameraTutorial arms
-	// tutorialSeedPending once the starter scene is applied, and a compiled walk
-	// (take v3) goes on as soon as that scene's character has a parsed rig: a
-	// state condition, not a timer. The compile runs in the worker; an edit that lands
-	// before it answers makes the job's fence refuse the install (set dressing, no error).
-	useEffect(() => {
-		if (!tutorialSeedPending || !activeRig) return;
-		const seedEpoch = tutorialSeedEpochRef.current;
-		tutorialSeedEpochRef.current = null;
-		setTutorialSeedPending(false);
-		if (seedEpoch === null || seedEpoch !== tutorialProjectEpochRef.current) return;
-		const spec = tutorialWalkSpec(activeChar); // the take is set dressing, never an error to act on
-		if (spec && runStudioAction("motion.compile", { characterId: activeChar.id, spec })) { setTlFrame(0); setTlPlaying(false); }
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [tutorialSeedPending, activeRig]);
 
 	// Drive every cast member from ITS OWN clip on the shared playhead. The
 	// active character's buffer motion and the stored session motions of the
@@ -4824,7 +4632,7 @@ export default function App() {
 	return (
 		<AppContext.Provider value={appContext}>
 		<StudioShellContext.Provider value={shellContext}>
-		<StudioShell className={"app" + (renderActive ? "" : " render-idle")} style={workspaceStyle} data-workflow-mode={workflowMode} data-previs-mode={scenesDomain.previsMode} data-embed-mode={embedMode ? "playview" : playgroundMode ? "playground" : undefined} data-playground-hint={playgroundMode ? playgroundHint ?? undefined : undefined} data-tutorial-step={cameraTutorial ? cameraTutorialStep ?? undefined : undefined} data-rail-draw={railDraw ? 1 : undefined} data-shot-look={lookThroughShot && !embedMode ? 1 : undefined} data-plan-draw={railDraw || pathDraw || waypointMode ? 1 : undefined}
+		<StudioShell className={"app" + (renderActive ? "" : " render-idle")} style={workspaceStyle} data-workflow-mode={workflowMode} data-previs-mode={scenesDomain.previsMode} data-embed-mode={embedMode ? "playview" : playgroundMode ? "playground" : undefined} data-rail-draw={railDraw ? 1 : undefined} data-shot-look={lookThroughShot && !embedMode ? 1 : undefined} data-plan-draw={railDraw || pathDraw || waypointMode ? 1 : undefined}
 			viewport={
 				<div className="viewport" data-drop={viewportDrop.over ? "over" : undefined} {...viewportDrop.handlers}
 					onWheel={(event) => {
@@ -4843,26 +4651,6 @@ export default function App() {
 					</div>
 				)}
 
-					{/* Sits under the mode tabs and left of the Top-View inset, over the
-					    stage it is teaching. The overlay itself never takes the pointer
-					    (styles.css) — every step is completed in the studio underneath. */}
-					{cameraTutorial && !embedMode && (
-						<CameraTutorial
-							key={cameraTutorialAttempt}
-							analytics={cameraTutorialAnalytics.current}
-							previewing={lookThroughShot}
-							previsMode={scenesDomain.previsMode}
-							shotCount={shots.length}
-							railReady={shots.some((shot) => Array.isArray(shot.camera?.cameraRail) && shot.camera.cameraRail.length >= 2)}
-							onStepChange={setCameraTutorialStep}
-							onComplete={() => { cameraTutorialCompletedRef.current = true; cameraTutorialHandoff?.complete(); }}
-							onClose={() => closeCameraTutorial()}
-							handoff={cameraTutorialHandoff}
-							shotId={activeShot?.id ?? null}
-							onOpenExport={openExportMenuForShot}
-							onContinue={() => closeCameraTutorial()}
-						/>
-					)}
 					<div className="stage" id="stage" ref={stageRef} data-render-loop={renderActive ? "always" : "demand"}>
 						{/* Shadows were off, so every castShadow in props.jsx was inert and
 						    nothing on the open stage ever touched the floor. A contact
@@ -5148,11 +4936,10 @@ export default function App() {
 								target={rangePinPreview?.target}
 								enabled={ikMode && ikEditTool === "pin" && Boolean(rangePinPreview?.target)}
 							/>
-							{/* The tutorial's top view is the landing playground's: camera, cast
-							    and the rail only, so the line the Rail step asks for is drawn on
-							    a clean floor instead of over 34 footprints. */}
+							{/* The landing playground's top view: camera, cast and the rail
+							    only, so a rail is drawn on a clean floor. */}
 							<PlanBoard
-								minimal={playgroundMode || cameraTutorial}
+								minimal={playgroundMode}
 								hostRef={planHostRef}
 								planCamRef={planCamRef}
 								shotCamRef={shotCamRef}
@@ -5447,7 +5234,7 @@ export default function App() {
 
 						<div
 							ref={shotPreviewRef}
-							hidden={playMode || ikMode || lookThroughShot || workflowMode === "motion"}
+							hidden={playMode || lookThroughShot}
 							className="vp-pane vp-shot-preview"
 							style={{ "--shot-aspect": shotOutput.aspect }}
 						>

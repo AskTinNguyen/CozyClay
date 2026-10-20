@@ -500,7 +500,8 @@ const implementations={
   const c=f.binding.context();
   protocol.validateStudioContext(c);
   assert.deepEqual(c.assets.filter(a=>a.kind).map(a=>a.kind),commands.studioObjectCatalogue().objects.map(o=>o.kind),'every placeable catalogue kind is listed');
-  assert.deepEqual(c.assets.find(a=>a.kind==='chair'),{kind:'chair',name:'Chair',type:'set-piece'});
+  assert.equal(c.assets.some(a=>['chair','car','small-plane'].includes(a.kind)),false,'the retired set pieces are not offered');
+  assert.deepEqual(c.assets.find(a=>a.kind==='text'),{kind:'text',name:'Text',type:'set-piece'});
   assert.deepEqual(c.assets.find(a=>a.kind==='cube'),{kind:'cube',name:'Cube',type:'primitive'});
   assert.deepEqual(c.assets.filter(a=>a.id),[{id:'img-0a1b2c',name:'Poster',type:'image'},{id:'mesh-3d4e5f',name:'Robot',type:'mesh'}],'imported scene assets are listed once each');
  },

@@ -622,7 +622,7 @@ expect("the composer stays disabled until a model it may send to is selected",
 	panel.includes('const composerDisabled = panelState === "rate-limited" || !model || !modelIsSelectable(modelProviders, model);'));
 expect("the wait for the model list is visible, not silent", panel.includes("Loading models…") && panel.includes("No model available"));
 expect("an unanswered model list is a state, not a guess", client.includes("const models = Array.isArray(result?.models) ? result.models : [];")
-	&& panel.includes('if (!applyModelList(advertised)) { setModelsState("failed"); return; }'));
+	&& panel.includes('if (advertised.status === "rejected" || !applyModelList(advertised.value)) setModelsState("failed");'));
 
 // --- provider-grouped models, effort and steering (#379) ------------------
 // Five providers now answer /agent/models. The dropdown groups them, says
@@ -1085,6 +1085,49 @@ expect("no timer drives the auth transition", !/set(Interval|Timeout)\([^)]*(sig
 	expect("autofix only adds the button tooltip", render("en", { note: { ...fixNote, autofix: { eligible: true, severity: "blocker" } } }).includes('title="Autofix is on: the blocker fixes would be applied as written"'));
 	expect("collapsed: no fix line", !render("en", { note: fixNote }).includes("agent-supervisor-fix"));
 	expect("an unavailable review is one muted line", unavailable === '<div class="agent-card agent-supervisor-card" data-supervisor-verdict="unavailable"><p class="agent-supervisor-summary">Supervisor review unavailable — the reviewer request timed out</p></div>', unavailable);
+}
+
+// --- no agent server (plain vite) ----------------------------------------
+// Without the sidecar every /agent/* answers 503 (or the port is dead). The panel shows a quiet
+// "not running" status with a Retry instead of sign-in buttons that could only fail silently.
+{
+	const failing = (response) => module_.createHttpTransport({ fetchImpl: async () => { if (response instanceof Error) throw response; return response; } });
+	const reason = async (transport) => { try { await transport.models(); return null; } catch (error) { return error; } };
+	for (const status of [503, 502, 404]) {
+		const error = await reason(failing(new Response(JSON.stringify({ error: "agent sidecar is not configured" }), { status, headers: { "content-type": "application/json" } })));
+		expect(`a ${status} from /agent/models reads as no agent server`, module_.agentServerUnavailable(error), String(error?.status));
+	}
+	expect("a network error reads as no agent server", module_.agentServerUnavailable(await reason(failing(new TypeError("Failed to fetch")))));
+	expect("the server's own refusal is not \"offline\"", !module_.agentServerUnavailable(await reason(failing(new Response("{}", { status: 500 })))) && !module_.agentServerUnavailable({ status: 401 }));
+	expect("the panel probes into an offline state and retries it", panel.includes('setAuthState("offline")') && /\}, \[applyModelList, probe, sessionState, transport\]\);/.test(panel) && panel.includes("<OfflineCard probing={probing} onRetry={retryServer} />"));
+	expect("offline hides the sign-in card and the login list", !/authState === "offline"[^\n]*agent-signin/.test(panel) && panel.includes('keysOpen && authState !== "offline" && <LoginPanel'));
+	expect("a failed ChatGPT sign-in shows its reason under the button", /agent-signin" onClick=\{signIn\}>Sign in with ChatGPT<\/button>\n\t+\{signInError && <p className="agent-key-error agent-signin-error" role="alert">/.test(panel));
+	expect("the offline card is token-driven", /\.agent-offline-icon \{[^}]*color: var\(--agent-text-muted\)/.test(css));
+	const { parseSync } = await import("rolldown/experimental");
+	const { transformWithOxc } = await import("vite");
+	const React = await import("react");
+	const { renderToStaticMarkup } = await import("react-dom/server");
+	const { FiPower, FiRotateCw } = await import("react-icons/fi");
+	const build = (koImpl) => {
+		const scope = { React, FiPower, FiRotateCw, ko: koImpl };
+		const source = parseSync("AgentPanel.jsx", panel).program.body.find((node) => node.type === "FunctionDeclaration" && node.id.name === "OfflineCard");
+		return { scope, source: panel.slice(source.start, source.end) };
+	};
+	const render = async (koImpl, props) => {
+		const { scope, source } = build(koImpl);
+		const { code } = await transformWithOxc(`function card() {\n${source}\nreturn OfflineCard;\n}`, "card.jsx", { lang: "jsx", jsx: { runtime: "classic" } });
+		const OfflineCard = new Function(...Object.keys(scope), `${code}\nreturn card();`)(...Object.values(scope));
+		return renderToStaticMarkup(React.createElement(OfflineCard, props));
+	};
+	const en = await render((english) => english, { probing: false, onRetry() {} });
+	expect("offline: the title says the agent server is not running", en.includes("<h3>Agent server is not running</h3>"), en);
+	expect("offline: one line says how to start it", en.includes("Start CozyClay with <code>npx cozyclay</code> (or <code>npm run dev</code> in a checkout) to sign in."), en);
+	expect("offline: a polite live status with an icon, not colour alone", en.includes('role="status"') && en.includes('aria-live="polite"') && en.includes("<svg") && en.includes('aria-hidden="true"'), en);
+	expect("offline: a Retry button and no sign-in button", en.includes(" Retry</button>") && !en.includes("Sign in with ChatGPT") && !en.includes("another provider"), en);
+	const busy = await render((english) => english, { probing: true, onRetry() {} });
+	expect("offline: Retry is busy while it re-probes", busy.includes("disabled") && busy.includes('aria-busy="true"') && busy.includes("Checking…"), busy);
+	const korean = await render((_english, koText) => koText, { probing: false, onRetry() {} });
+	expect("offline: the card reads in Korean under the Korean locale", korean.includes("에이전트 서버가 실행 중이 아니에요") && korean.includes("다시 확인"), korean);
 }
 
 if (failures) {

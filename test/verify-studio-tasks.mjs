@@ -134,7 +134,7 @@ const dispatch = (board, title, scope, extra = {}) => board.dispatch({ title, in
 	const again = board.dispatch({ title: "move it", instructions: "move the cube 1 m left", scope: ["object:cube"] });
 	assert.equal(again.duplicateOf, first.taskId, "case 19: the same work is not started twice");
 	await tick(); assert.equal(runs.length, 1);
-	assert.throws(() => board.dispatch({ title: "bad", instructions: "x", scope: ["chair"] }), /scope/);
+	assert.throws(() => board.dispatch({ title: "bad", instructions: "x", scope: ["cylinder"] }), /scope/);
 	assert.throws(() => board.dispatch({ title: "bad", instructions: "x", scope: ["object:a"], dependsOn: ["nope"] }), /dependsOn/);
 	console.log("PASS case 19: equal instructions on an equal scope answer the running task; bad scopes and dependencies are refused");
 }
@@ -189,7 +189,7 @@ const { createAgentHandler } = await import("../bin/agent/agent-routes.mjs");
 const { MAIN_SYSTEM_PROMPT } = await import("../bin/agent/main-prompt.mjs");
 {
 	const f = objectsFixture(), id = kind => f.store.current.objects.find(o => o.renderer === kind || o.id === kind).id;
-	const ids = { cube: id("cube"), sphere: id("sphere"), chair: id("chair") }, x = objectId => f.store.current.objects.find(o => o.id === objectId)?.x;
+	const ids = { cube: id("cube"), sphere: id("sphere"), cylinder: id("cylinder") }, x = objectId => f.store.current.objects.find(o => o.id === objectId)?.x;
 	const read = () => { const context = f.binding.handlers.read_studio_context({ host: f.host() }); return { ...context, host: { ...context.host, workspaceHandle: "handle-1" } }; };
 	const commands = [];
 	const hub = {
@@ -212,7 +212,7 @@ const { MAIN_SYSTEM_PROMPT } = await import("../bin/agent/main-prompt.mjs");
 			if (last.role === "user") return fauxAssistantMessage([
 				fauxToolCall("dispatch_task", { title: "cube", instructions: `Move ${ids.cube} to x 1.`, scope: [`object:${ids.cube}`] }, { id: `m-${randomUUID()}` }),
 				fauxToolCall("dispatch_task", { title: "sphere", instructions: `Move ${ids.sphere} to x 2.`, scope: [`object:${ids.sphere}`] }, { id: `m-${randomUUID()}` }),
-				fauxToolCall("quick_edit", { scope: [`object:${ids.chair}`], tool: "run_action", args: { action: "object.set", args: { id: ids.chair, set: { position: { x: 3, y: 0, z: 0 } } } } }, { id: `m-${randomUUID()}` }),
+				fauxToolCall("quick_edit", { scope: [`object:${ids.cylinder}`], tool: "run_action", args: { action: "object.set", args: { id: ids.cylinder, set: { position: { x: 3, y: 0, z: 0 } } } } }, { id: `m-${randomUUID()}` }),
 			]);
 			return fauxAssistantMessage([fauxText("큐브와 구를 옮기는 작업 두 개를 시작했고, 의자는 바로 옮겼어요.")]);
 		}
@@ -233,7 +233,7 @@ const { MAIN_SYSTEM_PROMPT } = await import("../bin/agent/main-prompt.mjs");
 	const frames = [...(await response.text()).matchAll(/^data: (.+)$/gm)].map(match => JSON.parse(match[1]));
 	assert.equal(frames.at(-1).type, "done", "the main turn ends");
 	assert.ok(frames.filter(frame => frame.type === "tool.done" && frame.name === "dispatch_task").every(frame => frame.ok), "two tasks dispatched");
-	assert.equal(x(ids.chair), 3, "quick_edit moved the chair inside a one-command task");
+	assert.equal(x(ids.cylinder), 3, "quick_edit moved the chair inside a one-command task");
 	const quick = commands.filter(command => command.action === "task.begin" || command.action === "task.finish");
 	assert.ok(quick.length >= 2, "quick_edit opened and finished a task");
 	const get = path => fetch(`${origin}${path}`, { headers: { origin, cookie } });

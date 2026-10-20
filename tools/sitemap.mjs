@@ -8,7 +8,7 @@ import { resolve } from "node:path";
 
 const ORIGIN = "https://cozyclay.org";
 const PAGES = [
-	{ path: "/", sources: ["index.html", "public/media", "public/scenes"] },
+	{ path: "/", sources: ["index.html", "public/media"] },
 	{ path: "/greybox-to-video/", sources: ["greybox-to-video/index.html"] },
 	{ path: "/previs-software/", sources: ["previs-software/index.html"] },
 	{ path: "/seedance-camera-control/", sources: ["seedance-camera-control/index.html"] },

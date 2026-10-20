@@ -105,7 +105,7 @@ const setLook = async (lighting) => { expect(`stage.set ${JSON.stringify(lightin
 const ids = await evaluate("window.__cozyclay.objects.map((o) => o.id)");
 if (ids.length) await act("object.remove", { ids });
 await act("stage.applyLighting", { preset: "studio" });
-await act("object.add", { kind: "chair", placement: { x: 0.65, z: -0.2, rot: -30 } });
+await act("object.add", { kind: "cylinder", placement: { x: 0.65, z: -0.2, rot: -30 } });
 await sleep(800);
 
 // 1. Studio: no map, no occlusion pass.

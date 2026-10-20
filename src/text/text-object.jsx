@@ -8,7 +8,7 @@ import { useEffect, useMemo, useState } from "react";
 import * as THREE from "three";
 import { Font } from "three/examples/jsm/loaders/FontLoader.js";
 import { TextGeometry } from "three/examples/jsm/geometries/TextGeometry.js";
-import { autoFlat } from "../set-pieces.jsx";
+import { autoFlat } from "../auto-flat.js";
 import { textIsSolid, textLayout } from "./text-record.js";
 
 // The app's own sans first, then the system's, which carries Hangul and CJK.

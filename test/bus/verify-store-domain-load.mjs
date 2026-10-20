@@ -17,8 +17,8 @@ try {
       releases.push(() => { owner.load = load; });
     } else releases.push(app.registerStoreDomain(name, { load: slice => calls.push([name, slice]) }));
   }
-  Object.assign(f.scope, { tutorialProjectEpochRef: { current: 0 }, tutorialSeedEpochRef: { current: null }, exportShotIdRef: { current: null } });
-  for (const name of ['setTutorialSeedPending', 'setCameraTutorial', 'setCameraTutorialHandoff', 'setRigMountEpoch', 'setHasCharSheet', 'setSelectedPromptId', 'setRailDraw', 'setActiveWaypointId', 'setPendingWaypointFrame']) f.scope[name] = () => {};
+  Object.assign(f.scope, { exportShotIdRef: { current: null } });
+  for (const name of ['setRigMountEpoch', 'setHasCharSheet', 'setSelectedPromptId', 'setRailDraw', 'setActiveWaypointId', 'setPendingWaypointFrame']) f.scope[name] = () => {};
   f.scope.setSceneObjects = () => { throw new Error('owned objects must publish through load'); };
   f.scope.setShots = () => { throw new Error('owned shots must publish through load'); };
   f.scope.setCharacters = () => { throw new Error('owned cast must publish through load'); };

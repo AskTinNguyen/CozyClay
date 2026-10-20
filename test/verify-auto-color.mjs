@@ -45,7 +45,7 @@ expect(
 import { readStudioSource } from "./bus/verify-domain-modules.mjs";
 const app = readStudioSource();
 const props = readFileSync(new URL("../src/props.jsx", import.meta.url), "utf8");
-const setPieces = readFileSync(new URL("../src/set-pieces.jsx", import.meta.url), "utf8");
+const autoFlatSource = readFileSync(new URL("../src/auto-flat.js", import.meta.url), "utf8");
 const planview = readFileSync(new URL("../src/planview.jsx", import.meta.url), "utf8");
 
 expect(
@@ -67,11 +67,11 @@ expect(
 );
 expect(
 	"the viewport renderers consume the marker with authored fallback",
-	props.includes("autoColor ?? color"),
+	props.includes("autoColor ? (") && props.includes("color={color}"),
 );
 expect(
 	"auto-colored surfaces use the flat solid-view response, not the lit clay one",
-	setPieces.includes("function autoFlat") && setPieces.includes("emissive: hex") && setPieces.includes("roughness: 1") && props.includes("autoFlat(autoColor)"),
+	autoFlatSource.includes("function autoFlat") && autoFlatSource.includes("emissive: hex") && autoFlatSource.includes("roughness: 1") && props.includes("autoFlat(autoColor)"),
 );
 expect(
 	"the plan board agrees with the viewport",

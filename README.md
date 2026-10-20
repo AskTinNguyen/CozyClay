@@ -36,13 +36,9 @@ CozyClay is a browser-based previs studio built with Three.js and React Three Fi
 npx cozyclay
 ```
 
-That is the whole install. Not sure yet? **[Try it in the browser first](https://cozyclay.org/#try)** — a seven-step camera tutorial on a live scene — then keep going on your machine with the same set:
+That is the whole install. Not sure yet? **[Try it in the browser first](https://cozyclay.org/#try)** — the studio runs live in the page — then keep going on your machine.
 
-```bash
-npx cozyclay --scene city-block
-```
-
-The camera tutorial seeds a compiled walk, so you can scrub the timeline, drive the cameras and draw a dolly rail straight away. New motion is compiled in the browser from a motion spec — no GPU box or sidecar needed.
+New motion is compiled in the browser from a motion spec — no GPU box or sidecar needed.
 
 ## Demo
 
@@ -52,7 +48,7 @@ https://github.com/user-attachments/assets/00f28c2f-e8e2-43eb-b253-b6c2436e1818
 
 |  | |
 | --- | --- |
-| **Stage a scene** | Create primitives and set pieces, then move, rotate and scale them with the transform strip's gizmo. Cast people from **Assets › Characters**: a rigged character you can pose and animate, or a **Capsule figure** — a rigless stand-in with one posture (stand, sit or lie) chosen in Details, for blocking where nobody needs to move their limbs. Capsule figures follow root paths and per-panel placements like any character but refuse pose, IK and motion tools, with the reason in the tooltip. Grid snapping is a preference, not a law — hold `Ctrl` mid-drag to invert it. A bird's-eye Top-View drives 2D root waypoints for character paths. **View ▾** on the viewport bar holds the reference grid and Auto Color — Blender's random viewport color, so twenty grey blockout boxes stay tellable apart without touching the colors you authored (captures include the display colors while it is on). |
+| **Stage a scene** | Create primitives, then move, rotate and scale them with the transform strip's gizmo. Cast people from **Assets › Characters**: a rigged character you can pose and animate, or a **Capsule figure** — a rigless stand-in with one posture (stand, sit or lie) chosen in Details, for blocking where nobody needs to move their limbs. Capsule figures follow root paths and per-panel placements like any character but refuse pose, IK and motion tools, with the reason in the tooltip. Grid snapping is a preference, not a law — hold `Ctrl` mid-drag to invert it. A bird's-eye Top-View drives 2D root waypoints for character paths. **View ▾** on the viewport bar holds the reference grid and Auto Color — Blender's random viewport color, so twenty grey blockout boxes stay tellable apart without touching the colors you authored (captures include the display colors while it is on). |
 | **Fly the camera** | Right-drag flies (WASD walks, Q/E cranes), middle-drag pans, Alt+drag orbits the selection, click selects, `F` frames — the muscle memory you already have from a 3D editor. Fly, pan and orbit lock the pointer for the hold, so the view can turn past the window edge. Selecting the camera switches to Camera mode. **Look through** in the Shot monitor puts you behind the shot camera with the same bindings; click the on-screen **Shot camera** indicator or press `Esc` to return to the free camera. |
 | **Cut and move the camera** | Add shots on the timeline, draw a dolly rail on the Top-View, set speed, height and crane, and preview the move through the shot camera. Each shot carries a **Target model** (Seedance 2.5, Kling 2, Veo 3, self-hosted MiniMax-H3) and is flagged when the cut runs past that model's limits. |
 | **Export for AI video** | One **Export ▾** menu: a keyframe pack (first/last frame, clip, camera JSON, prompt, README) as a zip, an mp4 of the shot, depth + normal conditioning passes, a storyboard contact sheet, and an OTIO cut list. Seedance 2.5 reads the pack's greybox clip as its white-model reference video, and MiniMax H3, Wan 3.0, LTX Desktop and fal render-to-real accept the same clip. The **Shot Prompt** turns the framing into a structured prompt for the model you picked. |
@@ -85,11 +81,9 @@ npx cozyclay
 bunx cozyclay
 ```
 
-That downloads the built studio and opens it at `http://127.0.0.1:5180/app/`. Nothing to compile, no dependency tree to install. Useful flags: `--port 5200`, `--no-open`, `--no-motion`, `--scene city-block` (start on the bundled starter scene instead of an empty room; the first-run dialog offers the same under **Start from a scene**, and a `.cclayproject` downloaded from the browser tutorial opens with **Open a project**).
+That downloads the built studio and opens it at `http://127.0.0.1:5180/app/`. Nothing to compile, no dependency tree to install. Useful flags: `--port 5200`, `--no-open`, `--no-motion`, `--scene <id>` (start on a bundled starter scene instead of an empty room; the build ships none today, and an unknown id opens the studio as usual).
 
 A global install gives you `cclay`, the same command with less typing. Once a day the launcher checks npm for a newer release and prints a one-line notice after the studio is up; it stays quiet when you're current or offline. `cclay update` installs the latest release, and `--no-update-check` skips the check entirely.
-
-New to the camera? The seven-step tutorial runs inside the Studio on the City Block set: **Settings ▾ → Camera tutorial**, or open `http://127.0.0.1:5180/app/?tutorial=camera`. Each step points at the control it needs and completes only when you actually make the move.
 
 ### From source
 
@@ -207,7 +201,6 @@ Longer reads on the site: [Greybox to AI video](https://cozyclay.org/greybox-to-
 | `npm run test:lifecycle` | Dev-server process lifecycle |
 | `npm run test:ardy` | IK pipeline, range pins and timeline helpers |
 | `node tools/run-tests.mjs` | Every Node verification file (what CI runs) |
-| `npm run qa:browser -- node test/qa-camera-tutorial-browser.mjs` | The seven-step tutorial driven with real input, beacons pinned to their controls |
 | `QA_URL=… CDP_PORT=… OUT=/tmp/count npm run qa:browser -- node tools/qa/studio-control-count.mjs` | Simultaneously visible controls per mode (budget: Scene ≤35 / Camera ≤38 / Motion ≤52) |
 | `cd mcp && npm install && npm run verify` | MCP server over real stdio — all 420 framing combinations |
 | `cd mcp && npm run verify:live` | Live-control protocol against a fake editor (same `npm install` first) |

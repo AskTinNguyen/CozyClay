@@ -101,13 +101,12 @@ const click = (selector) => evaluate(`(() => { const node = document.querySelect
 const session = () => evaluate(`JSON.parse(localStorage.getItem(${JSON.stringify(SESSION_KEY)}) || "null")`);
 const templateIds = () => evaluate("[...document.querySelectorAll('.v2-start-template-grid [data-template-id]')].map((node) => node.dataset.templateId)");
 const checkedMode = () => evaluate("document.querySelector('[data-testid=start-previs-mode] [aria-checked=true]')?.dataset.previsMode ?? null");
-// Fresh first launch: no project session, no scenes, no camera tutorial.
+// Fresh first launch: no project session, no scenes.
 const firstLaunch = async () => {
 	await evaluate(`(() => {
 		localStorage.removeItem(${JSON.stringify(SESSION_KEY)});
 		localStorage.removeItem("${SCENES_STORAGE_KEY}");
 		localStorage.removeItem("${PREVIOUS_SCENES_STORAGE_KEY}");
-		localStorage.setItem("cozyclay.camera-tutorial-terminal.v1", JSON.stringify({ dismissed: true }));
 	})()`);
 	await reload();
 };
@@ -130,21 +129,21 @@ const options = await evaluate("[...document.querySelectorAll('[data-testid=star
 expect("the control offers exactly Storyboard and Animation", options.join("|") === "storyboard:Storyboard|animation:Animation", options.join("|"));
 expect("Animation is selected by default", (await checkedMode()) === "animation");
 const animationTemplates = await templateIds();
-expect("Animation offers every template", animationTemplates.includes("blank-stage") && animationTemplates.includes("sample-city-block"), animationTemplates.join(","));
+const plusCardSelected = "!!document.querySelector('[data-testid=start-new-project-card].selected')";
+expect("Animation offers no bundled starters, only the + card", animationTemplates.length === 0 && await evaluate(plusCardSelected), animationTemplates.join(","));
 await setTheme("dark");
 await screenshot("task-18-new-animation-dark.png");
 await setTheme("light");
 await screenshot("task-18-new-animation-light.png");
 
-// --- Storyboard: the grid narrows to Blank Stage (failure scenario) --------
+// --- Storyboard: the grid keeps only the + card -----------------------------
 await click("[data-previs-mode=storyboard]");
 expect("Storyboard becomes the checked mode", await waitFor("document.querySelector('[data-previs-mode=storyboard]')?.getAttribute('aria-checked') === 'true'"));
 const storyboardTemplates = await templateIds();
-expect("Storyboard does not offer the City Block card", !storyboardTemplates.includes("sample-city-block"), storyboardTemplates.join(","));
-expect("Storyboard shows only Blank Stage", storyboardTemplates.join(",") === "blank-stage", storyboardTemplates.join(","));
-expect("Blank Stage is the selected template", await evaluate("document.querySelector('.v2-start-template.selected')?.dataset.templateId === 'blank-stage'"));
+expect("Storyboard shows no template cards", storyboardTemplates.length === 0, storyboardTemplates.join(","));
+expect("the + card stays the selected blank entry", await evaluate(plusCardSelected));
 const storyboardName = await evaluate("document.querySelector('[data-testid=start-project-name]')?.value");
-expect("the starter-filled name follows the switch to Blank Stage", storyboardName === "Blank Stage", storyboardName);
+expect("the blank name is kept through the switch", storyboardName === "Untitled Project", storyboardName);
 // The narrowest desktop the fixed 232px + 340px columns leave room for.
 await send("Emulation.setDeviceMetricsOverride", { width: 1024, height: 768, deviceScaleFactor: 1, mobile: false });
 const narrow = await evaluate("(() => { const mode = document.querySelector('[data-testid=start-previs-mode]').getBoundingClientRect(); const main = document.querySelector('.v2-start-main').getBoundingClientRect(); return { mode: [mode.left, mode.right], main: [main.left, main.right] }; })()");
@@ -157,9 +156,9 @@ await screenshot("task-18-new-storyboard-dark.png");
 await screenshot("task-18-previs-modes.png");
 await setTheme("light");
 
-// --- Storyboard + Blank Stage + name -> Create -----------------------------
+// --- Storyboard + the + card + name -> Create -------------------------------
+await click("[data-testid=start-new-project-card]");
 await setInput('[data-testid="start-project-name"]', "qa649_storyboard");
-await click("[data-template-id=blank-stage]");
 await click("[data-testid=start-create]");
 expect("Create opens the editor", await waitFor(editorOpen));
 const storyboardSession = await session();
@@ -172,22 +171,22 @@ expect("an edit after reload lands", await waitFor("!!document.querySelector('.p
 const reloadedSession = await session();
 expect("reload keeps previsMode storyboard", reloadedSession?.name === "qa649_storyboard" && reloadedSession?.previsMode === "storyboard", JSON.stringify(reloadedSession));
 
-// --- File > New: Animation + City Block -> animation ------------------------
+// --- File > New: Animation + the + card -> animation -------------------------
 await evaluate("window.confirm = () => true");
 await click("[data-testid=menu-file]");
 expect("File shows New", await waitFor("!!document.querySelector('[data-testid=menubar-new]')"));
 await click("[data-testid=menubar-new]");
 expect("File > New reuses the start screen with the mode control", await waitFor("!!document.querySelector('.v2-start-screen [data-testid=start-previs-mode]')"));
 expect("File > New starts on Animation", (await checkedMode()) === "animation");
-await click("[data-template-id=sample-city-block]");
-expect("City Block is the selected template", await waitFor("document.querySelector('.v2-start-template.selected')?.dataset.templateId === 'sample-city-block'"));
+await click("[data-testid=start-new-project-card]");
+expect("the + card is the selected entry", await waitFor(plusCardSelected));
 await setInput('[data-testid="start-project-name"]', "qa649_animation");
-expect("the City Block name is entered", await waitFor("document.querySelector('[data-testid=start-project-name]')?.value === 'qa649_animation'"));
+expect("the animation name is entered", await waitFor("document.querySelector('[data-testid=start-project-name]')?.value === 'qa649_animation'"));
 await click("[data-testid=start-create]");
-const cityBlockOpened = await waitFor(`${editorOpen} && (document.querySelector('.project-menu-trigger')?.textContent || '').includes('qa649_animation')`, 30000);
-expect("City Block opens in the editor", cityBlockOpened, await evaluate("JSON.stringify({ start: !!document.querySelector('.v2-start-screen'), menu: document.querySelector('.project-menu-trigger')?.textContent, toast: document.querySelector('[role=status]')?.textContent, name: document.querySelector('[data-testid=start-project-name]')?.value, selected: document.querySelector('.v2-start-template.selected')?.dataset.templateId })"));
+const animationOpened = await waitFor(`${editorOpen} && (document.querySelector('.project-menu-trigger')?.textContent || '').includes('qa649_animation')`, 30000);
+expect("the animation project opens in the editor", animationOpened, await evaluate("JSON.stringify({ start: !!document.querySelector('.v2-start-screen'), menu: document.querySelector('.project-menu-trigger')?.textContent, toast: document.querySelector('[role=status]')?.textContent, name: document.querySelector('[data-testid=start-project-name]')?.value, selected: document.querySelector('.v2-start-template.selected')?.dataset.templateId })"));
 const animationSession = await session();
-expect("the City Block project is an animation project", animationSession?.name === "qa649_animation" && animationSession?.previsMode === "animation", JSON.stringify(animationSession));
+expect("the new project is an animation project", animationSession?.name === "qa649_animation" && animationSession?.previsMode === "animation", JSON.stringify(animationSession));
 
 ws.close();
 if (failures > 0) {

@@ -185,20 +185,16 @@ expect("the menu reopens for the sample check", (await openMenu()) === "open");
 await clickAt(await rectCentre('.project-menu [role="menuitem"]:nth-of-type(2)'));
 expect("the start screen opens for the sample check", await waitFor("!!document.querySelector('.project-browser')"));
 await evaluate("[...document.querySelectorAll('.v2-start-nav-item')].find((node) => /New Project|새 프로젝트/.test(node.textContent))?.click()");
-expect("the sample card is offered", await waitFor("!!document.querySelector('[data-template-id=sample-city-block]')"));
-await evaluate("document.querySelector('[data-template-id=sample-city-block]').click()");
+expect("no bundled sample card is offered, the + card is", await waitFor("!document.querySelector('[data-template-id^=sample-]') && !!document.querySelector('[data-testid=start-new-project-card]')"));
+await evaluate("document.querySelector('[data-testid=start-new-project-card]').click()");
 await setInput('[data-testid="start-project-name"]', "sample_create_check");
 expect("the typed name enables Create", await waitFor("document.querySelector('[data-testid=start-create]')?.disabled === false"));
-// A dirty project asks before the starter replaces it; answer yes either way.
+// A dirty project asks before the new one replaces it; answer yes either way.
 await evaluate("window.confirm = () => true");
 await evaluate("document.querySelector('[data-testid=start-create]').click()");
 expect(
-	"Create with the sample card opens the editor under the typed name",
+	"Create with the + card opens the editor under the typed name",
 	await waitFor("!document.querySelector('.project-browser') && (document.querySelector('.project-menu-trigger')?.textContent || '').includes('sample_create_check')"),
-);
-expect(
-	"the sample scene is loaded into the editor",
-	await waitFor("(window.__cozyclay.objects || []).length > 0"),
 );
 
 /* ------------------------ storyboard animation export ------------------ */

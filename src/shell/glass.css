@@ -326,11 +326,6 @@
 		font-size: 11.5px;
 		font-weight: 400;
 	}
-	.app[data-shell="glass"]:not([data-embed-mode]) .studio-project-head .project-menu {
-		top: calc(100% + 6px);
-		left: -6px;
-		z-index: 40;
-	}
 
 	/* --------------------------------------------- viewport overlay rails */
 	/* Overlays fill the open stage between the columns: the mode switch rides

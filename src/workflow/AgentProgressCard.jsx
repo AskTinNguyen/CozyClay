@@ -45,7 +45,7 @@ function SheetViewer({ sheet, onClose }) {
 }
 
 /** `since`: when the latest turn started (null: no turn yet). Drafts and images from before it are not this turn's
- * work, such as the take the camera tutorial compiles at startup. `live`: that turn is still running. */
+ * work, such as a take compiled at startup. `live`: that turn is still running. */
 export function AgentProgressCard({ items, since = null, live = false }) {
 	useSyncExternalStore(subscribeProgress, progressVersion);
 	const [open, setOpen] = useState(null);

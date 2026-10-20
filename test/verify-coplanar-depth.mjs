@@ -119,7 +119,7 @@ check("cube resting on a plane or a cube bottom on the floor is not a conflict",
 
 check("skipped: spheres, capsules, cutouts, meshes, attached, hidden, junk", () => {
 	const base = cube("a", 0, 0, 0);
-	for (const renderer of ["sphere", "capsule", "cutout", "mesh", "car", "chair"]) {
+	for (const renderer of ["sphere", "capsule", "cutout", "mesh"]) {
 		assert.equal(coplanarDepthRanks([base, { ...cube("b", 0, 0, 0), renderer }]).size, 0, renderer);
 	}
 	assert.equal(coplanarDepthRanks([base, cube("b", 0, 0, 0, 1, 1, 1, { attach: { characterId: "x", bone: null } })]).size, 0);

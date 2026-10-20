@@ -2,11 +2,11 @@
  * Set props: low-poly clay maquettes to block against.
  *
  * The set is a bare room and a figure; a shot that needs "something in the
- * world" (a car to lean on, to walk past, to frame behind glass) has nothing
+ * world" (a wall to lean on, to walk past, to frame behind) has nothing
  * to work with. These props are built from primitives in the same clay style
  * as the Room and the character tint, so the whole frame stays one
- * consistent maquette. The hand-built set pieces live in set-pieces.jsx;
- * practical lights and glow in scene-lights.jsx and object-glow.js.
+ * consistent maquette. Practical lights and glow live in scene-lights.jsx
+ * and object-glow.js.
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -25,7 +25,7 @@ import { EffectMarker, EffectsLayer } from "./effects/EffectsLayer.jsx";
 import { EFFECT_KIND } from "./effects/effect-record.js";
 import { applyPoseFade } from "./pose-fade.js";
 import { coplanarDepthRanks } from "./coplanar-depth.js";
-import { autoFlat, Car, Chair, SmallPlane } from "./set-pieces.jsx";
+import { autoFlat } from "./auto-flat.js";
 import { LIGHT_KIND, capPracticalShadows } from "./object-look.js";
 import { SceneLight, useLookRefresh } from "./scene-lights.jsx";
 import { placeObjectLook } from "./scene-light-place.js";
@@ -242,9 +242,6 @@ function SceneObjectContent({ object, depthRank = 0 }) {
 	if (renderer === MESH_KIND) return <ImportedMesh object={object} />;
 	if (renderer === SCULPT_KIND) return <Sculpt object={object} depthRank={depthRank} />;
 	if (renderer === TEXT_KIND) return <TextObject object={object} />;
-	if (renderer === "car") return <Car color={autoColor ?? color} autoColor={autoColor} />;
-	if (renderer === "small-plane") return <SmallPlane autoColor={autoColor} />;
-	if (renderer === "chair") return <Chair autoColor={autoColor} />;
 	if (PRIMITIVE_KINDS.has(renderer)) return <Primitive kind={renderer} color={color} autoColor={autoColor} depthRank={depthRank} />;
 	return null;
 }

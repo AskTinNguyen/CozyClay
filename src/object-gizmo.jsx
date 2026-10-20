@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
-import { GIZMO_LAYER, SHOT_ASPECT, fitAspect } from "./dualview.jsx";
+import { GIZMO_LAYER, SHOT_ASPECT } from "./dualview.jsx";
+import { fitAspect } from "./shot-frame.js";
 import { HANDLE_PROXY_FLAG, claimsPress } from "./gizmo-claim.js";
 import { CUTOUT_KIND, rotatePatch, scalePatch, screenRotatePatch, translatePatch, wrapAngle } from "./scene-objects.js";
 import { dragTravel, dragTurn } from "./held-object-pose.js";

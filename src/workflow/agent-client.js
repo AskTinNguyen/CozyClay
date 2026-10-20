@@ -653,6 +653,10 @@ export function keyRefusedMessage(raw) {
 	return `The model provider refused the credentials${status || reason ? ` (${[status, reason].filter(Boolean).join(": ")})` : ""}.`;
 }
 
+/** True when the agent server itself did not answer: plain `vite` without the sidecar (503/502/404), a dead
+ * port (network error, no status), or an HTML fallback where JSON was expected. Any other status is the server's own answer. */
+export const agentServerUnavailable = (error) => !Number.isFinite(error?.status) || [404, 502, 503].includes(error.status);
+
 export function createHttpTransport({ fetchImpl = globalThis.fetch?.bind(globalThis), surface, capture = track, now = () => performance.now() } = {}) {
 	const activeTurns = new Map();
 	const request = (path, init) => sidecarRequest(fetchImpl, path, init);

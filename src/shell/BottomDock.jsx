@@ -4,9 +4,10 @@ import { logStore } from "./log-store.js";
 import "./dock.css";
 import LibrarySlot from "./LibrarySlot.jsx";
 import BoardSlot from "./BoardSlot.jsx";
+import LensScrub from "./lens-scrub.jsx";
 import { ko } from "../locale.js";
 import Timeline, { timelineTake } from "../motion/timeline.jsx";
-import { DEFAULT_PLAYBACK_SPEED, SHOT_ASPECT_PRESETS, sceneObjectNameDisplayKo } from "../app-stage.jsx";
+import { DEFAULT_PLAYBACK_SPEED, sceneObjectNameDisplayKo } from "../app-stage.jsx";
 
 import { trackFeature } from "../analytics.js";
 import { defaultRailRange } from "../camera-rail-schedule.js";
@@ -390,11 +391,10 @@ const CARD_RATIOS = [
 
 /** The shot camera's card at the dock's right end. The camera itself is drawn
  * into the stage canvas under `.vp-shot-preview`, which sits over the card's
- * frame slot (see glass.css); the card holds its title, ratio and look-through. */
+ * frame slot (see glass.css); the card holds its title, lens, ratio and look-through. */
 function ShotCard() {
-	const { activeShot, shot, shotAspectKey, runStudioAction, enterShotLook, exitShotLook, lookThroughShot, tlFps, embedMode } = useStudioShell();
+	const { activeShot, shot, fovDeg, shotsDomain, shotAspectKey, runStudioAction, enterShotLook, exitShotLook, lookThroughShot, tlFps, embedMode } = useStudioShell();
 	if (embedMode) return null;
-	const ratio = SHOT_ASPECT_PRESETS[shotAspectKey]?.label?.replace(/:1$/, "") ?? shotAspectKey;
 	const frames = activeShot && Number.isFinite(activeShot.startFrame) && Number.isFinite(activeShot.endFrame)
 		? `${activeShot.startFrame}–${activeShot.endFrame} · ${((activeShot.endFrame - activeShot.startFrame + 1) / (tlFps || 24)).toFixed(1)}s`
 		: null;
@@ -403,7 +403,7 @@ function ShotCard() {
 			<header className="dock-shot-head">
 				<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 5.75A1.5 1.5 0 0 1 3.5 4.25h6A1.5 1.5 0 0 1 11 5.75v4.5a1.5 1.5 0 0 1-1.5 1.5h-6A1.5 1.5 0 0 1 2 10.25z M11 7l3-1.5v5L11 9" /></svg>
 				<span className="dock-shot-title">{ko("Shot Camera", "샷 카메라")}</span>
-				<span className="dock-shot-meta">{shot.focalMm} mm · {ratio}</span>
+				<LensScrub fovDeg={fovDeg} sensorHeightMm={shot?.usedSensorHeightMm} shotsDomain={shotsDomain} disabled={!shot} />
 			</header>
 			{/* While the main view looks through this camera the card has nothing
 			    of its own to show (the preview pass is off): it says where the

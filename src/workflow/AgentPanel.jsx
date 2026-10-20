@@ -1,5 +1,5 @@
 import { Fragment, Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { FiAlertTriangle, FiArrowUp, FiCheck, FiChevronRight, FiClock, FiDownload, FiImage, FiMoreHorizontal, FiPaperclip, FiPlus, FiRotateCw, FiX } from "react-icons/fi";
+import { FiAlertTriangle, FiArrowUp, FiCheck, FiChevronRight, FiClock, FiDownload, FiImage, FiMoreHorizontal, FiPaperclip, FiPlus, FiPower, FiRotateCw, FiX } from "react-icons/fi";
 import { ATTACHMENT_FAILED_NOTICE, ATTACHMENT_LIMIT_NOTICE, ATTACHMENT_TYPE_NOTICE, attachmentFilesFromTransfer, attachmentFromFile, transferCarriesFiles } from "./attachment-image.js";
 import { isImeComposing } from "../ime.js";
 import { useStudioShell } from "../shell/studio-shell-context.js";
@@ -10,6 +10,7 @@ import {
 	AGENT_PANEL_WIDTH_MAX,
 	AGENT_PANEL_WIDTH_MIN,
 	AGENT_STATES,
+	agentServerUnavailable,
 	describeActivity,
 	JOB_STATE_COPY,
 	createAgentChatStore,
@@ -81,6 +82,20 @@ function ImageResultCard({ image, onUse, onUndo, onRegenerate, onOpen }) {
 		{/* The card states what the editor actually did: an unacknowledged or
 		    refused action is never drawn as a placement. */}
 		{failed && <p className="agent-image-error" role="alert">{image.apply.error}</p>}
+	</div>;
+}
+
+// Plain `vite` serves the Studio without the agent server, so there is nothing to sign in to. The card says
+// so and how to start it, in place of sign-in buttons that could only fail.
+function OfflineCard({ probing, onRetry }) {
+	return <div className="agent-state-card agent-offline-card" data-agent-card="offline" role="status" aria-live="polite">
+		<FiPower className="agent-offline-icon" size={18} aria-hidden="true" />
+		<h3>{ko("Agent server is not running", "에이전트 서버가 실행 중이 아니에요")}</h3>
+		<p>{ko(<>Start CozyClay with <code>npx cozyclay</code> (or <code>npm run dev</code> in a checkout) to sign in.</>,
+			<>로그인하려면 <code>npx cozyclay</code>(체크아웃에서는 <code>npm run dev</code>)로 CozyClay를 시작하세요.</>)}</p>
+		<button type="button" className="agent-ghost-button agent-offline-retry" onClick={onRetry} disabled={probing} aria-busy={probing}>
+			<FiRotateCw size={11} aria-hidden="true" /> {probing ? ko("Checking…", "확인 중…") : ko("Retry", "다시 확인")}
+		</button>
 	</div>;
 }
 
@@ -278,6 +293,11 @@ export default function AgentPanel({
 	const [menuOpen, setMenuOpen] = useState(false);
 	const [account, setAccount] = useState(null);
 	const [authState, setAuthState] = useState("loading");
+	// "offline" is its own auth state: no agent server answered /agent/models. Retry bumps `probe`.
+	const [probe, setProbe] = useState(0);
+	const [probing, setProbing] = useState(false);
+	// Why the last ChatGPT sign-in click did not start, under its button; a click never fails silently.
+	const [signInError, setSignInError] = useState("");
 	// No model is assumed. Sending a guessed id is how a turn fails upstream with
 	// nothing the panel can explain, so the composer waits for /agent/models.
 	const [models, setModels] = useState([]);
@@ -377,8 +397,8 @@ export default function AgentPanel({
 				if (!cancelled) {
 					store.newSession();
 					// A session id with no record behind it (the pane opened, nothing
-					// was ever sent) is nothing to restore, not a failure.
-					if (error?.status !== 404) setRestoreNotice("Previous conversation could not be restored");
+					// was ever sent) is nothing to restore, not a failure; with no agent server the offline card says why.
+					if (![404, 502, 503].includes(error?.status) && !(error instanceof TypeError || error instanceof SyntaxError)) setRestoreNotice("Previous conversation could not be restored");
 				}
 			} finally {
 				if (!cancelled) setRestoreReady(true);
@@ -451,25 +471,18 @@ export default function AgentPanel({
 	useEffect(() => {
 		let cancelled = false;
 		(async () => {
-			try {
-				const status = await transport.status();
-				if (cancelled) return;
-				setAccount(status);
-				setAuthState(sessionState(status));
-			} catch {
-				if (!cancelled) setAuthState("signed-out");
-			}
-			try {
-				const advertised = await transport.models();
-				if (cancelled) return;
-				if (!applyModelList(advertised)) { setModelsState("failed"); return; }
-			} catch {
-				// An unanswered model list is a visible state, not a silent guess.
-				if (!cancelled) setModelsState("failed");
-			}
+			const [status, advertised] = await Promise.allSettled([transport.status(), transport.models()]);
+			if (cancelled) return;
+			setProbing(false);
+			// No agent server behind the page: the panel says so instead of offering sign-ins that cannot work.
+			if (advertised.status === "rejected" && agentServerUnavailable(advertised.reason)) { setAuthState("offline"); setModelsState("failed"); return; }
+			if (status.status === "fulfilled") { setAccount(status.value); setAuthState(sessionState(status.value)); } else setAuthState("signed-out");
+			// An unanswered model list is a visible state, not a silent guess.
+			if (advertised.status === "rejected" || !applyModelList(advertised.value)) setModelsState("failed");
 		})();
 		return () => { cancelled = true; };
-	}, [applyModelList, sessionState, transport]);
+	}, [applyModelList, probe, sessionState, transport]);
+	const retryServer = useCallback(() => { setProbing(true); setProbe((count) => count + 1); }, []);
 
 	// Sign-in finishes in another window. The panel picks the session up when
 	// this document is looked at again, or when the host announces the return —
@@ -652,10 +665,13 @@ export default function AgentPanel({
 	// "ready" with nothing it may send (#379).
 	const signIn = useCallback(async () => {
 		setAuthState("signing-in");
+		setSignInError("");
 		try {
 			await transport.signIn();
 			await refreshProviderState();
-		} catch {
+		} catch (error) {
+			if (agentServerUnavailable(error)) { setAuthState("offline"); return; }
+			setSignInError(error?.message || ko("Sign-in could not start.", "로그인을 시작하지 못했어요."));
 			setAuthState("signed-out");
 		}
 	}, [refreshProviderState, transport]);
@@ -826,7 +842,8 @@ export default function AgentPanel({
 						{resetLabel && <span className="agent-account-reset">resets in {resetLabel}</span>}
 					</div>}
 					<button type="button" role="menuitem" onClick={clearContext}>Clear context</button>
-					<button type="button" role="menuitem" className="agent-menu-keys" aria-expanded={keysOpen} onClick={toggleProviderKeys}>Connect a model…</button>
+					<button type="button" role="menuitem" className="agent-menu-keys" aria-expanded={keysOpen} onClick={toggleProviderKeys}
+						disabled={authState === "offline"} title={authState === "offline" ? ko("The agent server is not running", "에이전트 서버가 실행 중이 아니에요") : undefined}>Connect a model…</button>
 					{account?.signedIn && <button type="button" role="menuitem" onClick={signOut}>Sign out</button>}
 				</div>}
 			</span>
@@ -838,15 +855,18 @@ export default function AgentPanel({
 
 		{/* An inline section, not a modal: the panel stays the one place the
 		    conversation and the credentials it runs on are managed. */}
-		{keysOpen && <LoginPanel onClose={() => setKeysOpen(false)} onChatGPT={signIn} onChanged={refreshProviderState} />}
+		{keysOpen && authState !== "offline" && <LoginPanel onClose={() => setKeysOpen(false)} onChatGPT={signIn} onChanged={refreshProviderState} />}
 
 		<div className="agent-transcript" ref={transcriptRef} aria-live="polite" aria-label="Conversation" data-agent-transcript="true">
 			{authState === "signed-out" && <div className="agent-state-card" data-agent-card="signed-out">
 				<h3>Connect a model</h3>
 				<p>Sign in with ChatGPT, or log in to another provider with a subscription, an API key, or your own proxy server. Sign-in happens in your browser — no token is ever stored in this page.</p>
 				<button type="button" className="agent-primary-button agent-signin" onClick={signIn}>Sign in with ChatGPT</button>
+				{signInError && <p className="agent-key-error agent-signin-error" role="alert">{signInError}</p>}
 				<button type="button" className="agent-ghost-button agent-use-key" onClick={openProviderKeys}>Log in with another provider</button>
 			</div>}
+
+			{authState === "offline" && <OfflineCard probing={probing} onRetry={retryServer} />}
 
 			{authState === "signing-in" && <div className="agent-state-card" data-agent-card="signing-in">
 				<span className="agent-spinner" aria-hidden="true" />

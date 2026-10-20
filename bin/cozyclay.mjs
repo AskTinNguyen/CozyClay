@@ -147,9 +147,7 @@ const HELP = `cozyclay - browser-based 3D staging studio
   cclay update              install the latest cozyclay globally (npm install -g)
   npx cozyclay --port 5200  serve on another port
   npx cozyclay --no-open    do not open a browser
-  npx cozyclay --scene city-block
-                            open the studio on a bundled starter scene
-                            (the set from the cozyclay.org tutorial)
+  npx cozyclay --scene <id> open the studio on a bundled starter scene
   npx cozyclay --no-star    never ask about starring the repo
   npx cozyclay --no-update-check
                             do not look for a newer release
@@ -483,11 +481,11 @@ server.listen({ port: opts.port, host: "127.0.0.1", ipv6Only: false }, () => {
 	// The package exists to open the studio, which the site serves from /app/.
 	// Landing on "/" would greet someone who just typed `npx cozyclay` with a
 	// marketing page.
-	// --scene <id> continues from a bundled starter scene (the landing-page
-	// tutorial hands people this exact command). Only a bare id is accepted
-	// here; the studio resolves it to dist/scenes/<id>.cclayproject.
+	// --scene <id> opens a bundled starter scene. Only a bare id is accepted
+	// here; the studio resolves it to dist/scenes/<id>.cclayproject and ignores
+	// an id it does not ship, with a console warning.
 	const sceneParam = opts.scene && /^[a-z0-9-]+$/i.test(opts.scene) ? `?scene=${encodeURIComponent(opts.scene)}` : "";
-	if (opts.scene && !sceneParam) console.error(`cozyclay: --scene expects a starter id such as city-block (got ${opts.scene}); opening the studio without it.`);
+	if (opts.scene && !sceneParam) console.error(`cozyclay: --scene expects a bare starter id (got ${opts.scene}); opening the studio without it.`);
 	const url = `http://127.0.0.1:${opts.port}/app/${sceneParam}`;
 	console.log(`CozyClay is running at ${url}`);
 	console.log("Use a Chromium-based browser — Safari and Firefox are not supported.");

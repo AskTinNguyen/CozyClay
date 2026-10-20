@@ -204,7 +204,7 @@ function commandFixture({ frame = 8, still = false } = {}) {
 	const host = { workspaceId: "workspace", documentEpoch: "document", sceneId: "scene-1", sceneEpoch: "epoch" };
 	const state = {
 		shots: [{ ...createShot("Shot 1", 0, 15, [{ id: "key-1", frame: 0, framing: { pos: { x: 0, y: 1.6, z: 5 }, yaw: 0, pitch: 0, fovDeg: 40 } }], { mode: "rail", cameraRail: [{ x: -2, z: 4 }, { x: 2, z: 4 }] }), id: "shot-1", ...(still ? { kind: "still" } : {}) }],
-		objects: [{ ...createSceneObject("sphere"), id: "parent-1" }, { ...createSceneObject("cube"), id: "object-1", parent: "parent-1" }, { ...createSceneObject("chair"), id: "group-2" }],
+		objects: [{ ...createSceneObject("sphere"), id: "parent-1" }, { ...createSceneObject("cube"), id: "object-1", parent: "parent-1" }, { ...createSceneObject("cylinder"), id: "group-2" }],
 		characters: [createCharacterEntry({ id: 'actor', subject: 'Ada', layer: { waypoints: [] } }), createCharacterEntry({ id: 'actor-other' })], customPoses: [], frame, frameCount: 48, selectedObjectId: null, activeCharacterId: "actor",
 		promptBlockCount: 0, generating: false, motionReady: true, exporting: false, canExportVideo: true,
 		scenes: [{ id: "scene-1", name: "ONE" }, { id: "scene-2", name: "TWO" }], activeSceneId: "scene-1",

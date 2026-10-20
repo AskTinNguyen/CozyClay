@@ -49,9 +49,6 @@ const OBJECT_GLYPHS = {
 	cylinder: "M5 7c0-1.38 3.13-2.5 7-2.5s7 1.12 7 2.5-3.13 2.5-7 2.5S5 8.38 5 7z M5 7v10c0 1.38 3.13 2.5 7 2.5s7-1.12 7-2.5V7",
 	cone: "M12 3.5 5 17 M12 3.5 19 17 M5 17c0 1.38 3.13 2.5 7 2.5s7-1.12 7-2.5",
 	plane: "M12 7.5 21 12l-9 4.5L3 12z",
-	chair: "M7 3.5h10v8.5H7z M5.5 12h13v3h-13z M7 15v5.5 M17 15v5.5",
-	car: "M3 15.5v-3l2.5-.5 2.5-4h8l3 4 2 .5v3z M6 15.5a1.75 1.75 0 1 0 3.5 0 M14.5 15.5a1.75 1.75 0 1 0 3.5 0 M8 12h10",
-	"small-plane": "M12 3v18 M3 11.5l9-2 9 2v2l-9-1-9 1z M8.5 19.5 12 18.5l3.5 1",
 };
 
 const STORAGE_FOLDER = "__storage";
@@ -368,12 +365,11 @@ function matchesQuery(label, query) {
 	return !query || String(label).toLowerCase().includes(query);
 }
 
-/** Folder ids in display order. Basic Shapes and Sets split the object
- * catalogue by its own groups; Props holds what the user imported. */
+/** Folder ids in display order. Basic Shapes holds the object catalogue's
+ * primitives; Props holds what the user imported. */
 const FOLDERS = [
 	{ id: "basic", label: () => ko("Basic Shapes", "기본 도형") },
 	{ id: "characters", label: () => ko("Characters", "인물") },
-	{ id: "sets", label: () => ko("Sets", "세트") },
 	{ id: "props", label: () => ko("Props", "소품") },
 	{ id: "cameras", label: () => ko("Cameras", "카메라") },
 	{ id: "motions", label: () => ko("Motions", "모션") },
@@ -389,7 +385,7 @@ function catalogueTile(entry, props) {
 			key={key}
 			assetKey={key}
 			label={label}
-			type={entry.group === "Primitives" ? ko("Shape", "도형") : ko("Set piece", "세트 소품")}
+			type={ko("Shape", "도형")}
 			title={ko(`Drag ${entry.label} into the scene, or double-click to place it at the origin`, `${label}을(를) 씬에 드래그하거나 더블클릭해 원점에 놓으세요`)}
 			preview={<ObjectPreview kind={entry.kind} color={entry.color} />}
 			selected={props.selectedKey === key}
@@ -408,10 +404,9 @@ export function FolderGrid({ folder, query, ...props }) {
 	const { imageAssetIds, meshAssetIds, shots = [], takeVersions = [], poses = [], onShotOpen, onTakeOpen, selectedKey, onSelect } = props;
 	let tiles = [];
 	let empty = null;
-	if (folder === "basic" || folder === "sets") {
-		const group = folder === "basic" ? "Primitives" : "Set pieces";
+	if (folder === "basic") {
 		tiles = OBJECT_LIBRARY
-			.filter((entry) => entry.group === group && matchesQuery(displayObjectLabel(entry.label), query))
+			.filter((entry) => entry.group === "Primitives" && matchesQuery(displayObjectLabel(entry.label), query))
 			.map((entry) => catalogueTile(entry, props));
 	} else if (folder === "characters") {
 		tiles = CHARACTER_ASSETS.filter((asset) => matchesQuery(asset.label, query)).map((asset) => {

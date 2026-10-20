@@ -173,8 +173,8 @@ await check("object.sculpt edits patch one part in place as one undo, and are re
 await check("object.sculpt can hang the new sculpt off a parent", () => {
 	const f = objectsFixture();
 	try {
-		const id = ok(f.run("object.sculpt", { recipe: pillar, parent: "chair" })).affectedIds[0];
-		assert.equal(f.objects.read().find((entry) => entry.id === id).parent, "chair");
+		const id = ok(f.run("object.sculpt", { recipe: pillar, parent: "cylinder" })).affectedIds[0];
+		assert.equal(f.objects.read().find((entry) => entry.id === id).parent, "cylinder");
 	} finally {
 		f.dispose();
 	}

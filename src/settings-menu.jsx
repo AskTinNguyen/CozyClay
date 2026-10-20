@@ -7,8 +7,7 @@ import PreferencesDialog from "./shell/PreferencesDialog.jsx";
 // not belong on the Save/Export row as bare toggles.
 //
 // The trigger now opens the v2 Preferences dialog. The old language strings stay
-// here because the locale contract and the camera-tutorial source contract both
-// treat this file as the Settings entry point.
+// here because the locale contract treats this file as the Settings entry point.
 const LANGUAGES = [
 	{ id: "en", label: "English", action: "Switch to English" },
 	{ id: "ko", label: "한국어", action: "한국어로 전환" },
@@ -21,23 +20,6 @@ export default function SettingsMenu() {
 		setOpen(false);
 		triggerRef.current?.focus();
 	}, []);
-	const openCameraTutorial = useCallback(() => {
-		window.dispatchEvent(new CustomEvent("cozyclay:camera-tutorial", { detail: { open: true } }));
-		setOpen(false);
-	}, []);
-	const cameraTutorial = (
-		<>
-			<h4>{ko("Help", "도움말")}</h4>
-			<button
-				type="button"
-				data-testid="settings-camera-tutorial"
-				title={ko("Learn the camera in seven steps", "일곱 단계로 카메라 익히기")}
-				onClick={openCameraTutorial}
-			>
-				{ko("Camera tutorial", "카메라 튜토리얼")}
-			</button>
-		</>
-	);
 
 	// First-run cue: the studio starts in English even on a Korean browser, so
 	// the only visible hint that Korean exists used to be the old locale button.
@@ -64,7 +46,6 @@ export default function SettingsMenu() {
 				open={open}
 				onClose={close}
 				initialSection="Appearance"
-				cameraTutorial={cameraTutorial}
 			/>
 		</div>
 	);

@@ -153,12 +153,6 @@ try {
 		if (frame.method === "Fetch.requestPaused") heldModelRequests.push(frame.params.requestId);
 	});
 	await send("Page.enable");
-	await send('Page.addScriptToEvaluateOnNewDocument', { source: `
-		// This suite owns the scene-loading race it is testing. A fresh profile
-		// would otherwise auto-open the first-run camera tutorial (#586), whose
-		// asynchronous starter remounts the canvas underneath these commands.
-		localStorage.setItem("cozyclay.camera-tutorial-terminal.v1", JSON.stringify({ dismissed: true }));
-	` });
 	await send("Page.navigate", { url: `http://127.0.0.1:${vitePort}/app/` });
 
 	client = new Client({ name: "cozyclay-live-editor-model-verify", version: "1.0.0" });

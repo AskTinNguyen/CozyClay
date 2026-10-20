@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
+import { fitAspect } from "./shot-frame.js";
 
 /**
  * Two live viewports out of one scene.
@@ -103,17 +104,6 @@ const EDGE_FRAGMENT = `
 		gl_FragColor = vec4(edgeColor, edge * 0.38 * distanceFade);
 	}
 `;
-
-/** largest centred sub-rect of `rect` with the given aspect */
-export function fitAspect(rect, aspect) {
-	let w = rect.w;
-	let h = w / aspect;
-	if (h > rect.h) {
-		h = rect.h;
-		w = h * aspect;
-	}
-	return { x: rect.x + (rect.w - w) / 2, y: rect.y + (rect.h - h) / 2, w, h };
-}
 
 export function DualRender({ stageRef, mainRef, insetRef, shotPreviewRef, shotCamRef, planCamRef, poserCamRef, editorCamRef, ikMode = false, planIsMain, playMode = false, lookThrough = false, insetCollapsed = false, planZoom = 1, shotAspect = SHOT_ASPECT, editorLook = false }) {
 	const invalidate = useThree((state) => state.invalidate);
@@ -479,6 +469,14 @@ export function DualRender({ stageRef, mainRef, insetRef, shotPreviewRef, shotCa
 				// can fly the recording lens with the same bindings as the free camera.
 				// The QA hook (`window.__cozyclay.setLookThrough`) draws the same path.
 				// Look-through is the recording lens: it keeps the authored stage.
+				// The pane is the open stage less the rails (shell.css), so the
+				// canvas around it is bars too: clear it, or the last full-canvas
+				// draw stays there and reads as picture the export does not have.
+				if (lookThrough) {
+					gl.setScissorTest(false);
+					gl.setClearColor(letterbox, 1);
+					gl.clear(true, true, false);
+				}
 				draw(shotCam, shotPane, fitAspect(shotPane, shotAspect), !navigatingCamera);
 				if (!navigatingCamera || redrawFrozenPanes) drawVisibleInset(planCam, planPane, null, false);
 				drawPreviewCard();

@@ -9,9 +9,9 @@ const f = stageFixture();
 try {
   const first = f.run('stage.set', { style: 'Outgoing room' });
   const beforeRevision = f.revision.current;
-  Object.assign(f.scope, { tutorialProjectEpochRef: { current: 0 }, tutorialSeedEpochRef: { current: null }, exportShotIdRef: { current: null } });
+  Object.assign(f.scope, { exportShotIdRef: { current: null } });
   const renderUpdates = [];
-  for (const name of ['setTutorialSeedPending', 'setCameraTutorial', 'setCameraTutorialHandoff', 'setSceneObjects', 'setRigMountEpoch', 'setHasCharSheet', 'setSelectedPromptId', 'setRailDraw', 'setActiveWaypointId', 'setPendingWaypointFrame']) {
+  for (const name of ['setSceneObjects', 'setRigMountEpoch', 'setHasCharSheet', 'setSelectedPromptId', 'setRailDraw', 'setActiveWaypointId', 'setPendingWaypointFrame']) {
     f.scope[name] = value => renderUpdates.push([name, value]);
   }
   const dependencies = { appContext: f.scope.appContext, createSceneStage, createSceneHistoryStore, withCommandHistory, createIkState,

@@ -81,7 +81,6 @@ await navigate(`${origin}/favicon.ico`);
 await send("Storage.clearDataForOrigin", { origin, storageTypes: "all" });
 await evaluate(`localStorage.setItem("cozyclay.scenes.v4", ${JSON.stringify(v4Raw)});
 	localStorage.setItem("cozyclay.project-session.v1", JSON.stringify({ name: "V5 QA", updatedAt: Date.now() }));
-	localStorage.setItem("cozyclay.camera-tutorial-terminal.v1", JSON.stringify({ completed: true }));
 	true`);
 assert.equal(await evaluate(`localStorage.getItem("cozyclay.scenes.v5")`), null, "no v5 key before the studio opens");
 // The migration is written by the studio's scene reader during startup. Hook

@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ko, isKo } from "./locale.js";
 import { buildHierarchyNodes } from "./hierarchy-model.js";
 import { sceneObjectIdFromHierarchy } from "./scene-objects.js";
 import { CatalogueEntries, displayObjectLabel } from "./object-catalog.jsx";
 import { Dropdown } from "./ui.jsx";
+import { usePopover } from "./popover.js";
 import { isImeComposing } from "./ime.js";
 import "./hierarchy-panel.css";
 
@@ -97,6 +99,7 @@ function ScenePill({ scenes, activeSceneId, onSceneSelect, onSceneCreate, onRena
 				value={activeSceneId}
 				options={options}
 				ariaLabel={ko("Select scene", "장면 선택")}
+				menuClassName="hierarchy-scene-menu"
 				onChange={(value) => {
 					if (value === NEW_SCENE_OPTION) onSceneCreate?.();
 					else if (value !== activeSceneId) onSceneSelect?.(value);
@@ -194,11 +197,9 @@ function RowContextMenu({ menu, onClose, onAction, onAddObject }) {
 	const [deleteArmed, setDeleteArmed] = useState(false);
 	useEffect(() => setDeleteArmed(false), [menu]);
 
+	usePopover(menu, onClose, [rootRef]);
 	useEffect(() => {
 		if (!menu) return undefined;
-		const onDocDown = (event) => {
-			if (rootRef.current && !rootRef.current.contains(event.target)) onClose();
-		};
 		const onKey = (event) => {
 			if (event.key !== "Escape") return;
 			// Capture phase + stopImmediatePropagation: closing the menu must
@@ -206,12 +207,8 @@ function RowContextMenu({ menu, onClose, onAction, onAddObject }) {
 			event.stopImmediatePropagation();
 			onClose();
 		};
-		document.addEventListener("mousedown", onDocDown);
 		window.addEventListener("keydown", onKey, true);
-		return () => {
-			document.removeEventListener("mousedown", onDocDown);
-			window.removeEventListener("keydown", onKey, true);
-		};
+		return () => window.removeEventListener("keydown", onKey, true);
 	}, [menu, onClose]);
 
 	if (!menu) return null;
@@ -221,8 +218,11 @@ function RowContextMenu({ menu, onClose, onAction, onAddObject }) {
 		left: Math.max(4, Math.min(menu.x, window.innerWidth - 244)),
 		top: Math.max(4, Math.min(menu.y, window.innerHeight - menu.height)),
 	};
-	return (
-		<div className="hierarchy-context-menu" role="menu" style={style} ref={rootRef}>
+	// Portaled: the glass column clips and blurs its children, so an in-place
+	// menu was cut at the column edge and sat under body-level popovers. The
+	// display:contents layer keeps the `.v2-outliner` style scope.
+	return createPortal(
+		<div className="v2-outliner v2-outliner-layer"><div className="hierarchy-context-menu" role="menu" style={style} ref={rootRef}>
 			{menu.kind === "scene" ? (
 				<>
 					<button type="button" role="menuitem" className="hierarchy-context-item" onClick={() => onAction("rename", menu.id)}>
@@ -292,7 +292,8 @@ function RowContextMenu({ menu, onClose, onAction, onAddObject }) {
 			) : (
 				<CatalogueEntries onPick={onAddObject} />
 			)}
-		</div>
+		</div></div>,
+		document.body,
 	);
 }
 

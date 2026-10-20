@@ -59,8 +59,7 @@ const evaluate = async (expression) => {
 await send("Page.enable");
 // QA_LOCALE=ko runs the same contract against the Korean labels.
 const LOCALE = process.env.QA_LOCALE === "ko" ? "ko" : "en";
-// A fresh profile would open the first-run camera tutorial instead of the chooser.
-await evaluate(`localStorage.setItem("cozyclay.locale", ${JSON.stringify(LOCALE)}); localStorage.setItem("cozyclay.camera-tutorial-terminal.v1", JSON.stringify({ dismissed: true }))`);
+await evaluate(`localStorage.setItem("cozyclay.locale", ${JSON.stringify(LOCALE)})`);
 const loaded = waitForPageLoad();
 await send("Page.reload", { ignoreCache: true });
 await loaded;
@@ -103,8 +102,8 @@ const setInput = (selector, value) => evaluate(`(() => {
 expect("the first-run v2 project chooser renders", await waitFor("!!document.querySelector('.v2-start-screen.project-browser-backdrop.startup')"));
 expect("the chooser exposes the new-project preview", await waitFor("!!document.querySelector('[data-testid=start-project-preview]')"));
 expect("the chooser has a named Create action", await waitFor("!!document.querySelector('[data-testid=start-create]')"));
-// Blank Stage is the blank-project path that opens the guide (Sample City Block is a starter).
-await evaluate("document.querySelector('[data-template-id=blank-stage]')?.click()");
+// The "+ New project" card is the blank-project path that opens the guide.
+await evaluate("document.querySelector('[data-testid=start-new-project-card]')?.click()");
 await setInput('[data-testid="start-project-name"]', "guide_project");
 await evaluate("document.querySelector('[data-testid=start-create]').click()");
 expect("creating from the preview opens the editor", await waitFor("!document.querySelector('.project-browser') && !!document.querySelector('.timeline')"));
@@ -156,18 +155,6 @@ for (let index = 0; index < 4; index += 1) {
 }
 await evaluate("document.querySelector('.first-success-guide-close').click()");
 expect("the storyboard guide can be dismissed", await waitFor("!document.querySelector('.first-success-guide')"));
-
-// Failure scenario: the ?tutorial= door stays shut in a storyboard project.
-// Clear the dismissed marker so only the storyboard gate can keep the tutorial shut.
-await evaluate('localStorage.removeItem("cozyclay.camera-tutorial-terminal.v1")');
-const reopened = waitForPageLoad();
-await send("Page.navigate", { url: new URL("?tutorial=camera", await evaluate("location.href")).href });
-await reopened;
-expect("the storyboard project reopens through ?tutorial=camera", await waitFor("!document.querySelector('.v2-start-screen') && !!document.querySelector('.timeline') && document.querySelector('.app')?.dataset.previsMode === 'storyboard'", 30000));
-await evaluate("new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))");
-const tutorial = await evaluate("({ href: location.search, panel: !!document.querySelector('[data-testid=camera-tutorial]'), beacon: !!document.querySelector('[data-testid=camera-tutorial-beacon], .tutorial-beacon'), step: document.querySelector('.app')?.dataset.tutorialStep ?? null, source: window.__cozyclayTutorialSource ?? null })");
-console.log(JSON.stringify(tutorial));
-expect("?tutorial=camera does not render the camera tutorial in a storyboard project", tutorial.href.includes("tutorial=camera") && !tutorial.panel && !tutorial.beacon && tutorial.step === null && tutorial.source === null, JSON.stringify(tutorial));
 
 ws.close();
 if (failures > 0) {

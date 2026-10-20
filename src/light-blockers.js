@@ -19,9 +19,9 @@
 import { practicalShadows, withShadowCapWarnings } from "./object-look.js";
 import { isEffectivelyHidden } from "./object-hidden.js";
 
-/** Renderers whose meshes cast shadows (props.jsx, set-pieces.jsx, sculpts, imported meshes).
+/** Renderers whose meshes cast shadows (props.jsx primitives, sculpts, imported meshes).
  * A plane and a cutout are cards: nothing can be inside them. */
-const CASTERS = new Set(["cube", "sphere", "capsule", "cylinder", "cone", "car", "chair", "small-plane", "sculpt", "mesh"]);
+const CASTERS = new Set(["cube", "sphere", "capsule", "cylinder", "cone", "sculpt", "mesh"]);
 const DEG = Math.PI / 180;
 const EPS = 1e-6;
 const MAX_WARNINGS = 4;

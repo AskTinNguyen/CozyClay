@@ -80,14 +80,14 @@ test('cast: selection changes only the layer projection, never the inspected doc
 test('cast: every patchable path matches patch_elements normalization and field receipts', async () => {
   const values = { position: { x: 500, y: -3, z: 2 }, rot: 380, scale: 8, subject: 'A lead', hidden: true,
     model: 'x-bot-tpose', posture: 'lie', tint: '#123456', identityImage: 'data:image/png;base64,QQ==', pose: 'pose-wave',
-    parent: 'car' };
+    parent: 'cylinder' };
   assert.deepEqual(Object.keys(values).map(key => `character.${key}`).sort(), [...STUDIO_PATCHABLE_PATHS.character].sort());
   for (const [path, value] of Object.entries(values)) {
     const a = castFixture(), b = castFixture();
     try {
       owned(a); owned(b);
       // A character groups under an object that exists (#655).
-      if (path === 'parent') for (const f of [a, b]) ok(f.run('object.add', { kind: 'car' }));
+      if (path === 'parent') for (const f of [a, b]) ok(f.run('object.add', { kind: 'cylinder' }));
       const set = path.split('.').reduceRight((value, key) => ({ [key]: value }), value);
       const direct = ok(a.run('character.set', { id: 'actor-a', set }, 'agent'));
       const alias = ok(await b.call('patch_elements', b.request('patch_elements', { ops: [{ target: { kind: 'character', id: 'actor-a' }, set: { [path]: value } }] })));
@@ -131,23 +131,23 @@ test('cast: moving an object carries the characters grouped under it, in one und
   const f = castFixture();
   try {
     owned(f);
-    ok(f.run('object.add', { kind: 'car', placement: { x: 0, z: 0 } }));
-    ok(f.run('object.add', { kind: 'cube', parent: 'car', placement: { x: 0, z: 1 } }));
-    ok(f.run('character.update', { characterId: 'actor-a', patch: { x: 0.2, z: 0.5, parent: 'car' } }));
+    ok(f.run('object.add', { kind: 'cylinder', placement: { x: 0, z: 0 } }));
+    ok(f.run('object.add', { kind: 'cube', parent: 'cylinder', placement: { x: 0, z: 1 } }));
+    ok(f.run('character.update', { characterId: 'actor-a', patch: { x: 0.2, z: 0.5, parent: 'cylinder' } }));
     ok(f.run('character.update', { characterId: 'actor-b', patch: { x: 0.1, z: 1, parent: 'cube' } }));
     const seat = () => f.cast.read().map(({ id, x, y, z }) => ({ id, x, y, z }));
     const before = seat();
-    const moved = ok(f.run('object.update', { id: 'car', patch: { x: 2, y: 0.5, z: -1 } }));
+    const moved = ok(f.run('object.update', { id: 'cylinder', patch: { x: 2, y: 0.5, z: -1 } }));
     const after = seat();
     assert.deepEqual(after.find(row => row.id === 'actor-a'), { id: 'actor-a', x: 2.2, y: 0.5, z: -0.5 });
     // A rider of a part rides the part, which the car's move carried along.
     assert.deepEqual(after.find(row => row.id === 'actor-b'), { id: 'actor-b', x: 2.1, y: 0.5, z: 0 });
     assert.equal(f.run('edit.undo', { receiptId: moved.receiptId }).status, 'undone');
     assert.deepEqual(seat(), before);
-    assert.equal(f.store.current.objects.find(row => row.id === 'car').x, 0);
+    assert.equal(f.store.current.objects.find(row => row.id === 'cylinder').x, 0);
     // Ungrouped, the same move leaves the character where it stands.
     ok(f.run('character.update', { characterId: 'actor-a', patch: { parent: null } }));
-    ok(f.run('object.update', { id: 'car', patch: { x: 3 } }));
+    ok(f.run('object.update', { id: 'cylinder', patch: { x: 3 } }));
     assert.equal(f.cast.read().find(row => row.id === 'actor-a').x, 0.2);
   } finally { f.dispose(); }
 });

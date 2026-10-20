@@ -141,7 +141,6 @@ const expect = (name, condition, detail = "") => {
 	if (!condition) failures += 1;
 };
 
-await evaluate(`localStorage.setItem("cozyclay.camera-tutorial-terminal.v1", JSON.stringify({ dismissed: true }))`);
 await reload();
 expect("the editor opens", await waitFor("!document.querySelector('.v2-start-screen') && !!document.querySelector('.timeline') && !!window.__cozyclay?.runStudioAction", 30000));
 

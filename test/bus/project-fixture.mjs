@@ -44,10 +44,9 @@ export function projectFixture({ singleScene = false, session = { name: 'Heist' 
     dirtyRef: { current: false }, saveBlockedRef: { current: false }, saveFailureToastRef: { current: false },
     projectHandleRef: { current: null }, projectSnapshotRef: { current: null },
     projectStateRef: { current: { workspaceLayout: null, customPoses: [] } }, customPoses: [],
-    tutorialProjectEpochRef: { current: 0 }, tutorialSeedEpochRef: { current: null }, tutorialStarterRef: { current: false },
-    exportShotIdRef: { current: null }, playgroundMode: false, cameraTutorialQuery: false,
+    exportShotIdRef: { current: null }, playgroundMode: false,
   });
-  for (const name of ['setTutorialSeedPending', 'setCameraTutorial', 'setCameraTutorialHandoff', 'setRigMountEpoch', 'setHasCharSheet', 'setSelectedPromptId', 'setRailDraw', 'setActiveWaypointId', 'setPendingWaypointFrame', 'setCustomPoses', 'setFirstSuccessGuideOpen']) f.scope[name] = () => {};
+  for (const name of ['setRigMountEpoch', 'setHasCharSheet', 'setSelectedPromptId', 'setRailDraw', 'setActiveWaypointId', 'setPendingWaypointFrame', 'setCustomPoses', 'setFirstSuccessGuideOpen']) f.scope[name] = () => {};
   // These seams model React's synchronous live publication, not scene changes.
   f.scope.setShots = shots => app.patchLive({ shots });
   f.scope.setCharacters = characters => { app.publishCharacters(characters); app.patchLive({ characters }); };

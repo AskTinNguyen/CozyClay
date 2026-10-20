@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+Removed
+
+- The built-in set pieces: Chair, Car and Plane (aircraft), with their Set
+  pieces group, Content › Sets folder and renderers. An old project that has
+  one opens it as a plain cube with the same transform and size.
+- The City Block starter scene and its thumbnails. The chooser's "+ New
+  project" card is now the one blank entry; the Blank Stage card, the Samples
+  page and the category tabs are gone. `--scene <id>` and `?scene=` stay; an
+  unknown id is ignored with a console warning.
+- The camera tutorial: the Studio overlay, Help › Tutorial, the Settings and
+  Learn entries, `?tutorial=camera`, the first-shot handoff, the `tutorial:*`
+  analytics events, and the seven-step tutorial and project download on the
+  home-page playground (which now opens a blank stage).
+
 ## 3.0.3 - 2026-10-20
 
 Grasp round 2, from a user's own cup, ball and steering-wheel sessions on 3.0.2.

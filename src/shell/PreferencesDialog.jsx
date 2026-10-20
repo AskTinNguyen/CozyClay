@@ -114,7 +114,7 @@ function ThemeControls() {
 }
 
 function preferenceSection(section, props) {
-	const { autoColor, setAutoColor, analyticsOptOut, setAnalyticsOptOutState, gridView, setGridView, cameraTutorial } = props;
+	const { autoColor, setAutoColor, analyticsOptOut, setAnalyticsOptOutState, gridView, setGridView } = props;
 	const languageControls = (
 		<div className="v2-preferences__language-controls">
 			{LANGUAGES.map((language) => (
@@ -158,7 +158,6 @@ function preferenceSection(section, props) {
 							/>
 						</PreferenceRow>
 					</PreferenceSection>
-					{cameraTutorial && <div className="v2-preferences__help">{cameraTutorial}</div>}
 				</>
 			);
 		case "Viewport":
@@ -181,7 +180,7 @@ function preferenceSection(section, props) {
 	}
 }
 
-export default function PreferencesDialog({ open, onClose, initialSection = "Appearance", cameraTutorial }) {
+export default function PreferencesDialog({ open, onClose, initialSection = "Appearance" }) {
 	const dialogRef = useRef(null);
 	const searchRef = useRef(null);
 	const closeRef = useRef(onClose);
@@ -233,7 +232,7 @@ export default function PreferencesDialog({ open, onClose, initialSection = "App
 	}, [open, initialSection]);
 
 	if (!open || typeof document === "undefined") return null;
-	const currentProps = { autoColor, setAutoColor, analyticsOptOut, setAnalyticsOptOutState, gridView, setGridView, cameraTutorial };
+	const currentProps = { autoColor, setAutoColor, analyticsOptOut, setAnalyticsOptOutState, gridView, setGridView };
 
 	return createPortal(
 		<div className="v2-preferences" data-testid="preferences-dialog-backdrop" onPointerDown={(event) => { if (event.target === event.currentTarget) closeRef.current?.(); }}>

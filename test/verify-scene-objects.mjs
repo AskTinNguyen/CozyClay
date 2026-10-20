@@ -40,16 +40,13 @@ import {
 	updateSceneObject,
 	isEffectivelyHidden,
 	wrapAngle,
+	OBJECT_MENU_ENTRIES,
 } from "../src/scene-objects.js";
+import { retireObjectKind } from "../src/retired-kinds.js";
+import { readSceneDocument } from "../src/scenes.js";
 
 let failures = 0;
 const propsSource = readFileSync(new URL("../src/props.jsx", import.meta.url), "utf8");
-// The hand-built set pieces live in their own module (set-pieces.jsx).
-const setPiecesSource = readFileSync(new URL("../src/set-pieces.jsx", import.meta.url), "utf8");
-const carSource = setPiecesSource.slice(
-	setPiecesSource.indexOf("export function Car"),
-	setPiecesSource.indexOf("export function SmallPlane"),
-);
 function expect(name, condition, detail = "") {
 	console.log(`${condition ? "PASS" : "FAIL"} ${name}${condition ? "" : ` — ${detail}`}`);
 	if (!condition) failures += 1;
@@ -69,10 +66,6 @@ const objects = [
 ];
 const defaultIds = new Set(DEFAULT_SCENE_OBJECTS.map((object) => object.id));
 expect("default objects have unique IDs", defaultIds.size === DEFAULT_SCENE_OBJECTS.length);
-expect("default registry excludes the car", !DEFAULT_SCENE_OBJECTS.some((object) => object.renderer === "car"));
-expect("default registry excludes the chair", !DEFAULT_SCENE_OBJECTS.some((object) => object.renderer === "chair"));
-expect("only the chair renderer applies the 90 percent scale", setPiecesSource.includes("export function Chair") && setPiecesSource.includes('rotation={[0, rotY, 0]} scale={0.9}') && !carSource.includes("scale={0.9}"));
-expect("default player scene excludes the small plane", !DEFAULT_SCENE_OBJECTS.some((object) => object.renderer === "small-plane"));
 expect("default player scene contains no props", DEFAULT_SCENE_OBJECTS.length === 0);
 const hierarchy = buildHierarchyNodes(objects);
 const props = findNode(hierarchy, "props");
@@ -98,12 +91,14 @@ expect("unknown object removal is ignored", removeSceneObject(objects, "missing"
 /* ------------------------------------------------------ creation ---- */
 
 expect("catalogue offers the Unity primitive set", ["cube", "sphere", "capsule", "cylinder", "cone", "plane"].every((kind) => OBJECT_LIBRARY.some((entry) => entry.kind === kind)));
-expect("catalogue keeps the hand-built set pieces", ["car", "small-plane", "chair"].every((kind) => OBJECT_LIBRARY.some((entry) => entry.kind === kind)));
+expect("the retired set pieces are gone from the catalogue and the menu", ["car", "small-plane", "chair"].every((kind) => !OBJECT_MENU_ENTRIES.some((entry) => entry.kind === kind) && createSceneObject(kind, []) === null));
+expect("no Set pieces group is left", !OBJECT_MENU_ENTRIES.some((entry) => entry.group === "Set pieces"));
+expect("the renderer no longer draws the retired kinds", !/"car"|"small-plane"|"chair"/.test(propsSource));
 expect("every catalogue entry carries a footprint and a height", OBJECT_LIBRARY.every((entry) => entry.footprint.width > 0 && entry.footprint.depth > 0 && entry.height >= 0));
 
 const cube = createSceneObject("cube", []);
 expect("created object starts neutral on the floor", cube.y === 0 && cube.rotX === 0 && cube.rotZ === 0 && cube.scaleX === 1 && cube.scaleY === 1 && cube.scaleZ === 1);
-expect("primitives are grey-box grey, set pieces keep their clay", cube.color === "#c2c6c8" && createSceneObject("car", []).color === "#d98770");
+expect("primitives are grey-box grey", cube.color === "#c2c6c8");
 expect("created object carries its own footprint copy", cube.footprint !== OBJECT_LIBRARY[0].footprint && cube.footprint.width === 1);
 expect("unknown kinds create nothing", createSceneObject("teapot", []) === null);
 
@@ -111,8 +106,8 @@ const twoCubes = [cube, createSceneObject("cube", [cube])];
 expect("repeat creation gets a unique id", twoCubes[0].id !== twoCubes[1].id);
 expect("repeat creation gets a numbered name", twoCubes[1].name === "Cube 2", twoCubes[1].name);
 
-const placed = createSceneObject("chair", [], { x: 999, z: -999, rot: 540 });
-expect("chair support datum targets seat, not backrest", supportHeightForObject(placed) === 0.495);
+const placed = createSceneObject("cube", [], { x: 999, z: -999, rot: 540 });
+expect("a primitive's support datum is its top", supportHeightForObject(placed) === 1);
 expect("creation clamps placement onto the stage", placed.x === 240 && placed.z === -240);
 expect("an explicit placement angle is still wrapped", placed.rot === -180, String(placed.rot));
 
@@ -1176,6 +1171,32 @@ const hiddenChild = { ...createSceneObject("cube", [hiddenTable]), id: "child", 
 const fallingOnChild = { ...createSceneObject("sphere", [hiddenTable, hiddenChild]), id: "ball", y: 3 };
 const landedOnChild = dropToSurfacePatch(fallingOnChild, [hiddenTable, hiddenChild]);
 expect("a drop does not land on a child of a hidden parent", landedOnChild && landedOnChild.y === 0, JSON.stringify(landedOnChild));
+
+/* ------------------------------- retired kinds in an old project ---- */
+// An old project can still carry a car, a chair or a small plane. Each opens
+// as a plain cube with the same transform and the same standing size, so its
+// blocking, route and children survive instead of the record vanishing.
+const oldCar = { id: "car", name: "Car", renderer: "car", x: 2, y: 0, z: -3, rot: 30, rotX: 0, rotZ: 0, scaleX: 1, scaleY: 1, scaleZ: 2,
+	color: "#d98770", parent: null, footprint: { width: 1.8, depth: 4.5 }, height: 1.4 };
+const oldChair = { id: "chair", name: "Chair", renderer: "chair", x: -1, z: 1, rot: 90, scale: 2, parent: "car", footprint: { width: 0.6, depth: 0.6 }, height: 1.15, supportY: 0.495 };
+const oldPlane = { id: "small-plane", name: "Plane (aircraft)", renderer: "small-plane", x: 5, z: 5 };
+const retiredCar = normalizeSceneObject(oldCar);
+expect("an old car opens as a cube", retiredCar?.renderer === "cube", JSON.stringify(retiredCar));
+expect("the stand-in keeps id, name, colour and transform", retiredCar.id === "car" && retiredCar.name === "Car" && retiredCar.color === "#d98770" && retiredCar.x === 2 && retiredCar.z === -3 && retiredCar.rot === 30);
+const carSize = objectSize(retiredCar);
+expect("the stand-in keeps the car's size (scale included)", Math.abs(carSize.width - 1.8) < 1e-9 && Math.abs(carSize.depth - 9) < 1e-9 && Math.abs(carSize.height - 1.4) < 1e-9, JSON.stringify(carSize));
+const retiredChair = normalizeSceneObject(oldChair);
+const chairSize = objectSize(retiredChair);
+expect("a single legacy scale still applies to the stand-in", retiredChair.renderer === "cube" && Math.abs(chairSize.width - 1.2) < 1e-9 && Math.abs(chairSize.height - 2.3) < 1e-9, JSON.stringify(chairSize));
+expect("the stand-in keeps its parent", retiredChair.parent === "car");
+expect("a small plane opens as a cube too", normalizeSceneObject(oldPlane)?.renderer === "cube");
+expect("other records pass through retireObjectKind untouched", retireObjectKind(cube) === cube && retireObjectKind(null) === null);
+const oldDocument = readSceneDocument(JSON.stringify({ version: 5, activeSceneId: "s1", scenes: [{ id: "s1", name: "Old", objects: [oldCar, oldChair, oldPlane], stage: {} }] }));
+const oldObjects = oldDocument.document.scenes[0].objects;
+expect("an old scene document keeps all three records", oldDocument.status === "valid" && oldObjects.length === 3, JSON.stringify(oldDocument.status));
+expect("the scene reader maps every retired kind to a cube", oldObjects.every((object) => object.renderer === "cube"), JSON.stringify(oldObjects.map((object) => object.renderer)));
+const readCarSize = objectSize(oldObjects[0]);
+expect("the scene reader keeps the stored size", Math.abs(readCarSize.width - 1.8) < 1e-9 && Math.abs(readCarSize.depth - 9) < 1e-9 && Math.abs(readCarSize.height - 1.4) < 1e-9, JSON.stringify(readCarSize));
 
 // The grouping and attachment sections run after the first gate above, so they
 // need their own — otherwise a failure here would print FAIL and still exit 0.

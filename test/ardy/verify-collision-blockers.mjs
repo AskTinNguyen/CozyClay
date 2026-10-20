@@ -77,9 +77,9 @@ check(
 
 // A record with no footprint at all falls back to the library entry rather
 // than being dropped.
-const bare = { id: "bare", renderer: "chair", x: 1, y: 0, z: 1, rot: 0 };
+const bare = { id: "bare", renderer: "capsule", x: 1, y: 0, z: 1, rot: 0 };
 const [bareBox] = sceneObjectBlockers([bare], { library: OBJECT_LIBRARY });
-check("a footprint-less record resolves from the library", !!bareBox && near(bareBox.halfExtents.y, 1.15 / 2), JSON.stringify(bareBox ?? null));
+check("a footprint-less record resolves from the library", !!bareBox && near(bareBox.halfExtents.y, 1.4 / 2), JSON.stringify(bareBox ?? null));
 check("without a library a footprint-less record is skipped", sceneObjectBlockers([bare]).length === 0);
 
 // An attached prop's numbers are local to a bone frame — placing that box in

@@ -102,15 +102,15 @@ cclay live inspect --scope entities
 {"context":{"schema":"studio-context-v1","host":{…},"revision":{"scene":3,"physics":3,"view":1},"units":{"distance":"m","angle":"deg","up":"+Y","yawZero":"+Z","yawPositiveToward":"+X","fps":24,"rangeEnd":"exclusive"},"scene":{"name":"SCENE 01","aspect":"16:9","floorY":0,"frameCount":432,"objectCount":0,"characterCount":1},"selection":{"kind":"character","id":"char-a","hierarchyId":"characterA"},"activeCharacterId":"char-a","view":{…},"shot":null,"camera":{…},"entities":[{"id":"char-a","kind":"character","token":"target-2","name":"a young woman in a tan coat",…}],"entityPage":{…},"shots":[],…,"recentReceipts":[…],"jobs":[],"capabilities":{…}},"entities":[{"id":"char-a","kind":"character","name":"a young woman in a tan coat","token":"target-2"}],"total":1,"nextCursor":null}
 ```
 
-Place a chair next to her — `relativeTo` positions it in the subject's own
+Place a box next to her — `relativeTo` positions it in the subject's own
 basis, and `support: "floor"` stands it on the ground, so you never have to
 compute a `y`:
 
 ```sh
-cclay live arrange-objects --op '{"op":"create","source":{"kind":"chair"},"name":"Side chair","position":{"relativeTo":"char-a","basis":"subject","side":"left","gapM":1.4,"support":"floor"}}'
+cclay live arrange-objects --op '{"op":"create","source":{"kind":"cube"},"name":"Side box","position":{"relativeTo":"char-a","basis":"subject","side":"left","gapM":1.4,"support":"floor"}}'
 ```
 ```json
-{"ok":true,"commandId":"5aaf07d8-5b11-4cbc-8c7b-a23d6901cb7e","receiptId":"receipt-mu3uybgp-2","host":{…},"status":"applied","authored":true,"revision":{"before":3,"after":4},"affectedIds":["chair"],"delta":[{"id":"chair","after":{"position":{"x":2.0380938133472153,"y":0,"z":0},"yawDeg":0,"rotationDeg":{"x":0,"y":0,"z":0},"scale":{"x":1,"y":1,"z":1},"name":"Side chair","color":"#b9855d","renderer":"chair","parentId":null}}],"checks":{"coverage":"same-frame-world-AABB-proxies","relationSatisfied":true,"overlapIds":[],"actualGapM":1.4000000000000001,"requestedGapM":1.4,"maximumFootprintOverlapM":0,"basis":"subject","support":"floor","baseY":0},"undo":{"historyEntryId":"376e2467-5660-40ac-ad11-4e8821021066","entries":1,"canUndoDirect":true},"warnings":[],"detailCursor":"5aaf07d8-5b11-4cbc-8c7b-a23d6901cb7e"}
+{"ok":true,"commandId":"5aaf07d8-5b11-4cbc-8c7b-a23d6901cb7e","receiptId":"receipt-mu3uybgp-2","host":{…},"status":"applied","authored":true,"revision":{"before":3,"after":4},"affectedIds":["cube"],"delta":[{"id":"cube","after":{"position":{"x":2.0380938133472153,"y":0,"z":0},"yawDeg":0,"rotationDeg":{"x":0,"y":0,"z":0},"scale":{"x":1,"y":1,"z":1},"name":"Side box","color":"#c2c6c8","renderer":"cube","parentId":null}}],"checks":{"coverage":"same-frame-world-AABB-proxies","relationSatisfied":true,"overlapIds":[],"actualGapM":1.4000000000000001,"requestedGapM":1.4,"maximumFootprintOverlapM":0,"basis":"subject","support":"floor","baseY":0},"undo":{"historyEntryId":"376e2467-5660-40ac-ad11-4e8821021066","entries":1,"canUndoDirect":true},"warnings":[],"detailCursor":"5aaf07d8-5b11-4cbc-8c7b-a23d6901cb7e"}
 ```
 
 The receipt is the verification contract: the gap asked for (1.4 m) and the
@@ -170,7 +170,7 @@ shots). The frame-shot receipt itself reports `occluded` and `cameraSide` in
 `checks`, and one `OCCLUDED` warning per prop in the way.
 
 Reading that PNG as an image shows the character standing center-frame, head
-to feet unclipped, the chair fully visible beside her, camera at hip height —
+to feet unclipped, the box fully visible beside her, camera at hip height —
 the framing the receipt promised. Session (a) is done; the prop stays in the
 scene.
 
@@ -187,7 +187,7 @@ full admission envelope — which you build from one `inspect`:
 cclay live inspect --scope shot
 ```
 ```json
-{"context":{"schema":"studio-context-v1","host":{"surface":"studio","workspaceId":"8306b693-…","documentEpoch":"9110399f-…","sceneId":"scene-mu3uy6d6-1","sceneEpoch":"69c39cf9-…","workspaceHandle":"8306b693-…"},"revision":{"scene":5,"physics":4,"view":3},"units":{…},"scene":{"name":"SCENE 01","aspect":"16:9","floorY":0,"frameCount":432,"objectCount":1,"characterCount":1},"selection":{"kind":"character","id":"char-a","hierarchyId":"characterA"},"activeCharacterId":"char-a","view":{…},"shot":{"id":"shot-mu3uybub-3","name":"Shot 1","range":{"startFrame":0,"endFrameExclusive":432},"mode":"keys"},"camera":{…},"entities":[{"id":"char-a","kind":"character","token":"target-2",…},{"id":"chair","kind":"object","token":"target-5",…}],"entityPage":{"returned":2,"total":2,"truncated":false,"nextCursor":null},"shots":[{"id":"shot-mu3uybub-3","name":"Shot 1","range":{"startFrame":0,"endFrameExclusive":432},"keyCount":0}],"shotsTruncated":false,"assets":[],"recentReceipts":[{"id":"receipt-mu3uybub-4","summary":"applied","canUndoDirect":true},{"id":"receipt-mu3uybgp-2","summary":"applied","canUndoDirect":false},…],"jobs":[],"capabilities":{…}},"entities":[{"id":"char-a","kind":"character","name":"a young woman in a tan coat","token":"target-2"},{"id":"chair","kind":"object","name":"Side chair","token":"target-5"}],"total":2,"nextCursor":null}
+{"context":{"schema":"studio-context-v1","host":{"surface":"studio","workspaceId":"8306b693-…","documentEpoch":"9110399f-…","sceneId":"scene-mu3uy6d6-1","sceneEpoch":"69c39cf9-…","workspaceHandle":"8306b693-…"},"revision":{"scene":5,"physics":4,"view":3},"units":{…},"scene":{"name":"SCENE 01","aspect":"16:9","floorY":0,"frameCount":432,"objectCount":1,"characterCount":1},"selection":{"kind":"character","id":"char-a","hierarchyId":"characterA"},"activeCharacterId":"char-a","view":{…},"shot":{"id":"shot-mu3uybub-3","name":"Shot 1","range":{"startFrame":0,"endFrameExclusive":432},"mode":"keys"},"camera":{…},"entities":[{"id":"char-a","kind":"character","token":"target-2",…},{"id":"cube","kind":"object","token":"target-5",…}],"entityPage":{"returned":2,"total":2,"truncated":false,"nextCursor":null},"shots":[{"id":"shot-mu3uybub-3","name":"Shot 1","range":{"startFrame":0,"endFrameExclusive":432},"keyCount":0}],"shotsTruncated":false,"assets":[],"recentReceipts":[{"id":"receipt-mu3uybub-4","summary":"applied","canUndoDirect":true},{"id":"receipt-mu3uybgp-2","summary":"applied","canUndoDirect":false},…],"jobs":[],"capabilities":{…}},"entities":[{"id":"char-a","kind":"character","name":"a young woman in a tan coat","token":"target-2"},{"id":"cube","kind":"object","name":"Side box","token":"target-5"}],"total":2,"nextCursor":null}
 ```
 
 Build the envelope from that context — the four host identity fields and the
@@ -264,13 +264,13 @@ cannot meet and the hub answers `UNCERTAIN_APPLY` — the CLI then reconciles
 against the editor's journal *itself* and attaches the result:
 
 ```sh
-cclay live arrange-objects --timeout 200 --op '{"op":"update","id":"chair","name":"Stand-in chair"}'; echo "exit=$?"
+cclay live arrange-objects --timeout 200 --op '{"op":"update","id":"cube","name":"Stand-in box"}'; echo "exit=$?"
 ```
 ```text
 exit=5
 ```
 ```json
-{"ok":false,"error":{"code":"UNCERTAIN_APPLY","message":"Live editor timed out running arrange_objects. The mutation may have been applied. Do not retry it; describe the scene before choosing a recovery action.","recovery":{"action":"reconcile","hint":"Do not retry the mutation; describe the scene first and choose a recovery action from what it reports."},"details":{"commandId":"951b6678-2a44-45fd-8783-36c94dc0ccdc","reconcile":{"status":"applied","receipt":{"ok":true,"commandId":"951b6678-2a44-45fd-8783-36c94dc0ccdc","receiptId":"receipt-mu3vbw54-3","host":{…},"status":"applied","authored":true,"revision":{"before":4,"after":5},"affectedIds":["chair"],"delta":[{…,"name":"Stand-in chair",…}],"checks":{…},"undo":{…},"warnings":[],"detailCursor":"951b6678-2a44-45fd-8783-36c94dc0ccdc"}}}}}
+{"ok":false,"error":{"code":"UNCERTAIN_APPLY","message":"Live editor timed out running arrange_objects. The mutation may have been applied. Do not retry it; describe the scene before choosing a recovery action.","recovery":{"action":"reconcile","hint":"Do not retry the mutation; describe the scene first and choose a recovery action from what it reports."},"details":{"commandId":"951b6678-2a44-45fd-8783-36c94dc0ccdc","reconcile":{"status":"applied","receipt":{"ok":true,"commandId":"951b6678-2a44-45fd-8783-36c94dc0ccdc","receiptId":"receipt-mu3vbw54-3","host":{…},"status":"applied","authored":true,"revision":{"before":4,"after":5},"affectedIds":["cube"],"delta":[{…,"name":"Stand-in box",…}],"checks":{…},"undo":{…},"warnings":[],"detailCursor":"951b6678-2a44-45fd-8783-36c94dc0ccdc"}}}}}
 ```
 
 `error.details.reconcile.status: "applied"` settles it: the edit landed, the
@@ -330,11 +330,11 @@ case above reconciles `applied` because there the page never reloaded).
 cclay live inspect --scope selection
 ```
 ```json
-{"context":{"schema":"studio-context-v1","host":{…},"revision":{"scene":3,"physics":3,"view":1},"units":{…},"scene":{"name":"SCENE 01","aspect":"16:9","floorY":0,"frameCount":432,"objectCount":1,"characterCount":1},"selection":{…},"activeCharacterId":"char-a","view":{…},"shot":null,"camera":{…},"entities":[{…},{"id":"chair","kind":"object","token":"target-1","name":"Stand-in chair",…}],"entityPage":{…},"shots":[],…,"recentReceipts":[…],"jobs":[],"capabilities":{…}},"entities":[{"id":"char-a","kind":"character","name":"a young woman in a tan coat","token":"target-3"},{"id":"chair","kind":"object","name":"Stand-in chair","token":"target-1"}],"total":2,"nextCursor":null}
+{"context":{"schema":"studio-context-v1","host":{…},"revision":{"scene":3,"physics":3,"view":1},"units":{…},"scene":{"name":"SCENE 01","aspect":"16:9","floorY":0,"frameCount":432,"objectCount":1,"characterCount":1},"selection":{…},"activeCharacterId":"char-a","view":{…},"shot":null,"camera":{…},"entities":[{…},{"id":"cube","kind":"object","token":"target-1","name":"Stand-in box",…}],"entityPage":{…},"shots":[],…,"recentReceipts":[…],"jobs":[],"capabilities":{…}},"entities":[{"id":"char-a","kind":"character","name":"a young woman in a tan coat","token":"target-3"},{"id":"cube","kind":"object","name":"Stand-in box","token":"target-1"}],"total":2,"nextCursor":null}
 ```
 
-The reload reopened the same project and the chair is still there, renamed
-`Stand-in chair` — the timeout edit above had landed. Whatever the killed
+The reload reopened the same project and the box is still there, renamed
+`Stand-in box` — the timeout edit above had landed. Whatever the killed
 command did, the state you just read is the truth now, so close the loop on
 it: issue a fresh admitted command built from that inspect's revision (here a
 new colour; if it had re-issued the identical colour, the editor would have
@@ -346,7 +346,7 @@ const c = require("/tmp/329-doc/f-c-inspect2.json").context;
 const host = (({workspaceId, documentEpoch, sceneId, sceneEpoch}) => ({workspaceId, documentEpoch, sceneId, sceneEpoch}))(c.host);
 const envelope = {
   name: "arrange_objects",
-  args: { ops: [{ op: "update", id: "chair", color: "#3d5a80" }] },
+  args: { ops: [{ op: "update", id: "cube", color: "#3d5a80" }] },
   commandId: crypto.randomUUID(),
   host,
   expectedRevision: c.revision.scene,
@@ -356,7 +356,7 @@ require("node:fs").writeFileSync("/tmp/329-doc/f-c-envelope2.json", JSON.stringi
 cclay live cmd arrange_objects --args "$(cat /tmp/329-doc/f-c-envelope2.json)"
 ```
 ```json
-{"ok":true,"commandId":"53f3bb46-b939-4d57-811d-04701ba0bebf","receiptId":"receipt-mu3vc2ed-2","host":{…},"status":"applied","authored":true,"revision":{"before":3,"after":4},"affectedIds":["chair"],"delta":[{"id":"chair","after":{"position":{"x":2.0380938133472153,"y":0,"z":0},"yawDeg":0,"rotationDeg":{"x":0,"y":0,"z":0},"scale":{"x":1,"y":1,"z":1},"name":"Stand-in chair","color":"#3d5a80","renderer":"chair","parentId":null}}],"checks":{"coverage":"same-frame-world-AABB-proxies","overlapIds":[],"maximumFootprintOverlapM":0},"undo":{"historyEntryId":"7ada6c36-2b26-460d-874f-c70ef47a698c","entries":1,"canUndoDirect":true},"warnings":[],"detailCursor":"53f3bb46-b939-4d57-811d-04701ba0bebf"}
+{"ok":true,"commandId":"53f3bb46-b939-4d57-811d-04701ba0bebf","receiptId":"receipt-mu3vc2ed-2","host":{…},"status":"applied","authored":true,"revision":{"before":3,"after":4},"affectedIds":["cube"],"delta":[{"id":"cube","after":{"position":{"x":2.0380938133472153,"y":0,"z":0},"yawDeg":0,"rotationDeg":{"x":0,"y":0,"z":0},"scale":{"x":1,"y":1,"z":1},"name":"Stand-in box","color":"#3d5a80","renderer":"cube","parentId":null}}],"checks":{"coverage":"same-frame-world-AABB-proxies","overlapIds":[],"maximumFootprintOverlapM":0},"undo":{"historyEntryId":"7ada6c36-2b26-460d-874f-c70ef47a698c","entries":1,"canUndoDirect":true},"warnings":[],"detailCursor":"53f3bb46-b939-4d57-811d-04701ba0bebf"}
 ```
 
 `status: "applied"` with a receipt, rev 3→4 — the loop is closed on live
@@ -385,7 +385,7 @@ state, never on a guess about what the dead hub saw.
 `patch` carries one target kind per command — its commit domain — because one
 receipt is one revision step and one undo entry; a `character` patch and a
 `stage` patch are two commands. `--target` is `kind` (`stage`, or `shot` for
-the current shot) or `kind:id` (`character:char-a`, `object:chair`,
+the current shot) or `kind:id` (`character:char-a`, `object:cube`,
 `shot:shot-1`). `--set` is a JSON object keyed by the element path inside that
 kind, e.g. `{"keyLight.intensity": 2.4}` for `stage.keyLight.intensity`. A
 value the editor's own persistence normalizer refuses to keep is reported, not

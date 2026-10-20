@@ -1032,14 +1032,25 @@
 	background: var(--select, #e8a33d);
 }
 
+/* The menu is portaled to <body> (ProjectPanel.jsx); the layer that carries
+   the wrap classes there has no box of its own. Surface and layer are the
+   shared popover tokens (themes.css). */
+.v2-project-menu.project-menu-layer {
+	display: contents;
+}
+
 .v2-project-menu.v2-project-menu .project-menu {
+	position: fixed;
+	z-index: var(--z-popover, 90);
 	box-sizing: border-box;
 	min-width: var(--details-menu-width, 200px);
 	padding: var(--details-gap, 4px);
-	border: var(--details-border-width, 1px) solid var(--row-divider, #1d1d20);
-	border-radius: var(--r-2, 6px);
-	background: var(--surface-panel, #151517);
-	box-shadow: none;
+	border: var(--details-border-width, 1px) solid var(--popover-border, var(--row-divider, #1d1d20));
+	border-radius: var(--popover-radius, 6px);
+	background: var(--popover-surface, var(--surface-raised, #1e1e21));
+	-webkit-backdrop-filter: var(--popover-blur, none);
+	backdrop-filter: var(--popover-blur, none);
+	box-shadow: var(--popover-shadow, 0 8px 24px rgba(0, 0, 0, .45));
 }
 
 .v2-project-menu.v2-project-menu .project-menu button {

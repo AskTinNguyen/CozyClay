@@ -58,7 +58,7 @@ try {
   const { targetId } = await send('Target.createTarget', { url: 'about:blank' }, true);
   ({ sessionId } = await send('Target.attachToTarget', { targetId, flatten: true }, true));
   await send('Runtime.enable'); await send('Page.enable');
-  await send('Page.addScriptToEvaluateOnNewDocument', { source: `localStorage.setItem('cozyclay.project-session.v1', JSON.stringify({name:'Cast QA',updatedAt:Date.now()})); localStorage.setItem('cozyclay.camera-tutorial-terminal.v1',JSON.stringify({completed:true}));` });
+  await send('Page.addScriptToEvaluateOnNewDocument', { source: `localStorage.setItem('cozyclay.project-session.v1', JSON.stringify({name:'Cast QA',updatedAt:Date.now()}));` });
   const loaded = bounded(new Promise(resolve => {
     const listener = event => { const message = JSON.parse(event.data); if (message.method === 'Page.loadEventFired' && message.sessionId === sessionId) { ws.removeEventListener('message', listener); resolve(); } };
     ws.addEventListener('message', listener);

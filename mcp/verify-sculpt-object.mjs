@@ -126,11 +126,11 @@ setLiveHub({
 			undo: { historyEntryId: `history-${revision}`, entries: 1, canUndoDirect: true }, summary: "Sculpted Sculpt (sculpt): 1 parts." };
 	},
 });
-const live = await sculpt.handler({ recipe: pillar, x: 2, facing: 15, parent: "chair" });
+const live = await sculpt.handler({ recipe: pillar, x: 2, facing: 15, parent: "plinth" });
 assert.equal(live.isError, undefined, live.content[0].text);
 const run = commands.find((entry) => entry.name === "run_action");
 assert.ok(run, "the live path admits a command");
-assert.deepEqual(run.args.args.args, { recipe: pillar, placement: { x: 2, rot: 15 }, parent: "chair" }, "the recipe goes to the editor untouched; it validates there");
+assert.deepEqual(run.args.args.args, { recipe: pillar, placement: { x: 2, rot: 15 }, parent: "plinth" }, "the recipe goes to the editor untouched; it validates there");
 commands.length = 0;
 await sculpt.handler({ id: "sculpt", edits: [{ remove: "tooth" }] });
 assert.deepEqual(commands.find((entry) => entry.name === "run_action").args.args.args, { edits: [{ remove: "tooth" }], id: "sculpt" });

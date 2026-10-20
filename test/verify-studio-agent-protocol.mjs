@@ -32,7 +32,7 @@ export function contextFixture() {
 }
 export const envelopeFixture = () => ({ surface: "studio", sessionId: uuid, turnId: "00000000-0000-4000-8000-000000000002", text: "inspect selection", context: contextFixture() });
 const point = () => ({ x: 1, y: 0, z: 2 });
-const createOp = (name = "Chair") => ({ op: "create", source: { kind: "chair" }, name, position: { world: point() } });
+const createOp = (name = "Box") => ({ op: "create", source: { kind: "cylinder" }, name, position: { world: point() } });
 const guard = () => ({ workspaceId: "tab-7", sceneId: "scene-main", documentEpoch: "doc-3", sceneEpoch: "scene-open-4", targetId: "char-alex", token: "ct-11" });
 export function receiptFixture(status = "applied") {
 	const result = { ok: true, commandId: "cmd-1", receiptId: "receipt-1", host: { workspaceId: "tab-7", sceneId: "scene-main", documentEpoch: "doc-3", sceneEpoch: "scene-open-4" }, status,
@@ -374,7 +374,7 @@ function registerTests() {
 	});
 	test("D4 context assets list placeable catalogue kinds and imported scene assets", () => {
 		const c = contextFixture();
-		c.assets = [...["cube","sphere","capsule","cylinder","cone","plane"].map(kind => ({ kind, name: kind, type: "primitive" })), ...["chair","car","small-plane"].map(kind => ({ kind, name: kind, type: "set-piece" })),
+		c.assets = [...["cube","sphere","capsule","cylinder","cone","plane"].map(kind => ({ kind, name: kind, type: "primitive" })), ...["text","point-light","effect"].map(kind => ({ kind, name: kind, type: "set-piece" })),
 			{ id: "img-0a1b2c", name: "Poster", type: "image" }, { id: "mesh-3d4e5f", name: "Robot", type: "mesh" }];
 		assert.deepEqual(contextTools.buildStudioContext(c).assets, c.assets, "no placeable asset is cut");
 		protocol.validateStudioContext(c);
@@ -500,7 +500,7 @@ function registerTests() {
 			["undo_edit", { receiptId: 3 }, "$.args.receiptId: expected a string, got a number."],
 			["operate_studio", { selection: "char-a" }, '$.args.selection must be an object or null, got "char-a".'],
 			["operate_studio", { playing: "yes" }, "$.args.playing: expected a boolean, got a string."],
-			["arrange_objects", { ops: [{ op: "create", source: { kind: "chair" }, position: { world: { x: 1, y: 0, z: 0 }, extra: 1 } }] }, '$.args.ops[0].position has unknown field "extra"; allowed: world.'],
+			["arrange_objects", { ops: [{ op: "create", source: { kind: "cylinder" }, position: { world: { x: 1, y: 0, z: 0 }, extra: 1 } }] }, '$.args.ops[0].position has unknown field "extra"; allowed: world.'],
 		];
 		for (const [name, args, message] of exact) assert.equal(said(name, args), message);
 		// A plain-value union names every form (an action input such as install: true, false or "ifClean").
