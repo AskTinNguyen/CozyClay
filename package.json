@@ -57,7 +57,7 @@
     "prepack": "npm run build && node tools/prepare-package.mjs",
     "postpack": "node tools/prepare-package.mjs --clean",
     "prepublishOnly": "npm run build && node tools/prepare-package.mjs --check-key && node tools/prepare-package.mjs && node tools/verify-package-tarball.mjs",
-    "metrics:traffic": "node tools/metrics/archive-traffic.mjs"
+    "metrics:snapshot": "node tools/metrics-snapshot.mjs"
   },
   "license": "AGPL-3.0-or-later",
   "type": "module",

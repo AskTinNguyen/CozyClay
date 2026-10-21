@@ -1,10 +1,17 @@
 #!/usr/bin/env node
 /**
- * Snapshot GitHub traffic + repo stats + npm downloads into JSONL ledgers.
+ * Snapshot GitHub traffic, stars, referrers, repo stats and npm downloads
+ * into JSONL ledgers on the `metrics` branch.
  *
- * GitHub's traffic API only keeps 14 days, so this must run on a schedule
+ * GitHub's traffic API only keeps 14 days, so this runs daily
  * (.github/workflows/metrics.yml) to build a permanent time series. Rows are
  * deduped by date so overlapping 14-day windows never double-count.
+ *
+ * Files written to <output-dir>:
+ *   traffic-daily.jsonl  one row per UTC day: views, view_uniques, clones, clone_uniques
+ *   stars-daily.jsonl    one row per UTC day: new_stars, total (rebuilt from starred_at)
+ *   referrers.jsonl      one row per run date: 14-day top referrers and paths
+ *   repo-stats.jsonl     one row per run date: stars, forks, watchers, issues, npm weekly
  *
  * Usage: GITHUB_TOKEN=... node tools/metrics-snapshot.mjs <output-dir>
  */
@@ -26,9 +33,9 @@ if (!token) {
 	process.exit(2);
 }
 
-async function github(path) {
+async function github(path, accept = "application/vnd.github+json") {
 	const res = await fetch(`https://api.github.com/repos/${REPO}${path}`, {
-		headers: { authorization: `Bearer ${token}`, accept: "application/vnd.github+json" },
+		headers: { authorization: `Bearer ${token}`, accept },
 	});
 	if (!res.ok) throw new Error(`GET ${path} -> ${res.status}`);
 	return res.json();
@@ -95,4 +102,35 @@ stats.set(today, {
 });
 const statsTotal = saveRows(statsFile, stats);
 
-console.log(`traffic-daily: +${added} new day(s), ${trafficTotal} total; repo-stats: ${statsTotal} snapshot(s)`);
+// 3) Stars per UTC day, rebuilt from every stargazer's starred_at. Someone who
+// later unstars drops out of the history, so totals can trail repo.stargazers_count
+// by a few. Rebuilt in full each run, so it never drifts.
+const starDays = new Map();
+for (let page = 1; page <= 400; page++) {
+	const batch = await github(`/stargazers?per_page=100&page=${page}`, "application/vnd.github.star+json");
+	if (!Array.isArray(batch) || batch.length === 0) break;
+	for (const s of batch) {
+		const day = String(s.starred_at).slice(0, 10);
+		starDays.set(day, (starDays.get(day) ?? 0) + 1);
+	}
+	if (batch.length < 100) break;
+}
+const starRows = new Map();
+let running = 0;
+for (const day of [...starDays.keys()].sort()) {
+	running += starDays.get(day);
+	starRows.set(day, { date: day, new_stars: starDays.get(day), total: running });
+}
+const starsTotal = saveRows(join(outDir, "stars-daily.jsonl"), starRows);
+
+// 4) 14-day referrers and paths, one snapshot per run date.
+const [referrers, paths] = await Promise.all([github("/traffic/popular/referrers"), github("/traffic/popular/paths")]);
+const refFile = join(outDir, "referrers.jsonl");
+const refs = loadRows(refFile);
+refs.set(today, { date: today, referrers, paths });
+const refTotal = saveRows(refFile, refs);
+
+console.log(
+	`traffic-daily: +${added} new day(s), ${trafficTotal} total; repo-stats: ${statsTotal} snapshot(s); ` +
+		`stars-daily: ${starsTotal} day(s), ${running} stars; referrers: ${refTotal} snapshot(s)`,
+);

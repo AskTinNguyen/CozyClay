@@ -2,13 +2,18 @@ name: metrics-snapshot
 
 on:
   schedule:
-    # Twice a week: the traffic API only keeps 14 days, so one failed run
-    # still leaves the next run inside the window.
-    - cron: "17 1 * * 1,4"
+    # Daily at 09:05 KST. The traffic API keeps 14 days, so a missed run is
+    # backfilled by the next one. The Aside report routine also dispatches this
+    # workflow before it reads the ledger.
+    - cron: "5 0 * * *"
   workflow_dispatch:
 
 permissions:
   contents: write
+
+concurrency:
+  group: metrics-snapshot
+  cancel-in-progress: false
 
 jobs:
   snapshot:
