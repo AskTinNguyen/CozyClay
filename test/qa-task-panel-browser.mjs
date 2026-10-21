@@ -101,13 +101,20 @@ const evaluate = async expression => {
 const waitFor = async (expression, label, ms = 60_000) => {
 	for (let t = 0; t < ms; t += 200) { try { const value = await evaluate(expression); if (value) return value; } catch { /* page busy */ } await sleep(200); }
 	await shot(`timeout-${label.replace(/\W+/g, "-")}`).catch(() => {});
-	const probe = await evaluate(`({ cozy: !!window.__cozyclay, run: !!window.__cozyclay?.runStudioAction, input: !!document.querySelector('.agent-input'), disabled: document.querySelector('.agent-input')?.disabled, cards: document.querySelectorAll('.task-card').length, statuses: [...document.querySelectorAll('.task-card')].map(c => c.querySelector('.task-card-title')?.textContent + ':' + c.dataset.status + ':' + (c.querySelector('.task-card-reason')?.textContent ?? '')), agent: document.querySelector('[data-agent-card]')?.dataset.agentCard, nodes: [...document.querySelectorAll('[data-node-id]')].map(n => n.dataset.nodeId + (n.dataset.taskScope ? '*' : '')).slice(0, 30), toggles: [...document.querySelectorAll('button')].filter(b => /agent|Agent|에이전트/.test(b.className + b.textContent + (b.getAttribute('aria-label') || ''))).map(b => b.className + '|' + b.textContent.slice(0, 20) + '|' + b.getAttribute('aria-label')).slice(0, 12) })`).catch(error => String(error));
+	const probe = await evaluate(`({ cozy: !!window.__cozyclay, run: !!window.__cozyclay?.runStudioAction, input: !!document.querySelector('.agent-input'), disabled: document.querySelector('.agent-input')?.disabled, rows: document.querySelectorAll('.agent-transcript .task-row').length, statuses: [...document.querySelectorAll('.agent-transcript .task-row')].map(c => c.querySelector('.task-row-title')?.textContent + ':' + c.dataset.status + ':' + (c.querySelector('.task-row-line')?.textContent ?? '')), agent: document.querySelector('[data-agent-card]')?.dataset.agentCard, nodes: [...document.querySelectorAll('[data-node-id]')].map(n => n.dataset.nodeId + (n.dataset.taskScope ? '*' : '')).slice(0, 30), toggles: [...document.querySelectorAll('button')].filter(b => /agent|Agent|에이전트/.test(b.className + b.textContent + (b.getAttribute('aria-label') || ''))).map(b => b.className + '|' + b.textContent.slice(0, 20) + '|' + b.getAttribute('aria-label')).slice(0, 12) })`).catch(error => String(error));
 	throw new Error(`Timed out: ${label} ${JSON.stringify(probe)}`);
 };
 const shot = async name => writeFile(`${out}/${name}.png`, Buffer.from((await send("Page.captureScreenshot", { format: "png" })).data, "base64"));
-const card = title => `[...document.querySelectorAll('.task-card')].find(el => el.querySelector('.task-card-title')?.textContent === ${JSON.stringify(title)})`;
+// A task is one row in the chat; its actions and notices live in the task view a row opens.
+const card = title => `[...document.querySelectorAll('.agent-transcript .task-row')].find(el => el.querySelector('.task-row-title')?.textContent === ${JSON.stringify(title)})`;
 const statusOf = title => `${card(title)}?.dataset.status`;
-const clickIn = async (title, label) => evaluate(`(() => { const button = [...${card(title)}.querySelectorAll('button')].find(b => b.textContent === ${JSON.stringify(label)}); if (!button) throw new Error('no ${label} on ${title}'); button.click(); return true; })()`);
+const opened = title => `(document.querySelector('.task-detail-title')?.textContent === ${JSON.stringify(title)} ? document.querySelector('.task-detail') : null)`;
+const noticeOf = title => `${opened(title)}?.querySelector('.task-detail-notice')?.textContent`;
+const clickIn = async (title, label) => {
+	await evaluate(`${card(title)}.click(), true`);
+	await waitFor(`!!${opened(title)}`, `${title} opened`);
+	return evaluate(`(() => { const button = [...${opened(title)}.querySelectorAll('button')].find(b => b.textContent === ${JSON.stringify(label)}); if (!button) throw new Error('no ${label} on ${title}'); button.click(); return true; })()`);
+};
 const say = async text => {
 	await evaluate(`(() => { const input = document.querySelector('.agent-input'); input.focus(); const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set; set.call(input, ${JSON.stringify(text)}); input.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
 	await waitFor("document.querySelector('.agent-send') && !document.querySelector('.agent-send').disabled", "send enabled");
@@ -133,7 +140,8 @@ try {
 	const [c1, c2, c3] = ids;
 	await say(`Run them. [[run]] [[c1:${c1}]] [[c2:${c2}]] [[c3:${c3}]]`);
 	await waitFor(`${statusOf("Move cube one")} === 'running' && ${statusOf("Move cube two")} === 'running' && ${statusOf("Nudge cube one again")} === 'waiting'`, "two tasks run, the third waits for its scope");
-	await waitFor(`${card("Move cube one")}.querySelector('.task-card-progress')?.textContent.length > 0`, "a running card shows progress");
+	await waitFor(`${card("Move cube one")}.querySelector('.task-row-line')?.textContent.length > 0`, "a running row shows progress");
+	await waitFor(`${card("Nudge cube one again")}.querySelector('.task-row-line')?.textContent.includes('Move cube one')`, "a waiting row names the task it waits for, not its id");
 	assert.equal(await x(c3), 3);
 	pass("the main agent answered at once: two tasks run, a third waits for the first's scope, and the quick edit landed");
 	await evaluate(`(() => { const row = document.querySelector('[data-node-id="props"]'); if (row?.getAttribute('aria-expanded') === 'false') row.querySelector('.hierarchy-toggle')?.click(); return true; })()`);
@@ -143,7 +151,7 @@ try {
 
 	await clickIn("Move cube two", "Cancel");
 	// the scripted model answers one call at a time: once the cancel reached the server, the held step lets go
-	await waitFor(`${card("Move cube two")}.querySelector('.task-card-notice')?.textContent.length > 0`, "the cancel was answered");
+	await waitFor(`${noticeOf("Move cube two")}?.length > 0`, "the cancel was answered");
 	gate("B").open();
 	await waitFor(`${statusOf("Move cube two")} === 'cancelled'`, "cancelled");
 	await waitFor(`window.__cozyclay.objects.find(o => o.id === ${JSON.stringify(c2)})?.x === 0`, "cancel restored the object");
@@ -158,7 +166,7 @@ try {
 	await shot("3-done");
 
 	await clickIn("Move cube one", "Undo task");
-	await waitFor(`${card("Move cube one")}.querySelector('.task-card-notice')?.textContent.includes('Changed since')`, "the older undo is refused while a later task changed its key");
+	await waitFor(`${noticeOf("Move cube one")}?.includes('Changed since')`, "the older undo is refused while a later task changed its key");
 	await clickIn("Nudge cube one again", "Undo task");
 	await waitFor(`window.__cozyclay.objects.find(o => o.id === ${JSON.stringify(c1)})?.x === 1`, "newest task undone");
 	await clickIn("Move cube one", "Undo task");
@@ -173,7 +181,7 @@ try {
 	// the held step lets go while the page is away: its command meets a Studio that is not there
 	await send("Page.reload");
 	gate("C-before").open();
-	await waitFor("document.querySelector('.agent-input') && !document.querySelector('.agent-input').disabled && document.querySelectorAll('.task-card').length > 0", "panel and board back after the reload", 120_000);
+	await waitFor("document.querySelector('.agent-input') && !document.querySelector('.agent-input').disabled && document.querySelectorAll('.agent-transcript .task-row').length > 0", "panel and task rows back after the reload", 120_000);
 	await waitFor(`${statusOf("Move cube three")} === 'done'`, "task C done after the reload");
 	await waitFor(`window.__cozyclay.objects.find(o => o.id === ${JSON.stringify(c3)})?.x === 4`, "task C's edit landed in the reloaded Studio");
 	await waitFor(`${card("Move cube one")}?.dataset.status === 'done'`, "the earlier cards are back");

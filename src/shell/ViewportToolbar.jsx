@@ -11,7 +11,7 @@ import { elementByPath } from "../studio-elements.js";
 import { saveAutoColor } from "../auto-color.js";
 import { trackFeature } from "../analytics.js";
 import { GUIDE_LABELS, nextGuideMode } from "../shot-guides.js";
-import GhostsMenuGroup from "./GhostsMenuGroup.jsx";
+import GhostsMenuGroup from "./GhostsMenuGroup.jsx"; import { addCameraShot } from "./add-camera-shot.js";
 import "./viewport.css";
 
 // G1: the single mode+tool pill. Keys 1-5 and W/E/R are bound in App's
@@ -122,7 +122,7 @@ export default function ViewportToolbar() {
 		autoColor, setAutoColor, isCharacterSelection, partColoursChoice, embedMode,
 		agentCollapsed, addSceneObject, spawnCharacter, characters, flySpeed,
 		ikEditTool, setIkEditTool, motion, setRangePinPartPick,
-		previsMode, sculptView, requestSculptView,
+		previsMode, sculptView, requestSculptView, appContext, setToast,
 	} = useStudioShell();
 	const menu = useOverlayMenu();
 
@@ -292,7 +292,7 @@ export default function ViewportToolbar() {
 									role="menuitem"
 									className="add-object-item"
 									data-add="camera"
-									onClick={() => { runStudioAction("shot.create"); menu.close(); }}
+									onClick={() => { addCameraShot({ appContext, runStudioAction, setToast }); menu.close(); }}
 								>
 									<span className="add-object-swatch vp-add-swatch-camera" aria-hidden="true" />
 									<span>{ko("Camera", "카메라")}</span>

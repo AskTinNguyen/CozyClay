@@ -778,11 +778,13 @@
 	box-shadow: none;
 }
 
+/* Shots cut against each other: a hairline between neighbours, not a wide gutter, so a run of cuts reads as
+   one sequence. Free-camera time between shots still shows as its own gap. */
 .v2-sequencer .tl-shot-block {
 	top: var(--tl-clip-inset, 7px);
 	bottom: var(--tl-clip-inset, 7px);
-	left: calc(var(--tl-f-start) * 100% + var(--tl-clip-inset, 7px));
-	width: max(var(--tl-min-clip-width, 1px), calc((var(--tl-f-end) - var(--tl-f-start)) * 100% - (var(--tl-clip-inset, 7px) * 2)));
+	left: calc(var(--tl-f-start) * 100% + var(--tl-shot-gap, 1px));
+	width: max(var(--tl-min-clip-width, 1px), calc((var(--tl-f-end) - var(--tl-f-start)) * 100% - (var(--tl-shot-gap, 1px) * 2)));
 	padding: var(--sp-1, 8px) var(--sp-1, 8px) var(--tl-shot-footer-height, 28px);
 	border: 0;
 	border-radius: var(--r-1, 4px);
@@ -853,6 +855,10 @@
 .v2-sequencer .tl-shot-edge:hover {
 	background: var(--select-tint, rgba(232, 163, 61, .14));
 }
+
+/* The trim grips appear with the shot under the pointer, not as a column of marks at every cut. */
+.v2-sequencer .tl-shot-edge { opacity: 0; transition: opacity .12s; }
+.v2-sequencer .tl-shot-block:is(:hover, :focus-within) .tl-shot-edge { opacity: 1; }
 
 /* The bar hangs above the block's top-left corner instead of inside it: a
    short cut (40 frames ~ 38px) is narrower than Split + Duplicate + Delete,
@@ -926,13 +932,22 @@
 	pointer-events: auto;
 }
 
+/* A camera key sits on its Shot's key strip (the line along the box's foot), as a small diamond: at the
+   lane's first-row height it landed on the box's top corner, in the gutter between two Shots. */
 .v2-sequencer .tl-marker.cam {
-	top: calc(var(--tl-track-row-height, 38px) / 2);
-	bottom: auto;
+	top: auto;
+	bottom: calc(var(--tl-clip-inset, 7px) + var(--tl-key-strip-height, 12px) / 2);
+	width: 7px;
+	height: 7px;
+	border-radius: 1.5px;
 	background: var(--camera, #a78bfa);
-	transform: translate(-50%, -50%) rotate(45deg);
+	box-shadow: 0 0 0 1.5px var(--tl-camera-clip, #3d3354);
+	transform: translate(-50%, 50%) rotate(45deg);
 	z-index: 7;
 }
+/* A key on a Shot's first or last frame steps just inside the box instead of straddling its edge. */
+.v2-sequencer .tl-marker.cam[data-edge="start"] { margin-left: 7px; }
+.v2-sequencer .tl-marker.cam[data-edge="end"] { margin-left: -7px; }
 
 .v2-sequencer .tl-marker.wp {
 	background: var(--ok, #4fbf7a);
@@ -1150,6 +1165,29 @@
 .v2-sequencer .tl-crane-knob.selected {
 	background: var(--select, #e8a33d);
 }
+
+/* In a Shot box the height graph is a ~20 px strip: the points are small dots ON the curve, quiet on other
+   shots and full on the selected or hovered one, and their hit area stays a full finger wide. Hovering a curve
+   thickens it and the cursor says which way it moves. The axis labels have no room. */
+.v2-sequencer .tl-shot-block .tl-crane-knob {
+	width: 7px;
+	height: 7px;
+	border: 1.5px solid var(--tl-camera-rail, #302a40);
+	box-shadow: none;
+	opacity: .5;
+	transition: opacity .12s;
+}
+.v2-sequencer .tl-shot-block .sg-shot.height { z-index: 2; }
+.v2-sequencer .tl-shot-block .tl-crane-knob::before { content: ""; position: absolute; inset: -6px; border-radius: 50%; }
+.v2-sequencer .tl-shot-block .tl-crane-knob.selected { width: 9px; height: 9px; }
+.v2-sequencer .tl-shot-block:is(.selected, .active, :hover) .tl-crane-knob { opacity: 1; }
+.v2-sequencer .tl-shot-block .tl-crane-knob:hover, .v2-sequencer .tl-shot-block .tl-crane-knob:focus-visible { outline: none; transform: translate(-50%, -50%) scale(1.3); }
+.v2-sequencer .tl-shot-block .tl-crane-line { stroke-width: 1.5px; }
+.v2-sequencer .tl-shot-block .sg-shot .sg-body svg { cursor: ns-resize; }
+.v2-sequencer .tl-shot-block .sg-shot:hover :is(.sg-line, .tl-crane-line) { stroke-width: 2.5px; }
+.v2-sequencer .tl-shot-block .tl-crane-time-pick { opacity: 0; }
+.v2-sequencer .tl-shot-block .tl-crane-time-pick.selected { opacity: 1; }
+.v2-sequencer .tl-shot-block .tl-crane-editor :is(.sg-scale-top, .sg-scale-avg, .sg-scale-zero) { display: none; }
 
 .v2-sequencer .sg-shot {
 	left: var(--sp-1, 8px);

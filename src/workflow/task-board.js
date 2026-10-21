@@ -66,6 +66,55 @@ export function progressLine(frame, labelOf = call => call.name) {
 	return null;
 }
 
+/** A task's wait or failure reason in the author's words: the server names the blocking task by id and title. */
+export function taskReason(reason) {
+	// Greedy to the last ")": a title may hold parentheses of its own.
+	const after = /(?:waits for|held by) task \S+ \((.+)\)/.exec(String(reason ?? ""))?.[1];
+	if (after) return ko(`Starts after "${after}"`, `'${after}' 끝나면 시작`);
+	if (/scope is held/.test(String(reason ?? ""))) return ko("Starts when another task frees its part", "다른 작업이 끝나면 시작");
+	return reason ?? "";
+}
+
+/** The one line a task row shows after its title. */
+export function taskLine(task) {
+	if (task.status === "running") return task.progress || ko("Working…", "작업 중…");
+	if (task.status === "done") return task.undone ? ko("Undone", "되돌림") : String(task.summary?.reply ?? "").split(/(?<=[.!?。])\s/)[0] || TASK_STATUS_COPY.done;
+	if (task.reason) return taskReason(task.reason);
+	return TASK_STATUS_COPY[task.status] ?? task.status;
+}
+
+const SCOPE_NAMES = { timeline: ko("timeline", "타임라인"), stage: ko("stage", "무대"), scene: ko("scene", "장면"), object: ko("object", "오브젝트"), character: ko("character", "캐릭터"), shot: ko("shot", "샷") };
+/** A scope key (object:<id>, timeline, ...) as a word; the raw key stays in the tooltip. */
+export const scopeLabel = key => SCOPE_NAMES[String(key).split(":")[0]] ?? String(key);
+
+/** Rows by state for the status line: what needs a look first, then what runs, waits and ended. */
+export function boardGroups(board) {
+	const groups = { failed: [], running: [], waiting: [], done: [] };
+	for (const id of board.order) {
+		const task = board.tasks[id];
+		const group = task.status === "failed" || task.status === "paused" ? "failed" : task.status === "running" || task.status === "starting" ? "running" : ACTIVE_STATUSES.has(task.status) ? "waiting" : "done";
+		groups[group].push(task);
+	}
+	return groups;
+}
+
+/** The task ids a turn's dispatch_task steps started, in order (a duplicate points at the task it repeats). */
+export const dispatchedTaskIds = steps => (steps ?? []).filter(step => step.kind === "tool" && step.name === "dispatch_task")
+	.map(step => step.result?.taskId ?? step.result?.duplicateOf).filter(Boolean);
+
+/** What the task view shares between the headless board (TaskBoard.jsx) and the rows in the chat (TaskInline.jsx). */
+function createTaskViewStore() {
+	let state = { board: emptyBoard(), activity: null, client: null, undo: null, open: null };
+	const listeners = new Set();
+	return {
+		get: () => state,
+		set: patch => { state = { ...state, ...patch }; for (const listener of listeners) listener(); },
+		subscribe: listener => { listeners.add(listener); return () => listeners.delete(listener); },
+	};
+}
+// One agent panel per page, so one view.
+export const taskView = createTaskViewStore();
+
 /** "$0.12" for a task's cost, or "" when nothing is known yet. */
 export const costLabel = usage => (Number.isFinite(usage?.cost) && usage.cost > 0 ? `$${usage.cost.toFixed(2)}` : "");
 

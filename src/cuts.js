@@ -127,6 +127,17 @@ export function addShotAtFrame(shots, frame, frameCount, currentFraming, duratio
 	return [...list, createShot(`Shot ${list.length + 1}`, target, endFrame, keys)].sort((a, b) => a.startFrame - b.startFrame);
 }
 
+/** Add Shot when the take has no free time left: the take grows by one default
+ * shot at its end and the new shot fills that, so the button never silently does
+ * nothing. Existing shots are untouched. Null past maxFrameCount. */
+export function appendShotGrowingTake(shots, frameCount, currentFraming, maxFrameCount) {
+	const list = Array.isArray(shots) ? shots : [];
+	const startFrame = Math.max(frameNumber(frameCount, 1), ...list.map((shot) => shot.endFrame + 1));
+	const grownCount = startFrame + DEFAULT_SHOT_FRAMES;
+	if (grownCount > maxFrameCount) return null;
+	return { shots: addShotAtFrame(list, startFrame, grownCount, currentFraming), frameCount: grownCount };
+}
+
 export function resizeShot(shots, shotId, edge, rawFrame, frameCount) {
 	const shot = shotById(shots, shotId);
 	if (edge !== "start" && edge !== "end") return shots;

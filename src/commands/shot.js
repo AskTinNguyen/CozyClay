@@ -1,6 +1,6 @@
 // One semantic entry point for timeline, camera controls and agent framing.
 import { createCameraBlock, updateCameraBlock, removeCameraRail } from '../camera-block.js';
-import { addShotAtFrame, createShot, cutAtFrame, duplicateShot, removeShot, reorderShot, resizeShot, renameShot, moveCameraKey, removeCameraKey } from '../cuts.js';
+import { addShotAtFrame, appendShotGrowingTake, createShot, cutAtFrame, duplicateShot, removeShot, reorderShot, resizeShot, renameShot, moveCameraKey, removeCameraKey } from '../cuts.js';
 import { reflowStillShots, stillFrameCount, STILL_FRAME_COUNT_MAX, STILL_HOLD_DEFAULT } from '../shot-authoring.js';
 import { ko } from '../locale.js';
 import { track } from '../analytics.js';
@@ -17,6 +17,7 @@ import './elements/shot.js';
 import { changedIds, fail, shotLabel } from './shared.js';
 
 const id = StudioSchemas.TargetGuard.properties.targetId;
+const TAKE_FRAME_MAX = 28800;
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const number = { type: 'number' };
 const frame = { type: 'integer', minimum: 0 };
@@ -30,7 +31,7 @@ const extra = [
   mutation('shot.moveKey', 'Move camera key', input({ shotId: id, keyId: id, frame })),
   mutation('shot.removeKey', 'Remove camera key', input({ shotId: id, keyId: id })),
   mutation('shot.clearKeys', 'Clear camera keys', input({ shotId: id })),
-  mutation('shot.setTimeline', 'Set shot timeline', input({ frameCount: { type: 'integer', minimum: 24, maximum: 28800 } })),
+  mutation('shot.setTimeline', 'Set shot timeline', input({ frameCount: { type: 'integer', minimum: 24, maximum: TAKE_FRAME_MAX } })),
   mutation('shot.setLens', 'Set camera lens', input({ fovDeg: { ...number, minimum: 14, maximum: 90 } })),
   mutation('shot.frame', 'Frame the shot', { ...input({ ...STUDIO_TOOL_SCHEMAS.frame_shot.properties, preset: { type: 'string' } }, []), oneOf: [STUDIO_TOOL_SCHEMAS.frame_shot, input({ preset: { type: 'string' } })] },
     'Frame a shot on one character (the frame_shot tool): framing.intent { size, level, view, side, focalMm } or framing.exact { position, lookAt, focalMm }. Without keyAtFrame a shot that holds one framing is reframed whole: a held shot. keyAtFrame adds a camera key there; every key eases in and out, so the camera slows to a stop at each one: key a pan or zoom from one spot with two keys (its start and end), lay a moving camera as a rail (shot.setCameraRail) and cut to a new shot for a new view. On a rail shot it puts the shot back on keys. Answers checks { derivedSize, screenFraction, clipped, behindCamera, occluded, cameraSide } for the subject at that frame.'),
@@ -84,6 +85,17 @@ export function register(registry, ports) {
     const created = written.find(shot => shot.id === still.id), { selection, view } = ports.readView();
     ports.publishView({ selection, view: { ...view, frame: created.startFrame }, shotId: created.id });
   }
+  // A clip shot goes in the free time at (or after) the playhead; with none left the take grows at its end,
+  // in the same write so one undo takes both back, and the playhead lands in the new shot.
+  function createClip() {
+    const current = owner().read(), { frameCount } = owner().state(), framing = owner().capture();
+    const placed = addShotAtFrame(current, ports.state().frame, frameCount, framing);
+    if (placed !== current) return owner().write(placed);
+    const grown = appendShotGrowingTake(current, frameCount, framing, TAKE_FRAME_MAX) ?? fail('INVALID_ARGUMENT', `The take is at its longest (${TAKE_FRAME_MAX} frames); shorten or remove a shot first.`);
+    owner().writeState(before => ({ ...before, ...grown }));
+    const added = grown.shots.find(shot => !current.some(row => row.id === shot.id)), { selection, view } = ports.readView();
+    if (added) ports.publishView({ selection, view: { ...view, frame: added.startFrame }, shotId: added.id });
+  }
   function duplicate(shotId) {
     const source = shotOf(shotId), copied = { kind: source.kind, caption: source.caption, cast: structuredClone(source.cast), stylizedAssetId: source.stylizedAssetId };
     if (source.kind !== 'still') {
@@ -130,7 +142,7 @@ export function register(registry, ports) {
   // aimHeight moves a cast aim off the chest to a world height (a whole body, a face).
   const aimOf = (aim, aimHeight) => (aim?.ids && aimHeight !== undefined ? { ids: aim.ids, height: aimHeight } : aim);
   const methods = {
-    'shot.create': () => storyboard() ? createStill() : owner().write(current => addShotAtFrame(current, ports.state().frame, owner().state().frameCount, owner().capture())),
+    'shot.create': () => storyboard() ? createStill() : createClip(),
     'shot.createStill': args => createStill(args),
     'shot.setCaption': ({ shotId, caption }) => patchShot(shotId, shot => ({ ...shot, caption })),
     'shot.setCastOverride': ({ shotId, characterId, override }) => owner().setCastOverride(shotId, characterId, override),
@@ -188,7 +200,7 @@ export function register(registry, ports) {
   const hasShots = state => state.shots.length > 0 || 'There are no shots yet; add one with shot.create.';
   const availability = {
     'shot.createStill': () => true,
-    'shot.create': state => storyboard() || addShotAtFrame(state.shots, state.frame, state.frameCount, null) !== state.shots || `There is no free room for a new shot at the playhead (frame ${state.frame}); move it with operate_studio { frame } or shorten a shot.`,
+    'shot.create': state => storyboard() || addShotAtFrame(state.shots, state.frame, state.frameCount, null) !== state.shots || appendShotGrowingTake(state.shots, state.frameCount, null, TAKE_FRAME_MAX) !== null || `The take is at its longest (${TAKE_FRAME_MAX} frames); shorten or remove a shot first.`,
     'shot.split': state => state.shots.some(shot => state.frame > shot.startFrame && state.frame <= shot.endFrame) || `The playhead (frame ${state.frame}) is not inside a shot after its first frame; move it with operate_studio { frame }.`,
     'shot.clearCameraRail': state => state.shots.some(shot => createCameraBlock(shot.camera).cameraRail) || 'No shot has a camera rail; lay one with shot.setCameraRail.',
   };

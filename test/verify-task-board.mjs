@@ -8,9 +8,22 @@ import { test } from 'node:test';
 import { answerOf, runCompileJob } from '../src/motion3/compile-job.js';
 import { compileActivity, createCompileRunner, watchCompileActivity } from '../src/commands/motion3-compile.js';
 import { motionScene } from '../src/motion3/scene.js';
-import { compileState, costLabel, emptyBoard, progressLine, reduceBoard, reduceScopes, seedBoard } from '../src/workflow/task-board.js';
+import { boardGroups, compileState, costLabel, dispatchedTaskIds, emptyBoard, progressLine, reduceBoard, reduceScopes, scopeLabel, seedBoard, taskLine, taskReason } from '../src/workflow/task-board.js';
 
 const view = (taskId, status, extra = {}) => ({ taskId, title: `Task ${taskId}`, status, scope: [`object:${taskId}`], usage: { cost: 0 }, ...extra });
+
+test('a task row reads in the author\'s words: the blocking task by title, never its id', () => {
+	const waiting = taskReason('timeline is held by task 84867242-9a6f-4d2a-9495-85c6508f986f (Cube left (2 m))');
+	assert.ok(waiting.includes('Cube left (2 m)') && !waiting.includes('84867242'), waiting);
+	assert.ok(taskReason('waits for task t-1 (Frame the shot) to finish').includes('Frame the shot'));
+	assert.equal(taskReason('the run failed'), 'the run failed');
+	assert.equal(taskLine(view('a', 'running', { progress: 'Compile motion' })), 'Compile motion');
+	assert.equal(taskLine(view('a', 'done', { summary: { reply: 'Moved the cup. QA: none.' } })), 'Moved the cup.');
+	assert.equal(scopeLabel('object:cube-1') === 'object:cube-1', false);
+	const groups = boardGroups(['a', 'b', 'c', 'd'].reduce((board, id, i) => reduceBoard(board, { type: 'task.seed', ...view(id, ['running', 'waiting', 'failed', 'done'][i]) }), emptyBoard()));
+	assert.deepEqual(Object.fromEntries(Object.entries(groups).map(([key, list]) => [key, list.map(task => task.taskId)])), { failed: ['c'], running: ['a'], waiting: ['b'], done: ['d'] });
+	assert.deepEqual(dispatchedTaskIds([{ kind: 'tool', name: 'dispatch_task', result: { taskId: 't1' } }, { kind: 'tool', name: 'quick_edit', result: { taskId: 'x' } }, { kind: 'tool', name: 'dispatch_task', result: { duplicateOf: 't1' } }, { kind: 'tool', name: 'dispatch_task' }]), ['t1', 't1']);
+});
 
 test('board events make one card per task, in arrival order, with the latest state', () => {
 	let board = emptyBoard();

@@ -246,6 +246,10 @@ const { MAIN_SYSTEM_PROMPT } = await import("../bin/agent/main-prompt.mjs");
 	assert.equal(new Set(taskCommands.map(command => command.taskId)).size, 3, "each object.set ran inside its own task (two tasks and the quick edit)");
 	assert.equal((await get(`/agent/main/${sessionId}/board`)).status, 200);
 	assert.equal((await fetch(`${origin}/agent/main/${sessionId}/board`, { headers: { origin, cookie: "studio_owner=intruder" } })).status, 403, "another owner reads nothing");
+	// A main turn carrying a picture is far over 64 KB: the body limit is the turn route's, so the envelope reaches the validator.
+	const big = await fetch(`${origin}/agent/main`, { method: "POST", headers: { "content-type": "application/json", origin, cookie },
+		body: JSON.stringify({ surface: "studio", sessionId, turnId: randomUUID(), text: "x", attachments: [{ dataUrl: `data:image/jpeg;base64,${"A".repeat(300_000)}` }] }) });
+	assert.equal(typeof (await big.json()).error, "object", "an attachment-sized main turn is read and validated, not refused as too large");
 	for (let i = 0; i < 200 && !mainTurns; i++) await new Promise(r => setTimeout(r, 25));
 	assert.equal(mainTurns, 1, "the main agent reported once on its own when the tasks ended");
 	const turnReplay = await (await get(`/agent/turn/${encodeURIComponent(board[0].turnId)}/events?after=0`)).text();

@@ -4,7 +4,7 @@
 // duplicated aspect in the header, one gesture per drag).
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { clampMm, dragMm, fovDegToMm, formatMm, lensRange, mmToFovDeg, nextPrime } from "../src/shell/lens-scrub-math.js";
+import { clampMm, dragMm, fovDegToMm, formatMm, lensRange, mmToFovDeg, nextPrime, previousPrime } from "../src/shell/lens-scrub-math.js";
 import { usedSensorHeightMm } from "../src/shot.js";
 
 const sensor = usedSensorHeightMm("fullFrame", 16 / 9);
@@ -31,6 +31,10 @@ assert.equal(clampMm(24.44, range), 24.4);
 assert.equal(nextPrime(24.4, range), 28);
 assert.equal(nextPrime(24, range), 28);
 assert.equal(nextPrime(50, range), 14);
+// The left arrow: the previous real prime, wrapping to the longest.
+assert.equal(previousPrime(24.4, range), 24);
+assert.equal(previousPrime(24, range), 18);
+assert.equal(previousPrime(14, range), 50);
 
 const scrub = readFileSync(new URL("../src/shell/lens-scrub.jsx", import.meta.url), "utf8");
 assert.match(scrub, /role="slider"/);

@@ -639,7 +639,7 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 	};
 	// Lazy, like every src/ import here: the minimal legacy-sidecar package omits src/.
 	let taskRoutesReady;
-	const taskRoutes = async (...args) => (await (taskRoutesReady ??= import("./studio-task-routes.mjs").then(({ createStudioTaskRoutes }) => createStudioTaskRoutes({ enabled: studioTasks, handleStudioTurn, studioSessions, studioOwnerTokens, studioEvents, emitStudioEvent, writeStudioStream, parseCookies, json, readBody, limits: taskLimits,
+	const taskRoutes = async (...args) => (await (taskRoutesReady ??= import("./studio-task-routes.mjs").then(({ createStudioTaskRoutes }) => createStudioTaskRoutes({ enabled: studioTasks, handleStudioTurn, studioSessions, studioOwnerTokens, studioEvents, emitStudioEvent, writeStudioStream, parseCookies, json, readBody: req => readBody(req, TURN_BODY_LIMIT), limits: taskLimits,
 		newRecord: () => ({ next: 0, events: [], listeners: new Set(), terminal: false }),
 		validateEnvelope: async value => (await import("../../src/studio-agent-protocol.js")).validateStudioTurnEnvelope(value),
 		inspect: async (host, args) => ((await runtime).liveHub || liveHub).command("inspect_studio", args, host.workspaceHandle),

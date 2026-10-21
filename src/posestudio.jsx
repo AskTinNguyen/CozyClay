@@ -423,13 +423,10 @@ export function IkHandles({ chains, fkJoints, ikState, enabled, focus, onFocus, 
 			// not-yet-focused sphere just took focus (nothing to bake). An
 			// empty-canvas click releases focus too.
 			if (!d.moved) {
-				if (d.kind === "empty") {
-					if (focusIdRef.current) focusRef.current?.(null);
-					return;
-				}
-				if (d.wasFocused && !d.axisDir) {
-					focusRef.current?.(null); // toggle off
-				}
+				// (An empty press is always wasFocused: it only begins while focused.)
+				// A gizmo volume can win the raycast over the sphere centre, so a
+				// no-move press on the centre (d.centerClick) toggles off too.
+				if (d.wasFocused && (!d.axisDir || d.centerClick)) focusRef.current?.(null); // toggle off
 				// axis-arrow clicks and fresh-sphere clicks: nothing to bake
 				return;
 			}
@@ -842,7 +839,7 @@ const CLICK_PX = 4;
 		if (kind === "empty") {
 			// An empty-canvas press: no drag, just a click candidate that
 			// releases focus on pointerup (see onUp).
-			dragRef.current = { kind: "empty", trackId: "empty", downXY, moved: false };
+			dragRef.current = { kind: "empty", trackId: "empty", downXY, moved: false, wasFocused: true };
 			window.addEventListener("pointermove", handlersRef.current.onMove);
 			window.addEventListener("pointerup", handlersRef.current.onUp);
 			window.addEventListener("pointercancel", handlersRef.current.onUp);
@@ -860,6 +857,7 @@ const CLICK_PX = 4;
 		}
 		raycaster.setFromCamera(ndc, camera);
 		let plane;
+		const rect = gl.domElement.getBoundingClientRect(), c = origin.clone().project(camera);
 		const ringDrag = !!axisDir && (kind === "fk" || kind === "swing");
 		if (ringDrag) {
 			// A ring turns about its axis: the pointer is read on the ring's own plane.
@@ -892,6 +890,8 @@ const CLICK_PX = 4;
 			// a no-move click toggles focus OFF only then; a click on a fresh
 			// (unfocused) handle must keep the focus it just took.
 			wasFocused: focusIdRef.current === track.id,
+			// Press landed within CLICK_PX of the sphere's projected centre.
+			centerClick: Math.hypot(downXY[0] - (rect.left + (c.x + 1) / 2 * rect.width), downXY[1] - (rect.top + (1 - c.y) / 2 * rect.height)) <= CLICK_PX,
 		};
 		if (kind === "fk" || kind === "swing" || kind === "body") {
 			// Swing/translate start state, frozen at drag start so moves stay
@@ -944,8 +944,7 @@ const CLICK_PX = 4;
 				handleRefs.current[p.track.id]?.userData.ikExposed !== false
 			);
 			if (focused && !selectionOnly) picks = picks.filter((p) => p.track.id === focused);
-		else picks = picks.filter((p) => !p.axisDir); // spheres only
-			if (selectionOnly) picks = picks.filter((p) => !p.axisDir);
+			else picks = picks.filter((p) => !p.axisDir); // spheres only
 			if (!picks.length) {
 				if (focused) beginDrag("empty", { id: "empty" }, null, null, downXY);
 				return;
@@ -985,10 +984,16 @@ const CLICK_PX = 4;
 			}
 			setHoverAxis((current) => (current === axis ? current : axis));
 		};
+		// Esc releases the focused handle (same path as the toggle-off click).
+		const onKey = (ev) => {
+			if (ev.key === "Escape" && focusIdRef.current && !/^(INPUT|TEXTAREA|SELECT)$/.test(ev.target?.tagName)) focusRef.current?.(null);
+		};
 		raycaster.layers.enable(POSER_LAYER);
 		el.addEventListener("pointerdown", onDown, true);
 		el.addEventListener("pointermove", onHover);
+		window.addEventListener("keydown", onKey);
 		return () => {
+			window.removeEventListener("keydown", onKey);
 			el.removeEventListener("pointerdown", onDown, true);
 			el.removeEventListener("pointermove", onHover);
 			raycaster.layers.disable(POSER_LAYER);

@@ -139,6 +139,21 @@ function errorMessage(text) {
 	expect("the surviving text reached the panel", frames.some((f) => f.type === "text.delta" && f.text) || frames.some((f) => f.type === "text.delta"), JSON.stringify(frames));
 }
 
+// --- one session whose tool set changes between turns (the Studio Tasks switch) still runs ---
+{
+	const models = createModels();
+	const faux = fauxProvider({ provider: "faux", models: [{ id: "scripted", name: "Scripted", input: ["text", "image"] }] });
+	models.setProvider(faux.provider);
+	installScripts(faux, [fauxAssistantMessage([fauxText("one")]), fauxAssistantMessage([fauxText("two")])]);
+	const toolNamed = (name) => ({ name, parameters: { type: "object", properties: {}, additionalProperties: false }, handler: async () => ({ ok: true }) });
+	const runner = createAgentRunner({ models, tools: [] });
+	const session = await runner.openSession("errors-tool-swap", { surface: "workflow" });
+	const first = await collect(session, { text: "hi", model: "faux/scripted", tools: [toolNamed("inspect_studio")] });
+	const second = await collect(session, { text: "again", model: "faux/scripted", tools: [toolNamed("dispatch_task")] });
+	await runner.close();
+	expect("a turn with a different tool set in the same session is not refused", first.every((f) => f.type !== "error") && second.every((f) => f.type !== "error") && second.some((f) => f.type === "done"), JSON.stringify(second));
+}
+
 // --- provider-shaped key material in an upstream error is never exposed ---
 for (const token of ["AIza-secret-0123456789abcdefghijk", "sk-or-secret", "sk-ant-secret", "sk-secret", "Bearer secret", "eyJsecret"]) {
 	const models = createModels();

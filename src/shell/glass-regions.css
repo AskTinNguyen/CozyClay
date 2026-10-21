@@ -800,11 +800,12 @@
 
 /* ----------------------------------------------- Dock: Animation | Assets */
 /* The switch sits at the head's left end, where the Sequencer's transport
-   and the Library's Content | Log row start after it. */
+   and the Library's Content | Log row start after it. It paints above the
+   timeline (z-index 6, timeline.css), which would otherwise take its clicks. */
 .app[data-shell="glass"]:not([data-embed-mode]) .v2-dock { --dock-tabs-w: 176px; }
 .app[data-shell="glass"]:not([data-embed-mode]) .dock-tabs {
 	position: absolute;
-	z-index: 3;
+	z-index: 7;
 	top: 9px;
 	left: 16px;
 	box-sizing: border-box;

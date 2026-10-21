@@ -44,7 +44,7 @@ const NODE_FILES = [
 	"test/ik/verify-range-pin-ui.mjs",
 	"test/ik/verify-range-pin-object-transform.mjs",
 	"test/verify-ik-camera-performance.mjs",
-	"test/verify-ik-entry-camera.mjs",
+	"test/verify-ik-entry-camera.mjs", "test/verify-viewport-visible-rect.mjs",
 	"test/process/verify-lifecycle.mjs",
 	"test/process/verify-mcp-package-isolation.mjs",
 	"test/process/verify-package-telemetry.mjs",
