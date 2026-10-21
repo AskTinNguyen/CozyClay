@@ -9,7 +9,8 @@
 //   4. timeline (the planted spans go first, then entries from the end)
 //   5. the other groups as one-liners { kind, subject, count, severity, first, last }
 //   6. fixed, search, skills, ms
-// Room left after that turns one-liners back into full groups, from the top.
+// Room left after that turns one-liners back into full groups, from the top. A head still too big (a
+// repair that applied many patches) keeps the newest repair.applied entries; more.repair counts the rest.
 
 export const MOTION_OUTPUT_BUDGET = 6000;
 const MIN_FULL = 4;
@@ -47,6 +48,14 @@ export function fitOutput(full, budget = MOTION_OUTPUT_BUDGET) {
 	for (let i = nFull; i < out.qa?.groups.length && fits({ qa: { ...out.qa, groups: out.qa.groups.map((g, j) => (j === i ? groups[i] : g)) } }); i++) out.qa.groups[i] = groups[i];
 	// last resort (huge hints): full groups become one-liners from the end
 	for (let i = nFull - 1; i >= 0 && !fits({}); i--) out.qa.groups[i] = oneLine(groups[i]);
+	// a long repair (each applied patch in full) keeps its newest changes; the stored spec holds them all
+	const applied = out.repair?.applied;
+	if (Array.isArray(applied) && !fits({})) {
+		let n = applied.length;
+		while (n > 0 && !fits({ repair: { ...out.repair, applied: applied.slice(applied.length - n) } })) n--;
+		out.repair = { ...out.repair, applied: applied.slice(applied.length - n) };
+		more.repair = applied.length - n;
+	}
 	more.groups = groups.length - (out.qa?.groups ?? []).filter(g => "worst" in g).length;
 	return { ...out, more };
 }

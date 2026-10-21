@@ -10,7 +10,8 @@
 // paced to fit a short span: observations.paced; a skill whose release or
 // settle the last frame cut: observations.cut), and the timeline and the
 // requested probes read the result.
-// liftRequest first takes what the agent obviously meant: spec.probes are request probes, and a
+// prepareSpec (correct.js) first corrects slips with one reading and fits walkTo strides, both kept in the
+// stored spec; liftRequest takes what the agent obviously meant: spec.probes are request probes, and a
 // bare goals[].moved id is object:<id>; relaxSpec (lenient.js) fixes mechanical slips in the expanded
 // spec before validation and the answer lists each fix in notes.
 import { compileMotion } from "./compiler/compile.js";
@@ -32,6 +33,7 @@ import { observeLoad, LOAD_UNITS } from "./load.js";
 import { observeLife, LIFE_UNITS } from "./qa/motion-life.js";
 import { planWalks, applyWalkPlans } from "./walk-plan.js";
 import { relaxSpec } from "./lenient.js";
+import { prepareSpec } from "./correct.js";
 
 const ms = t => Math.round(performance.now() - t);
 
@@ -65,14 +67,27 @@ export function liftRequest(spec, probes) {
  * (with spec.probes, liftRequest).
  */
 export function compileSpec(sent, { sk, scene }, opts = {}) {
-	const { spec, probes: asked } = liftRequest(sent, opts.probes);
-	const t0 = performance.now(), ctx = { sk, scene, lenient: opts.lenient === true }, notes = [];
+	const notes = [], refusals = [];
+	try {
+		return compilePrepared(opts.lenient ? sent : prepareSpec(sent, { sk, scene }, notes, refusals), { sk, scene }, opts, notes, refusals);
+	} catch (error) {
+		// a walk prepareSpec refused is listed with whatever refused the spec first (validateSpec lists it with its own)
+		if (refusals.length && /^MOTION_SPEC_INVALID/.test(error.message) && !error.message.includes(refusals[0])) error.message = error.message.replace(/^MOTION_SPEC_INVALID: /, `MOTION_SPEC_INVALID: ${refusals.join("\n")}\n`);
+		// a refusal says what was corrected first, so the paths it names (a moved generator: use[i]) read right
+		if (notes.length && /^MOTION_SPEC_INVALID/.test(error.message)) error.message += `\n(adjusted before these checks: ${notes.join("; ")})`;
+		throw error;
+	}
+}
+
+function compilePrepared(prepared, { sk, scene }, opts, notes, refusals) {
+	const { spec, probes: asked } = liftRequest(prepared, opts.probes);
+	const t0 = performance.now(), ctx = { sk, scene, lenient: opts.lenient === true, problems: refusals };
 	const checks = opts.checks && nameChecks({ checks: opts.checks }).checks;
 	let plans = [];
 	const expand = s => {
 		const { spec: exp, used } = expandUse(nameChecks(applyWalkPlans(s, plans)), ctx);
 		// plain JSON objects compile about twice as fast as structuredClone'd ones (V8 shapes)
-		const full = relaxSpec(JSON.parse(JSON.stringify(checks ? { ...exp, checks } : exp)), scene, notes);
+		const full = relaxSpec(JSON.parse(JSON.stringify(checks ? { ...exp, checks } : exp)), scene, notes, sk);
 		validateSpec(full, ctx);
 		return { full, used };
 	};

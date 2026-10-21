@@ -7,6 +7,7 @@
 // A refusal is an Error with a code (INVALID_ARGUMENT, MOTION_SPEC_INVALID turned into it), which the
 // client turns back into the Studio's protocol error.
 import { compileSpec, liftRequest } from "./pipeline.js";
+import { prepareSpec } from "./correct.js";
 import { repairSpec } from "./repair.js";
 import { bakeTake } from "./take.js";
 import { skeletonFor } from "./rigs/index.js";
@@ -49,7 +50,9 @@ export function runCompileJob({ model, scene, spec: asked, probes: sentProbes, c
 		const r = asArgument(() => compileSpec(sent, { sk, scene }, { ...opts, probes }));
 		return { ...r, stored: r.spec === sent ? spec : r.spec };
 	};
-	const t0 = performance.now(), fixed = repair ? repairSpec(asked, repair, once) : { spec: asked, result: once(asked) };
+	// repair patches address the stored spec, so a repair starts from it corrected (correct.js), and says what was
+	const corrected = [], start = repair && !lenient ? prepareSpec(asked, { sk, scene }, corrected) : asked;
+	const t0 = performance.now(), fixed = repair ? repairSpec(start, repair, once) : { spec: asked, result: once(asked) };
 	// ms.repair: the whole repair's wall time, so a sweep that repairs every variant shows what it costs
 	const r = fixed.result, label = fixed.spec?.label ?? null, ms = fixed.repair ? { ...r.ms, repair: Math.round(performance.now() - t0) } : r.ms;
 	const take = bake ? bakeTake(sk, r.out, { position: bake.position, yaw: bake.yaw }, { spec: r.stored, prompt: ("prompt" in bake ? bake.prompt : label) ?? "" }) : undefined;
@@ -57,7 +60,7 @@ export function runCompileJob({ model, scene, spec: asked, probes: sentProbes, c
 	const people = take && keptPeople(scene, [r.expanded, r.stored]);
 	if (people) take.people = people;
 	return { stored: r.stored, qa: r.qa, observations: r.observations, used: r.used, fixed: r.fixed, search: r.search, timeline: r.timeline,
-		...(r.probes ? { probes: r.probes } : {}), ...(r.notes ? { notes: r.notes } : {}), ms, frameCount: r.out.frameCount, label,
+		...(r.probes ? { probes: r.probes } : {}), ...(r.notes || corrected.length ? { notes: [...corrected, ...(r.notes ?? [])] } : {}), ms, frameCount: r.out.frameCount, label,
 		...(fixed.repair ? { repair: fixed.repair } : {}), ...(take ? { take } : {}) };
 }
 
