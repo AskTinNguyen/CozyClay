@@ -2338,5 +2338,57 @@
       "count": 2,
       "uniques": 2
     }
+  ],
+  "2026-10-21": [
+    {
+      "referrer": "l.threads.com",
+      "count": 180,
+      "uniques": 144
+    },
+    {
+      "referrer": "t.co",
+      "count": 156,
+      "uniques": 111
+    },
+    {
+      "referrer": "Google",
+      "count": 133,
+      "uniques": 52
+    },
+    {
+      "referrer": "github.com",
+      "count": 114,
+      "uniques": 85
+    },
+    {
+      "referrer": "cozyclay.org",
+      "count": 75,
+      "uniques": 58
+    },
+    {
+      "referrer": "ruanyifeng.com",
+      "count": 13,
+      "uniques": 10
+    },
+    {
+      "referrer": "chatgpt.com",
+      "count": 9,
+      "uniques": 2
+    },
+    {
+      "referrer": "reddit.com",
+      "count": 3,
+      "uniques": 3
+    },
+    {
+      "referrer": "libhunt.com",
+      "count": 3,
+      "uniques": 2
+    },
+    {
+      "referrer": "yandex.ru",
+      "count": 3,
+      "uniques": 1
+    }
   ]
 }
