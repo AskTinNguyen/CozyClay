@@ -10,6 +10,8 @@
 //   - a second task starts only once the first one's model has answered, or STAGGER ms passed: the shared prompt prefix
 //     is then cached once, not written by every task at the same moment (12)
 //   - usage and cost per task (13); summaries are capped so the main agent's context stays small (16)
+//   - a done task also says what it changed as data (the ids its receipts touched, as scope keys where its scope names
+//     them), so a dependent reads which targets moved instead of parsing the summary text (8)
 //   - a run whose Studio went away pauses, and resumes when the main agent next sees the same scene; another scene fails
 //     it (14)
 //   - the same instructions on the same scope as a queued or running task are not started twice (19)
@@ -17,7 +19,7 @@
 import { randomUUID } from "node:crypto";
 import { isScopeKey, scopeConflict } from "../../src/bus-task-scopes.js";
 
-export const TASK_LIMITS = Object.freeze({ cap: 3, staggerMs: 1500, maxMs: 20 * 60_000, maxTools: 120, summaryChars: 1200, receipts: 8 });
+export const TASK_LIMITS = Object.freeze({ cap: 3, staggerMs: 1500, maxMs: 20 * 60_000, maxTools: 120, summaryChars: 1200, receipts: 8, changed: 24 });
 const ACTIVE = new Set(["queued", "waiting", "starting", "running", "paused"]);
 const ENDED = new Set(["done", "failed", "cancelled"]);
 const norm = text => String(text ?? "").toLowerCase().replace(/\s+/g, " ").trim();
@@ -35,7 +37,7 @@ export function createTaskBoard({ run, emit = () => {}, now = Date.now, setTimer
 	const running = () => list().filter(task => ["starting", "running"].includes(task.status));
 	const scopes = () => new Map(running().map(task => [task.taskId, { taskId: task.taskId, title: task.title, keys: new Set(task.scope) }]));
 	const view = task => ({ taskId: task.taskId, title: task.title, status: task.status, scope: task.scope, ...(task.reason ? { reason: task.reason } : {}), ...(task.turnId ? { turnId: task.turnId } : {}),
-		...(task.dependsOn.length ? { dependsOn: task.dependsOn } : {}), tools: task.tools, usage: task.usage, ...(task.summary ? { summary: task.summary } : {}) });
+		...(task.dependsOn.length ? { dependsOn: task.dependsOn } : {}), tools: task.tools, usage: task.usage, ...(task.summary ? { summary: task.summary } : {}), ...(task.changed?.length ? { changed: task.changed } : {}) });
 	const tell = (type, task, extra = {}) => emit({ type, at: now(), ...view(task), ...extra });
 
 	const invalid = message => Object.assign(new Error(message), { code: "INVALID_ARGUMENT" });
@@ -123,7 +125,7 @@ export function createTaskBoard({ run, emit = () => {}, now = Date.now, setTimer
 		lastStart = { at: now(), warm: false, taskId: task.taskId };
 		const mark = lastStart;
 		task.controller = new AbortController();
-		const deps = task.dependsOn.map(id => tasks.get(id)).map(dep => ({ taskId: dep.taskId, title: dep.title, summary: dep.summary }));
+		const deps = task.dependsOn.map(id => tasks.get(id)).map(dep => ({ taskId: dep.taskId, title: dep.title, summary: dep.summary, changed: dep.changed ?? [] }));
 		task.timer = setTimer(() => stop(task, `it ran past ${Math.round(L.maxMs / 60_000)} minutes`), L.maxMs);
 		task.onFrame = frame => {
 			if (task.status === "starting") { task.status = "running"; tell(resume ? "task.resumed" : "task.started", task); }
@@ -141,10 +143,18 @@ export function createTaskBoard({ run, emit = () => {}, now = Date.now, setTimer
 		else if (result.status === "lost") { task.status = "paused"; task.reason = "Studio disconnected; it resumes when Studio reconnects to the same scene"; task.sceneId = result.sceneId; tell("task.paused", task); }
 		else {
 			const summary = { reply: clip(String(result.reply ?? "").trim(), L.summaryChars), receipts: (result.receipts ?? []).slice(-L.receipts) };
+			if (result.status === "done") task.changed = changedBy(task, result.receipts);
 			// A cancel that arrived after the run finished cannot take it back: it stays done (and can be undone).
 			end(task, task.stopReason ? "failed" : task.cancelled && result.status !== "done" ? "cancelled" : result.status, { reason: task.stopReason ?? (result.status === "failed" ? clip(String(result.error?.message ?? result.error ?? "the run failed"), 300) : undefined), summary });
 		}
 		rescheduleNow();
+	}
+
+	// Every receipt counts, not only the capped ones the summary keeps; an id the scope names reads as its key, one the task
+	// made (outside its declared scope) as the bare id.
+	function changedBy(task, receipts = []) {
+		const keyOf = id => task.scope.find(key => key.slice(key.indexOf(":") + 1) === id && /^(object|character|shot):/.test(key)) ?? id;
+		return [...new Set(receipts.flatMap(receipt => receipt?.affectedIds ?? []).filter(id => typeof id === "string" && id).map(keyOf))].slice(0, L.changed);
 	}
 
 	function end(task, status, { reason, summary } = {}) {
@@ -191,7 +201,7 @@ export function taskHeader(task, { deps = [], resume = null } = {}) {
 		`You are one of several tasks working on this scene at once. Your scope (the only things you may change): ${task.scope.join(", ")}.`,
 		"Everything else is read-only for you: another task or the user may be changing it. A command outside your scope is refused with SCOPE_DENIED; ask for more with run_action task.requestScope { taskId, scope }, and if that answers SCOPE_BUSY, do what you can inside your scope and say what is left.",
 		"When you finish, end with a short report for the coordinator in English: what you changed (receipt ids, ids), the QA problems left, and anything not done. The coordinator talks to the user.",
-		...deps.map(dep => `Earlier task ${dep.taskId} (${dep.title}) is done: ${dep.summary?.reply ?? ""}`),
+		...deps.map(dep => `Earlier task ${dep.taskId} (${dep.title}) is done: ${dep.summary?.reply ?? ""}${dep.changed?.length ? ` It changed: ${dep.changed.join(", ")}.` : ""}`),
 		...(resume?.note ? [resume.note] : []),
 		"</task>", "", task.instructions].join("\n");
 }

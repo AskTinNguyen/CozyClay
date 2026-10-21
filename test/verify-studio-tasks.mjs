@@ -83,7 +83,7 @@ const dispatch = (board, title, scope, extra = {}) => board.dispatch({ title, in
 	assert.equal(runs.length, 1); assert.match(board.board().find(task => task.title === "grab cup").reason, /waits for task/);
 	runs[0].resolve({ status: "done", reply: "Cup made: cylinder-3." }); await tick(); await tick();
 	assert.equal(runs.length, 2);
-	assert.deepEqual(runs[1].options.deps, [{ taskId: a.taskId, title: "make cup", summary: { reply: "Cup made: cylinder-3.", receipts: [] } }], "case 8: it hears the earlier summary");
+	assert.deepEqual(runs[1].options.deps, [{ taskId: a.taskId, title: "make cup", summary: { reply: "Cup made: cylinder-3.", receipts: [] }, changed: [] }], "case 8: it hears the earlier summary");
 	assert.match(taskHeader(runs[1].task, { deps: runs[1].options.deps }), /Earlier task .* is done: Cup made: cylinder-3\./);
 	const c = dispatch(board, "x", ["object:x"]), d = dispatch(board, "y", ["object:y"], { dependsOn: [c.taskId] });
 	await tick();
@@ -91,6 +91,26 @@ const dispatch = (board, title, scope, extra = {}) => board.dispatch({ title, in
 	assert.equal(status().y, "failed"); assert.match(board.board().find(task => task.taskId === d.taskId).reason, /depends on task .* which failed/);
 	assert.equal(b.status, "waiting", "dispatch answers the task as the board sees it");
 	console.log("PASS case 8: a dependent task waits, hears the summary of what it depends on, and fails when that failed");
+}
+{
+	// case 8, the handoff as data: what a done task changed, from every receipt (not only the capped ones), deduped and
+	// capped; an id its scope names reads as that key, an id it made as itself.
+	const { board, runs } = boardFixture({ changed: 4 });
+	const a = dispatch(board, "set table", ["object:table", "character:alex"]);
+	dispatch(board, "frame it", ["shot:s1"], { dependsOn: [a.taskId] });
+	await tick();
+	const receipts = [{ receiptId: "r1", affectedIds: ["table", "cup-9"] }, ...Array.from({ length: 10 }, (_, i) => ({ receiptId: `n${i}`, affectedIds: [] })), { receiptId: "r2", affectedIds: ["table", "alex", "plate-2", "fork-1"] }];
+	runs[0].resolve({ status: "done", reply: "Table set.", receipts }); await tick(); await tick();
+	const done = board.board().find(task => task.title === "set table");
+	assert.deepEqual(done.changed, ["object:table", "cup-9", "character:alex", "plate-2"], "deduped, keyed where the scope names it, capped");
+	assert.equal(done.summary.receipts.length, TASK_LIMITS.receipts, "the summary keeps its own cap");
+	assert.deepEqual(runs[1].options.deps.map(dep => Object.keys(dep)), [["taskId", "title", "summary", "changed"]]);
+	assert.deepEqual(runs[1].options.deps[0].changed, done.changed);
+	assert.match(taskHeader(runs[1].task, { deps: runs[1].options.deps }), /is done: Table set\. It changed: object:table, cup-9, character:alex, plate-2\./);
+	const failed = dispatch(board, "bad", ["object:q"]); await tick();
+	runs[2].resolve({ status: "failed", receipts: [{ receiptId: "r3", affectedIds: ["q"] }], error: { message: "x" } }); await tick(); await tick();
+	assert.equal(board.board().find(task => task.taskId === failed.taskId).changed, undefined, "only a done task hands off what it changed");
+	console.log("PASS case 8 handoff: a done task records what it changed as data and its dependents receive it with the summary");
 }
 {
 	// case 8 as a plan: one call queues a graph, refs resolve to the new taskIds, and a bad plan queues nothing.
