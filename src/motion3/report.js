@@ -8,7 +8,8 @@
 //   3. probes
 //   4. timeline (the planted spans go first, then entries from the end)
 //   5. the other groups as one-liners { kind, subject, count, severity, first, last }
-//   6. fixed, search, skills, ms
+//   6. qa.warnings (qa/arm-checks.js: never failing, so after every group), as many lines as fit
+//   7. fixed, search, skills, ms
 // Room left after that turns one-liners back into full groups, from the top.
 
 export const MOTION_OUTPUT_BUDGET = 6000;
@@ -25,7 +26,8 @@ export function fitOutput(full, budget = MOTION_OUTPUT_BUDGET) {
 	if (size(full) <= budget) return full;
 	const { qa, observations, probes, timeline, fixed, search, skills, ms, ...head } = full;
 	const groups = qa?.groups ?? [], more = { specId: full.specId, groups: 0, timeline: 0, probes: 0 };
-	const out = { ...head, ...(qa ? { qa: { ...qa, groups: [] } } : {}), ...(observations ? { observations } : {}) };
+	const { warnings, ...qaHead } = qa ?? {};
+	const out = { ...head, ...(qa ? { qa: { ...qaHead, groups: [] } } : {}), ...(observations ? { observations } : {}) };
 	// the counts in `more` may still grow by a digit or two after a check
 	const fits = extra => size({ ...out, ...extra, more }) <= budget - 32;
 	const nFull = Math.min(MIN_FULL, groups.length);
@@ -43,6 +45,7 @@ export function fitOutput(full, budget = MOTION_OUTPUT_BUDGET) {
 		more.timeline = list === lean ? timeline.length : timeline.length - n;
 	}
 	for (let i = nFull; i < groups.length && fits({ qa: { ...out.qa, groups: [...out.qa.groups, oneLine(groups[i])] } }); i++) out.qa.groups.push(oneLine(groups[i]));
+	for (let n = warnings?.length ?? 0; n > 0; n--) if (fits({ qa: { ...out.qa, warnings: warnings.slice(0, n) } })) { out.qa.warnings = warnings.slice(0, n); break; }
 	for (const [k, v] of [["fixed", fixed], ["search", search], ["skills", skills], ["ms", ms]]) if (v !== undefined && fits({ [k]: v })) out[k] = v;
 	for (let i = nFull; i < out.qa?.groups.length && fits({ qa: { ...out.qa, groups: out.qa.groups.map((g, j) => (j === i ? groups[i] : g)) } }); i++) out.qa.groups[i] = groups[i];
 	// last resort (huge hints): full groups become one-liners from the end
