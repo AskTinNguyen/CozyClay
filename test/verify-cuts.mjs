@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import {
 	addShotAtFrame,
+	appendShotGrowingTake,
 	cameraAtFrame,
 	createShot,
 	cutAtFrame,
@@ -35,6 +36,15 @@ const fourSecond = [createShot("Long", 0, 79)];
 const addOverLong = addShotAtFrame(fourSecond, 20, 200, framing(20));
 assert.deepEqual(addOverLong.map(({ startFrame, endFrame }) => [startFrame, endFrame]), [[0, 79], [80, 119]], "add after an occupied 4-second Shot preserves it and creates a separate 2-second Shot");
 assert.equal(addOverLong[0], fourSecond[0], "add never rewrites the occupied Shot");
+
+// A take one Shot fills end to end (a 96-frame One Take) has no free time: add grows the take instead of doing nothing.
+const oneTake = [createShot("One Take", 0, 95)];
+assert.equal(addShotAtFrame(oneTake, 0, 96, framing(0)), oneTake, "a full take has no room at the playhead");
+const grown = appendShotGrowingTake(oneTake, 96, framing(0), 28800);
+assert.equal(grown.frameCount, 136, "the take grows by one 40-frame Shot");
+assert.deepEqual(grown.shots.map(({ startFrame, endFrame }) => [startFrame, endFrame]), [[0, 95], [96, 135]], "the new Shot follows the last one");
+assert.equal(grown.shots[0], oneTake[0], "growing never rewrites an existing Shot");
+assert.equal(appendShotGrowingTake(oneTake, 96, null, 120), null, "never past the longest take");
 
 shots = addShotAtFrame(shots, 100, 200, framing(100));
 assert.deepEqual(shots.map(({ startFrame, endFrame }) => [startFrame, endFrame]), [[20, 59], [100, 139]], "gaps remain valid");

@@ -273,8 +273,9 @@ function CraneHeightEditor({ crane, railRange, durationFrames, selectedIndex, on
 					key={index}
 					type="button"
 					className={"tl-crane-knob" + (index === selectedIndex ? " selected" : "")}
-					// an end point sits ON the window edge; clamp it inside so the knob stays a whole, grabbable circle
-					style={{ left: `clamp(9px, ${xFor(point.t) * 100}%, calc(100% - 9px))`, top: `clamp(9px, ${yFor(point.height) * 100}%, calc(100% - 9px))` }}
+					// an end point sits ON the window edge; clamp it inside so the knob stays whole. The clamp is the
+					// knob's own radius: a wider one pinned every knob of a 20 px Shot strip to one row, off its curve.
+					style={{ left: `clamp(5px, ${xFor(point.t) * 100}%, calc(100% - 5px))`, top: `clamp(5px, ${yFor(point.height) * 100}%, calc(100% - 5px))` }}
 					aria-label={ko(`Crane point ${index + 1}, ${point.height.toFixed(1)} metres`, `크레인 점 ${index + 1}, ${point.height.toFixed(1)}미터`)}
 					onPointerDown={(event) => {
 						event.preventDefault();
@@ -2199,7 +2200,7 @@ export default function Timeline({
 									{name === SHOTS_LANE && shots.flatMap((shot, index) => (shot.cameraKeys ?? []).map((key) => (
 										<span
 											key={`${shot.id}:${key.frame}`}
-											className="tl-marker cam"
+											className="tl-marker cam" data-edge={key.frame <= shot.startFrame ? "start" : key.frame >= shot.endFrame ? "end" : undefined}
 											style={{ "--tl-f": framePct(key.frame, displayFrameCount) }}
 											title={isKo ? `${key.frame}프레임의 카메라 키 — 클릭해 이동, 드래그로 시간 변경, 오른쪽 클릭으로 삭제` : `Camera key at frame ${key.frame} — click to jump, drag to re-time, right-click to remove`}
 											onPointerDown={(e) => beginCameraKeyDrag(e, key, index)}

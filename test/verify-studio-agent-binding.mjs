@@ -793,10 +793,9 @@ const implementations={
   try {
    const ui=(id,args)=>{f.values.setToast=undefined;return f.actual.runStudioAction(id,args);};
    const agent=(id,args,pattern)=>assert.throws(()=>f.registry.run(id,args),e=>e.code==='TARGET_NOT_READY'&&pattern.test(e.message)&&!/[\uac00-\ud7a3]/.test(e.message),`${id} tells the model in English`);
-   // + Add shot with no free room: silent.
+   // + Add shot with no free room: the take grows at its end and the Shot lands there, never a silent no-op.
    const whole=createShot('Whole',0,47,[]);f.scope.setShots([whole]);f.live.current.shots=[whole];
-   assert.equal(ui('shot.create'),null);assert.equal(f.values.setToast,undefined,'no room for a shot stays silent');
-   agent('shot.create',{},/operate_studio/);
+   assert.equal(ui('shot.create')?.ok,true,'a full take grows for the new shot');assert.equal(f.values.setToast,undefined,'and says nothing it need not');
    // Ctrl+D with nothing selected: silent.
    assert.equal((await f.call('arrange_objects',f.request('arrange_objects',createArgs))).ok,true);
    assert.equal(ui('object.duplicate'),null);assert.equal(f.values.setToast,undefined,'duplicate with nothing selected stays silent');

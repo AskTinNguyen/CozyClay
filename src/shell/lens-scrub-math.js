@@ -39,6 +39,12 @@ export function nextPrime(mm, range) {
 	return primes.find((prime) => prime > mm + 0.05) ?? primes[0];
 }
 
+/** The left arrow steps back to the previous real prime, wrapping to the longest. */
+export function previousPrime(mm, range) {
+	const primes = PRIME_SET.filter((prime) => prime >= range.min && prime <= range.max);
+	return [...primes].reverse().find((prime) => prime < mm - 0.05) ?? primes.at(-1);
+}
+
 export function formatMm(mm) {
 	const value = round1(mm);
 	return `${Number.isInteger(value) ? value : value.toFixed(1)} mm`;
