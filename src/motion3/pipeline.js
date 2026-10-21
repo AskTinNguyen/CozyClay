@@ -33,7 +33,7 @@ import { observeLoad, LOAD_UNITS } from "./load.js";
 import { observeLife, LIFE_UNITS } from "./qa/motion-life.js";
 import { planWalks, applyWalkPlans } from "./walk-plan.js";
 import { relaxSpec } from "./lenient.js";
-import { observeAsked, ASKED_UNITS } from "./qa/asked.js";
+import { observeAsked } from "./qa/asked.js";
 
 const ms = t => Math.round(performance.now() - t);
 
@@ -107,7 +107,7 @@ export function compileSpec(sent, { sk, scene }, opts = {}) {
 	if (placed.length) observations.placed = placed;
 	if (plans.length) observations.planned = plans.map(p => p.note);
 	const got = observeAsked(out, { used, use: resolved?.use, checks: measured.checks, goals: measured.goals, results: qa.goals });
-	if (got) Object.assign(observations, { units: `${observations.units}; ${ASKED_UNITS}`, asked: got });
+	if (got) observations.asked = got;
 	const timeline = timelineOf(out, { used, spec: expanded }), probes = asked && runProbes(out, asked, { spec: expanded, sk, scene, notes });
 	return { out, qa, observations, spec: resolved, expanded, used, fixed: out.fixed, search, timeline, ...(probes ? { probes } : {}), ...(notes.length ? { notes } : {}),
 		ms: { compile: compileMs, qa: ms(t2), total: ms(t0) } };

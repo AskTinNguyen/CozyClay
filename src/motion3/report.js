@@ -10,7 +10,7 @@
 //   5. the other groups as one-liners { kind, subject, count, severity, first, last }
 //   6. fixed, search, skills, ms
 // An answer that does not fit and has a delta (base + patch) says observations.units only by reference: the
-// base's answer gave them. Last resort: observations.asked loses lines, then full groups become one-liners.
+// base's answer gave them. Last resort: observations.asked and the brief lose lines, then full groups become one-liners.
 // Room left after that turns one-liners back into full groups, from the top.
 // brief (briefOf) is the answer in a few fixed-shape lines, so a script comparing variants returns it as
 // it is instead of mapping qa itself:
@@ -67,10 +67,12 @@ export function fitOutput(answer, budget = MOTION_OUTPUT_BUDGET) {
 	for (let i = nFull; i < groups.length && fits({ qa: { ...out.qa, groups: [...out.qa.groups, oneLine(groups[i])] } }); i++) out.qa.groups.push(oneLine(groups[i]));
 	for (const [k, v] of [["fixed", fixed], ["search", search], ["skills", skills], ["ms", ms]]) if (v !== undefined && fits({ [k]: v })) out[k] = v;
 	for (let i = nFull; i < out.qa?.groups.length && fits({ qa: { ...out.qa, groups: out.qa.groups.map((g, j) => (j === i ? groups[i] : g)) } }); i++) out.qa.groups[i] = groups[i];
-	// last resort (huge hints): observations.asked loses its goal and contact lines from the end, then full groups
-	// become one-liners from the end, then asked loses its skill lines
+	// last resort (huge hints): observations.asked loses its goal and contact lines from the end, the brief its group
+	// lines, then full groups become one-liners from the end, then asked loses its skill lines
 	const asked = out.observations?.asked, cut = keep => { while (out.observations.asked.length > keep && !fits({})) out.observations.asked.pop(); };
 	if (asked) { out.observations = { ...out.observations, asked: [...asked] }; cut(asked.filter(l => l.startsWith("use[")).length); }
+	// the brief's group lines repeat qa.groups
+	while (out.brief?.length > 1 && !out.brief[out.brief.length - 1].startsWith("goals ") && !fits({})) out.brief = out.brief.slice(0, -1);
 	for (let i = nFull - 1; i >= 0 && !fits({}); i--) out.qa.groups[i] = oneLine(groups[i]);
 	if (asked) cut(0);
 	if (asked && !out.observations.asked.length) delete out.observations.asked;

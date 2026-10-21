@@ -1,7 +1,7 @@
 // Measured, not judged (output.observations.asked): what the spec asked against what the take did, the
 // quantities agents probed or re-compiled for right after a compile (session study: the root where a walk
 // ended, the mouth and the cup top on the drink frame, when the fingers met the cup), one line each:
-//   use[i] <skill> f<a>-<b>: at [x, z] yaw <deg>[ (asked <deg>)][; to [x, z]: <m> m short|past[, <m> m aside][, ...]]
+//   use[i] <skill>[ <side> <anchor>] f<a>-<b>: at [x, z] yaw <deg>[ (asked <deg>)][; to [x, z]: <m> m short|past[, <m> m aside][, ...]]
 //       at = the feet's midpoint at the skill's last frame (what walkTo.to and standIdle.at place), yaw = the
 //       body's heading there; a walkTo whose steps are given only aims at to (the steps set the distance)
 //   <contact name> f<a>-<b>: gap <cm> f<f> .. <cm> f<f> (tol <cm>)   checks.contacts (reachGrip adds "fingers
@@ -18,7 +18,6 @@ import { goalKinds, goalName, movedRef } from "./goals.js";
 import { m3 } from "./fmt.js";
 
 const MAX_SKILLS = 8, MAX_CONTACTS = 6, MAX_GOALS = 8, OFF = 0.05, YAW_OFF = 5;
-export const ASKED_UNITS = "asked: skills, contacts, goals as asked vs got (at: the feet)";
 
 const v3 = p => `[${p.map(m3).join(", ")}]`;
 const cm = v => `${Math.round(v * 1000) / 10}`;
