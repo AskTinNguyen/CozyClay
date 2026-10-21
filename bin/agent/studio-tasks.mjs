@@ -19,6 +19,8 @@
 //     them), so a dependent reads which targets moved instead of parsing the summary text (8)
 //   - a run whose Studio went away pauses, and resumes when the main agent next sees the same scene; another scene fails
 //     it (14)
+//   - timing per task, in memory like the rest: queued, started and ended at, and the time it waited on a held scope, on
+//     its dependencies and on the cap, so the scheduling can be judged from data (in the view and the ended event)
 //   - the same instructions on the same scope as a queued or running task are not started twice (19)
 //   - a task that runs past MAX_MS or MAX_TOOLS tool calls is stopped and reported as such (20)
 import { randomUUID } from "node:crypto";
@@ -42,7 +44,13 @@ export function createTaskBoard({ run, emit = () => {}, now = Date.now, setTimer
 	const running = () => list().filter(task => ["starting", "running"].includes(task.status));
 	const scopes = () => new Map(running().map(task => [task.taskId, { taskId: task.taskId, title: task.title, keys: new Set(task.scope) }]));
 	const view = task => ({ taskId: task.taskId, title: task.title, status: task.status, scope: task.scope, ...(task.reason ? { reason: task.reason } : {}), ...(task.turnId ? { turnId: task.turnId } : {}),
-		...(task.dependsOn.length ? { dependsOn: task.dependsOn } : {}), ...(task.verify ? { verify: true } : {}), tools: task.tools, usage: task.usage, ...(task.summary ? { summary: task.summary } : {}), ...(task.changed?.length ? { changed: task.changed } : {}) });
+		...(task.dependsOn.length ? { dependsOn: task.dependsOn } : {}), ...(task.verify ? { verify: true } : {}), tools: task.tools, usage: task.usage, ...(task.summary ? { summary: task.summary } : {}), ...(task.changed?.length ? { changed: task.changed } : {}), timing: timing(task) });
+	// An open wait counts up to now, so a board read mid-wait is already true.
+	const waited = (task, kind) => task.waited[kind] + (task.wait?.kind === kind ? now() - task.wait.since : 0);
+	const timing = task => ({ queuedAt: task.createdAt, ...(task.startedAt ? { startedAt: task.startedAt } : {}), ...(task.endedAt ? { endedAt: task.endedAt } : {}),
+		waitScopeMs: waited(task, "scope"), waitDepsMs: waited(task, "deps"), waitCapMs: waited(task, "cap") });
+	const closeWait = task => { if (task.wait) task.waited[task.wait.kind] += now() - task.wait.since; task.wait = null; };
+	const waitOn = (task, kind) => { if (task.wait?.kind !== kind) { closeWait(task); task.wait = { kind, since: now() }; } };
 	const tell = (type, task, extra = {}) => emit({ type, at: now(), ...view(task), ...extra });
 
 	const invalid = message => Object.assign(new Error(message), { code: "INVALID_ARGUMENT" });
@@ -58,7 +66,7 @@ export function createTaskBoard({ run, emit = () => {}, now = Date.now, setTimer
 		const same = list().find(task => ACTIVE.has(task.status) && norm(task.instructions) === norm(instructions) && [...task.scope].sort().join() === [...scope].sort().join());
 		if (same) return { duplicateOf: same.taskId, ...view(same) };
 		const task = { taskId: randomUUID(), title: clip(String(title || instructions).trim(), 120), instructions, scope: [...new Set(scope)], reads, dependsOn, verify: verify === true,
-			status: "queued", tools: 0, usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, requests: 0 }, createdAt: now(), warm: false };
+			status: "queued", tools: 0, usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, requests: 0 }, createdAt: now(), warm: false, waited: { scope: 0, deps: 0, cap: 0 }, wait: null };
 		tasks.set(task.taskId, task);
 		tell("task.queued", task);
 		if (!planning) schedule();
@@ -103,10 +111,10 @@ export function createTaskBoard({ run, emit = () => {}, now = Date.now, setTimer
 		const failed = task.dependsOn.map(id => tasks.get(id)).find(dep => ["failed", "cancelled"].includes(dep.status));
 		if (failed) return { fail: `it depends on task ${failed.taskId} (${failed.title}), which ${failed.status === "failed" ? "failed" : "was cancelled"}` };
 		const open = task.dependsOn.map(id => tasks.get(id)).find(dep => dep.status !== "done");
-		if (open) return { wait: `waits for task ${open.taskId} (${open.title}) to ${open.status === "review" ? "be accepted" : "finish"}` };
+		if (open) return { kind: "deps", wait: `waits for task ${open.taskId} (${open.title}) to ${open.status === "review" ? "be accepted" : "finish"}` };
 		const held = scopeConflict(task.taskId, task.scope, scopes());
-		if (held) return { wait: `${held}` };
-		if (running().length >= L.cap) return { wait: `${L.cap} tasks are running; it starts when one ends` };
+		if (held) return { kind: "scope", wait: `${held}` };
+		if (running().length >= L.cap) return { kind: "cap", wait: `${L.cap} tasks are running; it starts when one ends` };
 		return null;
 	}
 
@@ -125,7 +133,8 @@ export function createTaskBoard({ run, emit = () => {}, now = Date.now, setTimer
 		for (const task of list().filter(task => ["queued", "waiting"].includes(task.status)).sort((a, b) => score(b) - score(a) || a.createdAt - b.createdAt)) {
 			const held = blocker(task);
 			if (held?.fail) { end(task, "failed", { reason: held.fail }); continue; }
-			if (held) { if (task.reason !== held.wait) { task.status = "waiting"; task.reason = held.wait; tell("task.waiting", task); } continue; }
+			if (held) { waitOn(task, held.kind); if (task.reason !== held.wait) { task.status = "waiting"; task.reason = held.wait; tell("task.waiting", task); } continue; }
+			closeWait(task);
 			// Cache warm-up: the previous start's model has not answered yet, and STAGGER has not passed.
 			const wait = lastStart && !lastStart.warm ? lastStart.at + L.staggerMs - now() : 0;
 			if (wait > 0) { scheduled = setTimer(() => { scheduled = null; schedule(); }, wait); return; }
@@ -136,7 +145,7 @@ export function createTaskBoard({ run, emit = () => {}, now = Date.now, setTimer
 	function rescheduleNow() { if (scheduled) { clearTimer(scheduled); scheduled = null; } schedule(); }
 
 	function start(task, resume = null) {
-		task.status = "starting"; task.reason = undefined; task.startedAt ??= now();
+		closeWait(task); task.status = "starting"; task.reason = undefined; task.startedAt ??= now();
 		lastStart = { at: now(), warm: false, taskId: task.taskId };
 		const mark = lastStart;
 		task.controller = new AbortController();
@@ -154,7 +163,7 @@ export function createTaskBoard({ run, emit = () => {}, now = Date.now, setTimer
 		clearTimer(task.timer);
 		if (lastStart?.taskId === task.taskId) lastStart.warm = true;
 		for (const key of Object.keys(task.usage)) if (Number.isFinite(result?.usage?.[key])) task.usage[key] += result.usage[key];
-		if (result.status === "scopeBusy") { task.status = "waiting"; task.reason = result.error?.message ?? "its scope is held by another task"; tell("task.waiting", task); }
+		if (result.status === "scopeBusy") { waitOn(task, "scope"); task.status = "waiting"; task.reason = result.error?.message ?? "its scope is held by another task"; tell("task.waiting", task); }
 		else if (result.status === "lost") { task.status = "paused"; task.reason = "Studio disconnected; it resumes when Studio reconnects to the same scene"; task.sceneId = result.sceneId; tell("task.paused", task); }
 		else {
 			const summary = { reply: clip(String(result.reply ?? "").trim(), L.summaryChars), receipts: (result.receipts ?? []).slice(-L.receipts) };
@@ -175,7 +184,7 @@ export function createTaskBoard({ run, emit = () => {}, now = Date.now, setTimer
 
 	function end(task, status, { reason, summary } = {}) {
 		// endedAt is when it stopped running: an accept after review does not move it.
-		task.status = status; task.reason = reason; task.endedAt ??= now();
+		closeWait(task); task.status = status; task.reason = reason; task.endedAt ??= now();
 		if (summary) task.summary = summary;
 		tell(`task.${status === "done" ? "done" : status}`, task);
 	}

@@ -202,6 +202,34 @@ const dispatch = (board, title, scope, extra = {}) => board.dispatch({ title, in
 	console.log("PASS case 8 as a plan: one dispatch_plan queues a graph, refs resolve to taskIds, a cycle or unknown ref refuses all of it");
 }
 {
+	// Timing per task: when it was queued, started and ended, and how long it waited on a held scope, its dependencies
+	// and the cap; live in the board view, final in the ended event, and kept out of the main agent's context.
+	const { board, runs, events, advance } = boardFixture({ cap: 2 });
+	const a = dispatch(board, "a", ["object:a"]); dispatch(board, "b", ["object:b"]);
+	const c = dispatch(board, "c", ["object:c"]), d = dispatch(board, "d", ["object:d"], { dependsOn: [a.taskId] }), e = dispatch(board, "e", ["object:a"]);
+	await tick();
+	advance(1000);
+	assert.deepEqual(board.board().find(task => task.taskId === c.taskId).timing, { queuedAt: 1000, waitScopeMs: 0, waitDepsMs: 0, waitCapMs: 1000 }, "an open wait counts up to now");
+	runs[1].resolve({ status: "done" }); await tick(); await tick();
+	advance(500);
+	runs[0].resolve({ status: "done" }); await tick(); await tick();
+	const timing = id => board.board().find(task => task.taskId === id).timing;
+	assert.deepEqual(timing(a.taskId), { queuedAt: 1000, startedAt: 1000, endedAt: 2500, waitScopeMs: 0, waitDepsMs: 0, waitCapMs: 0 });
+	assert.equal(timing(c.taskId).waitCapMs, 1000, "c waited on the cap until b ended"); assert.equal(timing(c.taskId).startedAt, 2000);
+	assert.equal(timing(d.taskId).waitDepsMs, 1500, "d waited on a"); assert.equal(timing(e.taskId).waitScopeMs, 1500, "e waited on a's object");
+	// A begin the bus refused (scopeBusy) waits on scope; here d holds the cap's other slot, so it waits on the cap next.
+	assert.equal(runs[2].task.taskId, c.taskId);
+	runs[2].resolve({ status: "scopeBusy", error: { message: "object:c is held by task x" } }); await tick(); await tick();
+	assert.equal(board.get(c.taskId).status, "starting", "retried at once: nothing on the board holds object:c");
+	advance(250);
+	runs.findLast(run => run.task.taskId === c.taskId).resolve({ status: "done" }); await tick(); await tick();
+	const ended = events.findLast(event => event.type === "task.done" && event.taskId === c.taskId);
+	assert.deepEqual(ended.timing, { queuedAt: 1000, startedAt: 2000, endedAt: 2750, waitScopeMs: 0, waitDepsMs: 0, waitCapMs: 1000 }, "the ended event carries the final timing");
+	assert.equal(timing(e.taskId).waitCapMs, 250, "e waited on a's object, then on the cap");
+	assert.ok(!mainContextText(board, events).includes("waitCapMs"), "timing stays out of the main agent's context");
+	console.log("PASS timing: each task records queued, started and ended at and its scope, dependency and cap waits; in the view and the ended event");
+}
+{
 	const { board, runs, advance } = boardFixture({ staggerMs: 1500 });
 	dispatch(board, "a", ["object:a"]); dispatch(board, "b", ["object:b"]); dispatch(board, "c", ["object:c"]);
 	await tick();
