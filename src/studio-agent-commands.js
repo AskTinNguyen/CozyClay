@@ -91,7 +91,7 @@ function basisAxis(spec, reference, state) {
 }
 function support(spec, state) {
   const id = spec.onObject ?? (typeof spec.support === 'object' ? spec.support.objectId : null);
-  if (!id) return { y: state.floorY, label: 'floor' };
+  if (!id) return { y: state.floorY ?? 0, label: 'floor' }; // live app state carries no floorY; the 3.0 floor is flat at 0
   const object = entityById(state, id);
   if (!object.renderer || object.renderer === 'cutout' || ['sphere', 'capsule', 'cone', 'empty', 'sculpt'].includes(object.renderer) || object.path || object.attach || Math.abs(object.rotX) > EPS || Math.abs(object.rotZ) > EPS || isEffectivelyHidden(object, state.objects, state.characters)) fail('TARGET_NOT_READY', 'Support must be a stationary solid upright surface.');
   return { y: object.y + supportHeightForObject(object) * object.scaleY, label: `object:${id}`, object };

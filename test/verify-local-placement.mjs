@@ -118,3 +118,16 @@ test('invalid parent and unsupported shapes give teaching errors', () => {
   assert.throws(() => validateStudioCommand({ name: 'arrange_objects', args: { ops: [{ op: 'update', id: 'kid', position: { world: zero }, space: 'world' }] } }), /./);
   assert.throws(() => validateStudioCommand({ name: 'arrange_characters', args: { ops: [{ op: 'update', characterId: 'alex', position: { world: zero }, space: 'parent' }] } }), /./);
 });
+
+test('floor-supported create works on live app state, which carries no floorY', () => {
+  const { floorY, ...live } = state([parent()]);
+  for (const name of ['arrange_objects', 'arrange_characters']) {
+    const op = name === 'arrange_objects'
+      ? { op: 'create', source: { kind: 'cube' }, name: 'X', position: { relativeTo: 'root', basis: 'subject', side: 'right', gapM: 1.5, support: 'floor' } }
+      : { op: 'update', characterId: 'alex', position: { relativeTo: 'root', basis: 'subject', side: 'right', gapM: 1.5, support: 'floor' } };
+    const plan = arrangement(validateStudioCommand({ name, args: { ops: [op] } }), live, ports);
+    const { baseY, support } = plan.receipt?.checks ?? plan.checks ?? {};
+    assert.equal(typeof baseY, 'number', name + ' baseY');
+    assert.equal(baseY, 0); assert.equal(support, 'floor');
+  }
+});
