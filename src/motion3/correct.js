@@ -10,8 +10,9 @@
 //   generators[i] with to, arrive, a single heading or type "walkTo" -> a walkTo use entry (the walk that
 //   heads for a point), placed in f0 order among the use entries
 //   objects.<id> written as { free: {...} } (or carry, hinge, follow) -> the record itself
-//   fitWalks: a walkTo with to and steps gets the stride that makes the steps end at to (skills/basic.js
-//   fitTo), stored with the spec; one it cannot fit is refused with what the walk would do
+//   fitWalks: a walkTo with to and steps gets the stride, or the step count and cadence, that ends the steps at
+//   to in a natural gait (skills/basic.js fitTo), stored with the spec; one it cannot fit is refused with what the
+//   walk would do and needs
 import { SPEC_FIELDS, USE_FIELDS, OBJECT_KEY_FIELDS, FALL_FIELDS, GOAL_FIELDS, FIT_FIELDS, ANCHOR_FIELDS, CHECK_ENTRY_FIELDS, OBJECT_FIELDS } from "./schema/fields.js";
 import { VEC_CHANNELS, NUM_CHANNELS, MAP_CHANNELS, FINGER_PRESETS } from "./compiler/vocab.js";
 import { SKILL_INFO } from "./skills/info.js";
@@ -202,7 +203,8 @@ function correctSpec(spec, notes = []) {
  */
 function fitWalks(spec, { sk, scene } = {}, notes = [], refusals = []) {
 	if (!plain(spec) || !Array.isArray(spec.use) || !spec.use.some(u => u?.skill === "walkTo" && plain(u.args) && u.args.to !== undefined)) return spec;
-	const fit = { refusals: [] };
+	// a walk may end later only in a frames "auto" spec (skills/basic.js fitTo, with nothing after it)
+	const fit = { refusals: [], stretch: spec.frames === "auto" };
 	let used;
 	try { ({ used } = expandUse({ ...spec, frames: 20000 }, { sk, scene, fit, auto: true })); } catch { return spec; }
 	refusals.push(...fit.refusals);

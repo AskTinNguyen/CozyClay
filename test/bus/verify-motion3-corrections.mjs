@@ -79,15 +79,35 @@ expect("at root yaw 180 a backward body-frame pole that points forward in the wo
 expect("facing +Z the same pole is still refused (it points backward either way)", /knee_l = \[-0.03,0.29,-0.96\] points backward/.test(refused(() => compile({ ...back, use: [stand] }))));
 
 // 6. walkTo with to and steps (C21): the steps walked steps x stride wherever to was (386 of 561 such walks missed it by > 0.1 m)
+// in a natural gait (skills/basic.js fitTo): a stride fitted at a fixed cadence went to 0.87 m at 1.2 steps a second
 const fit = compile(walkSpec({ to: [0, 1.7], steps: 4, step: 0.44 }));
-expect("to with steps and a stride that falls short: the stride is fitted, stored and named, and the walk ends at to", fit.spec.use[1].args.step === 0.61 && off(feetAt(fit), [0, 1.7]) <= 0.1
-	&& fit.notes?.[0] === "corrected: use[1] walkTo: step 0.44 -> 0.61 m, so steps 4 end at to [0, 1.7] (at step 0.44 they walk 1.35 of 1.7 m)", json([fit.notes, feetAt(fit)]));
+expect("to with steps and a stride that falls short: the stride (and the first step's share) is fitted, stored and named, and the walk ends at to",
+	fit.spec.use[1].args.step === 0.56 && fit.spec.use[1].args.firstStep === 0.51 && off(feetAt(fit), [0, 1.7]) <= 0.1
+	&& fit.notes?.[0] === "corrected: use[1] walkTo: step 0.44 -> 0.56 m, firstStep 0.4 -> 0.51 m, so steps 4 end at to [0, 1.7] (at step 0.44 they walk 1.35 of 1.7 m)", json([fit.notes, feetAt(fit)]));
 const again = compile(fit.spec);
 expect("the stored spec compiles to the same walk with nothing to fit", again.notes === undefined && json(feetAt(again)) === json(feetAt(fit)));
 const two = compile(walkSpec({ to: [0, 0.6], steps: 2 }));
 expect("two steps fit the first step", two.spec.use[1].args.firstStep === 0.53 && off(feetAt(two), [0, 0.6]) <= 0.1, json([two.notes, feetAt(two)]));
-const far = refused(() => compile(walkSpec({ to: [0, 1.6], steps: 3 })));
-expect("a stride past what a walk takes is refused with where the walk would end and the fix", far === "MOTION_SPEC_INVALID: use[1] walkTo: steps 3 at step 0.5 m walk 0.97 m and end at [0, 0.97], 0.63 m short of to [0, 1.6] (1.6 m away); that many steps would need a step of 1.13 m (0.2..0.9): leave steps out (walkTo picks the count), or give steps: 4", far);
+// a reach after the walk fixes its time; without one (frames "auto") the walk may end later
+const reachAt = f0 => ({ skill: "reachGrip", f0, args: { side: "r", anchor: "bar", define: { kind: "world", p: [0.3, 1.2, 2] } } });
+const timedSpec = (args, f0) => ({ ...base, use: [stand, { skill: "walkTo", f0: 2, args }, reachAt(f0)] });
+const gaitOf = r => { const a = r.spec.use[1].args; return { step: a.steps >= 3 ? a.step : a.firstStep, cadence: 24 / (a.period ?? 20), end: 2 + 16 + a.steps * (a.period ?? 20) + 18 }; };
+const natural = g => g.step >= 0.25 && g.step <= 0.7 && g.cadence >= 1 && g.cadence <= 1.8;
+const lunge = compile(walkSpec({ to: [0, 1.28], steps: 3 }));
+expect("a stride past the natural band (0.81 m at 1.2 steps a second) is not taken: one more step at the walk's cadence", lunge.spec.use[1].args.steps === 4 && gaitOf(lunge).step <= 0.7
+	&& gaitOf(lunge).cadence === 1.2 && off(feetAt(lunge), [0, 1.28]) <= 0.1, json([lunge.notes, lunge.spec.use[1].args]));
+const quick = compile(timedSpec({ to: [0, 1.6], steps: 3 }, 100));
+expect("steps that cannot reach in a natural step get more steps at a quicker cadence in the same time (the walk still ends f96), named", json(quick.spec.use[1].args) === json({ to: [0, 1.6], steps: 4, period: 15, swing: 11, step: 0.55, firstStep: 0.44 })
+	&& gaitOf(quick).end === 96 && natural(gaitOf(quick)) && off(feetAt(quick), [0, 1.6]) <= 0.1
+	&& quick.notes?.[0] === "corrected: use[1] walkTo: steps 3 -> 4, period 20 -> 15 (swing 14 -> 11), step 0.5 -> 0.55 m, firstStep 0.4 -> 0.44 m, so steps 4 end at to [0, 1.6] in a natural gait (step 0.25..0.7 m, 1..1.8 steps a second: period 14..24 at 24 fps; steps 3 would need a step of 0.85 m at 1.2 steps a second)", json([quick.notes, feetAt(quick)]));
+const last = compile(walkSpec({ to: [0, 1.6], steps: 3 }));
+expect("with nothing after it in a frames \"auto\" spec the walk keeps its cadence and ends later", json(last.spec.use[1].args) === json({ to: [0, 1.6], steps: 4, step: 0.55, firstStep: 0.44 })
+	&& /second\); it ends f116, not f96 \(nothing follows it\)$/.test(last.notes?.[0] ?? ""), json(last.notes));
+const many2 = compile(timedSpec({ to: [0, 1], steps: 6 }, 200));
+expect("too many steps for the distance: fewer, slower ones that end no later (the pose holds to the old end)", json(many2.spec.use[1].args) === json({ to: [0, 1], steps: 4, period: 24, swing: 17, step: 0.33, firstStep: 0.27 })
+	&& natural(gaitOf(many2)) && gaitOf(many2).end <= 156 && /it ends f132, not f156 \(the pose holds to f156\)/.test(many2.notes?.[0] ?? "") && off(feetAt(many2), [0, 1]) <= 0.1, json(many2.notes));
+const far = refused(() => compile(timedSpec({ to: [0, 3], steps: 3, period: 16 }, 100)));
+expect("a walk no natural gait reaches in its time is refused with the steps and frames it needs", far === "MOTION_SPEC_INVALID: use[1] walkTo: steps 3 at period 16 (48 frames of stepping) walk 0.97 m and end at [0, 0.97], 2.03 m short of to [0, 3] (3 m away); in a natural gait (step 0.25..0.7 m, 1..1.8 steps a second: period 14..24 at 24 fps) that takes 6 steps and 84 frames of stepping or more (the walk would end at f120 or later, not f84): leave steps out (walkTo picks the count), or give steps: 6 and room for the walk before what follows", far);
 const away = refused(() => compile(walkSpec({ to: [0, 2], heading: 180 })));
 expect("a heading that points away from to is refused (session 4a3423e0)", /use\[1\] walkTo: heading 180 points 180 deg away from to \[0, 2\] \(it lies at heading 0\)/.test(away), away);
 expect("a saved take (lenient) walks as it always did: no fit, no refusal", compile(walkSpec({ to: [0, 1.6], steps: 3 }), null, { lenient: true }).spec.use[1].args.step === undefined);
