@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 // Overlap (src/motion3/compiler/overlap.js, channels.js): a change keyed on one frame for the whole body breaks along
 // the chains: the lower spine, the chest, the head, the upper arm, the forearm and the wrist each start (and settle)
-// later than the one they hang from, and one arm trails the other, the side picked by the spec's label and the key
+// later than the one they hang from, and one arm (a free IK hand too) trails the other, the side picked by the spec's label and the key
 // frame (the same spec bakes the same frames). The arm's swing overshoots a little where it stops and settles back,
-// then a hold is exactly flat. The channels that place the body (root, feet, hand targets, IK weights, poles,
-// fingers) bake exactly as without it, an arm on its IK has none, flow: false has none, and through the compiler a
+// then a hold is exactly flat. The channels that place the body (root, feet, fingers, and a hand's target, IK weight
+// and pole wherever it touches, carries or reaches for a goal) bake exactly as without it, an arm on its IK has none, flow: false has none, and through the compiler a
 // cup pickup lands its hand and feet where it did.
 import { bakeChannels, flowOptions } from "../../src/motion3/compiler/channels.js";
 import { compileMotion } from "../../src/motion3/compiler/compile.js";
+import { handBusy } from "../../src/motion3/compiler/overlap.js";
 import { validateSpec } from "../../src/motion3/compiler/validate.js";
 import { skeletonFor } from "../../src/motion3/rigs/index.js";
 import { motionScene } from "../../src/motion3/scene.js";
@@ -47,10 +48,35 @@ const trails = ["a", "b", "c", "d", "e", "f", "g", "h"].map(s => { const b = bak
 expect("which side trails is picked per label (both occur over 8 labels)", trails.includes("l") && trails.includes("r"), json(trails));
 console.log(`  leading side for "take a": ${lead}; trailing per label ${trails.join("")}`);
 
-const placing = ["root", "foot_l", "foot_r", "hand_l", "fingers_l", "elbow_l"];
-expect("root, feet, hand target, fingers and pole bake exactly as without overlap", placing.every(ch => json(on[ch]) === json(off[ch])), placing.filter(ch => json(on[ch]) !== json(off[ch])).join());
+const placing = ["root", "foot_l", "foot_r", "fingers_l"];
+expect("root, feet and fingers bake exactly as without overlap", placing.every(ch => json(on[ch]) === json(off[ch])), placing.filter(ch => json(on[ch]) !== json(off[ch])).join());
 const none = bakeChannels(keys, 100, flowOptions(false));
 expect("flow: false has no chest share and no delay: every body channel starts on f20's next frame", !none.chest_yaw && BODY.every(ch => startOf(none[ch]) === 21), json(BODY.map(ch => startOf(none[ch]))));
+
+// free IK hands keyed on one frame part: one hand's target, IK weight and pole trail; a hand that is about to touch
+// (an anchor weight), carries (flow.hands: handBusy) or reaches for a goal keeps its keyed time
+const reach = extra => [{ f: 0, set: { armw_l: 1, armw_r: 1, hand_l: [0.3, 1.2, 0.3], hand_r: [-0.3, 1.2, 0.3], elbow_l: [0, -1, -0.3], elbow_r: [0, -1, -0.3], ...extra[0] } },
+	{ f: 20, set: { armw_l: 1, armw_r: 1, hand_l: [0.3, 1.2, 0.3], hand_r: [-0.3, 1.2, 0.3] } }, { f: 40, set: { hand_l: [0.3, 1.4, 0.4], hand_r: [-0.3, 1.4, 0.4], elbow_l: [0.3, -1, 0], elbow_r: [-0.3, -1, 0], ...extra[1] } },
+	{ f: 70, set: { hand_l: [0.2, 1.1, 0.3], hand_r: [-0.2, 1.1, 0.3], ...extra[2] } }, { f: 99, set: {} }];
+const start3 = xs => xs.findIndex(v => Math.abs(v[1] - xs[0][1]) > 0.002);
+const freeOn = bakeChannels(reach([{}, {}, {}]), 110, flowOptions(undefined, "take a")), freeOff = bakeChannels(reach([{}, {}, {}]), 110, flowOptions({ overlap: false }, "take a"));
+const handStarts = ["hand_l", "hand_r"].map(ch => start3(freeOn[ch]));
+console.log(`  free hands start f${handStarts.join(", f")}`);
+expect("two free IK hands keyed on one frame start a frame or more apart", Math.abs(handStarts[0] - handStarts[1]) >= 1, json(handStarts));
+// two arms going onto their IK on one frame from a hold: one side's IK weight and target come later
+const onto = [{ f: 0, set: { armw_l: 0, armw_r: 0, hand_l: [0.3, 1.2, 0.3], hand_r: [-0.3, 1.2, 0.3] } }, { f: 30, set: { armw_l: 0, armw_r: 0 } },
+	{ f: 50, set: { armw_l: 1, armw_r: 1 } }, { f: 99, set: { armw_l: 1, armw_r: 1 } }];
+const ontoOn = bakeChannels(onto, 110, flowOptions(undefined, "take a")), weights = ["armw_l", "armw_r"].map(ch => startOf(ontoOn[ch], 0.01));
+console.log(`  onto IK from a hold: IK weights start f${weights.join(", f")}`);
+expect("two arms going onto their IK on one frame part there too", Math.abs(weights[0] - weights[1]) >= 1, json(weights));
+const touching = reach([{ w_cup_l: 0, w_cup_r: 0 }, { w_cup_l: 1, w_cup_r: 1 }, { w_cup_l: 1, w_cup_r: 1 }]);
+const touchOn = bakeChannels(touching, 110, flowOptions(undefined, "take a")), touchOff = bakeChannels(touching, 110, flowOptions({ overlap: false }, "take a"));
+expect("hands going onto an anchor bake exactly as without overlap (target, weights, IK weight, pole)", ["hand", "armw", "elbow", "w_cup"].every(c => ["l", "r"].every(k => json(touchOn[`${c}_${k}`]) === json(touchOff[`${c}_${k}`]))));
+const carry = { l: [[10, 109]], r: [[0, 80]] };
+const carryOn = bakeChannels(reach([{}, {}, {}]), 110, flowOptions(undefined, "take a", carry));
+expect("hands that carry (or reach for a goal) over those frames bake exactly as without overlap", ["hand", "armw", "elbow"].every(c => ["l", "r"].every(k => json(carryOn[`${c}_${k}`]) === json(freeOff[`${c}_${k}`]))));
+const busy = handBusy({ frames: 100, props: { cup: { hand: "r" } }, objects: { mug: { prop: "cup", grab: 30, release: 60 } }, goals: [{ near: ["joint:lefthand", "object:mug"], at: [40, 50] }] });
+expect("handBusy: a carry is its hand's from grab to release, a hand goal both hands' over its frames", json(busy) === json({ l: [[40, 50]], r: [[30, 60], [40, 50]] }), json(busy));
 
 // a stop into a hold: the swing passes its value by a bounded overshoot, then holds exactly
 const stop = bakeChannels([{ f: 0, set: { aswing_l: 0 } }, { f: 10, set: { aswing_l: 0 } }, { f: 34, set: { aswing_l: 40 } }, { f: 70, set: { aswing_l: 40 } }, { f: 95, set: { aswing_l: 0 } }], 100).aswing_l;
@@ -59,10 +85,12 @@ console.log(`  stop: peak ${peak.toFixed(2)} deg, flat from f${settled}`);
 expect("the arm's swing overshoots its stop by under 3 deg and settles back", peak > 40.3 && peak < 43, peak);
 expect("then the hold is exactly flat up to its next move", settled < 60 && stop.slice(settled, 71).every(v => v === 40), json(stop.slice(40, 72).map(v => +v.toFixed(3))));
 
-// an arm on its IK keeps its keyed time: its swing bakes as without overlap
+// an arm on its IK has no link delay or settle of its own: on the leading side it bakes as without overlap, on the
+// trailing side only its whole arm's trail moves it (the same shift for its swing and its IK weight)
 const ik = [{ f: 0, set: { armw_r: 1, aswing_r: 0, abend_r: 0 } }, { f: 20, set: { aswing_r: 30, abend_r: 20 } }, { f: 40, set: { aswing_r: 30, abend_r: 20 } }];
-const ikOn = bakeChannels(ik, 50), ikOff = bakeChannels(ik, 50, flowOptions({ overlap: false }));
-expect("an arm on its IK has no overlap", json(ikOn.aswing_r) === json(ikOff.aswing_r) && json(ikOn.abend_r) === json(ikOff.abend_r));
+const ikOff = bakeChannels(ik, 50, flowOptions({ overlap: false })), ikAs = Array.from({ length: 32 }, (_, i) => `take ${i}`).map(s => bakeChannels(ik, 50, flowOptions(undefined, s)));
+const plainIk = ikAs.filter(b => json(b.aswing_r) === json(ikOff.aswing_r) && json(b.abend_r) === json(ikOff.abend_r)).length;
+expect("an arm on its IK has no link delay or settle (as without overlap on the leading side)", plainIk > 0 && plainIk < 32, plainIk);
 
 let refused = "";
 try { validateSpec({ schema: "cozyclay.motion-spec.v1", frames: 10, flow: { overlap: 3 } }, { sk: skeletonFor("x-bot-tpose") }); } catch (e) { refused = e.message; }

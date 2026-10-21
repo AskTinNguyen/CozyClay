@@ -69,7 +69,7 @@ expect("step keys switch on their frame", ch.v[29] === 0 && ch.v[30] === 1);
 	expect("flow: a hold stays flat and the last value is reached", on.head_yaw.slice(22, 33).every(v => Math.abs(v - 50) < 1e-9) && on.head_yaw[45] === 0);
 	expect("flow: the speed through a key is kept (not the monotone cubic's)", Math.abs(plainHead.head_yaw[11] - plainHead.head_yaw[9]) > Math.abs(off.head_yaw[11] - off.head_yaw[9]));
 	expect("flow: false is the monotone cubic everywhere", JSON.stringify(off.head_yaw) === JSON.stringify(bakeChannels(keys.map(k => ({ ...k, set: { head_yaw: k.set.head_yaw } })), 46, flowOptions(false)).head_yaw));
-	const ik = bakeChannels([{ f: 0, set: { armw_r: 1, aswing_r: 0 } }, { f: 10, set: { aswing_r: 30 } }, { f: 20, set: { aswing_r: 60 } }], 30);
+	const ik = bakeChannels([{ f: 0, set: { armw_r: 1, aswing_r: 0 } }, { f: 10, set: { aswing_r: 30 } }, { f: 20, set: { aswing_r: 60 } }], 30, flowOptions({ overlap: false }));
 	const ikOff = bakeChannels([{ f: 0, set: { armw_r: 1, aswing_r: 0 } }, { f: 10, set: { aswing_r: 30 } }, { f: 20, set: { aswing_r: 60 } }], 30, flowOptions(false));
 	expect("flow: an arm on its IK keeps its keys on time", ik.aswing_r.every((v, f) => Math.abs(v - ikOff.aswing_r[f]) < 1e-9));
 	let refused = "";
