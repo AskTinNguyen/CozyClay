@@ -208,7 +208,7 @@ export function compileMotion(spec, { sk, scene }, opts = {}) {
 	const engine = {
 		rebake(keys) {
 			out.keys = keys;
-			out.baked = bakeChannels(keys, frameCount, flowOptions(spec.flow));
+			out.baked = bakeChannels(keys, frameCount, flowOptions(spec.flow, spec.label ?? ""));
 			ctx.socketTurns = new Map();
 			ctx.graspPlans = new Map();
 			steadyHead(out.baked, keys, frameCount);
