@@ -283,7 +283,7 @@ export function createCommandBus({ registry, ports }) {
       const rebase = () => {
         const current = ports.read();
         token = targetId ? ports.readTarget?.(targetId) : null;
-        domainRevision = domain ? current.domainRevisions?.[domain] : null;
+        domainRevision = domain ? current.domainRevisions?.[domain] : null; if (scoped?.keys.length) tasks.rebase(scoped);
       };
       const nestedIds = new Set();
       const context = { origin: request.origin, signal: controller.signal, taskId: request.taskId ?? null,
@@ -293,7 +293,8 @@ export function createCommandBus({ registry, ports }) {
           // Name the fence that tripped: the three share one code, and a bare "something changed" leaves the user and the agent guessing.
           if (!same(current.host, before.host)) fail('STALE_TARGET', 'The open document or scene changed while the job was running.');
           if (domain && !task && current.domainRevisions?.[domain] !== domainRevision) fail('STALE_TARGET', `The ${domain} data changed while the job was running (revision ${domainRevision} to ${current.domainRevisions?.[domain]}); an edit landed between the request and its result.`);
-          if (targetId && ports.readTarget?.(targetId) !== token) fail('STALE_TARGET', `${targetId} changed while the job was running.`);
+          // Inside a task the fence is the task's own keys (bus-tasks.js moved): another task's layer of the target is not a change under it.
+          const moved = scoped?.keys.length ? tasks.moved(scoped) : targetId && ports.readTarget?.(targetId) !== token ? [targetId] : []; if (moved.length) fail('STALE_TARGET', `${moved.join(', ')} changed while the job was running.`);
         },
         commit(apply) {
           context.check();
