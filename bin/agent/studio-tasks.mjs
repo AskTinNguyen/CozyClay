@@ -2,7 +2,9 @@
 // agent answers the user at once and hands work to tasks; each task is an ordinary Studio agent run (studio-prompt.mjs,
 // its own history) inside task.begin..finish on its scope (src/bus-tasks.js). This file is the board: it queues, starts
 // and ends tasks and tells the main agent what happened, never what it hopes happened.
-//   - at most CAP running tasks; the rest wait in order (11)
+//   - at most CAP running tasks; the rest wait (11), the longest chain of work still to come first: a task that others
+//     wait on starts before an independent one, so the plan ends sooner. Waiting adds a level every AGING ms, so an
+//     independent task is not starved by a stream of chains; equal scores keep the order they came in
 //   - a task whose scope another running task holds waits for it; the bus is the authority (SCOPE_BUSY at begin) (1)
 //   - dependsOn: a task starts after those are done and hears their summaries; a failed one fails it (8)
 //   - verify: a task the coordinator wants to check ends in review, not done; it holds no scope (it finished running)
@@ -22,7 +24,7 @@
 import { randomUUID } from "node:crypto";
 import { isScopeKey, scopeConflict } from "../../src/bus-task-scopes.js";
 
-export const TASK_LIMITS = Object.freeze({ cap: 3, staggerMs: 1500, maxMs: 20 * 60_000, maxTools: 120, summaryChars: 1200, receipts: 8, changed: 24 });
+export const TASK_LIMITS = Object.freeze({ cap: 3, staggerMs: 1500, maxMs: 20 * 60_000, maxTools: 120, summaryChars: 1200, receipts: 8, changed: 24, agingMs: 60_000 });
 const ACTIVE = new Set(["queued", "waiting", "starting", "running", "paused", "review"]);
 const ENDED = new Set(["done", "failed", "cancelled"]);
 const norm = text => String(text ?? "").toLowerCase().replace(/\s+/g, " ").trim();
@@ -108,9 +110,19 @@ export function createTaskBoard({ run, emit = () => {}, now = Date.now, setTimer
 		return null;
 	}
 
+	// The longest chain of not-ended tasks that depend on each task, counting the task itself (dependsOn has no cycle:
+	// a dependency exists before its dependent, and a plan with a cycle is refused).
+	function chains() {
+		const dependents = new Map(), memo = new Map();
+		for (const task of list()) if (!ENDED.has(task.status)) for (const id of task.dependsOn) dependents.set(id, [...(dependents.get(id) ?? []), task]);
+		const chain = task => { if (!memo.has(task.taskId)) memo.set(task.taskId, 1 + Math.max(0, ...(dependents.get(task.taskId) ?? []).map(chain))); return memo.get(task.taskId); };
+		return chain;
+	}
+
 	function schedule() {
 		if (scheduled) return;
-		for (const task of list().filter(task => ["queued", "waiting"].includes(task.status)).sort((a, b) => a.createdAt - b.createdAt)) {
+		const chain = chains(), score = task => chain(task) + Math.floor((now() - task.createdAt) / L.agingMs);
+		for (const task of list().filter(task => ["queued", "waiting"].includes(task.status)).sort((a, b) => score(b) - score(a) || a.createdAt - b.createdAt)) {
 			const held = blocker(task);
 			if (held?.fail) { end(task, "failed", { reason: held.fail }); continue; }
 			if (held) { if (task.reason !== held.wait) { task.status = "waiting"; task.reason = held.wait; tell("task.waiting", task); } continue; }

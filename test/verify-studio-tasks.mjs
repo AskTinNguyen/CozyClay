@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Parallel Studio tasks, P2 (the server). The plan's cases that live in the server, by number:
-//   (a) the board (bin/agent/studio-tasks.mjs) with a scripted run: 11 at most three run and the rest wait in order,
+//   (a) the board (bin/agent/studio-tasks.mjs) with a scripted run: 11 at most three run and the rest wait, the
+//       longest chain first with aging,
 //       1 a held scope waits, 8 dependsOn waits and hears the summary (a failed dependency fails it), and a plan queues a
 //       whole graph at once (refs, cycles refused all or nothing), 12 the second
 //       start waits for the first model answer or STAGGER, 13 cost per task, 14 a lost Studio pauses and resumes on the
@@ -61,6 +62,30 @@ const dispatch = (board, title, scope, extra = {}) => board.dispatch({ title, in
 	assert.equal(status().a, "done"); assert.equal(runs.length, 4, "the waiting task starts when one ends"); assert.equal(runs[3].task.title, "d");
 	assert.equal(board.board().find(task => task.title === "a").usage.cost, 0.25, "case 13: cost per task");
 	console.log("PASS cases 11 and 13: three run at once, the fourth waits in order and starts when one ends; usage and cost per task");
+}
+{
+	// case 11, the order among ready tasks: the longest chain still to come first, equal chains in the order they came,
+	// and a task that waited AGING ms per level is not starved by later chains.
+	const { board, runs } = boardFixture({ cap: 1, agingMs: 60_000 });
+	const next = async () => { runs.at(-1).resolve({ status: "done" }); await tick(); await tick(); return runs.at(-1).task.title; };
+	dispatch(board, "busy", ["object:busy"]); await tick();
+	dispatch(board, "lone", ["object:lone"]);
+	const head = dispatch(board, "head", ["object:h"]), mid = dispatch(board, "mid", ["object:m"], { dependsOn: [head.taskId] });
+	dispatch(board, "tail", ["object:t"], { dependsOn: [mid.taskId] });
+	dispatch(board, "pair", ["object:p"]); dispatch(board, "pair end", ["object:pe"], { dependsOn: [board.board().at(-1).taskId] });
+	assert.equal(await next(), "head", "the chain of three starts first, though lone came before it");
+	assert.equal(await next(), "mid", "mid now heads a chain of two, as does pair: mid came first");
+	assert.equal(await next(), "pair", "pair (chain two) before lone (one) and tail (one)");
+	assert.equal(await next(), "lone", "equal chains in the order they came");
+	assert.deepEqual([await next(), await next()], ["tail", "pair end"]);
+	const aged = boardFixture({ cap: 1, agingMs: 60_000 });
+	dispatch(aged.board, "busy", ["object:busy"]); await tick();
+	dispatch(aged.board, "old", ["object:old"]);
+	aged.advance(2 * 60_000);
+	const a = dispatch(aged.board, "chain a", ["object:a"]); dispatch(aged.board, "chain b", ["object:b"], { dependsOn: [a.taskId] });
+	aged.runs[0].resolve({ status: "done" }); await tick(); await tick();
+	assert.equal(aged.runs.at(-1).task.title, "old", "two minutes of waiting outweigh a chain of two");
+	console.log("PASS case 11 order: critical path first among ready tasks, then arrival order; aging keeps an independent task from starving");
 }
 {
 	const { board, runs, status } = boardFixture();
