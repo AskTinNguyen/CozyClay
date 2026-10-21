@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Parallel Studio tasks, P2 (the server). The plan's cases that live in the server, by number:
 //   (a) the board (bin/agent/studio-tasks.mjs) with a scripted run: 11 at most three run and the rest wait in order,
-//       1 a held scope waits, 8 dependsOn waits and hears the summary (a failed dependency fails it), 12 the second
+//       1 a held scope waits, 8 dependsOn waits and hears the summary (a failed dependency fails it), and a plan queues a
+//       whole graph at once (refs, cycles refused all or nothing), 12 the second
 //       start waits for the first model answer or STAGGER, 13 cost per task, 14 a lost Studio pauses and resumes on the
 //       same scene (another scene fails it), 16 summaries are capped, 19 the same work is not started twice, 20 a task
 //       past its tool or time limit is stopped and reported; cancel of a queued and of a running task;
@@ -90,6 +91,38 @@ const dispatch = (board, title, scope, extra = {}) => board.dispatch({ title, in
 	assert.equal(status().y, "failed"); assert.match(board.board().find(task => task.taskId === d.taskId).reason, /depends on task .* which failed/);
 	assert.equal(b.status, "waiting", "dispatch answers the task as the board sees it");
 	console.log("PASS case 8: a dependent task waits, hears the summary of what it depends on, and fails when that failed");
+}
+{
+	// case 8 as a plan: one call queues a graph, refs resolve to the new taskIds, and a bad plan queues nothing.
+	const { board, runs, events, status } = boardFixture();
+	const before = dispatch(board, "base", ["object:base"]);
+	const step = (ref, scope, dependsOn) => ({ ref, title: ref, instructions: `do ${ref}`, scope: [scope], ...(dependsOn ? { dependsOn } : {}) });
+	const refused = [
+		[{ tasks: [step("a", "object:a", ["b"]), step("b", "object:b", ["a"])] }, /cycle: a -> b -> a/],
+		[{ tasks: [step("a", "object:a", ["a"])] }, /cycle/],
+		[{ tasks: [step("a", "object:a", ["ghost"])] }, /no ref or task ghost/],
+		[{ tasks: [step("a", "object:a"), step("a", "object:b")] }, /used twice/],
+		[{ tasks: [step("a", "object:a"), { ref: "b", title: "b", instructions: "x", scope: ["cylinder"] }] }, /scope/],
+		[{ tasks: [] }, /one or more/],
+	];
+	const queued = events.length;
+	for (const [plan, message] of refused) assert.throws(() => board.dispatchPlan(plan), error => error.code === "INVALID_ARGUMENT" && message.test(error.message));
+	assert.equal(events.length, queued, "a refused plan queues nothing (all or nothing)");
+	// Listed out of order: grab names cup by ref, frame names grab by ref and the earlier task by its taskId.
+	const plan = board.dispatchPlan({ tasks: [step("frame", "shot:s1", ["grab", before.taskId]), step("grab", "character:alex", ["cup"]), step("cup", "object:cup")] });
+	const by = Object.fromEntries(plan.tasks.map(task => [task.ref, task]));
+	assert.deepEqual(plan.tasks.map(task => task.ref), ["frame", "grab", "cup"], "answered in the plan's order");
+	assert.deepEqual(board.get(by.grab.taskId).dependsOn, [by.cup.taskId], "a ref resolves to the taskId it was given");
+	assert.deepEqual(board.get(by.frame.taskId).dependsOn, [by.grab.taskId, before.taskId], "an earlier taskId passes through");
+	assert.equal(by.cup.status, "starting", "the answer is the board after scheduling"); assert.equal(by.grab.status, "waiting");
+	await tick();
+	assert.deepEqual(runs.map(run => run.task.title), ["base", "cup"]);
+	runs[1].resolve({ status: "done", reply: "Cup made." }); await tick(); await tick();
+	assert.equal(status().grab, "starting");
+	const again = board.dispatchPlan({ tasks: [{ ...step("cup2", "object:cup"), instructions: "do grab", scope: ["character:alex"] }, step("after", "object:z", ["cup2"])] });
+	assert.equal(again.tasks[0].duplicateOf, by.grab.taskId, "a duplicate step answers the equal task");
+	assert.deepEqual(board.get(again.tasks[1].taskId).dependsOn, [by.grab.taskId], "and refs to it resolve to that task");
+	console.log("PASS case 8 as a plan: one dispatch_plan queues a graph, refs resolve to taskIds, a cycle or unknown ref refuses all of it");
 }
 {
 	const { board, runs, advance } = boardFixture({ staggerMs: 1500 });

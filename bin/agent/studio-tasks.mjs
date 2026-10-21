@@ -5,6 +5,8 @@
 //   - at most CAP running tasks; the rest wait in order (11)
 //   - a task whose scope another running task holds waits for it; the bus is the authority (SCOPE_BUSY at begin) (1)
 //   - dependsOn: a task starts after those are done and hears their summaries; a failed one fails it (8)
+//   - a plan queues a whole dependency graph at once: local refs name its steps, and a cycle or an unknown ref refuses
+//     all of it before one task is queued, so the board never holds half a plan (8)
 //   - a second task starts only once the first one's model has answered, or STAGGER ms passed: the shared prompt prefix
 //     is then cached once, not written by every task at the same moment (12)
 //   - usage and cost per task (13); summaries are capped so the main agent's context stays small (16)
@@ -28,7 +30,7 @@ const clip = (text, n) => (text.length > n ? `${text.slice(0, n - 1)}…` : text
  */
 export function createTaskBoard({ run, emit = () => {}, now = Date.now, setTimer = setTimeout, clearTimer = clearTimeout, limits = {} } = {}) {
 	const L = { ...TASK_LIMITS, ...limits }, tasks = new Map();
-	let lastStart = null, scheduled = null;
+	let lastStart = null, scheduled = null, planning = false;
 	const list = () => [...tasks.values()];
 	const running = () => list().filter(task => ["starting", "running"].includes(task.status));
 	const scopes = () => new Map(running().map(task => [task.taskId, { taskId: task.taskId, title: task.title, keys: new Set(task.scope) }]));
@@ -36,19 +38,57 @@ export function createTaskBoard({ run, emit = () => {}, now = Date.now, setTimer
 		...(task.dependsOn.length ? { dependsOn: task.dependsOn } : {}), tools: task.tools, usage: task.usage, ...(task.summary ? { summary: task.summary } : {}) });
 	const tell = (type, task, extra = {}) => emit({ type, at: now(), ...view(task), ...extra });
 
+	const invalid = message => Object.assign(new Error(message), { code: "INVALID_ARGUMENT" });
+	function check({ instructions, scope }) {
+		if (typeof instructions !== "string" || !instructions.trim()) throw invalid("A task needs instructions.");
+		if (!Array.isArray(scope) || !scope.length || scope.some(key => !isScopeKey(key))) throw invalid("scope: one or more keys object:<id>, character:<id>, shot:<id>, stage, timeline or scene.");
+	}
+
 	function dispatch({ title, instructions, scope, reads = [], dependsOn = [] }) {
-		if (typeof instructions !== "string" || !instructions.trim()) throw Object.assign(new Error("A task needs instructions."), { code: "INVALID_ARGUMENT" });
-		if (!Array.isArray(scope) || !scope.length || scope.some(key => !isScopeKey(key))) throw Object.assign(new Error("scope: one or more keys object:<id>, character:<id>, shot:<id>, stage, timeline or scene."), { code: "INVALID_ARGUMENT" });
+		check({ instructions, scope });
 		const unknown = dependsOn.find(id => !tasks.has(id));
-		if (unknown) throw Object.assign(new Error(`dependsOn: no task ${unknown}.`), { code: "INVALID_ARGUMENT" });
+		if (unknown) throw invalid(`dependsOn: no task ${unknown}.`);
 		const same = list().find(task => ACTIVE.has(task.status) && norm(task.instructions) === norm(instructions) && [...task.scope].sort().join() === [...scope].sort().join());
 		if (same) return { duplicateOf: same.taskId, ...view(same) };
 		const task = { taskId: randomUUID(), title: clip(String(title || instructions).trim(), 120), instructions, scope: [...new Set(scope)], reads, dependsOn,
 			status: "queued", tools: 0, usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, requests: 0 }, createdAt: now(), warm: false };
 		tasks.set(task.taskId, task);
 		tell("task.queued", task);
-		schedule();
+		if (!planning) schedule();
 		return view(task);
+	}
+
+	// A whole graph in one call: every step is checked and ordered first, then queued, then scheduled once, so the first
+	// step does not start before the steps that build on it are known.
+	function dispatchPlan({ tasks: steps } = {}) {
+		if (!Array.isArray(steps) || !steps.length) throw invalid("A plan needs one or more tasks.");
+		const byRef = new Map();
+		for (const step of steps) {
+			if (typeof step?.ref !== "string" || !step.ref.trim()) throw invalid("Every plan task needs a ref.");
+			if (byRef.has(step.ref)) throw invalid(`ref ${step.ref} is used twice.`);
+			check(step); byRef.set(step.ref, step);
+		}
+		for (const step of steps) { const unknown = (step.dependsOn ?? []).find(dep => !byRef.has(dep) && !tasks.has(dep)); if (unknown) throw invalid(`dependsOn of ${step.ref}: no ref or task ${unknown}.`); }
+		const order = [], state = new Map();
+		const visit = (ref, path) => {
+			if (state.get(ref) === "done") return;
+			if (state.get(ref) === "open") throw invalid(`dependsOn forms a cycle: ${[...path, ref].join(" -> ")}.`);
+			state.set(ref, "open");
+			for (const dep of byRef.get(ref).dependsOn ?? []) if (byRef.has(dep)) visit(dep, [...path, ref]);
+			state.set(ref, "done"); order.push(byRef.get(ref));
+		};
+		for (const step of steps) visit(step.ref, []);
+		const ids = new Map(), out = new Map(); // ref -> taskId, ref -> its dispatch answer
+		planning = true;
+		try {
+			for (const { ref, dependsOn = [], ...step } of order) {
+				const queued = dispatch({ ...step, dependsOn: [...new Set(dependsOn.map(dep => ids.get(dep) ?? dep))] });
+				ids.set(ref, queued.duplicateOf ?? queued.taskId); out.set(ref, queued);
+			}
+		} finally { planning = false; }
+		schedule();
+		// Answered after the one schedule pass, so each step reads as the board sees it now (running, waiting with why).
+		return { tasks: steps.map(({ ref }) => ({ ref, ...(out.get(ref).duplicateOf ? { duplicateOf: ids.get(ref) } : {}), ...view(tasks.get(ids.get(ref))) })) };
 	}
 
 	// What still holds a queued task back, or null when it may start now.
@@ -121,6 +161,7 @@ export function createTaskBoard({ run, emit = () => {}, now = Date.now, setTimer
 
 	return {
 		dispatch,
+		dispatchPlan,
 		board: () => list().map(view),
 		get: taskId => tasks.get(taskId),
 		/** Cancels a queued task, or stops a running one (its keys go back: task.cancel). */

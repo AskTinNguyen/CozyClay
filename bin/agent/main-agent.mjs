@@ -24,6 +24,12 @@ export function createMainTools({ board, studio, hub, admission, workspaceHandle
 				reads: { ...keys, minItems: 0, description: "keys the task reads but does not change (it hears when they change)" }, dependsOn: { type: "array", items: { type: "string" }, maxItems: 8 } },
 			["title", "instructions", "scope"]),
 		handler: args => board.dispatch(args) },
+		{ ...fn("dispatch_plan", "Queue several tasks that depend on each other in one call: each has a local ref, and dependsOn names refs of this plan or taskIds of earlier tasks. A cycle or an unknown ref refuses the whole plan. Answers every task with its ref, taskId and status.",
+			{ tasks: { type: "array", minItems: 1, maxItems: 12, items: { type: "object", additionalProperties: false, required: ["ref", "title", "instructions", "scope"], properties: {
+				ref: { type: "string", maxLength: 40 }, title: { type: "string", maxLength: 120 }, instructions: { type: "string", maxLength: 6000, description: "what to do, self-contained" }, scope: keys,
+				reads: { ...keys, minItems: 0, description: "keys the task reads but does not change (it hears when they change)" }, dependsOn: { type: "array", items: { type: "string" }, maxItems: 8, description: "refs of this plan or earlier taskIds" } } } } },
+			["tasks"]),
+		handler: args => board.dispatchPlan(args) },
 		{ ...fn("steer_task", "Add to a running task's instructions (the user changed their mind about its work).", { taskId: { type: "string" }, text: { type: "string", maxLength: 4000 } }, ["taskId", "text"]),
 			handler: async ({ taskId, text }) => {
 				const task = board.get(taskId) ?? fail("STALE_TARGET", `No task ${taskId}.`);

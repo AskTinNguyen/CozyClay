@@ -98,9 +98,9 @@ export function boardGroups(board) {
 	return groups;
 }
 
-/** The task ids a turn's dispatch_task steps started, in order (a duplicate points at the task it repeats). */
-export const dispatchedTaskIds = steps => (steps ?? []).filter(step => step.kind === "tool" && step.name === "dispatch_task")
-	.map(step => step.result?.taskId ?? step.result?.duplicateOf).filter(Boolean);
+/** The task ids a turn's dispatch_task and dispatch_plan steps started, in order (a duplicate points at the task it repeats). */
+export const dispatchedTaskIds = steps => (steps ?? []).filter(step => step.kind === "tool" && ["dispatch_task", "dispatch_plan"].includes(step.name))
+	.flatMap(step => (step.name === "dispatch_plan" ? step.result?.tasks ?? [] : [step.result])).map(result => result?.taskId ?? result?.duplicateOf).filter(Boolean);
 
 /** What the task view shares between the headless board (TaskBoard.jsx) and the rows in the chat (TaskInline.jsx). */
 function createTaskViewStore() {
