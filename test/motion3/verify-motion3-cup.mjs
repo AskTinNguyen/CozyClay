@@ -65,9 +65,9 @@ const late = run("motion.compile", { characterId: CHARACTER.id, base: first.spec
 expect("base + patch answers a new id and a delta against the base", late.specId && late.specId !== first.specId && late.delta?.base === first.specId
 	&& late.delta.new >= 1 && late.qa.ok === false, JSON.stringify({ id: late.specId, delta: late.delta }));
 const grabGroup = late.qa.groups.find(g => g.kind === "GRAB");
-// the GRAB group is the fourth with a patch: only the first three are compiled (hint-check.js), so its patch is not offered; its hint stays
+// the GRAB group is the fourth with a patch: only the first two are compiled (hint-check.js), so its patch is not offered; its hint stays
 expect("an early grab is a GRAB group on the cup with a hint; a patch is offered only once compiled", grabGroup && /empty-2/.test(grabGroup.subject) && /set objects\.empty-2\.grab to 28/.test(grabGroup.hint)
-	&& (grabGroup.patch ? Boolean(grabGroup.patchChecked) : late.qa.groups.filter(g => g.patch || g.patchTried).length >= 3) && late.qa.groups.every(g => !g.patch || g.patchChecked), JSON.stringify(grabGroup));
+	&& (grabGroup.patch ? Boolean(grabGroup.patchChecked) : late.qa.groups.filter(g => g.patch || g.patchTried).length >= 2) && late.qa.groups.every(g => !g.patch || g.patchChecked), JSON.stringify(grabGroup));
 
 // ---- repair --------------------------------------------------------------------------------
 const repaired = run("motion.compile", { characterId: CHARACTER.id, base: late.specId, repair: { rounds: 4 }, install: false });

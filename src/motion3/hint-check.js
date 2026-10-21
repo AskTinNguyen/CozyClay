@@ -10,7 +10,7 @@ import { applyPatch } from "./json-patch.js";
 import { groupKey } from "./qa/severity.js";
 import { compareQa, severityIn } from "./qa/verdict.js";
 
-const CHECKED = 3;
+const CHECKED = 2;
 const r2 = x => Math.round(x * 100) / 100;
 
 /**
