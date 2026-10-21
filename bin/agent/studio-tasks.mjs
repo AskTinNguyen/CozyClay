@@ -5,6 +5,9 @@
 //   - at most CAP running tasks; the rest wait in order (11)
 //   - a task whose scope another running task holds waits for it; the bus is the authority (SCOPE_BUSY at begin) (1)
 //   - dependsOn: a task starts after those are done and hears their summaries; a failed one fails it (8)
+//   - verify: a task the coordinator wants to check ends in review, not done; it holds no scope (it finished running)
+//     but its dependents wait until accept (done, they start) or reject (failed, they fail): a wrong result is caught
+//     before work is built on it (8)
 //   - a plan queues a whole dependency graph at once: local refs name its steps, and a cycle or an unknown ref refuses
 //     all of it before one task is queued, so the board never holds half a plan (8)
 //   - a second task starts only once the first one's model has answered, or STAGGER ms passed: the shared prompt prefix
@@ -20,7 +23,7 @@ import { randomUUID } from "node:crypto";
 import { isScopeKey, scopeConflict } from "../../src/bus-task-scopes.js";
 
 export const TASK_LIMITS = Object.freeze({ cap: 3, staggerMs: 1500, maxMs: 20 * 60_000, maxTools: 120, summaryChars: 1200, receipts: 8, changed: 24 });
-const ACTIVE = new Set(["queued", "waiting", "starting", "running", "paused"]);
+const ACTIVE = new Set(["queued", "waiting", "starting", "running", "paused", "review"]);
 const ENDED = new Set(["done", "failed", "cancelled"]);
 const norm = text => String(text ?? "").toLowerCase().replace(/\s+/g, " ").trim();
 const clip = (text, n) => (text.length > n ? `${text.slice(0, n - 1)}…` : text);
@@ -28,7 +31,7 @@ const clip = (text, n) => (text.length > n ? `${text.slice(0, n - 1)}…` : text
 /**
  * run(task, { resume }) runs one task to its end and answers { status: "done" | "failed" | "cancelled" | "lost" |
  * "scopeBusy", reply, receipts, usage, error }; it calls task.onFrame(frame) for every frame. emit(event) tells the
- * main agent (task.queued, task.started, task.done, task.failed, task.cancelled, task.paused, task.resumed).
+ * main agent (task.queued, task.started, task.review, task.done, task.failed, task.cancelled, task.paused, task.resumed).
  */
 export function createTaskBoard({ run, emit = () => {}, now = Date.now, setTimer = setTimeout, clearTimer = clearTimeout, limits = {} } = {}) {
 	const L = { ...TASK_LIMITS, ...limits }, tasks = new Map();
@@ -37,7 +40,7 @@ export function createTaskBoard({ run, emit = () => {}, now = Date.now, setTimer
 	const running = () => list().filter(task => ["starting", "running"].includes(task.status));
 	const scopes = () => new Map(running().map(task => [task.taskId, { taskId: task.taskId, title: task.title, keys: new Set(task.scope) }]));
 	const view = task => ({ taskId: task.taskId, title: task.title, status: task.status, scope: task.scope, ...(task.reason ? { reason: task.reason } : {}), ...(task.turnId ? { turnId: task.turnId } : {}),
-		...(task.dependsOn.length ? { dependsOn: task.dependsOn } : {}), tools: task.tools, usage: task.usage, ...(task.summary ? { summary: task.summary } : {}), ...(task.changed?.length ? { changed: task.changed } : {}) });
+		...(task.dependsOn.length ? { dependsOn: task.dependsOn } : {}), ...(task.verify ? { verify: true } : {}), tools: task.tools, usage: task.usage, ...(task.summary ? { summary: task.summary } : {}), ...(task.changed?.length ? { changed: task.changed } : {}) });
 	const tell = (type, task, extra = {}) => emit({ type, at: now(), ...view(task), ...extra });
 
 	const invalid = message => Object.assign(new Error(message), { code: "INVALID_ARGUMENT" });
@@ -46,13 +49,13 @@ export function createTaskBoard({ run, emit = () => {}, now = Date.now, setTimer
 		if (!Array.isArray(scope) || !scope.length || scope.some(key => !isScopeKey(key))) throw invalid("scope: one or more keys object:<id>, character:<id>, shot:<id>, stage, timeline or scene.");
 	}
 
-	function dispatch({ title, instructions, scope, reads = [], dependsOn = [] }) {
+	function dispatch({ title, instructions, scope, reads = [], dependsOn = [], verify = false }) {
 		check({ instructions, scope });
 		const unknown = dependsOn.find(id => !tasks.has(id));
 		if (unknown) throw invalid(`dependsOn: no task ${unknown}.`);
 		const same = list().find(task => ACTIVE.has(task.status) && norm(task.instructions) === norm(instructions) && [...task.scope].sort().join() === [...scope].sort().join());
 		if (same) return { duplicateOf: same.taskId, ...view(same) };
-		const task = { taskId: randomUUID(), title: clip(String(title || instructions).trim(), 120), instructions, scope: [...new Set(scope)], reads, dependsOn,
+		const task = { taskId: randomUUID(), title: clip(String(title || instructions).trim(), 120), instructions, scope: [...new Set(scope)], reads, dependsOn, verify: verify === true,
 			status: "queued", tools: 0, usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, requests: 0 }, createdAt: now(), warm: false };
 		tasks.set(task.taskId, task);
 		tell("task.queued", task);
@@ -98,7 +101,7 @@ export function createTaskBoard({ run, emit = () => {}, now = Date.now, setTimer
 		const failed = task.dependsOn.map(id => tasks.get(id)).find(dep => ["failed", "cancelled"].includes(dep.status));
 		if (failed) return { fail: `it depends on task ${failed.taskId} (${failed.title}), which ${failed.status === "failed" ? "failed" : "was cancelled"}` };
 		const open = task.dependsOn.map(id => tasks.get(id)).find(dep => dep.status !== "done");
-		if (open) return { wait: `waits for task ${open.taskId} (${open.title}) to finish` };
+		if (open) return { wait: `waits for task ${open.taskId} (${open.title}) to ${open.status === "review" ? "be accepted" : "finish"}` };
 		const held = scopeConflict(task.taskId, task.scope, scopes());
 		if (held) return { wait: `${held}` };
 		if (running().length >= L.cap) return { wait: `${L.cap} tasks are running; it starts when one ends` };
@@ -145,7 +148,8 @@ export function createTaskBoard({ run, emit = () => {}, now = Date.now, setTimer
 			const summary = { reply: clip(String(result.reply ?? "").trim(), L.summaryChars), receipts: (result.receipts ?? []).slice(-L.receipts) };
 			if (result.status === "done") task.changed = changedBy(task, result.receipts);
 			// A cancel that arrived after the run finished cannot take it back: it stays done (and can be undone).
-			end(task, task.stopReason ? "failed" : task.cancelled && result.status !== "done" ? "cancelled" : result.status, { reason: task.stopReason ?? (result.status === "failed" ? clip(String(result.error?.message ?? result.error ?? "the run failed"), 300) : undefined), summary });
+			const status = task.stopReason ? "failed" : task.cancelled && result.status !== "done" ? "cancelled" : result.status;
+			end(task, status === "done" && task.verify ? "review" : status, { reason: task.stopReason ?? (result.status === "failed" ? clip(String(result.error?.message ?? result.error ?? "the run failed"), 300) : undefined), summary });
 		}
 		rescheduleNow();
 	}
@@ -158,7 +162,8 @@ export function createTaskBoard({ run, emit = () => {}, now = Date.now, setTimer
 	}
 
 	function end(task, status, { reason, summary } = {}) {
-		task.status = status; task.reason = reason; task.endedAt = now();
+		// endedAt is when it stopped running: an accept after review does not move it.
+		task.status = status; task.reason = reason; task.endedAt ??= now();
 		if (summary) task.summary = summary;
 		tell(`task.${status === "done" ? "done" : status}`, task);
 	}
@@ -177,9 +182,23 @@ export function createTaskBoard({ run, emit = () => {}, now = Date.now, setTimer
 		/** Cancels a queued task, or stops a running one (its keys go back: task.cancel). */
 		cancel(taskId) {
 			const task = tasks.get(taskId);
-			if (!task || ENDED.has(task.status)) return null;
+			if (!task || ENDED.has(task.status) || task.status === "review") return null;
 			if (["queued", "waiting", "paused"].includes(task.status)) { end(task, "cancelled", { reason: "cancelled before it ran" }); schedule(); return view(task); }
 			task.cancelled = true; task.controller.abort(new Error("cancelled"));
+			return view(task);
+		},
+		/** A task in review is done: its dependents start. */
+		accept(taskId) {
+			const task = tasks.get(taskId);
+			if (task?.status !== "review") return null;
+			end(task, "done"); schedule();
+			return view(task);
+		},
+		/** A task in review is failed with the coordinator's reason: its dependents fail as after any failed task. */
+		reject(taskId, reason) {
+			const task = tasks.get(taskId);
+			if (task?.status !== "review") return null;
+			end(task, "failed", { reason: clip(`rejected by the coordinator: ${String(reason ?? "").trim() || "no reason given"}`, 300) }); schedule();
 			return view(task);
 		},
 		/** A Studio context the main agent saw: paused tasks of that scene resume there, others fail. */

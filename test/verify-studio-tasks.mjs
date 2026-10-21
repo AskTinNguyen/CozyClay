@@ -113,6 +113,38 @@ const dispatch = (board, title, scope, extra = {}) => board.dispatch({ title, in
 	console.log("PASS case 8 handoff: a done task records what it changed as data and its dependents receive it with the summary");
 }
 {
+	// case 8 with a checkpoint: verify ends the run in review; it frees its scope, its dependents wait for accept or
+	// fail on reject; without verify nothing changes.
+	const { board, runs, events, status } = boardFixture();
+	const a = dispatch(board, "make cup", ["object:cup"], { verify: true });
+	dispatch(board, "grab cup", ["character:alex"], { dependsOn: [a.taskId] });
+	dispatch(board, "paint cup", ["object:cup"]);
+	await tick();
+	assert.equal(status()["paint cup"], "waiting", "the cup is held while the run runs");
+	runs[0].resolve({ status: "done", reply: "Cup made.", receipts: [{ receiptId: "r1", affectedIds: ["cup"] }] }); await tick(); await tick();
+	assert.equal(status()["make cup"], "review"); assert.ok(events.some(event => event.type === "task.review" && event.taskId === a.taskId && event.verify), "task.review is told");
+	assert.equal(status()["paint cup"], "starting", "a task in review holds no scope");
+	assert.equal(status()["grab cup"], "waiting"); assert.match(board.board().find(task => task.title === "grab cup").reason, /to be accepted/, "but counts as not done for dependsOn");
+	assert.equal(board.cancel(a.taskId), null, "review is not cancelled: it is accepted or rejected");
+	assert.equal(dispatch(board, "make cup", ["object:cup"]).duplicateOf, a.taskId, "nor dispatched again");
+	assert.equal(board.accept(a.taskId).status, "done"); await tick();
+	assert.equal(status()["grab cup"], "starting", "accept releases its dependents");
+	assert.deepEqual(runs.at(-1).options.deps[0].changed, ["object:cup"]);
+	assert.equal(board.accept(a.taskId), null, "only a task in review is accepted");
+	const b = dispatch(board, "pose", ["character:sam"], { verify: true }), c = dispatch(board, "walk", ["character:sam"], { dependsOn: [b.taskId] });
+	await tick();
+	runs.find(run => run.task.taskId === b.taskId).resolve({ status: "done", reply: "Posed." }); await tick(); await tick();
+	assert.equal(board.reject(b.taskId, "the arm goes through the wall").status, "failed"); await tick();
+	assert.match(board.get(b.taskId).reason, /rejected by the coordinator: the arm goes through the wall/);
+	assert.equal(board.get(c.taskId).status, "failed", "reject fails the dependents as any failure does");
+	const plain = dispatch(board, "plain", ["object:p"]); await tick();
+	runs.find(run => run.task.taskId === plain.taskId).resolve({ status: "done" }); await tick(); await tick();
+	assert.equal(board.get(plain.taskId).status, "done", "without verify a task ends done");
+	const p = board.dispatchPlan({ tasks: [{ ref: "x", title: "x", instructions: "do x", scope: ["object:x"], verify: true }] });
+	assert.equal(p.tasks[0].verify, true, "a plan step takes verify");
+	console.log("PASS case 8 with a checkpoint: a verify task ends in review, frees its scope, and its dependents start on accept or fail on reject");
+}
+{
 	// case 8 as a plan: one call queues a graph, refs resolve to the new taskIds, and a bad plan queues nothing.
 	const { board, runs, events, status } = boardFixture();
 	const before = dispatch(board, "base", ["object:base"]);
@@ -226,7 +258,8 @@ const dispatch = (board, title, scope, extra = {}) => board.dispatch({ title, in
 
 // --- (b) the main agent's words ----------------------------------------------------------------------------
 {
-	const tasks = [{ taskId: "t-1", title: "컵 잡기", status: "running" }, { taskId: "t-2", title: "Lighting", status: "done" }];
+	const tasks = [{ taskId: "t-1", title: "컵 잡기", status: "running" }, { taskId: "t-2", title: "Lighting", status: "done" }, { taskId: "t-3", title: "Make the cup", status: "review" }];
+	assert.match(doneClaimCorrection("Make the cup 작업을 완료했습니다.", tasks, "컵 만들어"), /"Make the cup" 작업은 아직 끝나지 않았습니다. 지금 검토 대기입니다/, "a task in review is not done yet");
 	assert.match(doneClaimCorrection("컵 잡기 작업을 완료했습니다.", tasks, "컵 잡게 해"), /정정: "컵 잡기" 작업은 아직 끝나지 않았습니다. 지금 진행 중입니다/, "case 15 + 17: corrected in Korean");
 	assert.match(doneClaimCorrection("The 컵 잡기 task is done.", tasks, "have her grab the cup"), /Correction: task "컵 잡기" has not finished; it is running/);
 	assert.equal(doneClaimCorrection("Lighting is done. 컵 잡기 is still running.", tasks, "x"), null, "a true claim, and a running task called running, pass");
