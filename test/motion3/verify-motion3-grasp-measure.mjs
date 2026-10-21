@@ -18,9 +18,14 @@ const spec = at => ({ schema: "cozyclay.motion-spec.v1", fps: 24, frames: "auto"
 	use: [{ skill: "standIdle", args: { at, heading: 0 }, f0: 0 }, { skill: "reachGrip", args: { anchor: "cup", side: "r", reach: 22, hold: 30, release: 14 }, f0: 10 }],
 	goals: [{ name: "fingers on cup", near: ["joint:RightHandMiddle2", "object:cylinder"], tol: 0.03, at: [34, 58] }] });
 const sk = skeletonFor("y-bot-tpose"), worst = (r, kind) => r.qa.groups.find(g => g.kind === kind)?.worst ?? 0;
-const far = compileSpec(spec([0, 0]), { sk, scene }), near = compileSpec(spec([-0.04, 0.12]), { sk, scene });
+// the session's stance ([0, 0]) is now reached by a lean (fix.reach, fix/reach-body.js); 40 cm further back is past it
+const session = compileSpec(spec([0, 0]), { sk, scene }), far = compileSpec(spec([0, -0.4]), { sk, scene }), near = compileSpec(spec([-0.04, 0.12]), { sk, scene });
 
-check("out of reach, REACH and the contact say what the goal measures (the session's stance)", () => {
+check("the session's stance: the compiler leans the body to the cup and the goal holds (fixed.reachBody)", () => {
+	assert.ok(session.qa.goals[0].ok && session.fixed.reachBody?.runs?.[0]?.side === "r", JSON.stringify({ goal: session.qa.goals[0], fixed: session.fixed.reachBody }));
+});
+
+check("out of reach, REACH and the contact say what the goal measures (40 cm behind the session's stance)", () => {
 	const goal = far.qa.goals[0].value, reach = worst(far, "REACH"), contact = worst(far, "CONTACT");
 	assert.ok(!far.qa.goals[0].ok && goal > 0.03, `goal ${goal}`);
 	assert.ok(reach > 0 && Math.abs(reach - goal) < 0.05, `REACH ${reach} vs goal ${goal}`);

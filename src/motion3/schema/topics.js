@@ -42,7 +42,7 @@ export const EXAMPLES = {
 		{ f: 30, set: { lid: 1 }, step: ["lid"] }] },
 	refs: { props: { cupGrip: GRIP }, anchors: { spot: SPOT }, goals: [
 		{ name: "fingers at the spot", near: ["prop:cupGrip.fingers", "anchor:spot"], at: 30 },
-		{ name: "cup at the mouth", near: ["object:cup.top", "landmark:mouth"], tol: 0.06, at: [40, 50] },
+		{ name: "cup at the mouth", near: ["object:cup.rim", "landmark:mouth"], tol: 0.06, at: [40, 50] },
 		{ name: "hand above the hips", above: ["joint:RightHand", "bone:Hips"], at: 30 }] },
 	fix: { fix: { reach: true, slide: true, penetration: 0.02, self: true, retime: false } },
 };
@@ -106,10 +106,12 @@ export const NOTES = {
 		"Flow (spec.flow, on by default): the spine, head, arm swing/bend and wrist carry their speed through a key (a small overshoot) and trail the body (spine 1, head 2, arms 3 frames; lag: { spine, head, arms } or a number); feet, root, hand targets, weights, poles, fingers and objects land on their keys on time. flow: false turns it off; { smooth: false } or { lag: false } one part.",
 		"w_<anchor>_<side> (0..1) weights a hand onto an anchor; the weights of one hand add up to at most 1.",
 		"Any other numeric channel must come from spec.channels, a hinge (objects.<id>.channel), a check's when or a visible switch; names ending _vis are visibility switches (shown above 0.5)."],
-	refs: ["A ref names a point: joint:/bone:<Bone>, prop:<prop>.<point>, anchor:<name>, landmark:mouth, object:<id>[.center|.top|.base], person:<character id>.<Bone> (another character's joint in its installed take).",
+	refs: ["A ref names a point: joint:/bone:<Bone>, prop:<prop>.<point>, anchor:<name>, landmark:mouth, object:<id>[.center|.top|.base|.rim], person:<character id>.<Bone> (another character's joint in its installed take).",
+		"object .center/.top/.base are points of its world bounding box (a tilted cup's .top is not its rim); .rim is its opening (the top face in its own axes, tilting with it), against another point the nearest edge: drink goals take .rim.",
 		"object:<id> takes a body or a group (the box around its parts); in a distance a bare object:<id> means its surface.",
 		"Goals and probes take every kind; spec.checks keep joint:, prop: and anchor:."],
 	fix: [`spec.fix keys: ${FIX_KEYS.join(", ")}; false turns all off. output.fixed reports what each one changed.`,
 		"reach, slide, self and stance are on by default; penetration and retime are opt-in.",
+		"reach also brings the body to a hand on a world or scene-object anchor the straight arm misses: a lean, a hip shift, lower hips, the feet kept (fixed.reachBody lists each move); farther, place the body. retime is kept only when QA is no worse with it.",
 		"self keeps the arms out of the body on its fitted skin (QA BODY measures the same skin): wrist targets inside it go onto it, elbows turn about the shoulder-wrist line, a hand a little inside is pushed out. A fit's target (the mouth) is never moved; what is left is BODY, with checks.allow { part, object: <body part>, depth } for a contact meant to touch (a hand on a knee)."],
 };
