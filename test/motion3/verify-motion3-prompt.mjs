@@ -17,9 +17,10 @@ const sentences = text => text.split(/(?<=[.;:])\s+/).map(s => s.trim()).filter(
 // +291 characters for the efficiency round (the motion reference, describe topics, one script for sweeps): budgets +300
 // +332 for the camera round (a new view is a cut, a move is one rail, no camera-key chains): +350
 // +253 for physical grasp (#816: let the hand hold, throwObject/catchObject, read LOAD): +260
-check("the whole prompt is at most 12,160 characters", () => assert.ok(prompt.length <= 12160, `${prompt.length}`));
-check("the motion part is at most 2,060 characters", () => {
-	assert.ok(motion.length > 0 && motion.length <= 2060, `${motion.length}`);
+// +457 for key writing (extremes not a beat, lead with root and end effectors, break symmetry, read observations.life): +460
+check("the whole prompt is at most 12,620 characters", () => assert.ok(prompt.length <= 12620, `${prompt.length}`));
+check("the motion part is at most 2,520 characters", () => {
+	assert.ok(motion.length > 0 && motion.length <= 2520, `${motion.length}`);
 });
 check("the prompt names describe, grab, goals, repair, base, beats and the 0.01 m scale floor", () => {
 	for (const word of ["motion.describe", "grab", "goals", "repair", "base", "\"beats\"", "0.01 m"]) assert.ok(prompt.includes(word), word);
@@ -32,7 +33,9 @@ check("the motion part states the procedure", () => {
 	for (const rule of [/The <motion-reference> block below is motion\.describe/, /read them there, not by a call/, /topics: \[\.\.\.\]/, /never probe the schema/, /reachGrip/, /grab\/release/, /frames: "auto"/,
 		/group \(Empty\) is carried or hinged as one unit/, /at least one goals entry per motion request: first list its causes, contacts, effects and what must not happen/, /report the lines no goal measures \(Unmeasured/, /install: "ifClean" and repair: \{ rounds \}/, /topic: "essentials"/, /topic: "goals"/, /never sweep values by hand/, /loop in one script without repair \(tools\.run_action/, /then repair the pick until clean \(install: "ifClean"\)/, /independent calls in the same turn/,
 		/base .*plus patch/, /probes and output\.timeline instead of .*motion\.sample/, /qa\.ok, which includes the goals\) installs in that call/,
-		/visual: "contact_sheet", frames: "beats"/, /visual: "trace"/, /Report qa\.problems, not qa\.total, the goals and output\.fixed/, /read output\.observations near and wrist and verify_result exportFraming/, /output\.observations, not QA/, /views, focus, trail/]) assert.match(motion, rule);
+		/visual: "contact_sheet", frames: "beats"/, /visual: "trace"/, /Report qa\.problems, not qa\.total, the goals and output\.fixed/, /read output\.observations near and wrist and verify_result exportFraming/, /output\.observations, not QA/, /views, focus, trail/,
+		/Key the extremes .*never an even beat: vary the gaps/, /Lead with root, hands and feet; leave spine, head and arm swing to flow/, /a few frames off the pelvis/, /same pose on the same frame only when the action needs it/,
+		/fix the worst output\.observations\.life warning/]) assert.match(motion, rule);
 });
 check("no sentence describes objects only as hinged doors", () => {
 	assert.doesNotMatch(prompt, /\(doors\)/);
