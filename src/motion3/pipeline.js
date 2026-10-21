@@ -5,7 +5,8 @@
 // a cause and a hint per issue group against the agent's own spec, the style quantities are
 // measured (qa/style.js observeMotion; keyed objects: every key as drawn, qa/key-checks.js
 // heldReadings; each hand and foot against the nearest object, qa/near.js observeNear; each holding
-// wrist's bend, qa/wrist-obs.js observeWrist; a skill
+// wrist's bend, qa/wrist-obs.js observeWrist; how mechanical it reads against the agent's own
+// keys, qa/motion-life.js observeLife; a skill
 // paced to fit a short span: observations.paced; a skill whose release or
 // settle the last frame cut: observations.cut), and the timeline and the
 // requested probes read the result.
@@ -28,6 +29,7 @@ import { heldReadings, HELD_UNITS } from "./qa/key-checks.js";
 import { observeNear, NEAR_UNITS } from "./qa/near.js";
 import { observeWrist, WRIST_UNITS } from "./qa/wrist-obs.js";
 import { observeLoad, LOAD_UNITS } from "./load.js";
+import { observeLife, LIFE_UNITS } from "./qa/motion-life.js";
 import { planWalks, applyWalkPlans } from "./walk-plan.js";
 import { relaxSpec } from "./lenient.js";
 
@@ -93,6 +95,7 @@ export function compileSpec(sent, { sk, scene }, opts = {}) {
 	if (wrist) Object.assign(observations, { units: `${observations.units}; ${WRIST_UNITS}`, wrist });
 	const load = observeLoad(sk, out);
 	if (load) Object.assign(observations, { units: `${observations.units}; ${LOAD_UNITS}`, load });
+	Object.assign(observations, { units: `${observations.units}; ${LIFE_UNITS}`, life: observeLife(sk, out, resolved?.keys) });
 	// a skill that paced its beats to fit a short span says so where every answer keeps it (C7 tier 1)
 	const paced = used.filter(u => u.paced).map(u => `${u.skill} paced ${u.paced.toFixed(2)} to fit f${u.f0}..f${u.end}`);
 	if (paced.length) observations.paced = paced;
