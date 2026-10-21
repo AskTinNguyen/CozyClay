@@ -156,9 +156,10 @@ const patched = applyPatch(doc, [{ op: "test", path: "/keys/1/f", value: 4 }, { 
 expect("add / replace / remove / test with - and ~1, on a copy", JSON.stringify(patched) === '{"keys":[{"f":-1},{"f":0},{"f":6},{"f":9}],"anchors":{"b/c":1}}' && doc.keys.length === 2 && doc.anchors.a);
 const nine = { keys: Array.from({ length: 9 }, (_, f) => ({ f })) };
 expect("a missing path names the op and what is there", refusal(() => applyPatch(nine, [{ op: "test", path: "/keys/0/f", value: 0 }, { op: "replace", path: "/keys/12/f", value: 112 }]))
-	=== "MOTION_SPEC_INVALID: patch[1] (replace /keys/12/f): /keys/12 does not exist (keys has 9 entries)");
+	=== "MOTION_SPEC_INVALID: patch[1] (replace /keys/12/f): /keys/12 does not exist (keys has 9 entries; by f: /keys/@f=<f>, f 0, 1, 2, 3, 4, 5, 6, 7, ...)");
 expect("a failed test, a bad op and - outside add are refused", /patch\[0\] \(test \/keys\/0\/f\): value is 0, not 5/.test(refusal(() => applyPatch(nine, [{ op: "test", path: "/keys/0/f", value: 5 }])))
-	&& /op must be add, remove, replace, test, got "move"/.test(refusal(() => applyPatch(nine, [{ op: "move", path: "/keys/0" }])))
+	&& /op must be add, remove, replace, move, test, got "copy"/.test(refusal(() => applyPatch(nine, [{ op: "copy", path: "/keys/0" }])))
+	&& /move needs from/.test(refusal(() => applyPatch(nine, [{ op: "move", path: "/keys/0" }])))
 	&& /"-" \(append\) works with add only/.test(refusal(() => applyPatch(nine, [{ op: "replace", path: "/keys/-", value: 1 }]))));
 
 // 6. refs on the cup scene
