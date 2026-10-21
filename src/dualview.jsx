@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { fitAspect } from "./shot-frame.js";
+import { updateVisibleViewOffsets } from "./viewport-visible-rect.js";
 
 /**
  * Two live viewports out of one scene.
@@ -235,6 +236,7 @@ export function DualRender({ stageRef, mainRef, insetRef, shotPreviewRef, shotCa
 			return { x: r.left - base.left, y: r.top - base.top, w: r.width, h: r.height };
 		};
 		const mainRect = rectOf(mainRef.current);
+		updateVisibleViewOffsets({ editorCam, poserCam, canvas: gl.domElement.getBoundingClientRect(), aspect: mainRect.w / mainRect.h });
 		// A collapsed inset is just its tag pill: skip the whole inset pass
 		// instead of drawing a squished viewport into it.
 		const insetRect = insetCollapsed ? { x: 0, y: 0, w: 0, h: 0 } : rectOf(insetRef.current);
@@ -441,8 +443,6 @@ export function DualRender({ stageRef, mainRef, insetRef, shotPreviewRef, shotCa
 				// IK mode: the main pane is the poser working view (free navigation,
 				// handle layer visible); the inset is the FROZEN shot camera — the
 				// separate camera-placement screen the framing lives on.
-				poserCam.aspect = mainRect.w / mainRect.h;
-				poserCam.updateProjectionMatrix();
 				drawEditorPane(poserCam, mainRect, null, !navigatingCamera);
 				if (!navigatingCamera || redrawFrozenPanes) drawVisibleInset(shotCam, insetRect, fitAspect(insetRect, shotAspect), !navigatingCamera);
 				drawPreviewCard();
@@ -455,8 +455,6 @@ export function DualRender({ stageRef, mainRef, insetRef, shotPreviewRef, shotCa
 				// navigation that never touches the recording. The shot camera only
 				// appears in its own preview pane, framed to the export aspect and
 				// stripped of editing chrome, exactly like an exported frame.
-				editorCam.aspect = mainRect.w / mainRect.h;
-				editorCam.updateProjectionMatrix();
 				// A right-drag is a camera gesture even with IK off. Keep the main
 				// image readable while the camera is moving by deferring the expensive
 				// edge/ink pass until the gesture ends; the plan inset stays frozen.

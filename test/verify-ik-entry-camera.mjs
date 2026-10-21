@@ -33,4 +33,11 @@ assert.equal(
 	"a remembered poser view still wins over look-through-shot",
 );
 
+// The motion domain reads the editor view through its own shared getters (appContext.forRender): without them
+// editorPose was always null, and Pose mode opened from the poser's construction-time spot, off the character.
+const { readFileSync } = await import("node:fs");
+const app = readFileSync(resolve(sourceRoot, "src/App.jsx"), "utf8");
+const motionShared = app.slice(app.indexOf("useMotion(appContext.forRender({"), app.indexOf("}));", app.indexOf("useMotion(appContext.forRender({")));
+assert.ok(motionShared.includes("get editorCamRef()") && motionShared.includes("get editorLook()"), "the motion domain is handed the editor camera and its look");
+
 console.log("PASS IK entry camera seeding decisions");

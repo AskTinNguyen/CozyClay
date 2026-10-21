@@ -1060,7 +1060,8 @@ export default function App() {
 		get motionFullRef() { return motionFullRef; },
 		get poseMemberAtFrame() { return poseMemberAtFrame; },
 		get posedRig() { return posedRig; },
-		get poserCamRef() { return poserCamRef; },
+		// Pose mode enters from the view the author is looking through (motion.js toggleIkMode).
+		get poserCamRef() { return poserCamRef; }, get editorCamRef() { return editorCamRef; }, get editorLook() { return editorLook; },
 		get poserLook() { return poserLook; },
 		get posing() { return posing; },
 		get posingChar() { return posingChar; },
