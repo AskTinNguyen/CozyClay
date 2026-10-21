@@ -55,6 +55,10 @@ expect("a typeless drop falls back to its extension", attachmentType(fakeFile("s
 	const textOnly = attachmentFilesFromTransfer({ files: [], items: [{ kind: "string", type: "text/plain" }] });
 	expect("a text paste yields nothing to attach", textOnly.images.length === 0 && textOnly.unsupported === 0);
 	expect("a missing transfer is tolerated", attachmentFilesFromTransfer(null).images.length === 0);
+	const mp4 = fakeFile("take.mp4", "video/mp4");
+	const mov = fakeFile("take.MOV", "");
+	const withVideo = attachmentFilesFromTransfer({ files: [mp4, txt, mov], items: [] });
+	expect("a dropped or picked video is taken, typed or by extension", withVideo.images.length === 2 && withVideo.images[0] === mp4 && withVideo.images[1] === mov && withVideo.unsupported === 0, JSON.stringify(withVideo.images.map((file) => file.name)));
 	expect("a drag is accepted only while it carries files", transferCarriesFiles({ types: ["Files"] }) === true && transferCarriesFiles({ types: ["text/plain"] }) === false);
 }
 

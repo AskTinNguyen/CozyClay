@@ -266,27 +266,6 @@ export function storeModel(key, storage = globalThis.localStorage) {
 	}
 }
 
-/** The supervisor switch (#728): off unless the author turned it on. It rides
- * on every Studio turn as `supervisor: true|false`; the sidecar reviews only a
- * turn sent with `true`, and its own COZYCLAY_SUPERVISOR=off still wins. */
-const AGENT_SUPERVISOR_KEY = "cozyclay.agent.supervisor";
-
-export function readStoredSupervisor(storage = globalThis.localStorage) {
-	try {
-		return storage?.getItem(AGENT_SUPERVISOR_KEY) === "on";
-	} catch {
-		return false;
-	}
-}
-
-export function storeSupervisor(enabled, storage = globalThis.localStorage) {
-	try {
-		storage?.setItem(AGENT_SUPERVISOR_KEY, enabled ? "on" : "off");
-	} catch {
-		// Private-mode storage denial must never break the toggle.
-	}
-}
-
 /** The model to open with: the remembered key when it is still advertised,
  * otherwise the first model the sidecar listed. */
 export function preferredModel(models, stored = readStoredModel()) {

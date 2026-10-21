@@ -998,16 +998,8 @@ expect("no timer drives the auth transition", !/set(Interval|Timeout)\([^)]*(sig
 	expect("the client asks the supervisor route", client.includes("/supervisor`") && client.includes("requestSupervisorNote(turnId)"));
 	expect("the send label goes through ko()", panel.includes('ko("Send as next prompt", "다음 턴으로 보내기")'));
 	expect("the supervisor card is token-driven and muted", /\.agent-supervisor-card\s*\{[^}]*color: var\(--agent-text-muted\)/.test(css));
-	// The review is off by default (plan 7.3): the stored switch reads true only
-	// for "on", and false when storage is missing or throws.
-	const memory = (value) => ({ getItem: () => value, setItem(key, next) { value = next; } });
-	expect("the supervisor switch defaults off", module_.readStoredSupervisor(memory(null)) === false && module_.readStoredSupervisor(null) === false && module_.readStoredSupervisor(memory("off")) === false);
-	expect("a storage error reads as off", module_.readStoredSupervisor({ getItem() { throw new Error("denied"); } }) === false);
-	const toggled = memory(null);
-	module_.storeSupervisor(true, toggled);
-	expect("the toggle can still switch the review on", module_.readStoredSupervisor(toggled) === true);
-	module_.storeSupervisor(false, toggled);
-	expect("and off again", module_.readStoredSupervisor(toggled) === false);
+	// The composer has no supervisor switch: a Studio turn never asks for the review.
+	expect("the composer sends no supervisor flag", !panel.includes("supervisor: supervisorOn") && !panel.includes("agent-supervisor-toggle${"));
 	const drive = async (frames, options = { supervisor: true }) => {
 		const asked = [], requests = [];
 		let store;

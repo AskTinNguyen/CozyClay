@@ -524,7 +524,9 @@ export function createAgentRunner({ models: suppliedModels, sessionStore, tools 
 					await ensureHarness(input);
 					// Keep the lane history, but replace per-turn tool closures (admission,
 					// workspace and cancellation). Auth retry reuses these same bindings.
-					if (state.harness && input.tools !== undefined) await state.harness.setTools(await adapters(input), state.context);
+					// The Tasks switch swaps the whole tool set inside one session; the lane's
+					// active names must follow, or pi refuses the turn (configured_tools_unavailable).
+					if (state.harness && input.tools !== undefined) { const turnTools = await adapters(input); await state.harness.setTools(turnTools, state.context); await state.lane.setActiveTools(turnTools.map((tool) => tool.name), state.context); }
 					removeEventListeners = mapEvents(queue);
 					// Compose and deliver once; pi retries provider calls in place without
 					// repeating attachments, captures or completed tool executions.

@@ -10,6 +10,7 @@
  * Anything under it is sent verbatim: no re-encode, no generation loss.
  */
 import { fileToDataUrl, imageFileFromTransfer } from "./clipboard-image.js";
+import { isVideoFile, videoContactSheet } from "./attachment-video.js";
 
 export const ATTACHMENT_MAX_COUNT = 4;
 export const ATTACHMENT_MAX_DIMENSION = 1600;
@@ -19,8 +20,9 @@ export const ATTACHMENT_JPEG_QUALITY = 0.85;
  * rest here rather than letting the sidecar reject a turn the author sent. */
 const ATTACHMENT_TYPES = Object.freeze(["image/png", "image/jpeg", "image/webp"]);
 export const ATTACHMENT_LIMIT_NOTICE = "Up to 4 images per message";
-export const ATTACHMENT_TYPE_NOTICE = "Attach a PNG, JPEG or WebP image";
-export const ATTACHMENT_FAILED_NOTICE = "That image could not be attached";
+export const ATTACHMENT_TYPE_NOTICE = "Attach a PNG, JPEG or WebP image, or a video";
+export const ATTACHMENT_FAILED_NOTICE = "That image or video could not be attached";
+export const ATTACHMENT_ACCEPT = [...ATTACHMENT_TYPES, "video/*"].join(",");
 
 const EXTENSION_TYPES = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp" };
 
@@ -57,7 +59,8 @@ export function attachmentFilesFromTransfer(transfer) {
 	const images = [];
 	let unsupported = 0;
 	for (const file of candidates) {
-		if (attachmentType(file)) images.push(file);
+		// A video travels as a contact sheet image (attachment-video.js).
+		if (attachmentType(file) || isVideoFile(file)) images.push(file);
 		else if (String(file?.type ?? "").startsWith("image/")) unsupported += 1;
 	}
 	return { images, unsupported };
@@ -155,6 +158,10 @@ export function attachmentName(file) {
  * media type is the resolved one: a file dragged in without a type would
  * otherwise be labelled PNG whatever its bytes are. */
 export async function attachmentFromFile(file, options = {}) {
+	if (isVideoFile(file)) {
+		const sheet = await videoContactSheet(file);
+		return { dataUrl: await blobToDataUrl(sheet.blob, "image/jpeg"), name: sheet.name };
+	}
 	const { readDataUrl = fileToDataUrl, ...shrink } = options;
 	const type = attachmentType(file) ?? "image/png";
 	const read = await readDataUrl(file);
