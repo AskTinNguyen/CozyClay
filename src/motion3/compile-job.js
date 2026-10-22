@@ -56,8 +56,12 @@ export function runCompileJob({ model, scene, spec: asked, probes: sentProbes, c
 	// every compile's QA by its spec, so a hint patch repair already tried is not compiled again (hint-check.js)
 	const seen = new Map(), measured = s => { const r = once(s); seen.set(JSON.stringify(s), r.qa); return r; };
 	const t0 = performance.now(), fixed = repair ? repairSpec(start, repair, measured) : { spec: asked, result: measured(asked) };
-	// a hint's patch is offered only when its compile helped
-	checkHints(fixed.spec, fixed.result.qa, s => seen.get(JSON.stringify(s)) ?? measured(s).qa);
+	// a hint's patch is offered only when its compile helped (hint-check.js), and only by a compile that repairs: repair has
+	// compiled most of the patches already (seen), where a plain compile paid two more compiles for them (bench replay: first
+	// compile 1.6 -> 5.2 s median) and the agent applied an offered patch as sent once in the 60 bench runs (374 direct
+	// compiles, 319 with repair; a plain compile is mostly a variant in a sweep); a plain compile keeps the hint's words only
+	if (repair) checkHints(fixed.spec, fixed.result.qa, s => seen.get(JSON.stringify(s)) ?? measured(s).qa);
+	else for (const g of fixed.result.qa?.groups ?? []) delete g.patch;
 	// ms.repair: the whole repair's wall time, so a sweep that repairs every variant shows what it costs
 	const r = fixed.result, label = fixed.spec?.label ?? null, ms = fixed.repair ? { ...r.ms, repair: Math.round(performance.now() - t0) } : r.ms;
 	const take = bake ? bakeTake(sk, r.out, { position: bake.position, yaw: bake.yaw }, { spec: r.stored, prompt: ("prompt" in bake ? bake.prompt : label) ?? "" }) : undefined;

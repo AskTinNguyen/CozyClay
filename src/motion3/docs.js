@@ -11,7 +11,7 @@ export const MOTION_ACTION_HELP = {
 		+ "Refs need a prefix (joint: prop: anchor: landmark: object: person:; goals[].moved: a bare id too) and take loose bone names; spec.checks need exact ones. "
 		+ "repair: { rounds } (1-8, default 4) applies group patches while severity drops. "
 		+ "qa judges only what is broken; speed, balance and bends are observations unless checks.limits names them. "
-		+ "Answers brief (qa, misses, top groups: a script returns it as is), frames, installed, stuck (when to stop), specId, qa { ok, total, goals, groups (GOAL first, then severity; cause, hint, patch?) }, observations (asked: skill ends, contacts, goal points), delta (with base), repair, probes, timeline, fixed, search, skills. more: motion.report pages the rest.",
+		+ "Answers brief (qa, misses, top groups: a script returns it as is), frames, installed, stuck (when to stop), specId, qa { ok, total, goals, groups (GOAL first, then severity; cause, hint, repair patch?) }, observations (asked: skill ends, contacts, goal points), delta (with base), repair, probes, timeline, fixed, search, skills. more: motion.report pages the rest.",
 	qa: "Measure the character's installed take again against the scene as it is now (objects may have moved). Optional checks replace the spec's checks and its skills' checks. "
 		+ "Answers specId and qa as motion.compile does (goals, ranked groups with cause, hint and patch); output.more pages with motion.report. Changes nothing.",
 	sample: "World positions (metres) of named bones of the installed take at up to 64 frames. Bone names may be loose (any case, a mixamorig: prefix, aliases such as hips or hand_l); an unknown one answers a did-you-mean. "

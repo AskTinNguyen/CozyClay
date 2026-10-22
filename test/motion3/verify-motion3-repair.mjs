@@ -226,9 +226,13 @@ const rootOnly = s => ({ qa: { goals: [], groups: s.use[0].args.at[1] > 0 ? [] :
 r = repairSpec(armSpec, { rounds: 2 }, rootOnly);
 expect("arm-local: when moving the body is the only fix it is kept and says so (movedBody)", r.repair.applied.length === 1 && /^the body moved/.test(r.repair.applied[0].movedBody ?? ""), json(r.repair));
 
-// 13. motion.compile offers a hint patch only when its compile helped (hint-check.js), and fix.retime only when QA is no worse
-const job = s => runCompileJob({ model: "x-bot-tpose", scene: car, spec: s });
-const winged = job(wing), below = winged.qa.groups.find(g => g.kind === "BELOW");
+// 13. motion.compile offers a hint patch only when its compile helped (hint-check.js), only from a compile that repairs
+// (a plain compile keeps the hint's words: it paid two more compiles for patches the agent seldom applied), and fix.retime
+// only when QA is no worse
+const job = (s, repair) => runCompileJob({ model: "x-bot-tpose", scene: car, spec: s, ...(repair ? { repair } : {}) });
+const plainWing = job(wing);
+expect("a plain compile offers no hint patch: the words stay", plainWing.qa.groups.every(g => !g.patch && !g.patchTried) && plainWing.qa.groups.some(g => g.hint), json(plainWing.qa.groups.map(g => [g.kind, Boolean(g.patch), Boolean(g.hint)])));
+const winged = job(wing, { rounds: 1 }), below = winged.qa.groups.find(g => g.kind === "BELOW");
 expect("hint check: the pole patch that trades 20 problems for 27 is not offered, and says what it did", below && !below.patch && /^replace \/keys\/\d+\/set\/elbow_r: compiled, did not help \(problems 20 -> 27\)$/.test(below.patchTried ?? ""), json(below));
 expect("hint check: every patch left was compiled and helped", winged.qa.groups.filter(g => g.patch).every(g => g.patchChecked && g.patchChecked.severity[1] < g.patchChecked.severity[0]), json(winged.qa.groups.filter(g => g.patch)));
 const timed = compileSpec({ ...wing, fix: { ...wing.fix, retime: true } }, { sk, scene: car });
