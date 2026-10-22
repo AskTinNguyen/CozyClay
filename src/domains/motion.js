@@ -29,10 +29,8 @@ import {
 } from "../motion/ik.js";
 import * as THREE from "three";
 import { StudioProtocolError } from "../studio-agent-protocol.js";
-
-import { applyTakeFrame } from "../motion3/playback.js";
-import { isKo, ko } from "../locale.js";
-import { isProxyFigure } from "../scenes.js";
+import { applyTakeFrame } from "../motion3/playback.js"; import { setPlaybackFrame } from "../motion/playback-frame-store.js";
+import { isKo, ko } from "../locale.js"; import { isProxyFigure } from "../scenes.js";
 import { refuseRigOnly } from "../character-kind.js";
 import { DEFAULT_POSE, restoreBindPositions, applyPose, applyHipsOffset } from "../poses.js";
 import { bakeIkDragKey, bakeIkDragRange, chainsChangedBy, ikDragRecord, ikDragTouch } from "../motion/ik-drag.js";
@@ -633,7 +631,8 @@ export function useMotion(appContext) {
 			appContext.shared.setTlPlaying(false);
 			return;
 		}
-		appContext.shared.setTlFrame((f) => (f + count) % appContext.shared.frameCountRef.current);
+		const frame = setPlaybackFrame((f) => (f + count) % appContext.shared.frameCountRef.current); appContext.shared.tlFrameRef.current = frame; appContext.patchTimeline({ currentFrame: frame }); if (appContext.shared.activeRig) appContext.shared.poseMemberAtFrame(appContext.shared.activeRig, motion, null, frame); poseOtherCastMembers(frame); const state = appContext.shared.ikStateRef.current;
+		if (!appContext.shared.posing && state?.chains && (appContext.shared.ikMode || state.keys.size > 0)) ikEvaluate(state.chains, state, frame, state.fkJoints, motion ? IK_CORRECTION_BLEND_FRAMES : 0);
 	}
 
 	function stepFrame(delta) {

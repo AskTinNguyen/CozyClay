@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useStudioShell } from "./studio-shell-context.js";
 import { logStore } from "./log-store.js";
 import "./dock.css";
@@ -7,11 +7,13 @@ import BoardSlot from "./BoardSlot.jsx";
 import LensScrub from "./lens-scrub.jsx";
 import { ko } from "../locale.js";
 import Timeline, { timelineTake } from "../motion/timeline.jsx";
+<<<<<<< HEAD
 import { DEFAULT_PLAYBACK_SPEED, sceneObjectNameDisplayKo } from "../app-stage.jsx";
 
 import { trackFeature } from "../analytics.js";
 import { defaultRailRange } from "../camera-rail-schedule.js";
 import { insertPathMark, pathMarks } from "../object-path.js";
+import { playbackFrame, subscribePlaybackFrame } from "../motion/playback-frame-store.js";
 
 // G11: the dock resizes within [220, 480] px, and never so far that the 3D
 // viewport drops under 480 px (top bar 44 + status bar 24 + three 1 px gaps).
@@ -68,11 +70,12 @@ function dockTabsFor(previsMode) {
  * switching keeps the Sequencer's scroll and zoom and the Library's folder
  * and search. Any stored tab the mode does not offer opens its first tab. */
 export default function BottomDock({ tab: requestedTab = "animation", onTabChange, embedded = false }) {
+	const liveFrame = useSyncExternalStore(subscribePlaybackFrame, playbackFrame, playbackFrame);
 	const { previsMode } = useStudioShell();
 	const tabs = embedded ? dockTabsFor(null) : dockTabsFor(previsMode);
 	const tab = tabs.some((entry) => entry.key === requestedTab) ? requestedTab : tabs[0].key;
 	const {
-		tlFrame, motion, waypointMode, craneSelectedIndex,
+		motion, waypointMode, craneSelectedIndex,
 		isCameraSelection, addActiveCranePoint, deleteSelectedCranePoint, setCraneSelectedIndex, tlFrameCount,
 		tlFps, characters, activeCharIndex, ghostLayers, pathSpeed,
 		tlPlaying, workflowMode, waypoints, pendingWaypointFrame,
@@ -206,7 +209,7 @@ export default function BottomDock({ tab: requestedTab = "animation", onTabChang
 			{!embedded && previsMode === "storyboard" && <BoardSlot active={tab === "board"} />}
 			<div className="bottom-timeline" hidden={tab !== "animation"}>
 			<Timeline
-				frame={tlFrame}
+				frame={liveFrame}
 				craneSelectedIndex={craneSelectedIndex}
 				cameraSelected={isCameraSelection}
 				onCranePointAdd={addActiveCranePoint}
