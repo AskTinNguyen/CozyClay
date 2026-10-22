@@ -31,8 +31,6 @@ import { sampleAt } from '../src/sample-at.js';
 import { createShot, shotAtFrame, addShotAtFrame } from '../src/cuts.js';
 import { placementAt } from '../src/root-path.js';
 import * as studioActions from '../src/studio-actions.js';
-// The real motion request contract (#466); inert here because analytics never initializes.
-import { startMotionRequest } from '../src/analytics.js';
 import { createCommandBus, withCommandHistory } from '../src/command-bus.js';
 import { createStudioAppBinding } from '../src/studio-app-binding.js';
 import { createAppContext } from '../src/app-context.js';
