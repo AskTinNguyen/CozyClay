@@ -12,6 +12,7 @@
   <a href="https://www.npmjs.com/package/cozyclay"><img alt="npm" src="https://img.shields.io/npm/v/cozyclay"></a>
   <img alt="Node 22.19+" src="https://img.shields.io/badge/node-22.19%2B-brightgreen">
   <a href="https://github.com/NomaDamas/CozyClay/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/NomaDamas/CozyClay?style=flat"></a>
+  <a href="https://discord.gg/Hp9V5wwgjF"><img alt="Discord" src="https://img.shields.io/badge/discord-join-5865F2?logo=discord&logoColor=white"></a>
 </p>
 
 <p align="center">
@@ -19,7 +20,8 @@
   <a href="#quick-start">Quick start</a> ·
   <a href="INSTALL_FOR_AGENTS.md">Guide for AI agents</a> ·
   <a href="#docs">Docs</a> ·
-  <a href="CHANGELOG.md">Changelog</a>
+  <a href="CHANGELOG.md">Changelog</a> ·
+  <a href="https://discord.gg/Hp9V5wwgjF">Discord</a>
 </p>
 
 <table>
