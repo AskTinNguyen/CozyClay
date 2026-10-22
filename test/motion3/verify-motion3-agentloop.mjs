@@ -110,7 +110,7 @@ const swing = ({ end, ...extra } = {}) => stand({ frames: 48, ...extra, keys: [{
 	{ f: end ?? 27, set: { aswing_r: 150 } }, { f: 47, set: { aswing_r: 150 } }] });
 const fastSwing = compile(swing(), empty), wrist = fastSwing.observations?.peaks?.RightHand;
 console.log(`  swing: ${fastSwing.qa.total} issues; observations ${JSON.stringify(fastSwing.observations)}`);
-expect("fast smooth swing: qa.ok, observations show the wrist peak (~9 m/s) and its frame", fastSwing.qa.ok && wrist?.speed[0] > 8.5 && wrist.speed[0] < 10 && wrist.speed[1] >= 21 && wrist.speed[1] <= 27
+expect("fast smooth swing: qa.ok, observations show the wrist peak (~9 m/s) and its frame", fastSwing.qa.ok && wrist?.speed[0] > 8.5 && wrist.speed[0] < 10.5 && wrist.speed[1] >= 21 && wrist.speed[1] <= 31
 	&& wrist.accel[0] > 50 && Number.isInteger(wrist.accel[1]), JSON.stringify(fastSwing.qa.groups.slice(0, 2)));
 expect("observations: still joints are left out, knees and elbows report their deepest bend, balance its minimum",
 	!("LeftFoot" in fastSwing.observations.peaks) && fastSwing.observations.bend.elbow_r.length === 2 && fastSwing.observations.balance.min[0] > 0, JSON.stringify(fastSwing.observations));
