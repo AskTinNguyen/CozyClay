@@ -136,6 +136,12 @@ expect("a to clear of the box keeps the exact fit", off(feetAt(shy), [0, 0.3]) <
 const atTable = compile({ ...base, use: [{ skill: "standIdle", f0: 0, args: { at: [0, -1.2] } }, { skill: "walkTo", f0: 2, args: { to: [0, 0.6], steps: 3 } }] }, scene);
 expect("to at a table's edge: the walk ends where the standing body clears it (0.13 m from it), named", off(feetAt(atTable), [0, 0.47]) <= 0.02
 	&& /so steps \d end at \[0, 0\.47\], 0\.13 m before cube \(to \[0, 0\.6\] is against it\)/.test(atTable.notes?.[0] ?? ""), json([atTable.notes, feetAt(atTable)]));
+// a stop moves where the next walk starts: kept only while no later walk refuses (bench replay: 3 of 692 specs did)
+const chainCrate = motionScene([{ ...boxRec, z: 0.9 }]);
+const backUp = [{ skill: "standIdle", f0: 0, args: { at: [0, 0] } }, { skill: "walkTo", f0: 2, args: { to: [0, 0.8], steps: 3 } }, { skill: "walkTo", f0: 100, args: { to: [0, 0.55], steps: 2, heading: 180 } }];
+const alone = compile({ ...base, use: backUp.slice(0, 2) }, chainCrate), chained = compile({ ...base, use: backUp }, chainCrate);
+expect("a stop that would turn a later walk away from its to (heading 180 backing up) is not made: the walk keeps to, no refusal, nothing said", / m before crate/.test(alone.notes?.[0] ?? "")
+	&& !/ m before /.test(json(chained.notes)) && off(feetAt({ expanded: { keys: chained.expanded.keys.filter(k => k.f <= 99) } }), [0, 0.8]) <= 0.1, json([alone.notes, chained.notes]));
 const carried = compile({ ...walkSpec({ to: [0, 0.6], steps: 3 }), props: { grip: { hand: "l", origin: ["LeftHandIndex2", "LeftHandMiddle2"], points: { fingers: [0, 0, 0] } } }, objects: { crate: { prop: "grip", grab: 1, release: 70 } } }, crate);
 expect("a body the hand carries during the walk is not in its way: the exact fit", off(feetAt(carried), [0, 0.6]) <= 0.1 && !/ m before /.test(json(carried.notes)), json(carried.notes));
 const away = refused(() => compile(walkSpec({ to: [0, 2], heading: 180 })));

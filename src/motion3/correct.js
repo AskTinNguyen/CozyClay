@@ -206,9 +206,26 @@ function fitWalks(spec, { sk, scene } = {}, notes = [], refusals = []) {
 	// a walk may end later freely only in a frames "auto" spec with nothing after it, else into frames nothing uses
 	// (skills/basic.js fitTo, roomAfter): busy lists the frames of the object keys, grabs and releases, last the take's last frame
 	const busy = Object.values(plain(spec.objects) ? spec.objects : {}).flatMap(o => (plain(o) ? [o.grab, o.release, ...(Array.isArray(o.keys) ? o.keys.map(k => k?.f) : [])] : [])).filter(Number.isFinite);
-	const fit = { refusals: [], stretch: spec.frames === "auto", busy, last: Number.isFinite(spec.frames) ? spec.frames - 1 : Infinity };
-	let used;
-	try { ({ used } = expandUse({ ...spec, frames: 20000 }, { sk, scene, fit, auto: true })); } catch { return spec; }
+	const expand = noStop => {
+		const fit = { refusals: [], stretch: spec.frames === "auto", busy, last: Number.isFinite(spec.frames) ? spec.frames - 1 : Infinity, noStop, stopped: new Set() };
+		try { return { used: expandUse({ ...spec, frames: 20000 }, { sk, scene, fit, auto: true }).used, fit }; } catch { return null; }
+	};
+	// a walk stopped before a body (walk-fit.js) moves where the next one starts: a stop is kept only while the spec has no
+	// more refusals than with every walk on its to (bench replay: 3 of 692 specs refused a later walk), the earliest first
+	let run = expand(new Set());
+	if (!run) return spec;
+	if (run.fit.stopped.size) {
+		const off = new Set(run.fit.stopped), onTo = expand(off);
+		if (onTo && onTo.fit.refusals.length < run.fit.refusals.length) {
+			for (const i of [...run.fit.stopped].sort((a, b) => a - b)) {
+				off.delete(i);
+				const t = expand(off);
+				if (!t || t.fit.refusals.length > onTo.fit.refusals.length) off.add(i);
+			}
+			run = expand(off) ?? onTo;
+		}
+	}
+	const { used, fit } = run;
 	refusals.push(...fit.refusals);
 	if (!used.some(u => u.adjust)) return spec;
 	for (const u of used) if (u.adjust) notes.push(`corrected: ${u.adjust.note}`);

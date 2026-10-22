@@ -97,8 +97,10 @@ export function fitTo(ctx, gen, c0, d, bearing) {
 	const u = [Math.sin(bearing * Math.PI / 180), Math.cos(bearing * Math.PI / 180)];
 	// to against a body: the steps end at the nearest point of the approach where the body stands clear of it; when no
 	// natural gait ends there, the fit to to itself (and its refusal) as before
-	const stop = clearStop(ctx, c0, u, d, passable(ctx, ctx.f0 + 16 + steps * period + 18), CLEAR * legOf(sk), bearing);
+	// (ctx.fit.noStop: the walks correct.js fitWalks keeps on to, as a stop would make a later walk refuse; ctx.fit.stopped: the walks that stopped)
+	const stop = !ctx.fit.noStop?.has(ctx.index) && clearStop(ctx, c0, u, d, passable(ctx, ctx.f0 + 16 + steps * period + 18), CLEAR * legOf(sk), bearing);
 	let r = stop && fitSteps(ctx, gen, c0, u, stop.t, stop);
+	if (r && !r.refuse) ctx.fit.stopped?.add(ctx.index);
 	if (!r || r.refuse) r = fitSteps(ctx, gen, c0, u, d, null);
 	if (r.refuse) ctx.fit.refusals.push(r.refuse);
 	return { gen: r.gen, ...(r.adjust ? { adjust: r.adjust } : {}) };
