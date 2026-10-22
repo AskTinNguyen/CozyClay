@@ -28,7 +28,7 @@ import { appendAttachments, ATTACHMENT_MAX_COUNT } from "./attachment-image.js";
 import { ko } from "../locale.js";
 import { AGENT_TOOL_CATEGORIES, EXECUTION_TELEMETRY_VALUES } from "../execution-telemetry.js";
 import { STUDIO_VARIANTS, validateReceipt } from "../studio-agent-protocol.js";
-import { requestAgentImage, sidecarRequest, sidecarUrl } from "../agent-image-client.js";
+import { requestAgentImage, sidecarRequest, sidecarUrl } from "../agent-image-client.js"; import { clearSculptSketch, sculptSketchFrame } from "../sculpt-sketch-state.js";
 import { actionLabelsOf, changedLine, scriptNow, stepFields, thinkingLine, withCompose, withThinking, withToolStart, withTurnEnd } from "./agent-turn.js";
 import { isPlanFrame, restoredPlans, withPlanEnd, withPlanFrame } from "./agent-plan.js";
 
@@ -1500,14 +1500,15 @@ export function createAgentChatStore({
 					model: options.model,
 					effort: options.effort ?? undefined,
 					...(typeof options.supervisor === "boolean" ? { supervisor: options.supervisor } : {}), ...(options.tasks ? { tasks: true } : {}),
-				}, applyEvent, signal);
+				}, (event) => { sculptSketchFrame(event); applyEvent(event); }, signal);
 			} catch (error) {
 				if (!signal.aborted) applyEvent({ type: "error", code: "upstream", message: String(error?.message || error) });
 			} finally {
 				if (controller?.signal === signal) controller = null;
-				// A turn the author already replaced owns none of this state.
+				// A turn the author already replaced owns none of this state. Its live sculpt sketch
+				// (the ghost clay of a call still being written) ends with it, whatever ended it.
 				if (activeTurn === turn) {
-					wireTurnId = null;
+					wireTurnId = null; clearSculptSketch();
 					// Ending with nothing on screen is a failure, not a result.
 					if (!turn.produced && !turn.failure && !signal.aborted) {
 						turn.failure = { code: "no_output", message: "The turn ended without a response.", recovery: { action: "retry", retryAllowed: true } };
