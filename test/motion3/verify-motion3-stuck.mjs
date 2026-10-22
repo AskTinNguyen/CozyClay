@@ -50,6 +50,12 @@ const scripts = Array.from({ length: 30 }, (_, k2) => byCall(k2, `call-${Math.fl
 expect("30 compiles in 10 scripts (3 each): no cap note (10 calls, 9 repair steps)", scripts.every(x => x === undefined), JSON.stringify(scripts.filter(Boolean)));
 const eleventh = [byCall(30, "call-10"), byCall(31, "call-10")];
 expect("the 11th call is the cap, said in calls, for each of its compiles", /^10 repair calls\. /.test(eleventh[0] ?? "") && /^10 repair calls\. /.test(eleventh[1] ?? ""), JSON.stringify(eleventh));
+// the stuck streak counts steps too: three variants with the same failures in one script are one try
+w = createRepairWatch();
+const sameCall = ["s1", "s1", "s1", "s1"].map((callId, k2) => w.note({ characterId: "c", turnId: "t6", callId, specId: `spec-${String(++n).padStart(12, "0")}`, base: k2 ? "b" : undefined, qa: fail2() }).say);
+expect("4 compiles with the same failures in one call: no stuck note", sameCall.every(x => x === undefined), JSON.stringify(sameCall));
+const nextCalls = ["s2", "s3"].map(callId => w.note({ characterId: "c", turnId: "t6", callId, specId: `spec-${String(++n).padStart(12, "0")}`, base: "b", qa: fail2() }).say);
+expect("the same failures over 3 calls: the stuck note on the third", nextCalls[0] === undefined && /unchanged over 3 calls\. /.test(nextCalls[1] ?? ""), JSON.stringify(nextCalls));
 w = createRepairWatch();
 const loose = Array.from({ length: 11 }, (_, k2) => w.note({ characterId: "c", turnId: "t5", specId: `spec-${String(++n).padStart(12, "0")}`, base: k2 ? "b" : undefined, qa: sev(k2) }).say);
 expect("compiles with no call id (MCP, tests) are a step each: the 11th says repair compiles", loose.slice(0, 10).every(x => x === undefined) && /^10 repair compiles\. /.test(loose[10] ?? ""), JSON.stringify(loose[10]));

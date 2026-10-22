@@ -13,7 +13,9 @@
 // with the cap counted along the base chain (a whole spec starts it again). In a turn the cap counts agent
 // steps: the compiles of one tool call (context.callId; a script's nested ones share the script's) are one
 // repair step, as a script that compares variants is one try; a compile with no call id is a step of its own.
-// The 60 bench sessions: compiles counted one by one read 10-23 at the agent's 6-12th compiling call. A whole spec sent after a
+// The 60 bench sessions: compiles counted one by one read 10-23 at the agent's 6-12th compiling call. The stuck streak
+// counts the same steps: of the runs of 3 script compiles whose problems and issues did not drop (the SSE frames), 21 of
+// 37 merged (48 of 71 base) lay inside one script, which compared variants; each step's last compile carries it on. A whole spec sent after a
 // stuck note is the fresh start the note asked for, so the streak starts again too.
 // A note never leaves the take empty: the agent obeys it by reporting, and a turn whose compiles all ran
 // install: "ifClean" (or false) unclean ended with no take (5 of 30 bench runs). So the line keeps its best
@@ -52,7 +54,7 @@ export function createRepairWatch() {
 		let line = lines.get(key);
 		if (line) { lines.delete(key); lines.set(key, line); return line; }
 		// picks: the best compile per placement; held: the take the watch put on; mine: the agent's own last install
-		line = { compiles: 0, steps: 0, call: null, last: null, passed: null, best: null, picks: new Map(), held: null, mine: null, noted: false, depth: new Map() };
+		line = { compiles: 0, steps: 0, call: null, last: null, before: null, passed: null, best: null, picks: new Map(), held: null, mine: null, noted: false, depth: new Map() };
 		lines.set(key, line);
 		if (lines.size > KEPT) lines.delete(lines.keys().next().value);
 		return line;
@@ -72,11 +74,15 @@ export function createRepairWatch() {
 		const now = { specId, at, ok: Boolean(qa.ok), fails: new Set(groups.map(groupKey)), n: groups.length, sev: severity(groups), streak: 1 };
 		// core: the failures the whole streak shares (its first compile's; the later ones hold them all)
 		now.core = now.fails;
-		const prev = line.last, fresh = base === undefined && line.noted;
+		// a step: one agent call (its compiles share callId) or one compile; the streak compares with the last compile of the
+		// step before, so the variants one script compares are one try, not three
+		const step = !callId || callId !== line.call;
+		if (step) line.before = line.last;
+		const prev = line.before, fresh = base === undefined && line.noted;
 		if (prev && !fresh && now.fails.size && prev.fails.size && superset(now.fails, prev.fails) && now.n >= prev.n && now.sev > prev.sev * (1 - DELTA_STEP))
 			Object.assign(now, { streak: prev.streak + 1, core: prev.core });
 		line.compiles += 1;
-		if (!callId || callId !== line.call) line.steps += 1;
+		if (step) line.steps += 1;
 		line.call = callId;
 		const depth = base === undefined ? 0 : (line.depth.get(base) ?? 0) + 1;
 		line.depth.set(specId, depth);
@@ -118,7 +124,7 @@ export function createRepairWatch() {
 		else if (kind === "cap") say = `${repairs} repair ${turnId && callId ? "calls" : "compiles"}. ${status} Report its problems; stop unless asked for more.`;
 		else {
 			const codes = [...now.core], names = codes.slice(0, SAY_CODES).map(cut).join(", ") + (codes.length > SAY_CODES ? ` +${codes.length - SAY_CODES}` : "");
-			say = `${names} unchanged over ${now.streak} compiles. Stop patching it or re-applying its hint: start afresh or try another approach. ${status} If neither helps, report its problems.`;
+			say = `${names} unchanged over ${now.streak} ${turnId && callId ? "calls" : "compiles"}. Stop patching it or re-applying its hint: start afresh or try another approach. ${status} If neither helps, report its problems.`;
 		}
 		return { say, ...(install ? { install } : {}) };
 	}
