@@ -600,6 +600,14 @@ export default function App() {
 	// Preview is the player for the finished motion: entering starts playback,
 	// leaving pauses it. The editor view stays the manipulation surface.
 	const [tlPlaying, setTlPlaying] = useState(false);
+	// Playback ticks write the frame store, not React state; stopping commits
+	// the store frame back so export, keys and agent reads see where it stopped.
+	useEffect(() => {
+		if (!tlPlaying) shotsDomain.commitPlaybackFrame();
+	}, [tlPlaying]);
+	useEffect(() => {
+		if (playgroundMode && tlPlaying) window.parent?.postMessage({ type: "cozyclay:playground-nav", kind: "play" }, "*");
+	}, [playgroundMode, tlPlaying]);
 	const cameraPreviewEndRef = useRef(null);
 	// Once the operator touches the viewport, the physical camera stays in
 	// their hands. Follow/Rail only take it back through an explicit Preview or

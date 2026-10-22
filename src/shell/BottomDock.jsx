@@ -1,5 +1,5 @@
-import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
-import { useStudioShell } from "./studio-shell-context.js";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useStudioPlaybackFrame, useStudioShell } from "./studio-shell-context.js";
 import { logStore } from "./log-store.js";
 import "./dock.css";
 import LibrarySlot from "./LibrarySlot.jsx";
@@ -7,6 +7,7 @@ import BoardSlot from "./BoardSlot.jsx";
 import LensScrub from "./lens-scrub.jsx";
 import { ko } from "../locale.js";
 import Timeline, { timelineTake } from "../motion/timeline.jsx";
+<<<<<<< HEAD
 <<<<<<< HEAD
 import { DEFAULT_PLAYBACK_SPEED, sceneObjectNameDisplayKo } from "../app-stage.jsx";
 
@@ -70,8 +71,7 @@ function dockTabsFor(previsMode) {
  * switching keeps the Sequencer's scroll and zoom and the Library's folder
  * and search. Any stored tab the mode does not offer opens its first tab. */
 export default function BottomDock({ tab: requestedTab = "animation", onTabChange, embedded = false }) {
-	const liveFrame = useSyncExternalStore(subscribePlaybackFrame, playbackFrame, playbackFrame);
-	const { previsMode } = useStudioShell();
+	const { previsMode } = useStudioShell(), liveFrame = useStudioPlaybackFrame();
 	const tabs = embedded ? dockTabsFor(null) : dockTabsFor(previsMode);
 	const tab = tabs.some((entry) => entry.key === requestedTab) ? requestedTab : tabs[0].key;
 	const {
