@@ -22,6 +22,7 @@ import { qaSay } from "../qa-label.js";
 import { carryEdit } from "../motion3/edit-carry.js";
 import { normalizeCompileArgs } from "../motion3/lenient.js";
 import { createCompileRunner } from "./motion3-compile.js";
+import { createRepairWatch } from "../motion3/repair-watch.js";
 import { peopleOf } from "../motion3/people.js";
 
 const TIMELINE_FPS = 24;
@@ -84,6 +85,8 @@ function asArgument(run) {
 
 export function register(registry, ports) {
 	const store = createSpecStore();
+	// the stop rule: output.stuck when more compiles stopped paying (repair-watch.js)
+	const watch = createRepairWatch();
 	const owner = () => ports.storeDomain("motion");
 	const mounted = () => Boolean(ports.storeDomain?.("motion")) || "The motion owner is not mounted.";
 	const always = () => true;
@@ -159,7 +162,8 @@ export function register(registry, ports) {
 			}
 			const delta = base === undefined ? {} : { delta: deltaOf(store.parts(base)?.groups ?? [], qa.groups, base) };
 			const how = kept ? "; already installed, unchanged" : install === "ifClean" ? (installs ? "; installed" : "; not installed") : "";
-			const output = report(r, { frames: r.frameCount, fps: TIMELINE_FPS, installed: wanted, ...adjustedOf(notes) }, { ...delta, ...(r.repair ? { repair: r.repair } : {}), ...(timing ? { timing } : {}) });
+			const stuck = watch.note({ characterId, turnId: context?.turnId, specId: specIdOf(r.stored), base, qa });
+			const output = report(r, { frames: r.frameCount, fps: TIMELINE_FPS, installed: wanted, ...(stuck ? { stuck } : {}), ...adjustedOf(notes) }, { ...delta, ...(r.repair ? { repair: r.repair } : {}), ...(timing ? { timing } : {}) });
 			// agent-progress.js: viewport ghost, timeline beats, agent panel
 			publishDraft(characterId, { take, installed: installs || kept, specId: output.specId, label: r.label, qa, timeline: r.timeline });
 			return { affectedIds: installs ? [characterId] : [], summary: `Compiled ${r.frameCount} frames; QA ${qaSay(qa)}${how}${adjustedSay(notes)}.`, output, ...workerWarning() };
