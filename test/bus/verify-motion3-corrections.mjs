@@ -58,7 +58,7 @@ expect("use entries: every problem at once (an unknown arg, a missing arg, an en
 	"use[1] reachGrip needs args.anchor (not ending in _l/_r)", 'use[2].args.kind must be one of "back", "front", "cartwheel" (a standing back or front tuck, or a cartwheel), got "sideways"'].join("\n"), many);
 const merged = refused(() => compile({ ...base, frames: 30, use: [stand], keys: [0, 4, 8].map(f => ({ f, set: { zzz: 1 } })), goals: [{ near: ["joint:Hips", "joint:Head"], tol: 0.1, at: 40 }, { near: ["joint:Hips", "joint:Head"], tol: 0.1, at: 41 }] }));
 expect("problems that differ only in their index share a line", merged.includes('keys[0,1,2] (f0, f4, f8) sets unknown channel "zzz"') && merged.split("\n").length === 3, merged);
-const mixed = refused(() => compile({ ...walkSpec({ to: [0, 3], steps: 3, period: 16 }), keys: [{ f: 5, set: { zzz: 1 } }] }));
+const mixed = refused(() => compile({ ...base, use: [stand, { skill: "walkTo", f0: 2, args: { to: [0, 3], steps: 3, period: 16 } }, { skill: "reachGrip", f0: 100, args: { side: "r", anchor: "bar", define: { kind: "world", p: [0.3, 1.2, 2] } } }], keys: [{ f: 5, set: { zzz: 1 } }] }));
 expect("a walk that cannot reach to is refused with the validator's problems, not before them", /^MOTION_SPEC_INVALID: use\[1\] walkTo: steps 3/.test(mixed) && /keys\[0\] \(f5\) sets unknown channel "zzz"/.test(mixed), mixed);
 const moved = refused(() => compile({ ...base, frames: 30, use: [stand], generators: [{ type: "walk", f0: 2, to: [0, 1] }], keys: [{ f: 5, set: { zzz: 1 } }] }));
 expect("a refusal names the corrections made before it (the paths it names are the corrected spec's)", /\n\(adjusted before these checks: corrected: generators\[0\] \(a walk with to\) -> use\[1\] walkTo/.test(moved), moved);
@@ -108,6 +108,21 @@ expect("too many steps for the distance: fewer, slower ones that end no later (t
 	&& natural(gaitOf(many2)) && gaitOf(many2).end <= 156 && /it ends f132, not f156 \(the pose holds to f156\)/.test(many2.notes?.[0] ?? "") && off(feetAt(many2), [0, 1]) <= 0.1, json(many2.notes));
 const far = refused(() => compile(timedSpec({ to: [0, 3], steps: 3, period: 16 }, 100)));
 expect("a walk no natural gait reaches in its time is refused with the steps and frames it needs", far === "MOTION_SPEC_INVALID: use[1] walkTo: steps 3 at period 16 (48 frames of stepping) walk 0.97 m and end at [0, 0.97], 2.03 m short of to [0, 3] (3 m away); in a natural gait (step 0.25..0.7 m, 1..1.8 steps a second: period 14..24 at 24 fps) that takes 6 steps and 84 frames of stepping or more (the walk would end at f120 or later, not f84): leave steps out (walkTo picks the count), or give steps: 6 and room for the walk before what follows", far);
+// bench S7/S10 (merged runs r2-r3): 4 walks refused although a gait in the bands reached; now fitted and named
+const edge = compile(timedSpec({ to: [0, 1.38], steps: 3, period: 18 }, 90));
+expect("steps a hair past the longest natural step (0.73 m): that step, ending within 0.1 m of to (as a walk that near is not fitted), named", json(edge.spec.use[1].args) === json({ to: [0, 1.38], steps: 3, period: 18, step: 0.7, firstStep: 0.56 })
+	&& off(feetAt(edge), [0, 1.38]) <= 0.1 && edge.notes?.[0] === "corrected: use[1] walkTo: step 0.5 -> 0.7 m, firstStep 0.4 -> 0.56 m, so steps 3 end 0.05 m short of to [0, 1.38], the longest natural step (a natural gait (step 0.25..0.7 m, 1..1.8 steps a second: period 14..24 at 24 fps; steps 3 would need a step of 0.73 m at 1.33 steps a second)", json([edge.notes, feetAt(edge)]));
+const beyond = refused(() => compile(timedSpec({ to: [0, 1.45], steps: 3, period: 18 }, 90)));
+expect("the longest natural step ending 0.11 m short or more: still refused", /^MOTION_SPEC_INVALID: use\[1\] walkTo: steps 3 at period 18 \(54 frames of stepping\) walk 0.97 m/.test(beyond), beyond);
+const fixedTake = extra => ({ ...base, frames: 100, use: [stand, { skill: "walkTo", f0: 2, args: { to: [0, 1.9], steps: 3, period: 18 } }], keys: [{ f: 40, set: { head_pitch: 5 } }, ...(extra?.keys ?? [])], ...(extra?.objects ? { objects: extra.objects } : {}) });
+const roomy = compile(fixedTake());
+expect("free frames after the walk (no skill, key or object key; the take has room): more steps at a natural cadence end later there, named", json(roomy.spec.use[1].args) === json({ to: [0, 1.9], steps: 4, period: 15, swing: 12, step: 0.65, firstStep: 0.52 })
+	&& off(feetAt(roomy), [0, 1.9]) <= 0.1 && natural(gaitOf(roomy)) && /second\); it ends f96, not f90 \(nothing uses f91-f96\)$/.test(roomy.notes?.[0] ?? ""), json(roomy.notes));
+const settleKey = refused(() => compile(fixedTake({ keys: [{ f: 85, set: { head_pitch: 0 } }] })));
+const objectKey = refused(() => compile(fixedTake({ objects: { [CUP.group]: { keys: [{ f: 80, pos: [0.2, 0.75, 0.85] }] } } })));
+expect("a key, or an object key, after the walk's stepping: those frames are not free, still refused", [settleKey, objectKey].every(m => /^MOTION_SPEC_INVALID: use\[1\] walkTo: steps 3 at period 18/.test(m)), json([settleKey, objectKey]));
+const short = refused(() => compile({ ...fixedTake(), frames: 92 }));
+expect("the take's last frame bounds the room: a walk that would end past it is still refused", /^MOTION_SPEC_INVALID: use\[1\] walkTo: steps 3 at period 18/.test(short), short);
 const away = refused(() => compile(walkSpec({ to: [0, 2], heading: 180 })));
 expect("a heading that points away from to is refused (session 4a3423e0)", /use\[1\] walkTo: heading 180 points 180 deg away from to \[0, 2\] \(it lies at heading 0\)/.test(away), away);
 expect("a saved take (lenient) walks as it always did: no fit, no refusal", compile(walkSpec({ to: [0, 1.6], steps: 3 }), null, { lenient: true }).spec.use[1].args.step === undefined);

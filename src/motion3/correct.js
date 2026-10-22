@@ -203,8 +203,10 @@ function correctSpec(spec, notes = []) {
  */
 function fitWalks(spec, { sk, scene } = {}, notes = [], refusals = []) {
 	if (!plain(spec) || !Array.isArray(spec.use) || !spec.use.some(u => u?.skill === "walkTo" && plain(u.args) && u.args.to !== undefined)) return spec;
-	// a walk may end later only in a frames "auto" spec (skills/basic.js fitTo, with nothing after it)
-	const fit = { refusals: [], stretch: spec.frames === "auto" };
+	// a walk may end later freely only in a frames "auto" spec with nothing after it, else into frames nothing uses
+	// (skills/basic.js fitTo, roomAfter): busy lists the frames of the object keys, grabs and releases, last the take's last frame
+	const busy = Object.values(plain(spec.objects) ? spec.objects : {}).flatMap(o => (plain(o) ? [o.grab, o.release, ...(Array.isArray(o.keys) ? o.keys.map(k => k?.f) : [])] : [])).filter(Number.isFinite);
+	const fit = { refusals: [], stretch: spec.frames === "auto", busy, last: Number.isFinite(spec.frames) ? spec.frames - 1 : Infinity };
 	let used;
 	try { ({ used } = expandUse({ ...spec, frames: 20000 }, { sk, scene, fit, auto: true })); } catch { return spec; }
 	refusals.push(...fit.refusals);

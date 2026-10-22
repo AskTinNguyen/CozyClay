@@ -52,6 +52,10 @@ const r2 = v => Math.round(v * 100) / 100, xzText = p => `[${p.map(r2).join(", "
 // reaches 2.1).
 const STEP = [0.3, 0.85], FIRST = [0.18, 0.85], CADENCE = [1, 1.8], WALK_RATIO = 0.47, RATIO = [0.7, 1.4], CHANGE = 0.1, REACH_TOL = 0.1, HEADING_TOL = 20;
 const legOf = sk => { const P = sk.restWorldPos, I = sk.index; return len(sub(P[I.LeftLeg], P[I.LeftUpLeg])) + len(sub(P[I.LeftFoot], P[I.LeftLeg])); };
+// the last frame a walk whose stepping ends at `from` may end at: the first later frame another skill starts at, a key of the
+// spec (or an object key, grab or release: ctx.fit.busy) after its stepping, or the take's last frame (ctx.fit.last)
+const roomAfter = (ctx, from) => Math.min(ctx.fit.last ?? Infinity, ...(ctx.use ?? []).filter((x, j) => j !== ctx.index && x?.f0 > ctx.f0).map(x => x.f0),
+	...ctx.keys.filter(k => k.f > from && /^keys\[/.test(k.src ?? "")).map(k => k.f), ...(ctx.fit.busy ?? []).filter(f => f > from));
 
 /**
  * to with steps (C21): the steps walk where they walk, and to only turns the heading, so a walk with both is fitted
@@ -61,7 +65,12 @@ const legOf = sk => { const P = sk.restWorldPos, I = sk.index; return len(sub(P[
  *   else the step count whose stride is nearest the walk ratio, its stride and cadence in their bands: in the walk's own
  *   stepping time (steps x period frames, the period the one that fits, never ending later; fewer steps stand at the end),
  *   or at the walk's own period when nothing comes after it in a frames "auto" spec (ctx.fit.stretch: it may end later);
+ *   else more steps that end later, into frames nothing uses (roomAfter), at the walk's own cadence or a quicker natural one;
+ *   else the walk's own steps at its band's edge when they still end within REACH_TOL of to (a walk that near is not fitted);
  *   else, or for a heading that points away from to, a line in ctx.fit.refusals with what the walk would do and needs.
+ * The last two were refusals until the bench (S7, S10: 3 of 7 walkTo refusals in 30 merged runs, 4 walks): each had one in
+ * the bands (step 0.7 m, 1.33-1.5 steps a second, ending 0.04-0.07 m short; or 4-5 steps at 1.6-1.71 steps a second ending
+ * 2-15 frames later into free frames) whose whole take had no foot, knee or float problem in the walk the in-band walks lacked.
  * Deterministic: a walk at a candidate count is estimated (its end is linear in the stride) and the chosen one walked
  * once more to set its stride. -> { gen, adjust } with the fitted gen.
  */
@@ -85,19 +94,29 @@ function fitTo(ctx, gen, c0, d, bearing) {
 	// by the first step and a stride a middle step, rest the closing step's share; with steps 3 and up the first step keeps
 	// its share of the stride unless args give it, as a person's first step is a little shorter), whether they stay in their bands
 	const rest = along - first - (steps - 2) * was, share = args.firstStep === undefined ? first / was : 0;
-	const at = n => {
-		const p = stretch || n === steps ? period : Math.min(Math.max(pHi, period), Math.floor(span / n)), name = n >= 3 ? "step" : "firstStep";
+	const at = (n, pAt) => {
+		const p = pAt ?? (stretch || n === steps ? period : Math.min(Math.max(pHi, period), Math.floor(span / n))), name = n >= 3 ? "step" : "firstStep";
 		const value = n >= 3 ? (d - rest - (share ? 0 : first)) / (share + n - 2) : d - rest, lead = n >= 3 && share ? share * value : first;
 		const [lo, hi] = band(n), ratio = value * p / fps / nat, inBand = (x, [a, b]) => x >= a && x <= b;
 		return { n, p, name, value, ratio, ok: inBand(value, [lo, hi]) && inBand(lead, band(2)) && (p === period || inBand(p, [pLo, pHi])) };
 	};
 	const own = at(steps), most = Math.min(60, Math.ceil(d / band(3)[0]) + 2);
-	let pick = own.ok && own.ratio >= RATIO[0] && own.ratio <= RATIO[1] ? own : null;
+	let pick = own.ok && own.ratio >= RATIO[0] && own.ratio <= RATIO[1] ? own : null, room, short;
+	// nearest the walk ratio, a step count further from the one asked costing CHANGE of it a step
+	const cost = c => Math.abs(Math.log(c.ratio)) + CHANGE * Math.abs(c.n - steps), nearest = list => list.filter(c => c.ok).sort((a, b) => cost(a) - cost(b) || a.n - b.n)[0];
+	const counts = Array.from({ length: most - 1 }, (_, i) => i + 2);
+	if (!pick) pick = nearest(counts.map(n => at(n)));
+	if (!pick && !stretch) {
+		// more steps, ending later into frames nothing uses: the walk's own period, or the slowest natural one that ends in time
+		room = roomAfter(ctx, ctx.f0 + 16 + span);
+		pick = nearest(counts.filter(n => n > steps).map(n => at(n, Math.min(period, Math.floor((room - ctx.f0 - 34) / n)))).filter(c => c.p >= pLo && c.n * c.p > span));
+	}
 	if (!pick) {
-		const all = Array.from({ length: most - 1 }, (_, i) => at(i + 2)).filter(c => c.ok);
-		// nearest the walk ratio, a step count further from the one asked costing CHANGE of it a step
-		const cost = c => Math.abs(Math.log(c.ratio)) + CHANGE * Math.abs(c.n - steps);
-		pick = all.sort((a, b) => cost(a) - cost(b) || a.n - b.n)[0];
+		// the walk's own steps at its band's edge, when they end within REACH_TOL of to
+		const [lo, hi] = band(steps), value = Math.min(hi, Math.max(lo, own.value)), ratio = value * period / fps / nat, lead = steps >= 3 && share ? share * value : first;
+		const g = { ...gen, [own.name]: r2(value), ...(steps >= 3 && share ? { firstStep: r2(lead) } : {}) };
+		const left = ratio >= RATIO[0] && ratio <= RATIO[1] && lead >= band(2)[0] && lead <= band(2)[1] ? d - reach(g).along : Infinity;
+		if (Math.abs(left) <= REACH_TOL) ({ pick, short } = { pick: { ...own, value: r2(value), ratio }, short: left });
 	}
 	const [sLo, sHi] = band(3), gait = `a natural gait (step ${sLo}..${sHi} m, ${CADENCE[0]}..${CADENCE[1]} steps a second: period ${pLo}..${pHi} at ${fps} fps`;
 	const miss = `${r2(Math.abs(d - along))} m ${along < d ? "short of" : "past"} to ${xzText(args.to)} (${r2(d)} m away)`;
@@ -112,14 +131,16 @@ function fitTo(ctx, gen, c0, d, bearing) {
 	const timed = pick.p === period ? {} : { period: pick.p, swing: Math.max(2, Math.min(pick.p - 1, Math.round(swing * pick.p / period))) };
 	const lead = pick.n >= 3 && share > 0, strides = v => ({ [pick.name]: r2(v), ...(lead ? { firstStep: r2(share * v) } : {}) });
 	let fitted = { ...gen, steps: pick.n, ...timed, ...strides(pick.value) };
-	const left = d - reach(fitted).along;
-	if (Math.abs(left) > 0.02) fitted = { ...fitted, ...strides(pick.value + left / (pick.n >= 3 ? share + pick.n - 2 : 1)) };
+	const left = short ?? d - reach(fitted).along;
+	if (short === undefined && Math.abs(left) > 0.02) fitted = { ...fitted, ...strides(pick.value + left / (pick.n >= 3 ? share + pick.n - 2 : 1)) };
 	const v = fitted[pick.name], dflt = pick.name === "step" ? was : first, e0 = ctx.f0 + 16 + span + 18, e1 = ctx.f0 + 16 + pick.n * pick.p + 18;
 	const changes = [pick.n !== steps && `steps ${steps} -> ${pick.n}`, timed.period && `period ${period} -> ${timed.period} (swing ${swing} -> ${timed.swing})`, `${pick.name} ${dflt} -> ${v} m`,
 		lead && fitted.firstStep !== first && `firstStep ${first} -> ${fitted.firstStep} m`].filter(Boolean).join(", ");
-	const when = e1 === e0 ? "" : `; it ends f${e1}, not f${e0} (${stretch ? "nothing follows it" : `the pose holds to f${e0}`})`;
-	const why = pick.n === steps && !timed.period ? ` (at ${pick.name} ${dflt} they walk ${r2(along)} of ${r2(d)} m)` : ` in ${gait}; steps ${steps} would need a ${own.name} of ${r2(own.value)} m at ${r2(fps / period)} steps a second)${when}`;
-	const adjust = { args: { ...(pick.n === steps ? {} : { steps: pick.n }), ...timed, [pick.name]: v, ...(lead && fitted.firstStep !== first ? { firstStep: fitted.firstStep } : {}) }, note: `${tag}: ${changes}, so steps ${pick.n} end at to ${xzText(args.to)}${why}` };
+	const when = e1 === e0 ? "" : `; it ends f${e1}, not f${e0} (${stretch ? "nothing follows it" : e1 > e0 ? `nothing uses f${e0 + 1}-f${e1}` : `the pose holds to f${e0}`})`;
+	const needs = `steps ${steps} would need a ${own.name} of ${r2(own.value)} m at ${r2(fps / period)} steps a second`;
+	const why = short !== undefined ? ` (${gait}; ${needs})` : pick.n === steps && !timed.period ? ` (at ${pick.name} ${dflt} they walk ${r2(along)} of ${r2(d)} m)` : ` in ${gait}; ${needs})${when}`;
+	const ends = short === undefined ? `end at to ${xzText(args.to)}` : `end ${r2(Math.abs(short))} m ${short > 0 ? "short of" : "past"} to ${xzText(args.to)}, the ${short > 0 ? "longest" : "shortest"} natural step`;
+	const adjust = { args: { ...(pick.n === steps ? {} : { steps: pick.n }), ...timed, [pick.name]: v, ...(lead && fitted.firstStep !== first ? { firstStep: fitted.firstStep } : {}) }, note: `${tag}: ${changes}, so steps ${pick.n} ${ends}${why}` };
 	return { gen: fitted, adjust };
 }
 
