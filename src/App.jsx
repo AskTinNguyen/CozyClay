@@ -2567,10 +2567,11 @@ export default function App() {
 	// Cast render props, memoized with Character itself (React.memo): during
 	// playback the playhead ticks 24 times a second, and a character whose
 	// props did not change must not re-render its subtree.
-	/* eslint-disable react-hooks/preserve-manual-memoization */
 	const characterViews = useMemo(() => characters.flatMap((entry, index) => {
 		if (entry.hidden) return [];
 		const pickId = index === 0 ? "A" : index === 1 ? "B" : entry.id;
+		// Each cast member is driven by ITS OWN clip: the active one reads
+		// the editing buffer, the others their stored session motion.
 		const clip = entry.id === activeChar.id ? motion : entry.sessionMotion;
 		const placement = placementAt(entry, tlFrame, {
 			shotAt: frame => shotAtFrame(shots, frame),
@@ -2589,13 +2590,14 @@ export default function App() {
 			partColoursMode,
 			pose: clip ? null : (placement.pose ?? DEFAULT_POSE),
 			posture: placement.posture,
+			// The stature the entry's take was extracted at. It rides with the
+			// clip, never separately — see Character for why.
 			scale: entry.scale ?? 1,
 			...(isProxyFigure(entry) ? {} : { onRig: reportRig(entry.id) }),
 			pickId,
 			parent: entry.parent ?? null,
 		}];
 	}), [characters, activeChar.id, motion, shots, tlFrame, partColoursEnabled, partColoursMode]);
-	/* eslint-enable react-hooks/preserve-manual-memoization */
 	// Where the selection gizmo stands: same driving rules as the render,
 	// for the active (selected) cast member only. Gated on the HIERARCHY
 	// selection, not the sticky active layer — the layer stays on the last

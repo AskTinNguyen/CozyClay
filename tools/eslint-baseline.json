@@ -12,7 +12,7 @@
 	"no-useless-escape": 6,
 	"preserve-caught-error": 6,
 	"react-hooks/immutability": 81,
-	"react-hooks/preserve-manual-memoization": 26,
+	"react-hooks/preserve-manual-memoization": 28,
 	"react-hooks/purity": 5,
 	"react-hooks/refs": 102,
 	"react-hooks/rules-of-hooks": 2,

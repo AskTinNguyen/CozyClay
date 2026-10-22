@@ -59,11 +59,15 @@ export function ShotRig({ preset, nonce, fovDeg, charA, charB, showB, probe: pla
 		cam.updateProjectionMatrix();
 	}, [fovDeg, camRef]);
 
+	// A blocking tool must not claim a framing it is not holding, so the subject's
+	// feet and eyes are projected into the frame every tick.
 	const probe = useRef(new THREE.Vector3());
 	const lastMetrics = useRef({ x: NaN, y: NaN, z: NaN, visible: null });
 	useFrame(() => {
 		const cam = camRef.current;
 		if (!cam) return;
+		// During motion playback the probe follows the played root, so the
+		// "subject out of frame" caption stays honest.
 		const frame = playbackProbeInput.frameRef?.current ?? 0;
 		const current = playbackProbe(playbackProbeInput, frame, charA);
 		const visible = probeVisibility(probe.current, cam, current, SUBJECT_HEIGHT_M);

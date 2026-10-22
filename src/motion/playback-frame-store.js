@@ -60,8 +60,7 @@ export function usePlaybackEffects({ playing = false, commit = () => {}, onStop 
 			commit();
 			onStop?.();
 		}
-		// The commit action is recreated by the domain render.
-		// eslint-disable-next-line react-hooks/exhaustive-deps
+		// Runs on play/stop transitions only; commit and onStop are recreated every render.
 	}, [playing]);
 }
 
