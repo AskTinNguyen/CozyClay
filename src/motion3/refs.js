@@ -75,21 +75,23 @@ export function refDistance(out, f, a, b) {
 	return p && q ? len(sub(p, q)) : null;
 }
 
-/**
- * The prefixed refs a bare name could mean in this spec, rig and scene (`; did you mean
- * "object:empty-2"?`), or "". A field that takes more than one ref kind stays strict.
- */
-function bareHint(spec, { sk, scene }, ref, kinds) {
-	if (typeof ref !== "string" || !ref) return "";
+/** The prefixed refs a bare name could mean in this spec, rig and scene (lenient.js takes the one when there is one). */
+export function bareRefs(spec, { sk, scene }, ref, kinds = REF_KINDS) {
+	if (typeof ref !== "string" || !ref) return [];
 	const id = ref.replace(/\.(center|top|base)$/, ""), [prop, point] = ref.split(".");
 	const bone = sk && (kinds.includes("joint") || kinds.includes("bone")) ? resolveBone(sk, ref).bone : null;
-	const known = [
+	return [
 		kinds.includes("object") && (scene?.objects?.[id] || partsOf(scene, id).length) && `object:${ref}`,
 		bone && `${kinds.includes("joint") ? "joint" : "bone"}:${bone}`,
 		kinds.includes("anchor") && spec.anchors?.[ref] && `anchor:${ref}`,
 		kinds.includes("prop") && spec.props?.[prop] && (point === "origin" || spec.props[prop].points?.[point]) && `prop:${ref}`,
 		kinds.includes("landmark") && ref === "mouth" && "landmark:mouth",
 	].filter(Boolean);
+}
+
+/** `; did you mean "object:empty-2"?` for a bare name (bareRefs), or "". A field that takes more than one ref kind stays strict. */
+function bareHint(spec, ctx, ref, kinds) {
+	const known = bareRefs(spec, ctx, ref, kinds);
 	return known.length ? `; did you mean ${known.map(k => `"${k}"`).join(" or ")}?` : "";
 }
 

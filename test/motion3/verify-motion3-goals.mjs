@@ -156,17 +156,16 @@ const ALL = "joint:<Bone>, bone:<Bone>, prop:<prop>.<point>, anchor:<name>, land
 const bareCases = [
 	[[{ moved: "nope", at: 3 }], ['goals[0].moved "object:nope" names object "nope", which is not in the scene; did you mean "cube"?']],
 	[[{ moved: 3, at: 3 }], ['goals[0].moved must be an object id or a point ref (object:<id>[.center|.top|.base], prop:<prop>.<point>, joint:<Bone>, landmark:mouth, anchor:<name>), got 3']],
-	[[{ near: ["LeftHand", CUP.group], at: 3 }], [`goals[0].near[0] "LeftHand" must be ${ALL}; did you mean "joint:LeftHand"?`,
-		`goals[0].near[1] "${CUP.group}" must be ${ALL}; did you mean "object:${CUP.group}"?`]],
-	[[{ above: ["grip.tip", "spot"], at: 3 }], [`goals[0].above[0] "grip.tip" must be ${ALL}; did you mean "prop:grip.tip"?`,
-		`goals[0].above[1] "spot" must be ${ALL}; did you mean "anchor:spot"?`]],
-	[[{ near: ["mouth", "zzz"], at: 3 }], [`goals[0].near[0] "mouth" must be ${ALL}; did you mean "landmark:mouth"?`,
-		`goals[0].near[1] "zzz" must be ${ALL}`]],
+	[[{ near: ["mouth", "zzz"], at: 3 }], [`goals[0].near[1] "zzz" must be ${ALL}`, '(adjusted before these checks: corrected: goals[0].near[0] "mouth" -> "landmark:mouth")']],
 ];
 for (const [goals, want] of bareCases) {
 	const got = invalid(goals);
 	expect(`bare refs: ${want[0].slice(0, 70)}`, JSON.stringify(got) === JSON.stringify(want), JSON.stringify(got));
 }
+// a bare near / above name with exactly one reading is that ref (C21, lenient.js), named in notes; the compile goes on
+const bareOne = run([{ name: "b1", near: ["LeftHand", CUP.group], at: 3 }, { name: "b2", above: ["grip.tip", "spot"], at: 3 }]);
+expect("a bare name with one reading is corrected to its ref and named", JSON.stringify(bareOne.notes) === JSON.stringify(['corrected: goals[0].near[0] "LeftHand" -> "joint:LeftHand"',
+	`corrected: goals[0].near[1] "${CUP.group}" -> "object:${CUP.group}"`, 'corrected: goals[1].above[0] "grip.tip" -> "prop:grip.tip"', 'corrected: goals[1].above[1] "spot" -> "anchor:spot"']), JSON.stringify(bareOne.notes));
 const lenient = compileSpec(base({ goals: [{ moved: "object:cylinder", by: 0.02, at: 47, extra: 1 }] }), { sk, scene }, { lenient: true });
 expect("lenient ignores an unknown goal field", lenient.qa.goals[0].ok, JSON.stringify(lenient.qa.goals));
 

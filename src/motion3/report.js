@@ -11,7 +11,8 @@
 //   6. fixed, search, skills, ms
 // An answer that does not fit and has a delta (base + patch) says observations.units only by reference: the
 // base's answer gave them. Last resort: observations.asked and the brief lose lines, then full groups become one-liners.
-// Room left after that turns one-liners back into full groups, from the top.
+// Room left after that turns one-liners back into full groups, from the top. A head still too big (a
+// repair that applied many patches) keeps the newest repair.applied entries; more.repair counts the rest.
 // brief (briefOf) is the answer in a few fixed-shape lines, so a script comparing variants returns it as
 // it is instead of mapping qa itself:
 //   "<specId> qa ok|<problems> problems (<total> issues)[, installed|not installed]"
@@ -74,6 +75,14 @@ export function fitOutput(answer, budget = MOTION_OUTPUT_BUDGET) {
 	// the brief's group lines repeat qa.groups
 	while (out.brief?.length > 1 && !out.brief[out.brief.length - 1].startsWith("goals ") && !fits({})) out.brief = out.brief.slice(0, -1);
 	for (let i = nFull - 1; i >= 0 && !fits({}); i--) out.qa.groups[i] = oneLine(groups[i]);
+	// a long repair (each applied patch in full) keeps its newest changes; the stored spec holds them all
+	const applied = out.repair?.applied;
+	if (Array.isArray(applied) && !fits({})) {
+		let n = applied.length;
+		while (n > 0 && !fits({ repair: { ...out.repair, applied: applied.slice(applied.length - n) } })) n--;
+		out.repair = { ...out.repair, applied: applied.slice(applied.length - n) };
+		more.repair = applied.length - n;
+	}
 	if (asked) cut(0);
 	if (asked && !out.observations.asked.length) delete out.observations.asked;
 	more.groups = groups.length - (out.qa?.groups ?? []).filter(g => "worst" in g).length;
