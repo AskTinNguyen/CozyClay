@@ -15,6 +15,7 @@
  */
 
 import { RecipeError, isFiniteNumber, readUnit, tidy } from "./sculpt-recipe-read.js";
+import { LOFT_CONVEX_SPECS } from "./sculpt-shapes-loft-convex.js";
 
 /** How far a full taper narrows a blob's end; sculpt-geometry.js draws the same. */
 export const BLOB_TAPER = 0.6;
@@ -123,6 +124,7 @@ export const SCULPT_SHAPE_SPECS = Object.freeze({
 		samples: ringSamples,
 		hole: ringHole,
 	},
+	...LOFT_CONVEX_SPECS,
 });
 
 export const SCULPT_SHAPES = Object.freeze(Object.keys(SCULPT_SHAPE_SPECS));

@@ -13,6 +13,7 @@ import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import { expandSculptParts } from "./sculpt-recipe.js";
 import { BLOB_TAPER } from "./sculpt-shapes.js";
+import { LOFT_CONVEX_BUILDERS } from "./sculpt-geometry-loft-convex.js";
 
 const CLAY_ROUGHNESS = 0.82;
 
@@ -95,7 +96,7 @@ function frameGeometry(part) {
 	return geometry;
 }
 
-const BUILDERS = { blob: blobGeometry, box: boxGeometry, cylinder: cylinderGeometry, torus: torusGeometry, frame: frameGeometry };
+const BUILDERS = { blob: blobGeometry, box: boxGeometry, cylinder: cylinderGeometry, torus: torusGeometry, frame: frameGeometry, ...LOFT_CONVEX_BUILDERS };
 
 export function sculptPartGeometry(part) {
 	const build = BUILDERS[part.shape];
