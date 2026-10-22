@@ -13,8 +13,7 @@ import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import { expandSculptParts } from "./sculpt-recipe.js";
 import { BLOB_TAPER } from "./sculpt-shapes.js";
-
-const CLAY_ROUGHNESS = 0.82;
+import { lookMaterial } from "./material-look.js";
 
 /** roundness 0..1 → superellipse exponent 2..8 */
 const blobExponent = (roundness) => 2 + 6 * roundness;
@@ -105,22 +104,23 @@ export function sculptPartGeometry(part) {
 
 /**
  * The drawable object for a normalized recipe. `materialFor(part)` lets the
- * caller decide the look (clay, auto-colour, depth rank); the default is the
- * matte clay every primitive wears. Meshes carry their part id as the name and
- * as `userData.sculptPart`, so a capture or a raycast can say which part it hit.
+ * caller decide the look (auto-colour, depth rank); the default is the part's
+ * own preset (material-look.js), clay when it names none. Meshes carry their
+ * part id as the name and as `userData.sculptPart`, so a capture or a raycast
+ * can say which part it hit. Glass casts no shadow: light passes through it.
  */
 export function buildSculptGroup(recipe, { materialFor } = {}) {
 	const group = new THREE.Group();
 	group.userData.sculpt = true;
 	const matrix = new THREE.Matrix4();
 	for (const part of expandSculptParts(recipe)) {
-		const material = materialFor ? materialFor(part) : new THREE.MeshStandardMaterial({ color: part.color, roughness: CLAY_ROUGHNESS, metalness: 0 });
+		const material = materialFor ? materialFor(part) : lookMaterial(part);
 		const mesh = new THREE.Mesh(sculptPartGeometry(part), material);
 		mesh.name = part.id;
 		mesh.userData.sculptPart = part.id;
 		matrix.fromArray(part.matrix);
 		matrix.decompose(mesh.position, mesh.quaternion, mesh.scale);
-		mesh.castShadow = true;
+		mesh.castShadow = !(material.transmission > 0);
 		mesh.receiveShadow = true;
 		group.add(mesh);
 	}
@@ -128,7 +128,8 @@ export function buildSculptGroup(recipe, { materialFor } = {}) {
 }
 
 /** Frees what buildSculptGroup allocated. Materials are disposed too, because
- * buildSculptGroup (or the caller's materialFor) minted one per part. */
+ * buildSculptGroup (or the caller's materialFor) minted one per part; the
+ * preset pattern textures they sample are shared and stay. */
 export function disposeSculptGroup(group) {
 	group?.traverse((node) => {
 		if (!node.isMesh) return;

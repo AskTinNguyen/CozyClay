@@ -6,4 +6,19 @@
  * Pure: no three.js.
  */
 
-export const SCULPT_PART_FIELDS = Object.freeze([]);
+import { RecipeError } from "./sculpt-recipe-read.js";
+import { MATERIAL_FINISHES, MATERIAL_PRESETS } from "./material-presets.js";
+
+/** A name from `names`; null clears the field (back to the default look),
+ * which is how an edit `{ set: id, material: null }` undoes a preset. */
+const readName = (key, names) => (raw, part, where) => {
+	if (raw[key] === null) return;
+	if (!names.includes(raw[key])) throw new RecipeError(`${where}.${key}`, `must be one of ${names.join(", ")}; got ${JSON.stringify(raw[key])}`);
+	part[key] = raw[key];
+};
+
+export const SCULPT_PART_FIELDS = Object.freeze([
+	// Surface presets (material-presets.js); color stays the tint.
+	{ key: "material", read: readName("material", MATERIAL_PRESETS) },
+	{ key: "finish", read: readName("finish", MATERIAL_FINISHES) },
+]);
