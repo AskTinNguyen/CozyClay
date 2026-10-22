@@ -19,8 +19,7 @@ import { extrudeGeometry, latheGeometry, tubeGeometry } from "./sculpt-geometry-
 import { applySculptDetail } from "./sculpt-detail.js";
 import { applySculptColours } from "./sculpt-colours.js";
 import { scatterMesh } from "./sculpt-scatter.js";
-
-const CLAY_ROUGHNESS = 0.82;
+import { lookMaterial } from "./material-look.js";
 
 /** roundness 0..1 → superellipse exponent 2..8 */
 const blobExponent = (roundness) => 2 + 6 * roundness;
@@ -114,11 +113,12 @@ export function sculptPartGeometry(part) {
 
 /**
  * The drawable object for a normalized recipe. `materialFor(part)` lets the
- * caller decide the look (auto-colour, depth rank); the default is the
- * matte clay every primitive wears, with the part's gradient and a scatter's
- * per-item tint. Meshes (a scatter's InstancedMesh too) carry their part id as
- * the name and as `userData.sculptPart`, so a capture or a raycast can say
- * which part it hit.
+ * caller decide the look (auto-colour, depth rank); the default is the part's
+ * own preset (material-look.js), clay when it names none, with the part's
+ * gradient and a scatter's per-item tint. Meshes (a scatter's InstancedMesh
+ * too) carry their part id as the name and as `userData.sculptPart`, so a
+ * capture or a raycast can say which part it hit. Glass casts no shadow: light
+ * passes through it.
  */
 export function buildSculptGroup(recipe, { materialFor } = {}) {
 	const group = new THREE.Group();
@@ -128,7 +128,7 @@ export function buildSculptGroup(recipe, { materialFor } = {}) {
 	for (const part of parts) {
 		// A cutter (op) is never drawn: it cuts its parent's geometry instead.
 		if (part.op) continue;
-		const material = materialFor ? materialFor(part) : new THREE.MeshStandardMaterial({ color: part.color, roughness: CLAY_ROUGHNESS, metalness: 0 });
+		const material = materialFor ? materialFor(part) : lookMaterial(part);
 		// A scatter draws its own InstancedMesh and is never cut; every other part is cut by its cutters.
 		const mesh = MESH_BUILDERS[part.shape]?.(part, material) ?? new THREE.Mesh(cutSculptGeometry(sculptPartGeometry(part), part, parts, sculptPartGeometry), material);
 		// Gradients and scatter tints belong to the shaded look; a flat display mode (materialFor) ignores them.
@@ -137,7 +137,7 @@ export function buildSculptGroup(recipe, { materialFor } = {}) {
 		mesh.userData.sculptPart = part.id;
 		matrix.fromArray(part.matrix);
 		matrix.decompose(mesh.position, mesh.quaternion, mesh.scale);
-		mesh.castShadow = true;
+		mesh.castShadow = !(material.transmission > 0);
 		mesh.receiveShadow = true;
 		group.add(mesh);
 	}
@@ -146,7 +146,8 @@ export function buildSculptGroup(recipe, { materialFor } = {}) {
 
 /** Frees what buildSculptGroup allocated. Materials are disposed too, because
  * buildSculptGroup (or the caller's materialFor) minted one per part; a
- * scatter's instance buffers go with its InstancedMesh. */
+ * scatter's instance buffers go with its InstancedMesh. The preset pattern
+ * textures they sample are shared and stay. */
 export function disposeSculptGroup(group) {
 	group?.traverse((node) => {
 		if (!node.isMesh) return;
