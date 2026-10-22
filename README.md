@@ -105,6 +105,15 @@ npm test
 | [`docs/privacy.md`](docs/privacy.md) | Anonymous telemetry and how to turn it off (`cclay telemetry off`) |
 | [`AGENTS.md`](AGENTS.md) | Contribution rules |
 
+## Guides
+
+| Read | For |
+| --- | --- |
+| [Greybox to AI video](https://cozyclay.org/greybox-to-video/) | Why a grey blockout is the most reliable input for a video model, and the block-then-generate loop |
+| [Previs software compared](https://cozyclay.org/previs-software/) | Free, open source and browser-based previs tools side by side |
+| [Seedance 2.5 camera control](https://cozyclay.org/seedance-camera-control/) | Getting the same camera on every take with a reference clip |
+| [Camera control for AI video](https://cozyclay.org/ai-camera-control/) | Why camera prompts drift and what the models actually accept |
+
 Found a bug or want a feature? [Open an issue](https://github.com/NomaDamas/CozyClay/issues).
 
 ## License
