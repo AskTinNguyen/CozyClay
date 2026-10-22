@@ -14,10 +14,13 @@
 // stuck note is the fresh start the note asked for, so the streak starts again too.
 // A note never leaves the take empty: the agent obeys it by reporting, and a turn whose compiles all ran
 // install: "ifClean" (or false) unclean ended with no take (5 of 30 bench runs). So the line keeps its best
-// compile at the current placement (`at`: a take only fits the body and scene it was baked in) with its
-// take, and a note on a compile that did not install itself answers `install`: the best take, when the
-// character does not already carry this line's take at least as good. The caller installs it (no
-// compile: the take is the one baked then).
+// compile per placement (`at`, the last PLACES of them: a take plays in the character's placement frame,
+// take.js, so it only meets the scene where it was baked) with its take, and a note on a compile that did
+// not install itself answers `install`: the best take here, when the character carries no take or one the
+// watch put on that this one beats. The caller installs it (no compile: the take is the one baked then).
+// A take the agent installed (install: true, or an ifClean that installed) is never replaced for the rest
+// of the line, nor one the character had before it (replay of merged r3 S8: the agent's own take was
+// swapped for an earlier draft, so its report no longer named the character's take).
 import { groupKey } from "./qa/severity.js";
 
 const STUCK_AFTER = 3;
@@ -27,6 +30,8 @@ const KEPT = 32;
 // lines whose best take is kept (the newest): a take is ~0.25 MB a 240-frame Y Bot take (rotations, 65 bones), so at
 // most about 1 MB here; an older line keeps its notes but no take (its turn is over)
 const TAKES = 4;
+// placements per line whose best take is kept (S8 r1 moved the body 0.78 -> 0.88 -> 0.94 -> 0.88 m)
+const PLACES = 3;
 const SAY_CODES = 2;
 
 const severity = groups => groups.reduce((s, g) => s + (Number.isFinite(g.severity) ? g.severity : 0), 0);
@@ -35,13 +40,15 @@ const better = (a, b) => (a.ok !== b.ok ? a.ok : a.n !== b.n ? a.n < b.n : a.sev
 const problems = n => `${n} problem${n === 1 ? "" : "s"}`;
 const cut = s => (s.length > 40 ? `${s.slice(0, 39)}~` : s);
 const named = c => `${c.specId} (${c.ok ? "QA passes" : problems(c.n)})`;
+const HERE = "it is baked where the character stands, so moving it misaligns the take (compile again after a move)";
 
 export function createRepairWatch() {
 	const lines = new Map();
 	const lineOf = key => {
 		let line = lines.get(key);
 		if (line) { lines.delete(key); lines.set(key, line); return line; }
-		line = { compiles: 0, last: null, passed: null, best: null, pick: null, held: null, noted: false, depth: new Map() };
+		// picks: the best compile per placement; held: the take the watch put on; mine: the agent's own last install
+		line = { compiles: 0, last: null, passed: null, best: null, picks: new Map(), held: null, mine: null, noted: false, depth: new Map() };
 		lines.set(key, line);
 		if (lines.size > KEPT) lines.delete(lines.keys().next().value);
 		return line;
@@ -70,28 +77,35 @@ export function createRepairWatch() {
 		line.last = now;
 		if (now.ok && !line.passed) line.passed = specId;
 		if (!best || better(now, best)) line.best = now;
-		// the best take at this placement (a compile elsewhere starts it again), and the take this line put on
-		if (!line.pick || line.pick.at !== at || better(now, line.pick)) {
-			line.pick = { ...now, take };
+		// the best take at this placement (each of the last PLACES keeps its own), and the agent's own install
+		let pick = line.picks.get(at);
+		if (!pick || better(now, pick)) {
+			pick = { ...now, take };
 			let older = lines.size - TAKES;
-			for (const other of lines.values()) if (older-- > 0 && other.pick) other.pick.take = undefined;
+			for (const other of lines.values()) if (older-- > 0) for (const p of other.picks.values()) p.take = undefined;
 		}
-		if (installed) line.held = now;
+		line.picks.delete(at);
+		line.picks.set(at, pick);
+		if (line.picks.size > PLACES) line.picks.delete(line.picks.keys().next().value);
+		if (installed) line.mine = now;
 		const back = best && best.specId !== specId && better(best, now) ? `; best so far ${best.specId} (${best.ok ? "QA passes" : problems(best.n)})` : "";
 		const kind = passed && passed !== specId ? "polish" : repairs >= REPAIR_CAP && !now.ok ? "cap" : now.streak >= STUCK_AFTER ? "stuck" : null;
 		line.noted = Boolean(kind) && !passed;
 		if (!kind) return {};
-		// the take to leave on the character: this compile's when it installed itself; else what the line put on
-		// when the character still carries it here and the pick does not beat it; else the pick (a take plays in the
-		// character's placement frame, take.js, so one baked before a move no longer meets the scene where it stands)
-		const held = line.held, keeps = installed || (held && held.specId === current && held.at === at && !better(line.pick, held));
-		const install = keeps || line.pick.take === undefined ? undefined : { specId: line.pick.specId, take: line.pick.take };
-		if (install) line.held = line.pick;
-		const on = installed ? null : keeps ? held : install ? line.pick : null;
-		const report = install ? `installed the best take, ${named(on)}: report what it still fails` : on ? `${named(on)} stays installed: report what it still fails`
-			: installed ? "this take is installed: report what still fails" : "install the best take and report what it still fails";
+		// the take to leave on the character: this compile's, or the agent's own, when it carries it; else fill an empty
+		// take, or upgrade the one the watch put on, with the best here; a take from before this line stays
+		const held = line.held, mine = line.mine && line.mine.specId === current, watched = held && held.specId === current;
+		const keeps = !installed && !mine && watched && held.at === at && !better(pick, held);
+		const fills = !installed && !mine && !keeps && (current === null || watched) && pick.take !== undefined;
+		const install = fills ? { specId: pick.specId, take: pick.take } : undefined;
+		if (install) line.held = pick;
+		const on = installed ? null : mine ? line.mine : keeps ? held : install ? pick : null;
+		const report = installed ? "this take is installed: report what still fails" : install ? `installed the best take here, ${named(pick)}; ${HERE}: report what it still fails`
+			: mine ? `your installed take ${named(on)} stays: report what it still fails` : keeps ? `${named(on)} stays installed; ${HERE}: report what it still fails`
+				: current !== null && pick.take !== undefined ? `the character keeps the take it had; install the best take here, ${named(pick)}, to replace it, and report what it still fails`
+					: "install the best take and report what it still fails";
 		let say;
-		if (kind === "polish") say = `${passed} already passed QA: stop unless the user asked for a specific change${install ? `; installed ${named(on)}` : ""}.`;
+		if (kind === "polish") say = `${passed} already passed QA: stop unless the user asked for a specific change${install ? `; installed ${named(pick)}: ${HERE}` : ""}.`;
 		else if (kind === "cap") say = `${repairs} repair compiles${on ? "" : back}: ${report}, unless the user asked for more.`;
 		else {
 			const codes = [...now.core], names = codes.slice(0, SAY_CODES).map(cut).join(", ") + (codes.length > SAY_CODES ? ` +${codes.length - SAY_CODES}` : "");
