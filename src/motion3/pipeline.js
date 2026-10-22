@@ -36,6 +36,7 @@ import { planWalks, applyWalkPlans } from "./walk-plan.js";
 import { relaxSpec } from "./lenient.js";
 import { observeAsked } from "./qa/asked.js";
 import { prepareSpec } from "./correct.js";
+import { compareQa, noWorse } from "./qa/verdict.js";
 
 const ms = t => Math.round(performance.now() - t);
 
@@ -45,6 +46,21 @@ function warpChecks(spec, map) {
 	for (const name of ["contacts", "orient", "below"]) for (const k of c[name] ?? []) k.when = w(k.when);
 	for (const k of c.clearance ?? []) k.frames = w(k.frames);
 	return { ...spec, checks: c };
+}
+
+/**
+ * fix.retime is kept only when QA is no worse with it (qa/verdict.js noWorse: no more problems, at as many no higher
+ * summed severity, no goal lost); else the take compiles without it and fixed.retime says what it did (a session went from 30
+ * problems to 1015 after a retime). -> { out, measured, qa }
+ */
+function keptRetime(out, expanded, compile, qaOf) {
+	const qa = qaOf(out), measured = out.timeMap ? warpChecks(expanded, out.timeMap) : expanded;
+	if (!out.fixed?.retime) return { out, measured, qa };
+	const plain = compile({ ...expanded, fix: { ...expanded.fix, retime: false } }), base = qaOf(plain);
+	if (noWorse(qa, base)) return { out, measured, qa };
+	const v = compareQa(qa, base);
+	plain.fixed = { ...plain.fixed, retime: { ...out.fixed.retime, kept: false, how: `${out.fixed.retime.how}; not kept: QA was worse with it (summed severity ${v.sev[0]} -> ${v.sev[1]}, problems ${v.problems[0]} -> ${v.problems[1]}), so the take is compiled without it` } };
+	return { out: plain, measured: expanded, qa: base };
 }
 
 /**
@@ -102,10 +118,9 @@ function compilePrepared(prepared, { sk, scene }, opts, notes, refusals) {
 	if (spec?.frames === "auto") markFramesAuto(resolved);
 	const t1 = performance.now();
 	const { full: expanded, used } = expand(resolved);
-	const out = compileMotion({ fps: 24, ...expanded }, ctx);
+	const { out, measured, qa } = keptRetime(compileMotion({ fps: 24, ...expanded }, ctx), expanded, s => compileMotion({ fps: 24, ...s }, ctx), o => runMotionQa(sk, o, o.timeMap ? warpChecks(expanded, o.timeMap) : expanded, { userSpec: resolved }));
 	const compileMs = ms(t1), t2 = performance.now();
-	const measured = out.timeMap ? warpChecks(expanded, out.timeMap) : expanded;
-	const qa = runMotionQa(sk, out, measured, { userSpec: resolved }), observations = observeMotion(sk, out, measured.checks), held = heldReadings(out);
+	const observations = observeMotion(sk, out, measured.checks), held = heldReadings(out);
 	if (held) Object.assign(observations, { units: `${observations.units}; ${HELD_UNITS}`, held });
 	const near = observeNear(sk, out), wrist = observeWrist(sk, out);
 	if (near) Object.assign(observations, { units: `${observations.units}; ${NEAR_UNITS}`, near });

@@ -22,11 +22,11 @@ const MAX_SKILLS = 8, MAX_CONTACTS = 6, MAX_GOALS = 8, OFF = 0.05, YAW_OFF = 5;
 const v3 = p => `[${p.map(m3).join(", ")}]`;
 const cm = v => `${Math.round(v * 1000) / 10}`;
 const wrap = d => ((d % 360) + 540) % 360 - 180;
-const meaning = { top: " (box top)", base: " (box base)", center: " (box centre)" };
+const meaning = { top: " (box top)", base: " (box base)", center: " (box centre)", rim: " (opening)" };
 
 /** A ref with what an object point is: "object:cup.top (box top)". */
 function named(ref, bare) {
-	const m = /^object:.+?(?:\.(center|top|base))?$/s.exec(ref);
+	const m = /^object:.+?(?:\.(center|top|base|rim))?$/s.exec(ref);
 	if (!m) return ref;
 	return `${ref}${m[1] ? meaning[m[1]] : bare ? " (surface)" : meaning.center}`;
 }

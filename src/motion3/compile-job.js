@@ -3,12 +3,13 @@
 // name, the motion scene (scene.js motionScene of the editor's objects: oriented boxes; shapes.js reads a sphere or a cylinder round from them), the spec as sent, and
 // what to do with it (probes, checks, lenient, repair, bake). The answer is plain data and typed arrays
 // only (the compiler's out holds closures), so it crosses a worker boundary: QA, observations, the stored
-// spec, and the baked take when asked.
+// spec, and the baked take when asked. The hint patches QA offers are compiled first (hint-check.js).
 // A refusal is an Error with a code (INVALID_ARGUMENT, MOTION_SPEC_INVALID turned into it), which the
 // client turns back into the Studio's protocol error.
 import { compileSpec, liftRequest } from "./pipeline.js";
 import { prepareSpec } from "./correct.js";
 import { repairSpec } from "./repair.js";
+import { checkHints } from "./hint-check.js";
 import { bakeTake } from "./take.js";
 import { skeletonFor } from "./rigs/index.js";
 import { keptPeople } from "./people.js";
@@ -52,7 +53,11 @@ export function runCompileJob({ model, scene, spec: asked, probes: sentProbes, c
 	};
 	// repair patches address the stored spec, so a repair starts from it corrected (correct.js), and says what was
 	const corrected = [], start = repair && !lenient ? prepareSpec(asked, { sk, scene }, corrected) : asked;
-	const t0 = performance.now(), fixed = repair ? repairSpec(start, repair, once) : { spec: asked, result: once(asked) };
+	// every compile's QA by its spec, so a hint patch repair already tried is not compiled again (hint-check.js)
+	const seen = new Map(), measured = s => { const r = once(s); seen.set(JSON.stringify(s), r.qa); return r; };
+	const t0 = performance.now(), fixed = repair ? repairSpec(start, repair, measured) : { spec: asked, result: measured(asked) };
+	// a hint's patch is offered only when its compile helped
+	checkHints(fixed.spec, fixed.result.qa, s => seen.get(JSON.stringify(s)) ?? measured(s).qa);
 	// ms.repair: the whole repair's wall time, so a sweep that repairs every variant shows what it costs
 	const r = fixed.result, label = fixed.spec?.label ?? null, ms = fixed.repair ? { ...r.ms, repair: Math.round(performance.now() - t0) } : r.ms;
 	const take = bake ? bakeTake(sk, r.out, { position: bake.position, yaw: bake.yaw }, { spec: r.stored, prompt: ("prompt" in bake ? bake.prompt : label) ?? "" }) : undefined;
