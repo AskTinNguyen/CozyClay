@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+## 3.1.1 - 2026-10-23
+
+Sculpt gets new shapes, cutters, detail and materials, and the Studio agent shows its plan and a live sketch.
+
+Sculpt
+
+- New sculpt shapes: loft, convex hull, lathe, tube and extrude, plus an
+  instanced scatter (blade, tuft, flower, leaf, pebble, twig) that fills a
+  part with up to 12000 items. Bad points are refused with their path.
+- Boolean cutters: a part with `op: subtract | intersect` cuts its parent for
+  windows, doors, arches, hollow bowls and cups, notches, half-domes and
+  slices.
+- Surface `detail` (seeded displacement) and colour `gradient` on any shape.
+- Material presets for sculpt parts and primitives: clay, wood, straw, stone,
+  brick, concrete, metal, glass, ceramic, plastic, rubber, fabric, paper and
+  foliage, each with a matte, satin or gloss finish.
+
+Agent
+
+- A step checklist for long Studio turns, pinned under the prompt while the
+  turn runs and restored with the session.
+- A live ghost sketch of the sculpt in the viewport while the agent is still
+  writing the script. It is never picked, saved or exported.
+- The Studio prompt, MCP and Sculpt mode know the new shapes, materials and
+  fields.
+
 ## 3.1.0 - 2026-10-23
 
 Hands that hold, throw and catch with weight, Studio tasks in the chat, faster playback, and a leaner first run.
