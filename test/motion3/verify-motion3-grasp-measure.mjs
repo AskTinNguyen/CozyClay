@@ -35,7 +35,9 @@ check("in reach, a passing goal leaves no REACH and no contact problem", () => {
 	assert.ok(near.qa.goals[0].ok, JSON.stringify(near.qa.goals[0]));
 	assert.deepEqual(near.qa.groups.filter(g => /^(REACH|CONTACT)$/.test(g.kind)).map(g => `${g.kind}:${g.subject}`), []);
 });
+// the miss itself, not a bound: overlap (compiler/overlap.js) times the arm a little differently, so the far stance misses by
+// 0.136-0.148 m depending on it; a wound-up target read 0.37-0.85 m
 check("the hint's distance is the miss, not a wound-up target", () => {
 	const g = far.qa.groups.find(x => x.kind === "REACH"), m = /out of reach by ([\d.]+) m/.exec(g.hint ?? "");
-	assert.ok(m && +m[1] < 0.15, g.hint);
+	assert.ok(m && Math.abs(+m[1] - far.qa.goals[0].value) < 0.03, `${g.hint} (goal ${far.qa.goals[0].value})`);
 });
