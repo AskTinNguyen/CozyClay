@@ -75,9 +75,11 @@ Fields any part takes:
 
 | Field | Meaning |
 |---|---|
+| `material` | `clay` (default), `wood`, `straw`, `stone`, `brick`, `concrete`, `metal`, `glass`, `ceramic`, `plastic`, `rubber`, `fabric`, `paper` or `foliage`: a procedural, triplanar-mapped surface with bump and shine (`src/material-look.js`); `color` stays the tint. Glass refracts and casts no shadow. Plain objects take the same field through `object.set`. |
+| `finish` | `matte`, `satin` or `gloss`: overrides the preset's shine (metal + gloss = chrome, glass + matte = frosted). |
 | `detail` | `{ amount 0..1, scale? 1..12, seed? }`: seeded noise pushes the surface in and out (clouds, bushes, rocks, hay, bread). Seams are welded first. |
 | `gradient` | `{ color, axis? y\|x\|z, from? 0..1, to? 0..1 }`: vertex colours blend `color` into the second colour along the part's axis. Ignored by the flat display modes. |
-| `op` | `subtract` or `intersect`: the part is not drawn; it cuts its `parent` with three-bvh-csg (windows, doors, arches, hollow pots). Cut deeper than the wall; `mirror: true` cuts both sides. A cutter has no children and never enlarges the standing box. |
+| `op` | `subtract` or `intersect`: the part is not drawn; it cuts its `parent` with three-bvh-csg (windows, doors, arches). Hollow a lathe with a smaller lathe of the same profile: a boxy cutter pokes through a round wall. Cut deeper than the wall; `mirror: true` cuts both sides. A cutter has no children and never enlarges the standing box. |
 
 Compare scores these by their outline: a tube is hulled per segment, an extrude per triangle and a loft per pair of sections, so concave shapes stay honest. It ignores cutters and detail lumps, and treats a ground scatter as its whole box.
 
