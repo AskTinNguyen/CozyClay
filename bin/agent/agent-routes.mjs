@@ -379,9 +379,9 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 		record.next = value.eventSeq;
 		const previous = record.events.at(-1);
 		if (value.type === "job.progress" && previous?.type === "job.progress" && previous.jobId === value.jobId) record.events[record.events.length - 1] = value;
-		// The panel's live frames (turn-frames.mjs, a script's nested calls) keep one replay slot per run of them.
+		// The panel's live frames (turn-frames.mjs, a script's nested calls, a call's sculpt sketch) keep one replay slot per run of them.
 		else if (value.type === "thinking.delta" && previous?.type === "thinking.delta") record.events[record.events.length - 1] = { ...value, text: previous.text + value.text };
-		else if (value.type === "tool.progress" && previous?.type === "tool.progress" && previous.callId === value.callId) record.events[record.events.length - 1] = value;
+		else if (["tool.progress", "sculpt.sketch"].includes(value.type) && previous?.type === value.type && previous.callId === value.callId) record.events[record.events.length - 1] = value;
 		else record.events.push(value);
 		if (record.events.length > 256) record.events.splice(0, record.events.length - 256);
 		if (["done", "error", "receipt"].includes(value.type)) record.terminal = true;
@@ -425,8 +425,8 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 	};
 	const handleStudioTurn = async (req, res, value, path) => {
 		const { StudioProtocolError, validateStudioContextFreshness } = await import("../../src/studio-agent-protocol.js");
-		const [{ createStudioTools }, { encodeStudioContext }, { createScriptTool }, { runSupervisor, shouldSupervise }] = await Promise.all([
-			import("./studio-tools.mjs"), import("../../src/studio-agent-context.js"), import("./script-tool.mjs"), import("./supervisor.mjs"),
+		const [{ createStudioTools }, { encodeStudioContext }, { createScriptTool }, { runSupervisor, shouldSupervise }, { createPlanTool }] = await Promise.all([
+			import("./studio-tools.mjs"), import("../../src/studio-agent-context.js"), import("./script-tool.mjs"), import("./supervisor.mjs"), import("./plan-tool.mjs"),
 		]);
 		const hubDeps = await runtime; const hub = hubDeps.liveHub || liveHub;
 		if (path === "/agent/stop") {
@@ -477,7 +477,7 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 		let replySegment = "", lastReply = "";
 		const send = event => {
 			if (event.type === "text.delta") { replySegment += event.text ?? ""; lastReply = replySegment; }
-			else if (!["execution_telemetry", "execution_tool_started", "thinking.delta", "tool.compose", "tool.progress"].includes(event.type)) {
+			else if (!["execution_telemetry", "execution_tool_started", "thinking.delta", "tool.compose", "tool.progress", "sculpt.sketch"].includes(event.type)) {
 				if (event.type === "tool.start") replySegment = "";
 				turnFrames.push(event);
 			}
@@ -522,7 +522,8 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 			},
 		}));
 		const turnTransaction = studioTransaction({ hub, context: current, turnId: value.turnId, admission, task: value.task, signal: controller.signal, plain: Boolean(value.main) });
-		const script = createScriptTool({ tools: modelTools, signal: controller.signal, emit: send });
+		// The turn's step checklist (plan-tool.mjs): the model calls it directly or inside a script, and the panel shows it.
+		const plan = createPlanTool({ emit: send }), script = createScriptTool({ tools: [...modelTools, plan.nested], signal: controller.signal, emit: send });
 		const scriptTool = {
 			...script,
 			// A script that fails after it edited the scene rolls back its own edits, so
@@ -604,7 +605,7 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 			for await (const frame of turnTransaction.run(input => session.modelSession.start(input))({
 				surface: "studio", sessionId: value.sessionId, model: modelKey, effort: value.effort,
 				text: value.text, attachments: value.attachments, contextText: encodeStudioContext(value.context) + (value.main?.contextText() ?? ""), frameObservation,
-				reportCost: Boolean(value.task || value.main), context: value.context, tools: value.main ? value.main.tools({ studio: modelTools, hub, admission }) : [...modelTools, scriptTool], systemPrompt: value.main?.systemPrompt ?? (value.context.scene?.previsMode === "storyboard" ? STUDIO_SYSTEM_PROMPT_STORYBOARD : undefined), signal: controller.signal, emit: send,
+				reportCost: Boolean(value.task || value.main), context: value.context, tools: value.main ? value.main.tools({ studio: modelTools, hub, admission }) : [...modelTools, plan.track(scriptTool), plan], systemPrompt: value.main?.systemPrompt ?? (value.context.scene?.previsMode === "storyboard" ? STUDIO_SYSTEM_PROMPT_STORYBOARD : undefined), signal: controller.signal, emit: send,
 				meta: persistenceMeta,
 				quotaEvent: headers => codex?.parseQuotaHeaders ? quotaEvent(codex, headers) : { type: "quota", plan: null, primary: { usedPercent: null, windowMinutes: null, resetAt: null }, credits: { has: null } },
 			})) emitFrame(frame);

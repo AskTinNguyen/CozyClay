@@ -59,6 +59,8 @@ export function createScriptTool({ tools = [], signal, emit: createdEmit } = {})
 					name: tool.name,
 					description: tool.description,
 					execute: async (args, { signal: nestedSignal }) => {
+						// A quiet tool (plan-tool.mjs) is the panel's own business: no progress frame, no line in the calls summary.
+						if (tool.quiet) return publicData(await tool.handler(args ?? {}, {}));
 						const signals = [nestedSignal, runSignal].filter(Boolean), index = ++started;
 						let result;
 						report(index, tool.name, args, "running");
