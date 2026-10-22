@@ -62,7 +62,8 @@ export function createScriptTool({ tools = [], signal, emit: createdEmit } = {})
 						const signals = [nestedSignal, runSignal].filter(Boolean), index = ++started;
 						let result;
 						report(index, tool.name, args, "running");
-						try { result = await tool.handler(args ?? {}, { signal: signals.length > 1 ? AbortSignal.any(signals) : signals[0] }); }
+						// callId: the script's own tool call, so the editor counts the script's commands as one agent step (repair-watch.js)
+						try { result = await tool.handler(args ?? {}, { signal: signals.length > 1 ? AbortSignal.any(signals) : signals[0], ...(toolCallId ? { callId: toolCallId } : {}) }); }
 						catch (error) {
 							calls.push(callSummary(tool.name, null, error));
 							report(index, tool.name, args, "failed", null, error);

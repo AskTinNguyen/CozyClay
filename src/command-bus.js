@@ -287,7 +287,8 @@ export function createCommandBus({ registry, ports }) {
         domainRevision = domain ? current.domainRevisions?.[domain] : null; if (scoped?.keys.length) tasks.rebase(scoped);
       };
       const nestedIds = new Set();
-      const context = { origin: request.origin, signal: controller.signal, taskId: request.taskId ?? null, turnId: request.turnId ?? null,
+      // callId: the agent's tool call (a script's nested commands share it), for motion.compile's stop rule (repair-watch.js)
+      const context = { origin: request.origin, signal: controller.signal, taskId: request.taskId ?? null, turnId: request.turnId ?? null, callId: typeof request.callId === 'string' ? request.callId : null,
         check() {
           controller.signal.throwIfAborted();
           const current = ports.read();

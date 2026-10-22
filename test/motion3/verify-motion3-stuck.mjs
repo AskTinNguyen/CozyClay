@@ -43,6 +43,16 @@ const capped = Array.from({ length: 12 }, (_, k) => next(sev(k), k ? "b" : undef
 expect("no note before the cap while failures change", capped.slice(0, 10).every(x => x === undefined), JSON.stringify(capped));
 expect("the 11th compile of a turn (10 repairs) says install the best take and report", /^10 repair compiles\. Install the best take here, spec-\d+ \(1 problem\)\. Report its problems; stop unless asked for more\.$/.test(capped[10] ?? ""), capped[10]);
 expect("another turn of the same character starts again", next(sev(1), "b", "t3") === undefined);
+// in a turn the cap counts agent calls: a script's compiles (one callId) are one repair step
+w = createRepairWatch();
+const byCall = (k2, callId) => w.note({ characterId: "c", turnId: "t4", callId, specId: `spec-${String(++n).padStart(12, "0")}`, base: k2 ? "b" : undefined, qa: sev(k2 % 10) }).say;
+const scripts = Array.from({ length: 30 }, (_, k2) => byCall(k2, `call-${Math.floor(k2 / 3)}`));
+expect("30 compiles in 10 scripts (3 each): no cap note (10 calls, 9 repair steps)", scripts.every(x => x === undefined), JSON.stringify(scripts.filter(Boolean)));
+const eleventh = [byCall(30, "call-10"), byCall(31, "call-10")];
+expect("the 11th call is the cap, said in calls, for each of its compiles", /^10 repair calls\. /.test(eleventh[0] ?? "") && /^10 repair calls\. /.test(eleventh[1] ?? ""), JSON.stringify(eleventh));
+w = createRepairWatch();
+const loose = Array.from({ length: 11 }, (_, k2) => w.note({ characterId: "c", turnId: "t5", specId: `spec-${String(++n).padStart(12, "0")}`, base: k2 ? "b" : undefined, qa: sev(k2) }).say);
+expect("compiles with no call id (MCP, tests) are a step each: the 11th says repair compiles", loose.slice(0, 10).every(x => x === undefined) && /^10 repair compiles\. /.test(loose[10] ?? ""), JSON.stringify(loose[10]));
 w = createRepairWatch();
 const chain = Array.from({ length: 11 }, (_, k) => next(sev(k), k ? `spec-${String(n).padStart(12, "0")}` : undefined, null));
 expect("without a turn the cap counts along the base chain", /^10 repair compiles/.test(chain[10] ?? "") && next(sev(0), undefined, null) === undefined, chain[10]);
@@ -173,5 +183,12 @@ while (!measure3.at(-1).stuck && measure3.length < 12) measure3.push(inTurn({ ba
 expect(`the agent's install: true take (${agent3.qa.problems} problems) stays through "never" compiles and their note, though a draft had ${draft3.qa.problems}`, draft3.qa.problems < agent3.qa.problems && heldId() === agent3.specId
 	&& measure3.every(x => !x.affectedIds.length) && measure3.at(-1).stuck?.includes(`Your installed take ${agent3.specId}`), JSON.stringify({ held: heldId(), stuck: measure3.at(-1).stuck }));
 
+// through the registry: the bus hands motion.compile the agent's call id (command-bus.js context.callId)
+const steps = [];
+for (let c = 0; c < 4; c++) for (let v = 0; v < 3; v++) {
+	const r = turn.run("motion.compile", { characterId: body.id, base: t0.specId, patch: [{ op: "replace", path: "/keys/@f=30/set/pitch", value: 20 + c * 3 + v }], install: "never" }, { turnId: "turn-4", callId: `toolu_${c}` });
+	steps.push((r?.output ?? r?.receipt?.output ?? r).stuck ?? null);
+}
+expect("12 compiles in 4 agent calls through the registry: never a cap note (3 repair steps)", steps.every(x => x === null || !/repair (calls|compiles)/.test(x)), JSON.stringify(steps));
 if (failures) { console.error(`${failures} motion3 stuck check(s) failed`); process.exit(1); }
 console.log("motion3 stuck: all checks passed");

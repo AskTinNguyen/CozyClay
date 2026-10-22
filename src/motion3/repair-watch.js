@@ -10,7 +10,10 @@
 //           DELTA_STEP less severe: stop patching them (or re-applying their hints), start over,
 //           take another approach, or report what the best take still fails
 // History is per character and agent turn (context.turnId); without a turn (MCP, tests) per character,
-// with the cap counted along the base chain (a whole spec starts it again). A whole spec sent after a
+// with the cap counted along the base chain (a whole spec starts it again). In a turn the cap counts agent
+// steps: the compiles of one tool call (context.callId; a script's nested ones share the script's) are one
+// repair step, as a script that compares variants is one try; a compile with no call id is a step of its own.
+// The 60 bench sessions: compiles counted one by one read 10-23 at the agent's 6-12th compiling call. A whole spec sent after a
 // stuck note is the fresh start the note asked for, so the streak starts again too.
 // A note never leaves the take empty: the agent obeys it by reporting, and a turn whose compiles all ran
 // install: "ifClean" (or false) unclean ended with no take (5 of 30 bench runs). So the line keeps its best
@@ -49,7 +52,7 @@ export function createRepairWatch() {
 		let line = lines.get(key);
 		if (line) { lines.delete(key); lines.set(key, line); return line; }
 		// picks: the best compile per placement; held: the take the watch put on; mine: the agent's own last install
-		line = { compiles: 0, last: null, passed: null, best: null, picks: new Map(), held: null, mine: null, noted: false, depth: new Map() };
+		line = { compiles: 0, steps: 0, call: null, last: null, passed: null, best: null, picks: new Map(), held: null, mine: null, noted: false, depth: new Map() };
 		lines.set(key, line);
 		if (lines.size > KEPT) lines.delete(lines.keys().next().value);
 		return line;
@@ -60,10 +63,11 @@ export function createRepairWatch() {
 	 * it is the best at `at`), installed whether this compile put its own take on the character, current the
 	 * specId of the take the character carries now (after this compile).
 	 * -> { say?, install?: { specId, take } } : install is the best take the caller puts on the character.
-	 * @param {{ characterId: string, turnId?: string | null, specId: string, base?: string, qa: { ok: boolean, groups: object[] },
+	 * callId the agent's tool call the compile ran in, or null.
+	 * @param {{ characterId: string, turnId?: string | null, callId?: string | null, specId: string, base?: string, qa: { ok: boolean, groups: object[] },
 	 *   at?: string, take?: unknown, installed?: boolean, current?: string | null }} c
 	 */
-	function note({ characterId, turnId = null, specId, base, qa, at = "", take, installed = false, current = null }) {
+	function note({ characterId, turnId = null, callId = null, specId, base, qa, at = "", take, installed = false, current = null }) {
 		const line = lineOf(`${characterId}\u0000${turnId ?? ""}`), groups = qa.groups ?? [];
 		const now = { specId, at, ok: Boolean(qa.ok), fails: new Set(groups.map(groupKey)), n: groups.length, sev: severity(groups), streak: 1 };
 		// core: the failures the whole streak shares (its first compile's; the later ones hold them all)
@@ -72,9 +76,11 @@ export function createRepairWatch() {
 		if (prev && !fresh && now.fails.size && prev.fails.size && superset(now.fails, prev.fails) && now.n >= prev.n && now.sev > prev.sev * (1 - DELTA_STEP))
 			Object.assign(now, { streak: prev.streak + 1, core: prev.core });
 		line.compiles += 1;
+		if (!callId || callId !== line.call) line.steps += 1;
+		line.call = callId;
 		const depth = base === undefined ? 0 : (line.depth.get(base) ?? 0) + 1;
 		line.depth.set(specId, depth);
-		const repairs = turnId ? line.compiles - 1 : depth, passed = line.passed, best = line.best;
+		const repairs = turnId ? line.steps - 1 : depth, passed = line.passed, best = line.best;
 		line.last = now;
 		if (now.ok && !line.passed) line.passed = specId;
 		if (!best || better(now, best)) line.best = now;
@@ -109,7 +115,7 @@ export function createRepairWatch() {
 		let say;
 		if (kind === "polish") say = !install ? `${passed} already passed QA: ${asked}.` : install.specId === passed ? `${passed} passed QA and is now installed, ${POS}: ${asked}.`
 			: `${passed} passed QA at another position; the best take here, ${named(pick)}, is installed, ${POS}. Report its problems; ${asked}.`;
-		else if (kind === "cap") say = `${repairs} repair compiles. ${status} Report its problems; stop unless asked for more.`;
+		else if (kind === "cap") say = `${repairs} repair ${turnId && callId ? "calls" : "compiles"}. ${status} Report its problems; stop unless asked for more.`;
 		else {
 			const codes = [...now.core], names = codes.slice(0, SAY_CODES).map(cut).join(", ") + (codes.length > SAY_CODES ? ` +${codes.length - SAY_CODES}` : "");
 			say = `${names} unchanged over ${now.streak} compiles. Stop patching it or re-applying its hint: start afresh or try another approach. ${status} If neither helps, report its problems.`;

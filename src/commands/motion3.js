@@ -175,7 +175,7 @@ export function register(registry, ports) {
 			const delta = base === undefined ? {} : { delta: deltaOf(store.parts(base)?.groups ?? [], qa.groups, base) };
 			// the stop rule (repair-watch.js): a note, and the best take so far put on when the note would leave the take empty or worse
 			const own = specIdOf(r.stored), carried = owner().motionFor(characterId)?.spec, current = carried ? specIdOf(carried) : null;
-			const { say: stuck, install: best } = watch.note({ characterId, turnId: context?.turnId, specId: own, base, qa, at, take, installed: Boolean(installs || kept), current });
+			const { say: stuck, install: best } = watch.note({ characterId, turnId: context?.turnId, callId: context?.callId, specId: own, base, qa, at, take, installed: Boolean(installs || kept), current });
 			if (best) timing = put(character, best.take, context) ?? timing;
 			const self = best?.specId === own, how = kept ? "; already installed, unchanged" : self ? "; installed as the best take so far"
 				: best ? `; not installed; the best take so far, ${best.specId}, installed` : install === "ifClean" ? (installs ? "; installed" : "; not installed") : "";
