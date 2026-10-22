@@ -2,6 +2,52 @@
 
 ## Unreleased
 
+## 3.1.0 - 2026-10-23
+
+Hands that hold, throw and catch with weight, Studio tasks in the chat, faster playback, and a leaner first run.
+
+Motion
+
+- Hands hold what they carry. Fingers close until they touch the held
+  surface, a ball rests in the palm and fingers, and spheres and cylinders
+  are round to the compiler. QA flags a finger through the object
+  (`FINGER_PEN`), a finger short of it (`FINGER_GAP`) and a hand that does
+  not hold it (`SUPPORT`).
+- A held thing has weight: `objects.<id>.mass` sags the arm, and a load past
+  one hand asks for two (`LOAD`, `observations.load`).
+- New skills `throwObject` and `catchObject`. A thrown thing leaves with the
+  hand's speed and lands on the first surface its path comes down onto; a
+  hand meets a flying ball where it can reach and gives with it.
+- Grasp issues say why and carry the fix that repair applies.
+
+Studio and agent
+
+- Tasks: a **Tasks** switch in the agent composer. With it on, the main
+  agent answers at once while Studio tasks edit the scene in their own
+  scopes, on a pool of two compile workers. Running tasks show as one line
+  in the chat. Off by default.
+- A video can be attached to the agent; it travels as a contact sheet.
+- A fresh install opens the project chooser with one "+ New project" card.
+- The Shot Camera card draws the live shot in every mode, and a focal-length
+  scrub replaces the read-only lens label.
+- The project menu, scene dropdown and Outliner menu no longer open behind
+  the panels and close each other.
+- + Add shot on a full take grows the take; dock tabs are clickable; Pose
+  enters from the editor view and releases IK focus on exit.
+
+Performance
+
+- Timeline playback no longer re-renders the whole app every frame.
+- The motion body fits (~0.5 MB) load after first paint instead of in the
+  first bundle.
+
+Fixes
+
+- `npm test` and `npm run lint` run on a Windows checkout, and the MCP server
+  removes its live endpoint file when it exits on Windows.
+- `npm run dev` exits within about 1.5 s on Ctrl+C instead of hanging.
+- mcp: `proxy-addr` 2.0.8 (CVE-2026-90711).
+
 Removed
 
 - The built-in set pieces: Chair, Car and Plane (aircraft), with their Set
@@ -21,6 +67,7 @@ Docs
 - The README is short again: install, what it does, the three AI surfaces, docs.
 - `INSTALL_FOR_AGENTS.md` is the install, run and connect guide for an AI agent given the
   repository link. It ships in the npm package.
+- The README links the CozyClay Discord server and GitHub Sponsors.
 
 ## 3.0.3 - 2026-10-20
 
