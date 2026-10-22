@@ -27,8 +27,8 @@ const STUCK_AFTER = 3;
 const REPAIR_CAP = 10;
 const DELTA_STEP = 0.05;
 const KEPT = 32;
-// lines whose best take is kept (the newest): a take is ~0.25 MB a 240-frame Y Bot take (rotations, 65 bones), so at
-// most about 1 MB here; an older line keeps its notes but no take (its turn is over)
+// lines whose best takes are kept (the newest): a take is ~0.25 MB a 240-frame Y Bot take (rotations, 65 bones), so
+// with PLACES each at most about 3 MB here; an older line keeps its notes but no take (its turn is over)
 const TAKES = 4;
 // placements per line whose best take is kept (S8 r1 moved the body 0.78 -> 0.88 -> 0.94 -> 0.88 m)
 const PLACES = 3;
