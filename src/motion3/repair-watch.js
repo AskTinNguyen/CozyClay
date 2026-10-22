@@ -40,7 +40,8 @@ const better = (a, b) => (a.ok !== b.ok ? a.ok : a.n !== b.n ? a.n < b.n : a.sev
 const problems = n => `${n} problem${n === 1 ? "" : "s"}`;
 const cut = s => (s.length > 40 ? `${s.slice(0, 39)}~` : s);
 const named = c => `${c.specId} (${c.ok ? "QA passes" : problems(c.n)})`;
-const HERE = "it is baked where the character stands, so moving it misaligns the take (compile again after a move)";
+// a take plays in the character's placement frame: one the watch put on says so (a move misaligns it)
+const POS = "bound to this position (recompile after a move)";
 
 export function createRepairWatch() {
 	const lines = new Map();
@@ -88,7 +89,7 @@ export function createRepairWatch() {
 		line.picks.set(at, pick);
 		if (line.picks.size > PLACES) line.picks.delete(line.picks.keys().next().value);
 		if (installed) line.mine = now;
-		const back = best && best.specId !== specId && better(best, now) ? `; best so far ${best.specId} (${best.ok ? "QA passes" : problems(best.n)})` : "";
+		const past = c => (best && best.specId !== c.specId && better(best, c) ? `; best so far ${named(best)}` : "");
 		const kind = passed && passed !== specId ? "polish" : repairs >= REPAIR_CAP && !now.ok ? "cap" : now.streak >= STUCK_AFTER ? "stuck" : null;
 		line.noted = Boolean(kind) && !passed;
 		if (!kind) return {};
@@ -99,17 +100,19 @@ export function createRepairWatch() {
 		const fills = !installed && !mine && !keeps && (current === null || watched) && pick.take !== undefined;
 		const install = fills ? { specId: pick.specId, take: pick.take } : undefined;
 		if (install) line.held = pick;
-		const on = installed ? null : mine ? line.mine : keeps ? held : install ? pick : null;
-		const report = installed ? "this take is installed: report what still fails" : install ? `installed the best take here, ${named(pick)}; ${HERE}: report what it still fails`
-			: mine ? `your installed take ${named(on)} stays: report what it still fails` : keeps ? `${named(on)} stays installed; ${HERE}: report what it still fails`
-				: current !== null && pick.take !== undefined ? `the character keeps the take it had; install the best take here, ${named(pick)}, to replace it, and report what it still fails`
-					: "install the best take and report what it still fails";
+		// what the character carries after the note, in one sentence; then what to do (a cap note at most ~180 characters)
+		const status = installed ? `This take is installed${past(now)}.` : install ? `Installed the best take here, ${named(pick)}, ${POS}.`
+			: mine ? `Your installed take ${named(line.mine)} stays${past(line.mine)}.` : keeps ? `${named(held)} stays installed, ${POS}.`
+				: current !== null && pick.take !== undefined ? `The earlier take stays; to replace it, install the best take here, ${named(pick)}.`
+					: `Install the best take here, ${named(pick)}.`;
+		const asked = "stop unless the user asked for a specific change";
 		let say;
-		if (kind === "polish") say = `${passed} already passed QA: stop unless the user asked for a specific change${install ? `; installed ${named(pick)}: ${HERE}` : ""}.`;
-		else if (kind === "cap") say = `${repairs} repair compiles${on ? "" : back}: ${report}, unless the user asked for more.`;
+		if (kind === "polish") say = !install ? `${passed} already passed QA: ${asked}.` : install.specId === passed ? `${passed} passed QA and is now installed, ${POS}: ${asked}.`
+			: `${passed} passed QA at another position; the best take here, ${named(pick)}, is installed, ${POS}. Report its problems; ${asked}.`;
+		else if (kind === "cap") say = `${repairs} repair compiles. ${status} Report its problems; stop unless asked for more.`;
 		else {
 			const codes = [...now.core], names = codes.slice(0, SAY_CODES).map(cut).join(", ") + (codes.length > SAY_CODES ? ` +${codes.length - SAY_CODES}` : "");
-			say = `${names} unchanged over ${now.streak} compiles${on ? "" : back}. Stop patching it (or re-applying its hint): start afresh, try another approach, or ${report}.`;
+			say = `${names} unchanged over ${now.streak} compiles. Stop patching it or re-applying its hint: start afresh or try another approach. ${status} If neither helps, report its problems.`;
 		}
 		return { say, ...(install ? { install } : {}) };
 	}
