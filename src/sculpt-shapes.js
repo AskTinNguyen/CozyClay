@@ -3,7 +3,8 @@
  * read, how a mirrored copy reflects the shape's own data, and the local
  * points the silhouette compare hulls. Pure: no three.js.
  *
- * A new shape is one entry here plus a builder in sculpt-geometry.js.
+ * A new shape is one entry here plus a builder in sculpt-geometry.js (a
+ * geometry builder, or a mesh builder for an instanced shape like scatter).
  *
  *   keys     shape-only part keys; any other shape refuses them
  *   read     (raw, part, where) fills the normalized part's shape fields
@@ -15,6 +16,7 @@
  */
 
 import { RecipeError, isFiniteNumber, readUnit, tidy } from "./sculpt-recipe-read.js";
+import { SCATTER_SHAPE } from "./sculpt-scatter-shape.js";
 
 /** How far a full taper narrows a blob's end; sculpt-geometry.js draws the same. */
 export const BLOB_TAPER = 0.6;
@@ -123,6 +125,7 @@ export const SCULPT_SHAPE_SPECS = Object.freeze({
 		samples: ringSamples,
 		hole: ringHole,
 	},
+	scatter: SCATTER_SHAPE,
 });
 
 export const SCULPT_SHAPES = Object.freeze(Object.keys(SCULPT_SHAPE_SPECS));

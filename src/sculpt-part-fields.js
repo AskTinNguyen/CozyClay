@@ -3,7 +3,9 @@
  * detail). Each entry is { key, read(raw, part, where) }: `read` runs only
  * when raw[key] is present, refuses a bad value with RecipeError
  * (sculpt-recipe-read.js) and writes the normalized value onto the part.
- * Pure: no three.js.
+ * An edit that sets a field to null clears it. Pure: no three.js.
  */
 
-export const SCULPT_PART_FIELDS = Object.freeze([]);
+import { SURFACE_FIELDS } from "./sculpt-surface-fields.js";
+
+export const SCULPT_PART_FIELDS = Object.freeze([...SURFACE_FIELDS]);

@@ -81,7 +81,7 @@ const NODE_FILES = [
 	"test/verify-auto-color.mjs",
 	"test/verify-coplanar-depth.mjs",
 	"test/verify-empty-object.mjs",
-	"test/verify-sculpt-recipe.mjs",
+	"test/verify-sculpt-recipe.mjs", "test/verify-sculpt-detail.mjs",
 	"test/verify-sculpt-object.mjs",
 	"test/verify-sculpt-compare.mjs",
 	"test/verify-sculpt-run.mjs",
