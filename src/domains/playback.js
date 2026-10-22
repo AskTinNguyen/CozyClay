@@ -3,6 +3,7 @@ import { advancePlaybackFrame, registerPlaybackFrameApplier } from "../motion/pl
 function createPlaybackApplier(appContext, motion, poseOtherCastMembers, ikEvaluate, blendFrames) {
 	return (frame) => {
 		appContext.shared.tlFrameRef.current = frame;
+		appContext.shared.propFrameRef.current = frame;
 		appContext.patchTimeline({ currentFrame: frame });
 		if (appContext.shared.activeRig) appContext.shared.poseMemberAtFrame(appContext.shared.activeRig, motion, null, frame);
 		poseOtherCastMembers(frame);

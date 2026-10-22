@@ -5,13 +5,14 @@ import { aimAt } from "./controls.jsx";
 import { SUBJECT_HEIGHT_M } from "./shot.js";
 import { shotAtFrame } from "./cuts.js";
 import { sampleAt } from "./sample-at.js";
+import { playbackProbe, probeVisibility } from "./motion/playback-probe.js";
 import { RENDER_ACTIVITY_EVENT } from "./use-render-activity.js";
 import { PRESETS, editorFrameForSubject } from "./stage-startup-defaults.js";
 
 /** Selection marker for the picked cast member: a Unity-style XYZ tripod
  * plus a ground ring at the feet. X/Z arrows also drag the character on the
  * floor (Y is display-only — characters stand on the deck). */
-export function ShotRig({ preset, nonce, fovDeg, charA, charB, showB, probeX, probeZ, camRef, look, onMetrics, appliedPresetRef, lastPosRef }) {
+export function ShotRig({ preset, nonce, fovDeg, charA, charB, showB, probe: playbackProbeInput = {}, camRef, look, onMetrics, appliedPresetRef, lastPosRef }) {
 	useEffect(() => {
 		const cam = camRef.current;
 		if (!cam) return;
@@ -58,20 +59,14 @@ export function ShotRig({ preset, nonce, fovDeg, charA, charB, showB, probeX, pr
 		cam.updateProjectionMatrix();
 	}, [fovDeg, camRef]);
 
-	// A blocking tool must not claim a framing it is not holding, so the subject's
-	// feet and eyes are projected into the frame every tick.
 	const probe = useRef(new THREE.Vector3());
 	const lastMetrics = useRef({ x: NaN, y: NaN, z: NaN, visible: null });
 	useFrame(() => {
 		const cam = camRef.current;
 		if (!cam) return;
-		let visible = false;
-		for (const y of [0.1, SUBJECT_HEIGHT_M * 0.94]) {
-			// During motion playback the probe follows the played root, so the
-			// "subject out of frame" caption stays honest.
-			probe.current.set(probeX ?? charA.x, y, probeZ ?? charA.z).project(cam);
-			if (probe.current.z < 1 && Math.abs(probe.current.x) <= 1 && Math.abs(probe.current.y) <= 1) visible = true;
-		}
+		const frame = playbackProbeInput.frameRef?.current ?? 0;
+		const current = playbackProbe(playbackProbeInput, frame, charA);
+		const visible = probeVisibility(probe.current, cam, current, SUBJECT_HEIGHT_M);
 		const previous = lastMetrics.current;
 		if (
 			Math.abs(previous.x - cam.position.x) +

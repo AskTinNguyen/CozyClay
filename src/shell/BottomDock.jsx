@@ -7,14 +7,11 @@ import BoardSlot from "./BoardSlot.jsx";
 import LensScrub from "./lens-scrub.jsx";
 import { ko } from "../locale.js";
 import Timeline, { timelineTake } from "../motion/timeline.jsx";
-<<<<<<< HEAD
-<<<<<<< HEAD
 import { DEFAULT_PLAYBACK_SPEED, sceneObjectNameDisplayKo } from "../app-stage.jsx";
 
 import { trackFeature } from "../analytics.js";
 import { defaultRailRange } from "../camera-rail-schedule.js";
 import { insertPathMark, pathMarks } from "../object-path.js";
-import { playbackFrame, subscribePlaybackFrame } from "../motion/playback-frame-store.js";
 
 // G11: the dock resizes within [220, 480] px, and never so far that the 3D
 // viewport drops under 480 px (top bar 44 + status bar 24 + three 1 px gaps).

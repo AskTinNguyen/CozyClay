@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { shotIndexAtFrame } from "../cuts.js";
 
 // The playhead lives here, outside React: playback ticks write it and only the
@@ -52,6 +52,17 @@ export function commitPlaybackFrame(setReactFrame, onFrame) {
 
 export function usePlaybackSnapshot(getSnapshot) {
 	return useSyncExternalStore(subscribePlaybackFrame, getSnapshot, getSnapshot);
+}
+
+export function usePlaybackEffects({ playing = false, commit = () => {}, onStop = null } = {}) {
+	useEffect(() => {
+		if (!playing) {
+			commit();
+			onStop?.();
+		}
+		// The commit action is recreated by the domain render.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [playing]);
 }
 
 /** The shots domain's timeline frame: React state (owned by the caller) for edits, the store for playback.

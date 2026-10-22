@@ -213,11 +213,14 @@ import {
 	shotAtFrame,
 	shotIndexAtFrame,
 } from "./cuts.js";
+import { playbackFrame } from "./motion/playback-frame-store.js";
+import { usePlaybackSubjectPosition } from "./motion/playback-subject.js";
+import { characterGizmoObject as buildCharacterGizmoObject, characterGizmoView, followCameraActive, playbackSceneWithTrack, updateShotMetrics } from "./stage-gizmo.js";
 import {
 	CameraGlide,
 	CameraRailScenePreview,
 	CaptureRig,
-	Character,
+	PlaybackCharacter,
 	ContextLossGuard,
 	CraneHandles,
 	DEFAULT_CAMERA_POSITION,
@@ -600,11 +603,8 @@ export default function App() {
 	// Preview is the player for the finished motion: entering starts playback,
 	// leaving pauses it. The editor view stays the manipulation surface.
 	const [tlPlaying, setTlPlaying] = useState(false);
-	// Playback ticks write the frame store, not React state; stopping commits
-	// the store frame back so export, keys and agent reads see where it stopped.
-	useEffect(() => {
-		if (!tlPlaying) shotsDomain.commitPlaybackFrame();
-	}, [tlPlaying]);
+	// Playback ticks stay outside React; stopping commits the live frame back to
+	// the edit-time state so exports and agent reads see the stopped frame.
 	useEffect(() => {
 		if (playgroundMode && tlPlaying) window.parent?.postMessage({ type: "cozyclay:playground-nav", kind: "play" }, "*");
 	}, [playgroundMode, tlPlaying]);
@@ -1097,6 +1097,7 @@ export default function App() {
 		get tlFrame() { return tlFrame; },
 		get tlFrameCount() { return tlFrameCount; },
 		get tlFrameRef() { return tlFrameRef; },
+		get propFrameRef() { return propFrameRef; },
 		
 		
 		get waitForRig() { return waitForRig; },
@@ -1764,9 +1765,9 @@ export default function App() {
 	// The frame props follow. Live playback keeps it at the playhead; the
 	// offscreen export drives it per captured frame without re-rendering.
 	const propFrameRef = useRef(0);
-
 	const [cameraPos, setCameraPos] = useState(DEFAULT_CAMERA_POSITION);
 	const [subjectVisible, setSubjectVisible] = useState(true);
+	const subjectVisibleRef = useRef(true);
 	const mcpCaptureRef = useRef(null);
 	const liveControlRef = useRef(null);
 	const [liveWorkspaceHandle, setLiveWorkspaceHandle] = useState(null);
@@ -1979,7 +1980,11 @@ export default function App() {
 	}
 
 
-	const renderActive = useRenderActivity(tlPlaying || movePlaying);
+	const renderActive = useRenderActivity(tlPlaying || movePlaying, { playing: tlPlaying, commit: shotsDomain.commitPlaybackFrame, onStop: () => {
+		const position = shotCameraPosRef.current;
+		if (position) setCameraPos(position);
+		setSubjectVisible(subjectVisibleRef.current);
+	} });
 	 // the clip length on the production clock
 
 	// Keep the imperative frame in step with the playhead for live playback;
@@ -2562,11 +2567,10 @@ export default function App() {
 	// Cast render props, memoized with Character itself (React.memo): during
 	// playback the playhead ticks 24 times a second, and a character whose
 	// props did not change must not re-render its subtree.
+	/* eslint-disable react-hooks/preserve-manual-memoization */
 	const characterViews = useMemo(() => characters.flatMap((entry, index) => {
 		if (entry.hidden) return [];
 		const pickId = index === 0 ? "A" : index === 1 ? "B" : entry.id;
-		// Each cast member is driven by ITS OWN clip: the active one reads
-		// the editing buffer, the others their stored session motion.
 		const clip = entry.id === activeChar.id ? motion : entry.sessionMotion;
 		const placement = placementAt(entry, tlFrame, {
 			shotAt: frame => shotAtFrame(shots, frame),
@@ -2574,6 +2578,8 @@ export default function App() {
 		});
 		return [{
 			id: entry.id,
+			entry,
+			clip,
 			model: entry.model,
 			...(isProxyFigure(entry) ? {} : { url: characterModelUrl(entry.model) }),
 			position: [placement.x, entry.y ?? 0, placement.z],
@@ -2583,47 +2589,27 @@ export default function App() {
 			partColoursMode,
 			pose: clip ? null : (placement.pose ?? DEFAULT_POSE),
 			posture: placement.posture,
-			// The stature the entry's take was extracted at. It rides with the
-			// clip, never separately — see Character for why.
 			scale: entry.scale ?? 1,
 			...(isProxyFigure(entry) ? {} : { onRig: reportRig(entry.id) }),
 			pickId,
 			parent: entry.parent ?? null,
 		}];
 	}), [characters, activeChar.id, motion, shots, tlFrame, partColoursEnabled, partColoursMode]);
+	/* eslint-enable react-hooks/preserve-manual-memoization */
 	// Where the selection gizmo stands: same driving rules as the render,
 	// for the active (selected) cast member only. Gated on the HIERARCHY
 	// selection, not the sticky active layer — the layer stays on the last
 	// character so the motion tab keeps working, but a move gizmo hanging in
 	// the viewport while the camera or a prop is selected reads as a stray
 	// widget.
-	const gizmoView = useMemo(() => {
-		if (!charIdFromHierarchyId(selectedHierarchyId)) return null;
-		const entry = characters.find((item) => item.id === activeChar.id);
-		if (!entry || entry.hidden) return null;
-		const hasTake = activeChar.id === activeCharacterId ? Boolean(motion) : Boolean(activeChar.sessionMotion);
-		const placement = hasTake ? entry : placementAt(entry, tlFrame, { shotAt: frame => shotAtFrame(shots, frame) });
-		return { position: [placement.x, entry.y ?? 0, placement.z], rot: placement.rot };
-	}, [characters, activeChar.id, motion, shots, tlFrame, selectedHierarchyId]);
+	const gizmoView = characterGizmoView({
+		selected: Boolean(charIdFromHierarchyId(selectedHierarchyId)), characters, activeCharacterId,
+		activeCharacter: activeChar, motion, shots, activeId: activeChar.id, frame: tlFrame,
+	});
 	// The cast rides the SAME gizmo as scene objects — one movement grammar
 	// for everything on stage. The proxy hands ObjectGizmo the object shape
 	// it expects; `height` puts the pivot at the hips like a prop's centre.
-	const characterGizmoObject = useMemo(() => {
-		if (!gizmoView) return null;
-		const entry = characters.find((item) => item.id === activeChar.id);
-		return {
-			id: "__character__",
-			x: gizmoView.position[0],
-			y: gizmoView.position[1],
-			z: gizmoView.position[2],
-			height: 1.15,
-			footprint: { width: 0.6, depth: 0.6 },
-			rotY: gizmoView.rot ?? entry?.rot ?? 0,
-			scaleX: entry?.scale ?? 1,
-			scaleY: entry?.scale ?? 1,
-			scaleZ: entry?.scale ?? 1,
-		};
-	}, [gizmoView, characters, activeChar.id]);
+	const characterGizmoObject = buildCharacterGizmoObject(gizmoView, characters.find((item) => item.id === activeChar.id));
 
 	/* --------------------- per-character layer buffers ---------------------
 	 * waypoints / motion above are the EDITING BUFFER of the
@@ -3685,7 +3671,7 @@ export default function App() {
 	// (test/motion3/qa-motion3-*-browser.mjs). Harmless in normal use.
 	useEffect(() => {
 	window.__cozyclay = {
-			runStudioAction, setFrame: setTlFrame,
+			runStudioAction, setFrame: setTlFrame, setPlaying: setTlPlaying,
 			rigA: activeRig, motion, tlFrame, frameCount: tlFrameCount, playing: tlPlaying, ikMode, ikChains, ikFocus, contactRadii: ikChains?.values().next().value?.contactRadii ?? null, ik: ikStateRef.current,
 			rangePins, rangePinResiduals,
 			rangePinApplySpec: motionDomain.rangePinApplySpec,
@@ -3867,11 +3853,7 @@ export default function App() {
 			return { x: at.x, z: at.z };
 		};
 	}, [charA.parent, charA.y, sceneObjects, tlFrameCount, tlFps]);
-	const motionPos = useMemo(() => {
-		if (!motion && !subjectCarry) return null;
-		const subject = sampleAt(playbackSceneBase, null, tlFrame).subject;
-		return subjectCarry ? subjectCarry(subject, tlFrame) : subject;
-	}, [motion, subjectCarry, playbackSceneBase, tlFrame]);
+	const motionPos = usePlaybackSubjectPosition({ motion, subjectCarry, scene: playbackSceneBase, frame: tlFrame });
 
 	// The subject's full per-frame scene trajectory — what the follow camera
 	// is derived from. Without a loaded motion, and riding nothing, the subject
@@ -3892,11 +3874,7 @@ export default function App() {
 	// A rail shot with an aim holds its cast (or a world point) instead of the subject.
 	const followTrack = useShotCameraTracks({ shots, subjectTrack, subjectId: charA.id, fps: tlFps, yawDeg: charA.rot, filmback, characters, objects: sceneObjects, frameCount: tlFrameCount, activeId: activeChar.id, motion });
 
-	const playbackScene = useMemo(() => ({
-		...playbackSceneBase,
-		subjectTrack,
-		cameraTrack: followTrack,
-	}), [playbackSceneBase, subjectTrack, followTrack]);
+	const playbackScene = useMemo(() => playbackSceneWithTrack(playbackSceneBase, subjectTrack, followTrack), [playbackSceneBase, subjectTrack, followTrack]);
 
 	// Browser acceptance seam: it invokes the exact production exporter but
 	// suppresses the download, returning only serializable evidence.
@@ -3937,8 +3915,7 @@ export default function App() {
 
 	// The follow camera owns the shot camera in the same situations key
 	// following would: never while an authoring mode holds the viewport.
-	const followCamActive =
-		activeCamera.mode !== "keys" && !!followTrack?.[tlFrame] && (preview || (!ikMode && !waypointMode && !posing));
+	const followCamActive = followCameraActive(activeCamera.mode, followTrack, tlPlaying ? playbackFrame() : tlFrame, preview, ikMode, waypointMode, posing);
 
 	// Implied locomotion speed per authored segment, on the timeline clock
 	// (m/s is physical, so the judge always uses tlFps). Shown in the
@@ -4795,7 +4772,10 @@ export default function App() {
 									take={{ frameCount: tlFrameCount, fps: tlFps, objectTracks }}
 									registryRef={carrierRegistryRef}
 								>
-									<Character
+									<PlaybackCharacter
+										entry={view.entry}
+										clip={view.clip}
+										shots={shots}
 										url={view.url}
 										{...{ model: view.model, posture: view.posture }}
 										position={view.position}
@@ -4852,19 +4832,10 @@ export default function App() {
 								charA={charA}
 								charB={charB}
 								showB={showB}
-								probeX={motionPos ? motionPos.x : charA.x}
-								probeZ={motionPos ? motionPos.z : charA.z}
+								probe={{ scene: playbackSceneBase, frameRef: propFrameRef, carry: subjectCarry }}
 								camRef={shotCamRef}
 								look={look}
-								onMetrics={(p, visible) => {
-									shotCameraPosRef.current = { x: p.x, y: p.y, z: p.z };
-									setCameraPos((prev) =>
-										Math.abs(prev.x - p.x) + Math.abs(prev.y - p.y) + Math.abs(prev.z - p.z) > 1e-4
-											? { x: p.x, y: p.y, z: p.z }
-											: prev,
-									);
-									setSubjectVisible((prev) => (prev === visible ? prev : visible));
-								}}
+								onMetrics={(p, visible) => updateShotMetrics({ position: p, visible, playing: tlPlaying, setCameraPos, setSubjectVisible, cameraRef: shotCameraPosRef, visibleRef: subjectVisibleRef })}
 							/>
 							<MoveRig
 								playing={movePlaying}
