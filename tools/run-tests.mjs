@@ -88,7 +88,7 @@ const NODE_FILES = [
 	"test/verify-sculpt-compare-command.mjs",
 	"test/verify-sculpt-panel.mjs",
 	"test/verify-sculpt-blueprint.mjs",
-	"test/verify-sculpt-mode.mjs",
+	"test/verify-sculpt-mode.mjs", "test/verify-sculpt-csg.mjs",
 	"test/verify-route-owner.mjs",
 	"test/verify-part-colours.mjs",
 	"test/verify-asset-shelf.mjs",

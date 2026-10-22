@@ -18,6 +18,7 @@
 import { RecipeError, readVector, tidy } from "./sculpt-recipe-read.js";
 import { SCULPT_SHAPES, SCULPT_SHAPE_KEYS, SCULPT_SHAPE_SPECS } from "./sculpt-shapes.js";
 import { SCULPT_PART_FIELDS } from "./sculpt-part-fields.js";
+import { checkSculptCutters } from "./sculpt-cutters.js";
 
 const SCULPT_RECIPE_VERSION = 1;
 export const SCULPT_LIMITS = Object.freeze({
@@ -150,6 +151,7 @@ export function normalizeSculptRecipe(input) {
 			seen.add(part.id);
 		}
 		partDepths(parts);
+		checkSculptCutters(parts);
 		const recipe = { version: SCULPT_RECIPE_VERSION, parts };
 		const count = expandSculptParts(recipe).length;
 		if (count > SCULPT_LIMITS.maxParts) {
@@ -308,10 +310,11 @@ function localCorners(part) {
 	return corners;
 }
 
+/** A cutter (op) is not drawn and only takes from its parent, so it never widens the box. */
 export function sculptBounds(recipe) {
 	const min = [Infinity, Infinity, Infinity];
 	const max = [-Infinity, -Infinity, -Infinity];
-	for (const part of expandSculptParts(recipe)) {
+	for (const part of expandSculptParts(recipe).filter((drawn) => !drawn.op)) {
 		for (const corner of localCorners(part)) {
 			const point = applyMatrix(part.matrix, corner);
 			for (let axis = 0; axis < 3; axis += 1) {

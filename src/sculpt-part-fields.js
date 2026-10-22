@@ -5,5 +5,6 @@
  * (sculpt-recipe-read.js) and writes the normalized value onto the part.
  * Pure: no three.js.
  */
+import { SCULPT_OP_FIELD } from "./sculpt-cutters.js";
 
-export const SCULPT_PART_FIELDS = Object.freeze([]);
+export const SCULPT_PART_FIELDS = Object.freeze([SCULPT_OP_FIELD]);

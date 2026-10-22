@@ -127,9 +127,9 @@ function convexHull(points) {
 	return lower.slice(0, -1).concat(upper.slice(0, -1));
 }
 
-/** Projected convex outline of every drawn part, in view metres. Frames keep their hole. */
+/** Projected convex outline of every drawn part, in view metres. Frames keep their hole. A cutter (op) adds no area and cuts no hole: the reference mask fills enclosed holes anyway, and an intersect's parent keeps its uncut outline. */
 export function sculptViewPolygons(recipe, { yaw = 0, elevation = 0 } = {}) {
-	return expandSculptParts(recipe).map((part) => {
+	return expandSculptParts(recipe).filter((part) => !part.op).map((part) => {
 		const project = (point) => viewProject(applyMatrix(part.matrix, point), yaw, elevation);
 		const spec = SCULPT_SHAPE_SPECS[part.shape];
 		// See-through only where the front and back openings overlap; the front

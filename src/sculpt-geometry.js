@@ -13,6 +13,7 @@ import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import { expandSculptParts } from "./sculpt-recipe.js";
 import { BLOB_TAPER } from "./sculpt-shapes.js";
+import { cutSculptGeometry } from "./sculpt-csg.js";
 
 const CLAY_ROUGHNESS = 0.82;
 
@@ -113,9 +114,13 @@ export function buildSculptGroup(recipe, { materialFor } = {}) {
 	const group = new THREE.Group();
 	group.userData.sculpt = true;
 	const matrix = new THREE.Matrix4();
-	for (const part of expandSculptParts(recipe)) {
+	const parts = expandSculptParts(recipe);
+	for (const part of parts) {
+		// A cutter (op) is never drawn: it cuts its parent's geometry instead.
+		if (part.op) continue;
+		const geometry = cutSculptGeometry(sculptPartGeometry(part), part, parts, sculptPartGeometry);
 		const material = materialFor ? materialFor(part) : new THREE.MeshStandardMaterial({ color: part.color, roughness: CLAY_ROUGHNESS, metalness: 0 });
-		const mesh = new THREE.Mesh(sculptPartGeometry(part), material);
+		const mesh = new THREE.Mesh(geometry, material);
 		mesh.name = part.id;
 		mesh.userData.sculptPart = part.id;
 		matrix.fromArray(part.matrix);
