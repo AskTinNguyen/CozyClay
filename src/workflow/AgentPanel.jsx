@@ -7,8 +7,7 @@ import { ko } from "../locale.js";
 import {
 	AGENT_PANEL_OVERLAY_BREAKPOINT,
 	AGENT_PANEL_RAIL_WIDTH,
-	AGENT_PANEL_WIDTH_MAX,
-	AGENT_PANEL_WIDTH_MIN,
+	AGENT_PANEL_WIDTH_MAX, AGENT_PANEL_WIDTH_MIN,
 	AGENT_STATES,
 	agentServerUnavailable,
 	describeActivity,
@@ -29,8 +28,7 @@ import {
 	formatTurnClock,
 	formatResetIn,
 	readStoredPanelWidth,
-	storeModel,
-	storePanelWidth,
+	storeModel, storePanelWidth,
 	STUDIO_SESSION_STORAGE_KEY,
 	selectedModelRoles,
 	shortModelId,
@@ -43,6 +41,7 @@ const TaskBoard = lazy(() => import("./TaskBoard.jsx"));
 import { AgentProgressCard } from "./AgentProgressCard.jsx";
 import { LoginPanel } from "./LoginPanel.jsx";
 import { TurnSteps } from "./AgentTurnSteps.jsx";
+import { PlanCard } from "./AgentPlanCard.jsx";
 import { ReplyText } from "./AgentReplyText.jsx";
 import { stepLabel, turnLayout } from "./agent-turn.js";
 
@@ -908,6 +907,7 @@ export default function AgentPanel({
 				if (item.kind === "receipt") return <div className="agent-row" key={item.id}><ReceiptCard item={item} /></div>;
 				if (item.kind === "failure") return <div className="agent-row" key={item.id}><FailureCard failure={item.failure} onRetry={() => runTurn(chat.lastPrompt)} onFixKey={openProviderKeys} /></div>;
 				if (item.kind === "supervisor") return <div className="agent-row" key={item.id}><SupervisorCard note={item} onSend={(text) => { store.setDraft(text); runTurn(text); }} /></div>;
+				if (item.kind === "plan") return <PlanCard key={item.id} plan={item} live={streaming && !item.outcome} />;
 				return <div className="agent-row" key={item.id}><ImageResultCard image={item} onUse={(image) => store.applyImage(image.id)} onUndo={(image) => store.undoImage(image.id)} onRegenerate={() => runTurn(chat.lastPrompt)} onOpen={setLightbox} /></div>;
 			})}
 
