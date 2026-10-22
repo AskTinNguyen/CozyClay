@@ -512,8 +512,8 @@ export function createAgentHandler({ auth = defaultAuth, codex, models, codexBas
 		const tools = createStudioTools({ liveHub: hub, workspaceHandle: value.context.host.workspaceHandle, previsMode: value.context.scene?.previsMode, session: { signal: controller.signal, admission, actionIndex: current?.actionIndex ?? [], baseline: value.context }, resolveImage: async (id, correlation) => hub.command("resolve_studio_image", { imageId: id, ...correlation }, value.context.host.workspaceHandle) });
 		const modelTools = tools.map(tool => ({
 			...tool,
-			handler: async args => {
-				const result = await tool.handler(args);
+			handler: async (args, call) => {
+				const result = await tool.handler(args, call);
 				if (!result || !Array.isArray(result.visualRefs) || !result.visualRefs.length) return result;
 					const ref = result.visualRefs.find(item => item?.imageId || item?.id);
 				if (!ref) return result;
