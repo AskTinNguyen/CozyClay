@@ -82,7 +82,8 @@ export function createRepairWatch() {
 		line.noted = Boolean(kind) && !passed;
 		if (!kind) return {};
 		// the take to leave on the character: this compile's when it installed itself; else what the line put on
-		// when the character still carries it here and the pick does not beat it; else the pick
+		// when the character still carries it here and the pick does not beat it; else the pick (a take plays in the
+		// character's placement frame, take.js, so one baked before a move no longer meets the scene where it stands)
 		const held = line.held, keeps = installed || (held && held.specId === current && held.at === at && !better(line.pick, held));
 		const install = keeps || line.pick.take === undefined ? undefined : { specId: line.pick.specId, take: line.pick.take };
 		if (install) line.held = line.pick;

@@ -69,8 +69,8 @@ const roomAfter = (ctx, from) => Math.min(ctx.fit.last ?? Infinity, ...(ctx.use 
  *   else the walk's own steps at its band's edge when they still end within REACH_TOL of to (a walk that near is not fitted);
  *   else, or for a heading that points away from to, a line in ctx.fit.refusals with what the walk would do and needs.
  * The last two were refusals until the bench (S7, S10: 3 of 7 walkTo refusals in 30 merged runs, 4 walks): each had one in
- * the bands (step 0.7 m, 1.33-1.5 steps a second, ending 0.04-0.07 m short; or 4-5 steps at 1.6-1.71 steps a second ending
- * 2-15 frames later into free frames) whose whole take had no foot, knee or float problem in the walk the in-band walks lacked.
+ * the bands (step 0.7 m at 1.33-1.5 steps a second ending 0.05-0.07 m short, or 4 steps at 1.71 steps a second ending 2
+ * frames later into free frames) whose whole take had no foot, knee or float problem in the walk the in-band walks lacked.
  * Deterministic: a walk at a candidate count is estimated (its end is linear in the stride) and the chosen one walked
  * once more to set its stride. -> { gen, adjust } with the fitted gen.
  */
