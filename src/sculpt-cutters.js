@@ -34,6 +34,7 @@ export function checkSculptCutters(parts) {
 	const byId = new Map(parts.map((part) => [part.id, part]));
 	for (const part of parts) {
 		const parent = byId.get(part.parent);
+		if (part.op && parent?.shape === "scatter") throw new RecipeError(`parts[${part.id}].op`, `"${parent.id}" is a scatter, which is drawn as instances and cannot be cut`);
 		if (!parent?.op) continue;
 		throw new RecipeError(`parts[${part.id}].parent`, part.op
 			? `"${parent.id}" is a cutter, and a cutter only cuts drawn parts; give this one parent "${parent.parent}" so both cut it`

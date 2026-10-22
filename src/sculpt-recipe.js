@@ -15,7 +15,7 @@
  * Contract: docs/sculpt-from-image.md.
  */
 
-import { RecipeError, readVector, tidy } from "./sculpt-recipe-read.js";
+import { RecipeError, readHexColor, readVector, tidy } from "./sculpt-recipe-read.js";
 import { SCULPT_SHAPES, SCULPT_SHAPE_KEYS, SCULPT_SHAPE_SPECS } from "./sculpt-shapes.js";
 import { SCULPT_PART_FIELDS } from "./sculpt-part-fields.js";
 import { checkSculptCutters } from "./sculpt-cutters.js";
@@ -28,6 +28,8 @@ export const SCULPT_LIMITS = Object.freeze({
 	maxExtent: 20,
 	maxOffset: 20,
 	maxDepth: 8,
+	/** scatter items across the whole recipe, after mirrors */
+	maxScatterItems: 12000,
 });
 const SCULPT_DEFAULT_COLOR = "#c2c6c8";
 /** The suffix a mirrored copy's id gets. `.` is outside the id alphabet, so a
@@ -36,23 +38,13 @@ export const SCULPT_MIRROR_SUFFIX = ".mirror";
 const MIN_HEIGHT = 0.05;
 
 const ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,39}$/;
-const HEX_SHORT = /^#?([0-9a-f]{3})$/i;
-const HEX_LONG = /^#?([0-9a-f]{6})$/i;
 const PART_KEYS = new Set(["id", "shape", "size", "position", "rotation", "color", "parent", "mirror", ...SCULPT_SHAPE_KEYS, ...SCULPT_PART_FIELDS.map((field) => field.key)]);
 const wrapDegrees = (deg) => {
 	const wrapped = ((((deg + 180) % 360) + 360) % 360) - 180;
 	return wrapped === -180 ? 180 : wrapped;
 };
 
-function readColor(value, path) {
-	if (value === undefined) return SCULPT_DEFAULT_COLOR;
-	const text = typeof value === "string" ? value.trim() : "";
-	const short = HEX_SHORT.exec(text);
-	if (short) return `#${short[1].toLowerCase().replace(/./g, (digit) => digit + digit)}`;
-	const long = HEX_LONG.exec(text);
-	if (long) return `#${long[1].toLowerCase()}`;
-	throw new RecipeError(path, `colour must be #rgb or #rrggbb, got ${JSON.stringify(value)}`);
-}
+const readColor = (value, path) => (value === undefined ? SCULPT_DEFAULT_COLOR : readHexColor(value, path));
 
 function normalizePart(raw, index) {
 	const at = `parts[${index}]`;
@@ -153,9 +145,14 @@ export function normalizeSculptRecipe(input) {
 		partDepths(parts);
 		checkSculptCutters(parts);
 		const recipe = { version: SCULPT_RECIPE_VERSION, parts };
-		const count = expandSculptParts(recipe).length;
-		if (count > SCULPT_LIMITS.maxParts) {
-			throw new RecipeError("recipe.parts", `expands to ${count} parts with mirrors; the limit is ${SCULPT_LIMITS.maxParts}`);
+		const drawn = expandSculptParts(recipe);
+		if (drawn.length > SCULPT_LIMITS.maxParts) {
+			throw new RecipeError("recipe.parts", `expands to ${drawn.length} parts with mirrors; the limit is ${SCULPT_LIMITS.maxParts}`);
+		}
+		// A scatter is one part but many drawn items; the frame rate pays per item.
+		const items = drawn.reduce((sum, part) => sum + (part.shape === "scatter" ? part.count : 0), 0);
+		if (items > SCULPT_LIMITS.maxScatterItems) {
+			throw new RecipeError("recipe.parts", `scatter parts draw ${items} items with mirrors; the limit is ${SCULPT_LIMITS.maxScatterItems}`);
 		}
 		return { ok: true, recipe };
 	} catch (error) {
@@ -166,8 +163,9 @@ export function normalizeSculptRecipe(input) {
 
 /**
  * A recipe edited part by part instead of rewritten. `edits` are applied in
- * order: `{ set: id, ...fields }` merges fields into one part (`parent: null`
- * and `mirror: false` clear), `{ add: part }` appends, `{ remove: id }` drops a
+ * order: `{ set: id, ...fields }` merges fields into one part (`parent: null`,
+ * `mirror: false` and null for an optional field such as `detail` clear),
+ * `{ add: part }` appends, `{ remove: id }` drops a
  * part and every part below it. The result is normalized as a whole, so an edit
  * that leaves the recipe undrawable is refused with the usual path.
  * Returns `{ ok: true, recipe, changed: [ids] }` or `{ ok: false, error, path }`.
@@ -205,6 +203,7 @@ export function patchSculptRecipe(recipe, edits) {
 		const next = { ...parts[found], ...fields };
 		if (fields.parent === null) delete next.parent;
 		if (fields.mirror === false) delete next.mirror;
+		for (const field of SCULPT_PART_FIELDS) if (fields[field.key] === null) delete next[field.key];
 		// Shape-specific defaults belong to the old shape, not the new one.
 		if ("shape" in fields) for (const key of SCULPT_SHAPE_KEYS) if (!(key in fields)) delete next[key];
 		parts[found] = next;

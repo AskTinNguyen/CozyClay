@@ -162,20 +162,17 @@ function Cutout({ object }) {
 
 /**
  * A sculpt: the clay parts its recipe describes, rebuilt only when the recipe
- * or the look changes. Each part keeps its own clay colour; auto-colour paints
- * the whole sculpt flat like any other prop, because it is one object.
+ * or the look changes. The shaded look is buildSculptGroup's own clay (part
+ * colours, gradients, scatter tints); auto-colour paints the whole sculpt flat
+ * like any other prop, because it is one object. Depth rank rides on either.
  */
 function Sculpt({ object, depthRank = 0 }) {
 	const { recipe, autoColor } = object;
-	const group = useMemo(
-		() => buildSculptGroup(recipe, {
-			materialFor: (part) => new THREE.MeshStandardMaterial({
-				...(autoColor ? autoFlat(autoColor) : { color: part.color, roughness: 0.82, metalness: 0 }),
-				...depthRankProps(depthRank),
-			}),
-		}),
-		[recipe, autoColor, depthRank],
-	);
+	const group = useMemo(() => {
+		const built = buildSculptGroup(recipe, autoColor ? { materialFor: () => new THREE.MeshStandardMaterial(autoFlat(autoColor)) } : {});
+		built.traverse((node) => node.material && Object.assign(node.material, depthRankProps(depthRank)));
+		return built;
+	}, [recipe, autoColor, depthRank]);
 	useEffect(() => () => disposeSculptGroup(group), [group]);
 	return <primitive object={group} />;
 }

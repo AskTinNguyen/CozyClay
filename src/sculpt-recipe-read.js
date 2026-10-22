@@ -33,3 +33,33 @@ export function readUnit(value, path, fallback, min, max) {
 	}
 	return tidy(value);
 }
+
+export function readInteger(value, path, fallback, min, max) {
+	if (value === undefined && fallback !== undefined) return fallback;
+	if (!Number.isInteger(value) || value < min || value > max) {
+		throw new RecipeError(path, `must be a whole number from ${min} to ${max}, got ${JSON.stringify(value)}`);
+	}
+	return value;
+}
+
+/** A pattern seed (detail bumps, scatter layout): 0 unless the recipe picks another. */
+export const readSeed = (value, path) => readInteger(value, path, 0, 0, 999999);
+
+export function readChoice(value, path, fallback, choices) {
+	if (value === undefined && fallback !== undefined) return fallback;
+	if (!choices.includes(value)) throw new RecipeError(path, `must be one of ${choices.join(", ")}; got ${JSON.stringify(value)}`);
+	return value;
+}
+
+const HEX_SHORT = /^#?([0-9a-f]{3})$/i;
+const HEX_LONG = /^#?([0-9a-f]{6})$/i;
+
+/** `#rgb` or `#rrggbb` (the `#` optional), as lower-case `#rrggbb`. */
+export function readHexColor(value, path) {
+	const text = typeof value === "string" ? value.trim() : "";
+	const short = HEX_SHORT.exec(text);
+	if (short) return `#${short[1].toLowerCase().replace(/./g, (digit) => digit + digit)}`;
+	const long = HEX_LONG.exec(text);
+	if (long) return `#${long[1].toLowerCase()}`;
+	throw new RecipeError(path, `colour must be #rgb or #rrggbb, got ${JSON.stringify(value)}`);
+}
