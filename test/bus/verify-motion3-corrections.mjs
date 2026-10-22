@@ -123,6 +123,21 @@ const objectKey = refused(() => compile(fixedTake({ objects: { [CUP.group]: { ke
 expect("a key, or an object key, after the walk's stepping: those frames are not free, still refused", [settleKey, objectKey].every(m => /^MOTION_SPEC_INVALID: use\[1\] walkTo: steps 3 at period 18/.test(m)), json([settleKey, objectKey]));
 const short = refused(() => compile({ ...fixedTake(), frames: 92 }));
 expect("the take's last frame bounds the room: a walk that would end past it is still refused", /^MOTION_SPEC_INVALID: use\[1\] walkTo: steps 3 at period 18/.test(short), short);
+// a to against a body: the bench replay (n=692) had walks fitted onto a to 0.22-0.30 m from a box the body then bent over;
+// the walk stops 0.5 legs (0.41 m on the Y Bot) before a low body ahead instead, named; a carried body or a far one keeps the fit
+const boxRec = { id: "crate", name: "crate", renderer: "cube", x: 0, y: 0, z: 1, rot: 0, rotX: 0, rotZ: 0, scaleX: 0.4, scaleY: 0.3, scaleZ: 0.3, footprint: { width: 1, depth: 1 }, height: 1 };
+const crate = motionScene([boxRec]);
+const atCrate = compile(walkSpec({ to: [0, 0.6], steps: 3 }), crate);
+expect("to 0.25 m from a low box ahead: the walk ends 0.41 m before it, at the nearest natural gait, named", off(feetAt(atCrate), [0, 0.44]) <= 0.1
+	&& /^corrected: use\[1\] walkTo: .*so steps \d end at \[0, 0\.4\d\], 0\.4\d m before crate \(to \[0, 0\.6\] is against it\)/.test(atCrate.notes?.[0] ?? ""), json([atCrate.notes, feetAt(atCrate)]));
+const shy = compile(walkSpec({ to: [0, 0.3], steps: 2 }), crate);
+expect("a to clear of the box keeps the exact fit", off(feetAt(shy), [0, 0.3]) <= 0.1 && /so steps 2 end at to \[0, 0\.3\]/.test(shy.notes?.[0] ?? ""), json(shy.notes));
+// a table (higher than 0.65 legs): the standing body clears it by 0.05 m (legs, feet, hips), so a cup on it stays in reach
+const atTable = compile({ ...base, use: [{ skill: "standIdle", f0: 0, args: { at: [0, -1.2] } }, { skill: "walkTo", f0: 2, args: { to: [0, 0.6], steps: 3 } }] }, scene);
+expect("to at a table's edge: the walk ends where the standing body clears it (0.13 m from it), named", off(feetAt(atTable), [0, 0.47]) <= 0.02
+	&& /so steps \d end at \[0, 0\.47\], 0\.13 m before cube \(to \[0, 0\.6\] is against it\)/.test(atTable.notes?.[0] ?? ""), json([atTable.notes, feetAt(atTable)]));
+const carried = compile({ ...walkSpec({ to: [0, 0.6], steps: 3 }), props: { grip: { hand: "l", origin: ["LeftHandIndex2", "LeftHandMiddle2"], points: { fingers: [0, 0, 0] } } }, objects: { crate: { prop: "grip", grab: 1, release: 70 } } }, crate);
+expect("a body the hand carries during the walk is not in its way: the exact fit", off(feetAt(carried), [0, 0.6]) <= 0.1 && !/ m before /.test(json(carried.notes)), json(carried.notes));
 const away = refused(() => compile(walkSpec({ to: [0, 2], heading: 180 })));
 expect("a heading that points away from to is refused (session 4a3423e0)", /use\[1\] walkTo: heading 180 points 180 deg away from to \[0, 2\] \(it lies at heading 0\)/.test(away), away);
 expect("a saved take (lenient) walks as it always did: no fit, no refusal", compile(walkSpec({ to: [0, 1.6], steps: 3 }), null, { lenient: true }).spec.use[1].args.step === undefined);

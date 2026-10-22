@@ -1,9 +1,10 @@
 // Basic skills: stand, walk, reach-and-grip. Each reads the channel state the earlier keys
 // leave at its f0 and returns keys plus whatever anchors, props, fits and checks it needs.
-import { add, apply, len, ry, sub } from "../compiler/math.js";
-import { walk, stateAt } from "../compiler/walk.js";
+import { add, apply, ry } from "../compiler/math.js";
+import { walk } from "../compiler/walk.js";
 import { keyBook, skillError } from "./book.js";
 import { walkEnd } from "./info.js";
+import { fitTo, walkEndAt, r2, xzText, REACH_TOL } from "./walk-fit.js";
 import { GRASP_FINGERS, GRASP_POINTS } from "../compiler/vocab.js";
 import { clearStance, reachStance } from "./stance.js";
 import { CLOSE, GAZE, gazeAt, headKeyed, earlyTransport, holdsOpen, transportKeys } from "./reach-human.js";
@@ -35,113 +36,6 @@ export function standIdle(ctx) {
 	const keys = [{ f: ctx.f0, set }];
 	if (args.until !== undefined) keys.push({ f: args.until, set: structuredClone(set) });
 	return { keys, end: args.until ?? ctx.f0, ...(placed ? { placed } : {}) };
-}
-
-/** The feet's midpoint [x, z] once the walk's keys have played out. */
-function walkEndAt(keys) {
-	const st = stateAt(keys, Infinity);
-	return [(st.foot_l[0] + st.foot_r[0]) / 2, (st.foot_l[2] + st.foot_r[2]) / 2];
-}
-const r2 = v => Math.round(v * 100) / 100, xzText = p => `[${p.map(r2).join(", ")}]`;
-// A natural gait for the rig (fitTo): a step STEP of the leg (hip to ankle: 0.25..0.7 m on the Y Bot), the first of a
-// two-step walk FIRST of it (a short shuffle is a natural reposition), CADENCE steps a second, and the step over the cadence
-// within RATIO of WALK_RATIO legs x s: a person's walk ratio (about 6.5 mm per step a minute, 0.39 m x s on a 0.83 m leg)
-// holds from a slow walk to a brisk one, so longer steps come with quicker ones. A stride fitted at a fixed cadence went to
-// 0.87 m at 1.2 steps a second in the agent sessions (a lunge); the walk generator slides or pops in most cadences from a
-// 0.75 m step, and pops above 1.8 steps a second (31 of 47 fitted walks at period 12-13, none at 14-18; a person's brisk walk
-// reaches 2.1).
-const STEP = [0.3, 0.85], FIRST = [0.18, 0.85], CADENCE = [1, 1.8], WALK_RATIO = 0.47, RATIO = [0.7, 1.4], CHANGE = 0.1, REACH_TOL = 0.1, HEADING_TOL = 20;
-const legOf = sk => { const P = sk.restWorldPos, I = sk.index; return len(sub(P[I.LeftLeg], P[I.LeftUpLeg])) + len(sub(P[I.LeftFoot], P[I.LeftLeg])); };
-// the last frame a walk whose stepping ends at `from` may end at: the first later frame another skill starts at, a key of the
-// spec (or an object key, grab or release: ctx.fit.busy) after its stepping, or the take's last frame (ctx.fit.last)
-const roomAfter = (ctx, from) => Math.min(ctx.fit.last ?? Infinity, ...(ctx.use ?? []).filter((x, j) => j !== ctx.index && x?.f0 > ctx.f0).map(x => x.f0),
-	...ctx.keys.filter(k => k.f > from && /^keys\[/.test(k.src ?? "")).map(k => k.f), ...(ctx.fit.busy ?? []).filter(f => f > from));
-
-/**
- * to with steps (C21): the steps walk where they walk, and to only turns the heading, so a walk with both is fitted
- * when ctx.fit asks (correct.js fitWalks, before the spec is stored), in a natural gait (the bands above):
- *   the stride (steps >= 3, the first step keeping its share of it) or the first step (steps 2) that makes the steps end
- *   at to, when it stays in its band and in the walk ratio band at the walk's cadence;
- *   else the step count whose stride is nearest the walk ratio, its stride and cadence in their bands: in the walk's own
- *   stepping time (steps x period frames, the period the one that fits, never ending later; fewer steps stand at the end),
- *   or at the walk's own period when nothing comes after it in a frames "auto" spec (ctx.fit.stretch: it may end later);
- *   else more steps that end later, into frames nothing uses (roomAfter), at the walk's own cadence or a quicker natural one;
- *   else the walk's own steps at its band's edge when they still end within REACH_TOL of to (a walk that near is not fitted);
- *   else, or for a heading that points away from to, a line in ctx.fit.refusals with what the walk would do and needs.
- * The last two were refusals until the bench (S7, S10: 3 of 7 walkTo refusals in 30 merged runs, 4 walks): each had one in
- * the bands (step 0.7 m at 1.33-1.5 steps a second ending 0.05-0.07 m short, or 4 steps at 1.71 steps a second ending 2
- * frames later into free frames) whose whole take had no foot, knee or float problem in the walk the in-band walks lacked.
- * Deterministic: a walk at a candidate count is estimated (its end is linear in the stride) and the chosen one walked
- * once more to set its stride. -> { gen, adjust } with the fitted gen.
- */
-function fitTo(ctx, gen, c0, d, bearing) {
-	const { args, tag, sk } = ctx, steps = gen.steps, h = Array.isArray(args.heading) ? args.heading[1] : args.heading;
-	const off = h === undefined ? 0 : Math.abs(((h - bearing) % 360 + 540) % 360 - 180);
-	if (off > HEADING_TOL) {
-		ctx.fit.refusals.push(`${tag}: heading ${h} points ${Math.round(off)} deg away from to ${xzText(args.to)} (it lies at heading ${Math.round(bearing)}), so the walk would not go there; with to the walk turns toward it by itself: leave heading out, or give heading without to to walk that way`);
-		return { gen };
-	}
-	const period = gen.period ?? 20, swing = gen.swing ?? 14, was = gen.step ?? 0.5, first = gen.firstStep ?? 0.4;
-	if (args.steps === undefined || args.arrive !== undefined || !(steps >= 2) || ![steps, period, swing, was, first].every(Number.isFinite)) return { gen };
-	const u = [Math.sin(bearing * Math.PI / 180), Math.cos(bearing * Math.PI / 180)];
-	const reach = g => { const e = walkEndAt(walk(g, ctx.keys, sk, tag)); return { end: e, along: (e[0] - c0[0]) * u[0] + (e[1] - c0[1]) * u[1] }; };
-	const { end, along } = reach(gen);
-	if (Math.abs(d - along) <= REACH_TOL) return { gen };
-	const fps = ctx.fps ?? 24, leg = legOf(sk), nat = WALK_RATIO * leg, span = steps * period;
-	const band = n => (n >= 3 ? STEP : FIRST).map(x => r2(x * leg)), pLo = Math.ceil(fps / CADENCE[1]), pHi = Math.floor(fps / CADENCE[0]);
-	const stretch = ctx.fit.stretch === true && !(ctx.use ?? []).some((x, j) => j !== ctx.index && x?.f0 > ctx.f0) && !ctx.keys.some(k => k.f > ctx.f0 && /^keys\[/.test(k.src ?? ""));
-	// n steps: the period (its own, or the one that keeps the stepping time), the stride that ends them at to (the end moves
-	// by the first step and a stride a middle step, rest the closing step's share; with steps 3 and up the first step keeps
-	// its share of the stride unless args give it, as a person's first step is a little shorter), whether they stay in their bands
-	const rest = along - first - (steps - 2) * was, share = args.firstStep === undefined ? first / was : 0;
-	const at = (n, pAt) => {
-		const p = pAt ?? (stretch || n === steps ? period : Math.min(Math.max(pHi, period), Math.floor(span / n))), name = n >= 3 ? "step" : "firstStep";
-		const value = n >= 3 ? (d - rest - (share ? 0 : first)) / (share + n - 2) : d - rest, lead = n >= 3 && share ? share * value : first;
-		const [lo, hi] = band(n), ratio = value * p / fps / nat, inBand = (x, [a, b]) => x >= a && x <= b;
-		return { n, p, name, value, ratio, ok: inBand(value, [lo, hi]) && inBand(lead, band(2)) && (p === period || inBand(p, [pLo, pHi])) };
-	};
-	const own = at(steps), most = Math.min(60, Math.ceil(d / band(3)[0]) + 2);
-	let pick = own.ok && own.ratio >= RATIO[0] && own.ratio <= RATIO[1] ? own : null, room, short;
-	// nearest the walk ratio, a step count further from the one asked costing CHANGE of it a step
-	const cost = c => Math.abs(Math.log(c.ratio)) + CHANGE * Math.abs(c.n - steps), nearest = list => list.filter(c => c.ok).sort((a, b) => cost(a) - cost(b) || a.n - b.n)[0];
-	const counts = Array.from({ length: most - 1 }, (_, i) => i + 2);
-	if (!pick) pick = nearest(counts.map(n => at(n)));
-	if (!pick && !stretch) {
-		// more steps, ending later into frames nothing uses: the walk's own period, or the slowest natural one that ends in time
-		room = roomAfter(ctx, ctx.f0 + 16 + span);
-		pick = nearest(counts.filter(n => n > steps).map(n => at(n, Math.min(period, Math.floor((room - ctx.f0 - 34) / n)))).filter(c => c.p >= pLo && c.n * c.p > span));
-	}
-	if (!pick) {
-		// the walk's own steps at its band's edge, when they end within REACH_TOL of to
-		const [lo, hi] = band(steps), value = Math.min(hi, Math.max(lo, own.value)), ratio = value * period / fps / nat, lead = steps >= 3 && share ? share * value : first;
-		const g = { ...gen, [own.name]: r2(value), ...(steps >= 3 && share ? { firstStep: r2(lead) } : {}) };
-		const left = ratio >= RATIO[0] && ratio <= RATIO[1] && lead >= band(2)[0] && lead <= band(2)[1] ? d - reach(g).along : Infinity;
-		if (Math.abs(left) <= REACH_TOL) ({ pick, short } = { pick: { ...own, value: r2(value), ratio }, short: left });
-	}
-	const [sLo, sHi] = band(3), gait = `a natural gait (step ${sLo}..${sHi} m, ${CADENCE[0]}..${CADENCE[1]} steps a second: period ${pLo}..${pHi} at ${fps} fps`;
-	const miss = `${r2(Math.abs(d - along))} m ${along < d ? "short of" : "past"} to ${xzText(args.to)} (${r2(d)} m away)`;
-	if (!pick) {
-		// short: the fewest steps at the longest natural step, at the quickest natural cadence (the least stepping time that reaches)
-		const n = 2 + Math.ceil((d - rest - first) / sHi - 1e-9), e = ctx.f0 + 16 + n * pLo + 18;
-		ctx.fit.refusals.push(`${tag}: steps ${steps} at period ${period} (${span} frames of stepping) walk ${r2(along)} m and end at ${xzText(end)}, ${miss}; ${along < d
-			? `in ${gait}) that takes ${n} steps and ${n * pLo} frames of stepping or more (the walk would end at f${e} or later, not f${ctx.f0 + 16 + span + 18}): leave steps${args.step === undefined ? "" : " and step"} out (walkTo picks the count), or give steps: ${n} and room for the walk before what follows`
-			: `no natural step count ends there: leave steps out (walkTo picks the count)`}`);
-		return { gen };
-	}
-	const timed = pick.p === period ? {} : { period: pick.p, swing: Math.max(2, Math.min(pick.p - 1, Math.round(swing * pick.p / period))) };
-	const lead = pick.n >= 3 && share > 0, strides = v => ({ [pick.name]: r2(v), ...(lead ? { firstStep: r2(share * v) } : {}) });
-	let fitted = { ...gen, steps: pick.n, ...timed, ...strides(pick.value) };
-	const left = short ?? d - reach(fitted).along;
-	if (short === undefined && Math.abs(left) > 0.02) fitted = { ...fitted, ...strides(pick.value + left / (pick.n >= 3 ? share + pick.n - 2 : 1)) };
-	const v = fitted[pick.name], dflt = pick.name === "step" ? was : first, e0 = ctx.f0 + 16 + span + 18, e1 = ctx.f0 + 16 + pick.n * pick.p + 18;
-	const changes = [pick.n !== steps && `steps ${steps} -> ${pick.n}`, timed.period && `period ${period} -> ${timed.period} (swing ${swing} -> ${timed.swing})`, `${pick.name} ${dflt} -> ${v} m`,
-		lead && fitted.firstStep !== first && `firstStep ${first} -> ${fitted.firstStep} m`].filter(Boolean).join(", ");
-	const when = e1 === e0 ? "" : `; it ends f${e1}, not f${e0} (${stretch ? "nothing follows it" : e1 > e0 ? `nothing uses f${e0 + 1}-f${e1}` : `the pose holds to f${e0}`})`;
-	const needs = `steps ${steps} would need a ${own.name} of ${r2(own.value)} m at ${r2(fps / period)} steps a second`;
-	const why = short !== undefined ? ` (${gait}; ${needs})` : pick.n === steps && !timed.period ? ` (at ${pick.name} ${dflt} they walk ${r2(along)} of ${r2(d)} m)` : ` in ${gait}; ${needs})${when}`;
-	const ends = short === undefined ? `end at to ${xzText(args.to)}` : `end ${r2(Math.abs(short))} m ${short > 0 ? "short of" : "past"} to ${xzText(args.to)}, the ${short > 0 ? "longest" : "shortest"} natural step`;
-	const adjust = { args: { ...(pick.n === steps ? {} : { steps: pick.n }), ...timed, [pick.name]: v, ...(lead && fitted.firstStep !== first ? { firstStep: fitted.firstStep } : {}) }, note: `${tag}: ${changes}, so steps ${pick.n} ${ends}${why}` };
-	return { gen: fitted, adjust };
 }
 
 /**
