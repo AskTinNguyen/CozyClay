@@ -12,11 +12,9 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import { expandSculptParts } from "./sculpt-recipe.js";
+import { BLOB_TAPER } from "./sculpt-shapes.js";
 
 const CLAY_ROUGHNESS = 0.82;
-/** How far a full taper narrows a blob's end. A blob at 1.0 would come to a
- * point, which reads as a cone; 0.6 keeps a pear a pear. */
-const BLOB_TAPER = 0.6;
 
 /** roundness 0..1 → superellipse exponent 2..8 */
 const blobExponent = (roundness) => 2 + 6 * roundness;

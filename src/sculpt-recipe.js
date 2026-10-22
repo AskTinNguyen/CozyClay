@@ -15,8 +15,11 @@
  * Contract: docs/sculpt-from-image.md.
  */
 
+import { RecipeError, readVector, tidy } from "./sculpt-recipe-read.js";
+import { SCULPT_SHAPES, SCULPT_SHAPE_KEYS, SCULPT_SHAPE_SPECS } from "./sculpt-shapes.js";
+import { SCULPT_PART_FIELDS } from "./sculpt-part-fields.js";
+
 const SCULPT_RECIPE_VERSION = 1;
-const SCULPT_SHAPES = Object.freeze(["blob", "box", "cylinder", "torus", "frame"]);
 export const SCULPT_LIMITS = Object.freeze({
 	/** after mirrors are expanded */
 	maxParts: 48,
@@ -34,32 +37,11 @@ const MIN_HEIGHT = 0.05;
 const ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,39}$/;
 const HEX_SHORT = /^#?([0-9a-f]{3})$/i;
 const HEX_LONG = /^#?([0-9a-f]{6})$/i;
-const PART_KEYS = new Set(["id", "shape", "size", "position", "rotation", "color", "parent", "mirror", "roundness", "taper", "border"]);
-const SHAPE_KEYS = {
-	blob: new Set(["roundness", "taper"]),
-	box: new Set(["roundness"]),
-	cylinder: new Set(["taper"]),
-	torus: new Set(),
-	frame: new Set(["border"]),
-};
-const DEFAULT_ROUNDNESS = { blob: 0.5, box: 0.1 };
-
-const tidy = (value) => {
-	const rounded = Math.round(value * 1e4) / 1e4;
-	return rounded === 0 ? 0 : rounded;
-};
-const isFiniteNumber = (value) => typeof value === "number" && Number.isFinite(value);
+const PART_KEYS = new Set(["id", "shape", "size", "position", "rotation", "color", "parent", "mirror", ...SCULPT_SHAPE_KEYS, ...SCULPT_PART_FIELDS.map((field) => field.key)]);
 const wrapDegrees = (deg) => {
 	const wrapped = ((((deg + 180) % 360) + 360) % 360) - 180;
 	return wrapped === -180 ? 180 : wrapped;
 };
-
-class RecipeError extends Error {
-	constructor(path, message) {
-		super(`${path}: ${message}`);
-		this.path = path;
-	}
-}
 
 function readColor(value, path) {
 	if (value === undefined) return SCULPT_DEFAULT_COLOR;
@@ -69,23 +51,6 @@ function readColor(value, path) {
 	const long = HEX_LONG.exec(text);
 	if (long) return `#${long[1].toLowerCase()}`;
 	throw new RecipeError(path, `colour must be #rgb or #rrggbb, got ${JSON.stringify(value)}`);
-}
-
-function readVector(value, path, fallback, check) {
-	if (value === undefined && fallback) return [...fallback];
-	if (!Array.isArray(value) || value.length !== 3 || !value.every(isFiniteNumber)) {
-		throw new RecipeError(path, `must be three numbers [x, y, z], got ${JSON.stringify(value)}`);
-	}
-	value.forEach((component, axis) => check(component, `${path}[${axis}]`));
-	return value.map(tidy);
-}
-
-function readUnit(value, path, fallback, min, max) {
-	if (value === undefined) return fallback;
-	if (!isFiniteNumber(value) || value < min || value > max) {
-		throw new RecipeError(path, `must be a number from ${min} to ${max}, got ${JSON.stringify(value)}`);
-	}
-	return tidy(value);
 }
 
 function normalizePart(raw, index) {
@@ -101,8 +66,9 @@ function normalizePart(raw, index) {
 	if (!SCULPT_SHAPES.includes(raw.shape)) {
 		throw new RecipeError(`${where}.shape`, `must be one of ${SCULPT_SHAPES.join(", ")}; got ${JSON.stringify(raw.shape)}`);
 	}
-	for (const key of ["roundness", "taper", "border"]) {
-		if (raw[key] !== undefined && !SHAPE_KEYS[raw.shape].has(key)) {
+	const spec = SCULPT_SHAPE_SPECS[raw.shape];
+	for (const key of SCULPT_SHAPE_KEYS) {
+		if (raw[key] !== undefined && !spec.keys.includes(key)) {
 			throw new RecipeError(`${where}.${key}`, `does not apply to a ${raw.shape}`);
 		}
 	}
@@ -129,20 +95,8 @@ function normalizePart(raw, index) {
 	};
 	if (raw.parent !== undefined) part.parent = raw.parent;
 	if (raw.mirror === true) part.mirror = true;
-	if (SHAPE_KEYS[raw.shape].has("roundness")) part.roundness = readUnit(raw.roundness, `${where}.roundness`, DEFAULT_ROUNDNESS[raw.shape], 0, 1);
-	if (SHAPE_KEYS[raw.shape].has("taper")) part.taper = readUnit(raw.taper, `${where}.taper`, 0, -1, 1);
-	if (raw.shape === "frame") {
-		const limit = Math.min(size[0], size[1]) / 2;
-		const fallback = tidy(Math.min(size[0], size[1]) * 0.15);
-		const border = raw.border === undefined ? fallback : raw.border;
-		if (!isFiniteNumber(border) || border <= 0 || border >= limit) {
-			throw new RecipeError(`${where}.border`, `must be above 0 and below half the frame's smaller side (${tidy(limit)} m), got ${JSON.stringify(raw.border)}`);
-		}
-		part.border = tidy(border);
-	}
-	if (raw.shape === "torus" && size[2] >= Math.min(size[0], size[1])) {
-		throw new RecipeError(`${where}.size`, "a torus's tube (size[2]) must be thinner than its outer diameter");
-	}
+	spec.read(raw, part, where);
+	for (const field of SCULPT_PART_FIELDS) if (raw[field.key] !== undefined) field.read(raw, part, where);
 	return part;
 }
 
@@ -250,7 +204,7 @@ export function patchSculptRecipe(recipe, edits) {
 		if (fields.parent === null) delete next.parent;
 		if (fields.mirror === false) delete next.mirror;
 		// Shape-specific defaults belong to the old shape, not the new one.
-		if ("shape" in fields) for (const key of ["roundness", "taper", "border"]) if (!(key in fields)) delete next[key];
+		if ("shape" in fields) for (const key of SCULPT_SHAPE_KEYS) if (!(key in fields)) delete next[key];
 		parts[found] = next;
 		changed.add(id);
 	}
@@ -298,7 +252,8 @@ function applyMatrix(m, [x, y, z]) {
 
 /** A reflection across x = 0 of the parent frame keeps the part's shape and
  * negates the lateral axis only: position.x flips, and the yaw and roll turn
- * the other way. All five shapes are symmetric about their own x, so no
+ * the other way. Shapes symmetric about their own x need nothing more; the
+ * others reflect their own data (SCULPT_SHAPE_SPECS[shape].mirror), so no
  * negative scale (and no winding flip) is needed. */
 function mirroredPart(part, parentId) {
 	const copy = {
@@ -308,6 +263,7 @@ function mirroredPart(part, parentId) {
 		rotation: [part.rotation[0], tidy(-part.rotation[1]), tidy(-part.rotation[2])],
 	};
 	delete copy.mirror;
+	SCULPT_SHAPE_SPECS[copy.shape].mirror?.(copy);
 	if (parentId !== undefined) copy.parent = parentId;
 	return copy;
 }
