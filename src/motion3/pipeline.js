@@ -8,7 +8,8 @@
 // wrist's bend, qa/wrist-obs.js observeWrist; how mechanical it reads against the agent's own
 // keys, qa/motion-life.js observeLife; a skill
 // paced to fit a short span: observations.paced; a skill whose release or
-// settle the last frame cut: observations.cut), and the timeline and the
+// settle the last frame cut: observations.cut; what the spec asked against what it got, per skill,
+// contact and goal: qa/asked.js observeAsked), and the timeline and the
 // requested probes read the result.
 // liftRequest first takes what the agent obviously meant: spec.probes are request probes, and a
 // bare goals[].moved id is object:<id>; relaxSpec (lenient.js) fixes mechanical slips in the expanded
@@ -32,6 +33,7 @@ import { observeLoad, LOAD_UNITS } from "./load.js";
 import { observeLife, LIFE_UNITS } from "./qa/motion-life.js";
 import { planWalks, applyWalkPlans } from "./walk-plan.js";
 import { relaxSpec } from "./lenient.js";
+import { observeAsked } from "./qa/asked.js";
 
 const ms = t => Math.round(performance.now() - t);
 
@@ -104,6 +106,8 @@ export function compileSpec(sent, { sk, scene }, opts = {}) {
 	const placed = used.filter(u => u.placed).map(u => `${u.skill} f${u.f0}: ${u.placed.why}: at [${u.placed.at.join(", ")}], heading ${u.placed.heading}`);
 	if (placed.length) observations.placed = placed;
 	if (plans.length) observations.planned = plans.map(p => p.note);
+	const got = observeAsked(out, { used, use: resolved?.use, checks: measured.checks, goals: measured.goals, results: qa.goals });
+	if (got) observations.asked = got;
 	const timeline = timelineOf(out, { used, spec: expanded }), probes = asked && runProbes(out, asked, { spec: expanded, sk, scene, notes });
 	return { out, qa, observations, spec: resolved, expanded, used, fixed: out.fixed, search, timeline, ...(probes ? { probes } : {}), ...(notes.length ? { notes } : {}),
 		ms: { compile: compileMs, qa: ms(t2), total: ms(t0) } };
