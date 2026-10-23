@@ -2466,23 +2466,14 @@ export default function App() {
 
 	const liveSceneName = scenes.find((entry) => entry.id === activeSceneId)?.name ?? "";
 	const liveMeta = () => ({
-		project: projectName ?? "Untitled",
-		scene: liveSceneName,
-		cast: appContext.live.characters.length,
-		// The Workflow page embeds this same Studio as a preview. It is a
-		// live editor too, so an agent choosing a workspace must be able to
-		// tell the preview apart from the tab the user is authoring in.
-		...(embedMode ? { embed: true } : {}),
-		// Which live commands this editor answers. A stale tab from an
-		// older build (or a different app on the same port) answers a
-		// different set; the agent picks a workspace that has what it needs.
-		commands: [...Object.keys(liveQueries), ...Object.keys(studioBindingRef.current.handlers)],
+		project: projectName ?? "Untitled", scene: liveSceneName, cast: appContext.live.characters.length,
+		// The Workflow page's embedded preview is a live editor too; mark it apart from the authoring tab.
+		// Commands: what this editor answers; a stale tab from an older build answers a different set.
+		...(embedMode ? { embed: true } : {}), commands: [...Object.keys(liveQueries), ...Object.keys(studioBindingRef.current.handlers)],
 	});
 	// The client is created once; opening a project must still relabel the tab
 	// in live status and the --workspace <project> selector (#864).
-	useEffect(() => {
-		liveControlRef.current?.setMeta(liveMeta());
-	}, [projectName, liveSceneName, appContext.live.characters.length]);
+	useEffect(() => { liveControlRef.current?.setMeta(liveMeta()); }, [projectName, liveSceneName, appContext.live.characters.length]);
 
 	useEffect(() => {
 		const enabled = import.meta.env.DEV || window.__COZYCLAY_LIVE__ === true;
