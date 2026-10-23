@@ -723,6 +723,32 @@ read answers 404, and the sidecar logs `[agent] skipping legacy session <id>`
 once per session per process. If you want one of those conversations back,
 read the old file yourself: nothing in the Studio will convert it.
 
+## Camera techniques
+
+Film vocabulary is one command. `camera.applyTechnique` takes a director's
+sentence (`request`) or a stack of technique ids (`stack`), compiles it into
+the shot's camera keys or rail as one undo entry, and answers what the camera
+actually does: `checks.move` is the move the classifier read back from the
+keys, `checks.moveVerified` says it is the move the technique promises, and a
+`PROMPT_ONLY` warning names a technique the camera cannot do yet (roll,
+focus, shake, slow motion, blur), which is then stated in the prompt only.
+
+```sh
+cclay live run camera.techniques --args '{"query":"uneasy"}'
+cclay live run camera.describeTechnique --args '{"id":"dolly-zoom"}'
+cclay live run camera.applyTechnique --args '{"shotId":"shot-reveal","request":"slow push-in on Mara"}'
+cclay live operate --frame 95
+cclay live capture --framing --out push-in-end.png
+```
+```json
+{"ok":true,"summary":"Applied PUSH-IN · 35mm to Reveal [0, 96): Push-in (dolly in) (verified).","checks":{"derivedSize":"medium close-up","technique":"PUSH-IN · 35mm","expectedMove":"push-in","move":"push-in","moveVerified":true,"fromSize":"medium-wide shot","toSize":"medium close-up"}, …}
+```
+
+A stack holds one size, one angle, one roll, one move and one coverage
+framing plus any modifiers (`{"stack":["low-angle",{"id":"push-in","params":{"speed":"slow"}}]}`);
+two moves are refused with the reason. The applied stack is stored on the
+shot and the export prompt states it until the camera is edited by hand.
+
 ## Limits
 
 Motion is not a dedicated verb, but the editor's registered motion actions

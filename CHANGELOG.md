@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+Camera
+
+- Camera technique library: 65 film techniques (shot sizes, angles, camera and
+  lens moves, coverage, modifiers) with fresh descriptions, aliases and moods.
+  `camera.applyTechnique` compiles a stack ("low-angle slow push-in", "a
+  vertigo shot", an over-the-shoulder, a 360) into camera keys or a rail as one
+  undo entry, and the receipt names the move the classifier read back.
+- Techniques picker in Camera mode: search, kind tabs, a mood filter, a
+  top-down plan of the camera path and a parameter popover; picks stack on the
+  shot, and the timeline Shot block shows the stack ("LOW · PUSH-IN · 35mm").
+- Camera keys can run at constant speed (crash zoom, whip pan, 360 orbit).
+- The export prompt, the keyframe pack's prompt.txt and MCP `render_prompt`
+  state the applied technique; techniques that need roll, focus, shake, slow
+  motion or blur are stated as prompt words only.
+- MCP: `list_camera_techniques` and `apply_camera_technique` (29 tools).
+
 ## 3.1.2 - 2026-10-23
 
 The Studio agent repairs motion faster and ends with a take, exports can go to a folder you choose, and a round of fixes for the live hub, MCP, prompts and docs.
