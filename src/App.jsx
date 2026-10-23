@@ -2463,6 +2463,26 @@ export default function App() {
 			capture_plan_png: (args = {}) => appContext.live.state.capturePlanPng(requestedCaptureOutput(args) ?? undefined),
 	};
 
+	const liveSceneName = scenes.find((entry) => entry.id === activeSceneId)?.name ?? "";
+	const liveMeta = () => ({
+		project: projectName ?? "Untitled",
+		scene: liveSceneName,
+		cast: appContext.live.characters.length,
+		// The Workflow page embeds this same Studio as a preview. It is a
+		// live editor too, so an agent choosing a workspace must be able to
+		// tell the preview apart from the tab the user is authoring in.
+		...(embedMode ? { embed: true } : {}),
+		// Which live commands this editor answers. A stale tab from an
+		// older build (or a different app on the same port) answers a
+		// different set; the agent picks a workspace that has what it needs.
+		commands: [...Object.keys(liveQueries), ...Object.keys(studioBindingRef.current.handlers)],
+	});
+	// The client is created once; opening a project must still relabel the tab
+	// in live status and the --workspace <project> selector (#864).
+	useEffect(() => {
+		liveControlRef.current?.setMeta(liveMeta());
+	}, [projectName, liveSceneName, appContext.live.characters.length]);
+
 	useEffect(() => {
 		const enabled = import.meta.env.DEV || window.__COZYCLAY_LIVE__ === true;
 		if (!enabled) return undefined;
@@ -2474,19 +2494,7 @@ export default function App() {
 					// Tapped so a sculpt run hears the agent's object.sculpt / sculpt.compare.
 					handlers: sculptTap.wrap({ ...liveQueries, ...studioBindingRef.current.handlers }),
 					workspaceId: liveWorkspaceIdRef.current,
-					meta: {
-						project: projectName ?? "Untitled",
-						scene: scenes.find((entry) => entry.id === activeSceneId)?.name ?? "",
-						cast: appContext.live.characters.length,
-						// The Workflow page embeds this same Studio as a preview. It is a
-						// live editor too, so an agent choosing a workspace must be able to
-						// tell the preview apart from the tab the user is authoring in.
-						...(embedMode ? { embed: true } : {}),
-						// Which live commands this editor answers. A stale tab from an
-						// older build (or a different app on the same port) answers a
-						// different set; the agent picks a workspace that has what it needs.
-						commands: [...Object.keys(liveQueries), ...Object.keys(studioBindingRef.current.handlers)],
-					},
+					meta: liveMeta(),
 					// The shared client intentionally has no disconnect UI callback.
 					// Observe only this owned socket; a stale handle must never be sent.
 					WebSocketImpl: class extends WebSocket {
