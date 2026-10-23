@@ -411,4 +411,23 @@ assert.equal(LIVE_WORKSPACE_ID_KEY, "cozyclay:live-workspace-id");
 	}
 }
 
+// Given an editor connected under its startup label "Untitled" (#864)
+// When the user opens a named project and the editor relabels itself
+// Then the open socket reports the new label and every later hello carries it.
+{
+	const sent = [];
+	class MetaSocket extends FakeWebSocket {
+		send(frame) { sent.push(JSON.parse(frame)); }
+	}
+	const relabeled = createLiveControl({ WebSocketImpl: MetaSocket, handlers, workspaceId: "tab-a", meta: { project: "Untitled" } });
+	relabeled.setMeta({ project: "Before open" });
+	assert.equal(sent.length, 0, "a socket that is not open yet sends nothing");
+	const first = FakeWebSocket.instances.at(-1);
+	first.open();
+	assert.deepEqual(sent.shift(), { type: "hello", role: "editor", version: 1, workspaceId: "tab-a", meta: { project: "Before open" } });
+	relabeled.setMeta({ project: "Example project", scene: "Scene 1" });
+	assert.deepEqual(sent.shift(), { type: "meta", meta: { project: "Example project", scene: "Scene 1" } });
+	relabeled.close();
+}
+
 console.log("all live control checks PASS");

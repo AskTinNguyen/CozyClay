@@ -150,10 +150,8 @@ export async function dispatchLiveFrame(data, handlers = {}) {
 	}
 }
 
-/**
- * Open the editor's one-way client connection. Failures are intentionally
- * silent: a studio remains a fully local editor when the MCP server is absent.
- */
+// Open the editor's one-way client connection. Failures are intentionally
+// silent: a studio remains a fully local editor when the MCP server is absent.
 export function createLiveControl({
 	handlers = {},
 	onWorkspace = () => {},
@@ -379,6 +377,12 @@ export function createLiveControl({
 	return {
 		setHandlers(nextHandlers) {
 			currentHandlers = nextHandlers && typeof nextHandlers === "object" ? nextHandlers : {};
+		},
+		// Opening another project renames the tab; the next hello carries the new
+		// label and an open socket tells the hub now, so status stays truthful.
+		setMeta(nextMeta) {
+			meta = nextMeta && typeof nextMeta === "object" ? nextMeta : null;
+			if (meta) send({ type: "meta", meta });
 		},
 		close() {
 			stopped = true;
