@@ -3,7 +3,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { basename, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import * as defaultAuth from "../codex-auth.mjs";
-import { publishLiveEndpoint, removeLiveEndpoint } from "../live-endpoint.mjs";
+import { liveHubPort, publishLiveEndpoint, removeLiveEndpoint } from "../live-endpoint.mjs";
 import { createCodexClient } from "./codex-client.mjs";
 import { createAgentTools, SYSTEM_PROMPT, pickWorkspace } from "./agent-tools.mjs";
 
@@ -261,7 +261,7 @@ function liveToolsRuntime(mcpRuntime) {
 	return liveToolsModules(mcpRuntime).then(async ([registry, { startLiveHub }]) => {
 		const owner = liveHubOwner();
 		const token = randomBytes(32).toString("hex");
-		const livePort = Number(process.env.COZYCLAY_LIVE_PORT ?? 5184);
+		const livePort = liveHubPort();
 		const liveHub = await startLiveHub(livePort, { token, owner });
 		// EADDRINUSE comes back as null: another CozyClay (or its dev server) owns
 		// the port, and the Studio page is built to connect to that port, so the
