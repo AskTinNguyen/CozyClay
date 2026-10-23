@@ -717,10 +717,32 @@ read the old file yourself: nothing in the Studio will convert it.
 
 ## Limits
 
-Motion generation is not on the CLI yet: `generate_motion` and the motion
-install verbs are served by the MCP server's own runtime, not the live hub
-(deferred to part E of this plan). Until then, an editor connected to the hub
-refuses those commands with `CAPABILITY_MISSING`, and motion work stays on
-the surfaces that own it — the Studio's motion panels, or a prompt-driven
-session through the Agent panel (**View ▾ → Panels → Agent panel**), which
-remains available and works the same scene.
+Motion is not a dedicated verb, but the editor's registered motion actions
+run through `live run`, admitted like the agent's `run_action` and waiting
+the action's declared timeout (120 s for `motion.compile`). `cclay live
+commands --ids motion.compile` prints the input schema; the spec language is
+in [motion3-agent-guide.md](motion3-agent-guide.md) and
+[motion-api-v3.1.md](motion-api-v3.1.md). Compile without installing first,
+then install the stored spec by its `specId` once QA is clean:
+
+```sh
+cclay live run motion.compile --args '{"characterId":"<id>","spec":{"schema":"cozyclay.motion-spec.v1","fps":24,"frames":48,"use":[{"skill":"standIdle","f0":0,"args":{"at":[0,0],"heading":0,"until":47}}]},"install":false}'
+cclay live run motion.compile --args '{"characterId":"<id>","base":"<specId>","install":"ifClean"}'
+```
+
+The other motion actions (`motion.qa`, `motion.sample`, `motion.describe`,
+`motion.report`, `motion.keyObject`) run the same way. Readiness:
+
+- an Animation project (motion belongs to Animation), with the editor's
+  motion owner mounted; otherwise `motion.compile`, `motion.qa`,
+  `motion.sample` and `motion.keyObject` are refused as unavailable with
+  "The motion owner is not mounted."
+- an X Bot or Y Bot character at scale 1; any other body (a capsule figure
+  included) or scale answers `TARGET_NOT_READY` with the reason.
+- `motion.qa`, `motion.sample` and `motion.keyObject` need a compiled take on
+  the character; compile first.
+
+What is not on the CLI is the old generation surface: there is no
+`generate_motion` tool or prompt-to-motion install verb on the live hub. For
+prompt-driven motion, use a session in the Agent panel (**View ▾ → Panels →
+Agent panel**), which calls the same `motion.compile` on the same scene.
