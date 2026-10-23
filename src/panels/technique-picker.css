@@ -1,0 +1,147 @@
+/* Camera technique picker (TechniquePicker.jsx): a compact Details region.
+   Theme tokens only (src/styles/themes.css), so light and dark both read;
+   camera marks use the camera violet, selection the theme accent. */
+
+.technique-picker {
+	display: grid;
+	gap: 6px;
+	padding: 0 var(--sp-2, 12px) var(--sp-1, 8px);
+	font-family: var(--sans, system-ui);
+	font-size: 12px;
+	color: var(--text-1, #e4e4e7);
+}
+
+.technique-picker .technique-search,
+.technique-picker .technique-mood,
+.technique-picker .technique-param select,
+.technique-picker .technique-param input {
+	box-sizing: border-box;
+	width: 100%;
+	height: 24px;
+	padding: 0 8px;
+	border: 0;
+	border-radius: 6px;
+	background: var(--field, #0f0f11);
+	color: var(--text-1, #e4e4e7);
+	font: inherit;
+	font-size: 11.5px;
+}
+
+.technique-picker .technique-search::placeholder { color: var(--text-3, #636369); }
+
+.technique-picker .technique-kinds {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 2px;
+	padding: 2px;
+	border-radius: 8px;
+	background: var(--field, #0f0f11);
+}
+
+.technique-picker .technique-kinds button {
+	flex: 1 0 auto;
+	height: 20px;
+	padding: 0 6px;
+	border: 0;
+	border-radius: 6px;
+	background: transparent;
+	color: var(--text-2, #9b9ba1);
+	font: inherit;
+	font-size: 11px;
+	cursor: pointer;
+}
+
+.technique-picker .technique-kinds button.active {
+	background: var(--seg-on, var(--surface-active, #26262a));
+	box-shadow: var(--seg-on-shadow, none);
+	color: var(--seg-on-text, var(--select-text, #e8a33d));
+}
+
+.technique-picker .technique-list {
+	display: grid;
+	gap: 1px;
+	max-height: 216px;
+	margin: 0;
+	padding: 0;
+	overflow-x: hidden;
+	overflow-y: auto;
+	list-style: none;
+}
+
+.technique-picker .technique-list button {
+	box-sizing: border-box;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 6px;
+	width: 100%;
+	height: 24px;
+	padding: 0 8px;
+	border: 0;
+	border-radius: 6px;
+	background: transparent;
+	color: var(--text-row, #c9c9ce);
+	font: inherit;
+	font-size: 11.5px;
+	text-align: left;
+	cursor: pointer;
+}
+
+.technique-picker .technique-list button span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.technique-picker .technique-list button small { flex: none; font-size: 10px; letter-spacing: .02em; color: var(--text-3, #636369); font-variant-numeric: tabular-nums; }
+.technique-picker .technique-list button:hover:not(:disabled) { background: var(--chip-fill, rgba(255, 255, 255, .06)); }
+.technique-picker .technique-list button.applied small { color: var(--camera, #a78bfa); font-weight: 600; }
+.technique-picker .technique-list button.focused { background: var(--row-sel-bg, var(--select-tint, rgba(232, 163, 61, .14))); color: var(--text-1, #fff); }
+.technique-picker .technique-list button:disabled { color: var(--text-off, #4f4f55); cursor: default; }
+
+.technique-picker .technique-applied { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+
+.technique-picker .technique-chip {
+	height: 20px;
+	padding: 0 8px;
+	border: 0;
+	border-radius: 10px;
+	background: var(--camera, #7258a0);
+	color: #fff;
+	font: inherit;
+	font-size: 10.5px;
+	font-weight: 600;
+	letter-spacing: .02em;
+	cursor: pointer;
+}
+
+.technique-picker .technique-applied small { font-size: 10.5px; color: var(--text-2, #9b9ba1); font-variant-numeric: tabular-nums; }
+
+/* The parameter popover: the focused technique's plan, words and params. */
+.technique-picker .technique-detail {
+	display: grid;
+	gap: 6px;
+	padding: 8px;
+	border-radius: var(--popover-radius, 6px);
+	background: var(--popover-surface, var(--surface-raised, #1e1e21));
+	box-shadow: var(--popover-shadow, 0 8px 24px rgba(0, 0, 0, .45));
+}
+
+.technique-picker .technique-detail p { margin: 0; font-size: 11.5px; line-height: 1.4; color: var(--text-2, #9b9ba1); }
+.technique-picker .technique-detail .technique-status { color: var(--text-1, #e4e4e7); font-size: 11px; }
+.technique-picker .technique-detail .technique-status.refused { color: var(--danger, #e5484d); }
+.technique-picker .technique-more { font-size: 10.5px; color: var(--select-text, #a78bfa); }
+
+.technique-picker .technique-diagram { width: 100%; height: 96px; border-radius: 6px; background: var(--field-deep, var(--frame-well, #0c0c0d)); }
+.technique-picker .technique-diagram.empty { display: grid; place-items: center; font-size: 11px; color: var(--text-3, #636369); }
+.technique-diagram .wedge { fill: color-mix(in srgb, var(--camera, #a78bfa) 18%, transparent); stroke: color-mix(in srgb, var(--camera, #a78bfa) 60%, transparent); stroke-width: .6; }
+.technique-diagram .wedge.start { fill: none; stroke-dasharray: 2 2; }
+.technique-diagram .cast circle { fill: #4fbf7a; }
+.technique-diagram .cast:not(.subject) circle { fill: color-mix(in srgb, #4fbf7a 45%, var(--text-3, #636369)); }
+.technique-diagram .cast line { stroke: #4fbf7a; stroke-width: 1; }
+.technique-diagram .path { fill: none; stroke: var(--camera, #a78bfa); stroke-width: 1.5; stroke-linecap: round; }
+.technique-diagram .path.rail { stroke-dasharray: 3 2; }
+.technique-diagram .camera { fill: var(--camera, #a78bfa); }
+.technique-diagram .camera.start { fill: none; stroke: var(--camera, #a78bfa); stroke-width: 1; }
+
+.technique-picker .technique-params { display: grid; gap: 4px; }
+.technique-picker .technique-param { display: grid; grid-template-columns: 58px 1fr auto; align-items: center; gap: 6px; font-size: 11px; color: var(--label, var(--text-3, #636369)); }
+.technique-picker .technique-param input { padding-right: 2px; }
+
+/* The applied stack on the timeline Shot block (timeline.jsx), after its frames. */
+.tl-shot-label small .tl-shot-technique { color: var(--camera, #c9b5f4); font-weight: 600; letter-spacing: .02em; }
