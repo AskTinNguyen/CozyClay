@@ -1,0 +1,8 @@
+{
+  "extraKnownMarketplaces": {
+    "intent": { "source": { "source": "github", "repo": "AskTinNguyen/intent" } }
+  },
+  "enabledPlugins": {
+    "intent@intent": true
+  }
+}
