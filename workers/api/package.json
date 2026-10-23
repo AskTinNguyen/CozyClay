@@ -13,6 +13,6 @@
     "migrate:remote": "wrangler d1 migrations apply cozyclay-demo --remote --config wrangler.toml"
   },
   "devDependencies": {
-    "wrangler": "4.125.0"
+    "wrangler": "4.152.0"
   }
 }
