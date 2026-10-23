@@ -21,12 +21,23 @@ export function documentWithCamera(document, camera) {
 	};
 }
 
-/** The camera saved with the active scene, or null when the project has none. */
-export function savedCamera(document) {
+/** Split a loaded document into the camera saved with its active scene (null
+ * when it has none) and the document without that key, so the open scene is
+ * exactly the one that was saved and the camera lives only in the MCP state. */
+export function splitSavedCamera(document) {
 	const scene = document.scenes.find((entry) => entry.id === document.activeSceneId) ?? document.scenes[0];
 	const record = scene?.stage?.[STAGE_KEY];
-	if (!record || typeof record !== "object") return null;
-	if (!FIELDS.every((key) => Number.isFinite(record[key]))) return null;
-	if (record.focalMm <= 0) return null;
-	return Object.fromEntries(FIELDS.map((key) => [key, record[key]]));
+	const valid = !!record && typeof record === "object"
+		&& FIELDS.every((key) => Number.isFinite(record[key])) && record.focalMm > 0;
+	return {
+		camera: valid ? Object.fromEntries(FIELDS.map((key) => [key, record[key]])) : null,
+		document: {
+			...document,
+			scenes: document.scenes.map((entry) => {
+				if (!entry?.stage || !Object.hasOwn(entry.stage, STAGE_KEY)) return entry;
+				const { [STAGE_KEY]: _saved, ...stage } = entry.stage;
+				return { ...entry, stage };
+			}),
+		},
+	};
 }
