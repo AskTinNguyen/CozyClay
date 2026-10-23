@@ -1,6 +1,7 @@
 # CozyClay 작업 규칙
 
 - trunk는 `main`. 모든 작업은 `main`에서 브랜치를 따서 `main`으로 PR을 연다.
+- 기능 작업은 intent로 진행한다: `docs/intent/README.md`.
 - 3.0 방향: 모션 생성 백엔드(ARDY/Kimodo)는 없다. 에이전트가 브라우저 안의 결정적 모션 컴파일러(`src/motion3/`)와 QA로 모션을 계산한다. 설계 기록은 `docs/v3-plan.md`, 에이전트용 안내는 `docs/motion3-agent-guide.md`에 있다.
 - 구현은 컨트롤 세션이 직접 한다(Codex 워커와 워크트리 규칙은 아래 2.x 절에만 해당한다).
 - 아래 "CI 린트 래칫"과 "PR 기준"(테스트 통과, 250줄 래칫, knip)은 그대로 적용한다.
