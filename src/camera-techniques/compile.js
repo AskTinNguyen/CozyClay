@@ -8,6 +8,7 @@ import { groupFraming, inFrame, povFraming, reverseFraming, shoulderFraming, sin
 import { hasGeometry, techniqueById } from "./index.js";
 import { compileMove } from "./moves.js";
 import { slotOf } from "./resolve.js";
+import { focalMmToFov, nearestPrime } from "../shot.js";
 
 const fail = (code, message) => { throw Object.assign(new Error(message), { code }); };
 const SHARED = ["speed", "focalMm", "direction", "degrees"];
@@ -104,11 +105,13 @@ export function compileStack(stack, ctx, shared = {}) {
 	}
 	const keys = compiled.keys?.map(({ offset, framing, ease }) => ({ frame: shot.startFrame + offset, framing, ...(ease ? { ease } : {}) })) ?? null;
 	if (keys && new Set(keys.map((key) => key.frame)).size !== keys.length) fail("TARGET_NOT_READY", `The shot is too short (${length} frames) to hold this move's ${keys.length} keys.`);
-	const focal = keys ? [keys[0].framing.focalMm, keys.at(-1).framing.focalMm].map(Math.round) : compiled.rail ? [Math.round(compiled.rail.focalMm)] : [];
+	// The slate names the nearest real prime, as every other studio slate does (shot.js nearestPrime).
+	const prime = (mm) => nearestPrime(focalMmToFov(mm, filmback.sensorId, filmback.aspectRatio), filmback.sensorId, filmback.aspectRatio);
+	const focal = (keys ? [keys[0].framing.focalMm, keys.at(-1).framing.focalMm] : compiled.rail ? [compiled.rail.focalMm] : []).map(prime);
 	const tags = ["angle", "roll", "size", "coverage", "move", "modifier"].flatMap((slot) => items.filter(({ entry }) => slotOf(entry) === slot).map(({ entry }) => entry.tag));
 	const lensText = focal.length ? (focal[0] === focal.at(-1) ? `${focal[0]}mm` : `${focal[0]}→${focal.at(-1)}mm`) : null;
 	return {
-		stack: items.map(({ entry, params }) => ({ id: entry.id, params })),
+		stack: items.map(({ entry, params }) => ({ id: entry.id, params: Object.fromEntries(Object.entries(params).filter(([, value]) => value !== null && value !== undefined)) })),
 		subjectIds, keys, rail: compiled.rail ?? null, expectedMove: compiled.expect, sizes: compiled.sizes ?? null, degrees: compiled.degrees ?? null,
 		label: [...tags, ...(lensText ? [lensText] : [])].join(" · "),
 		words: items.filter(({ entry }) => hasGeometry(entry) && slotOf(entry) !== "move" && !entry.requires.length).map(({ entry }) => entry.prompt),

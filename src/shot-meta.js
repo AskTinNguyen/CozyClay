@@ -12,6 +12,8 @@
  * editor state, where a shot can be missing entirely (no shots authored yet).
  */
 
+import { currentTechnique } from "./camera-techniques/storage.js";
+
 const finite = (value) => (Number.isFinite(value) ? value : null);
 
 /**
@@ -62,5 +64,8 @@ export function shotCaptureMeta({ shot = null, stage = null, cast = [], fps = nu
 		shotTitle: typeof shot?.name === "string" && shot.name ? shot.name : null,
 		targetModel: shot?.targetModel ?? null,
 		frame: finite(frame),
+		// The camera technique stack applied to the shot, while it still describes
+		// the camera (an edited camera drops it): words for the prompt.
+		...(currentTechnique(shot) ? { technique: { label: currentTechnique(shot).label, phrase: currentTechnique(shot).phrase } } : {}),
 	};
 }

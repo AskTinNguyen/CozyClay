@@ -72,6 +72,7 @@ import { classifyMove, captureFraming, moveSlate } from "../src/camera-move.js";
 import { DEFAULT_PREVIS_MODE, PREVIS_MODES, createProjectDocument, readProjectDocument } from "../src/project.js";
 import { kindRefusal } from "../src/character-kind.js";
 import { documentWithCamera, splitSavedCamera } from "./project-camera.mjs";
+import { cameraTechniqueTools, promptTechnique } from "./camera-technique-tools.mjs";
 
 /** The authoring state. One scene document, one camera, one project name. */
 export const state = {
@@ -102,7 +103,7 @@ const noLiveEditor = (requirement) =>
 		: requirement;
 export const liveWorkspace = new AsyncLocalStorage();
 const liveWorkspaceTools = new Set([
-	"describe_scene", "describe_shot", "render_prompt", "mark_camera_move", "describe_camera_move", "save_project",
+	"describe_scene", "describe_shot", "render_prompt", "mark_camera_move", "describe_camera_move", "list_camera_techniques", "apply_camera_technique", "save_project",
 	"set_camera", "frame_shot", "add_character", "place_character", "remove_character",
 	"focus_character", "place_object", "import_mesh", "sculpt_object", "compare_sculpt", "group_objects", "update_object",
 	"remove_object", "apply_batch", "add_scene", "switch_scene", "open_project", "capture_frame",
@@ -168,6 +169,8 @@ const TOOL_ANNOTATIONS = Object.freeze({
 	render_prompt: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
 	mark_camera_move: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
 	describe_camera_move: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+	list_camera_techniques: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+	apply_camera_technique: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
 	add_scene: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
 	switch_scene: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
 	open_project: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
@@ -579,7 +582,7 @@ function shotReport() {
 }
 
 const studioAliasTools = new Set([
-	"set_camera", "frame_shot", "place_object", "update_object", "remove_object",
+	"set_camera", "frame_shot", "apply_camera_technique", "place_object", "update_object", "remove_object",
 	"import_mesh", "sculpt_object", "group_objects", "add_scene", "switch_scene", "apply_batch", "open_project",
 	"add_character", "place_character", "remove_character",
 ]);
@@ -805,15 +808,7 @@ export const createToolHandlers = ({ projectRootPromise } = {}) => {
 				}
 				// Midpoints of shot.js's SIZE_TABLE bands, so the label that comes back is
 				// the label that was asked for rather than whatever sits on a boundary.
-				const FRACTION = {
-					"extreme close-up": 3.4,
-					"close-up": 2.2,
-					"medium close-up": 1.375,
-					"medium shot": 0.975,
-					"medium-wide shot": 0.66,
-					"wide shot": 0.41,
-					"extreme wide shot": 0.2,
-				};
+				const FRACTION = { "extreme close-up": 3.4, "close-up": 2.2, "medium close-up": 1.375, "medium shot": 0.975, "medium-wide shot": 0.66, "wide shot": 0.41, "extreme wide shot": 0.2 };
 				// Heights that land mid-band in shot.js's LEVEL_TABLE.
 				const HEIGHT = { ground: 0.3, low: 0.7, hip: 1.1, eye: 1.65, high: 2.1, overhead: 2.8 };
 				// Angle off the subject's facing direction, in degrees.
@@ -1517,7 +1512,8 @@ export const createToolHandlers = ({ projectRootPromise } = {}) => {
 						return liveError(error);
 					}
 				}
-				const st = stage();
+				// An applied camera technique speaks for a default camera_move, in the words its classifier proved.
+				const st = stage(), technique = promptTechnique(state, scene(), Boolean(liveHub?.connected)), byTechnique = Boolean(technique) && camera_move === CAMERA_MOVES[0];
 				const known = CAMERA_MOVES.includes(camera_move);
 				// composePrompt frames two subjects: the one the camera is on, then the
 				// next visible member of the cast.
@@ -1533,12 +1529,12 @@ export const createToolHandlers = ({ projectRootPromise } = {}) => {
 					pose2Phrase: other ? pose2_phrase : "",
 					environment,
 					style,
-					cameraMove: known ? camera_move : "Custom…",
-					customMove: known ? "" : camera_move,
+					cameraMove: known && !byTechnique ? camera_move : "Custom…",
+					customMove: byTechnique ? technique.phrase : known ? "" : camera_move,
 					hasCharSheet: st.hasCharSheet === true,
 					hasEnvSheet: false,
 				});
-				return text(`${slateLine(currentShot())}\n\n${prompt}`);
+				return text(`${slateLine(currentShot())}${technique ? `\ntechnique ${technique.label}: ${technique.phrase}` : ""}\n\n${prompt}`);
 			},
 		),
 
@@ -1597,6 +1593,7 @@ export const createToolHandlers = ({ projectRootPromise } = {}) => {
 				);
 			},
 		),
+		...cameraTechniqueTools({ tool, z, text, liveError, state, cast, findCharacter, filmback, slateLine, currentShot, refreshLiveDescription, runStudioCommand, isLive: () => Boolean(liveHub?.connected) }),
 
 		tool(
 			"add_scene",

@@ -46,6 +46,8 @@ const slateOf = (body) => body.split("\n").find((line) => line.includes("·")) ?
 const { tools } = await client.listTools();
 check("every tool has a description", tools.every((t) => t.description?.length > 20));
 console.log(`${tools.length} tools registered`);
+// 27 tools plus the camera technique pair (list_camera_techniques, apply_camera_technique).
+check("29 tools registered", tools.length === 29, `${tools.length}`);
 
 /* ---------------------------- framing matrix ----------------------------- */
 
