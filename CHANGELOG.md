@@ -2,6 +2,45 @@
 
 ## Unreleased
 
+## 3.1.2 - 2026-10-23
+
+The Studio agent repairs motion faster and ends with a take, exports can go to a folder you choose, and a round of fixes for the live hub, MCP, prompts and docs.
+
+Agent
+
+- Motion repair loop: task scheduling with verify/accept/reject steps,
+  character key scopes, a life critic, patch selectors and a repair watch
+  that keeps the best compile and never ends a turn without a take.
+- walkTo fits a walk a natural gait can reach instead of refusing it, and
+  stops short of a body at its target.
+- The repair cap and stuck streak count agent calls, not compiles inside one
+  script; hint patches are pre-checked only on repair compiles.
+
+Export
+
+- Optional export folder (Settings > Export): downloads go straight to a
+  chosen folder and fall back to the browser download if it is unavailable.
+- The keyframe-pack README lists only the files in the pack; the depth video
+  is a separate export.
+- The prompt's LENS word follows the editor's lens calibration (24 mm is a
+  wide shot, not a long shot).
+
+Live and MCP
+
+- The packaged Studio dials the live hub port the launcher chose
+  (`COZYCLAY_LIVE_PORT`).
+- `shot.frame` receipts report a retained camera key as present, not removed.
+- Motion verification measures objects where the take animates them.
+- `cclay live status` and `--workspace <project>` follow the project that is
+  open, not the label at connect time.
+- Without an editor, MCP `save_project` / `open_project` keep the camera.
+- `npm run verify:live` works from `mcp/`.
+
+Docs
+
+- Node 22.19+ on the homepage, 27 MCP tools, and the CLI guide's framing
+  walkthrough and motion limits match the current behaviour.
+
 ## 3.1.1 - 2026-10-23
 
 Sculpt gets new shapes, cutters, detail and materials, and the Studio agent shows its plan and a live sketch.

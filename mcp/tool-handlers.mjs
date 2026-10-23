@@ -71,6 +71,7 @@ import {
 import { classifyMove, captureFraming, moveSlate } from "../src/camera-move.js";
 import { DEFAULT_PREVIS_MODE, PREVIS_MODES, createProjectDocument, readProjectDocument } from "../src/project.js";
 import { kindRefusal } from "../src/character-kind.js";
+import { documentWithCamera, splitSavedCamera } from "./project-camera.mjs";
 
 /** The authoring state. One scene document, one camera, one project name. */
 export const state = {
@@ -1697,7 +1698,7 @@ export const createToolHandlers = ({ projectRootPromise } = {}) => {
 				// the current stage shape rather than trusted as-is.
 				const scenes = readSceneDocument(serializeSceneDocument(result.project.scenesDocument));
 				if (!scenes.document) return text(`That project was written by a newer CozyClay: ${full}`);
-				const nextDocument = scenes.document;
+				const { document: nextDocument, camera: savedCamera } = splitSavedCamera(scenes.document);
 				if (liveHub?.connected) {
 					try {
 						const loaded = await executeStudioCommand({ ...admission, action: "load_scenes", args: { document: nextDocument } });
@@ -1713,11 +1714,10 @@ export const createToolHandlers = ({ projectRootPromise } = {}) => {
 					}
 				}
 				state.doc = nextDocument;
+				Object.assign(state.camera, savedCamera);
 				state.previsMode = result.project.previsMode ?? DEFAULT_PREVIS_MODE;
 				state.name = result.project.name;
-				state.focus = null;
-				state.focusLocked = false;
-				state.markedFraming = null;
+				Object.assign(state, { focus: null, focusLocked: false, markedFraming: null });
 				return text(`Opened ${full}.\n\n${sceneReport()}`);
 			},
 		),
@@ -1753,7 +1753,7 @@ export const createToolHandlers = ({ projectRootPromise } = {}) => {
 					return text(`Could not write project: ${error.message}`);
 				}
 				const project = createProjectDocument({
-					scenesDocument: state.doc,
+					scenesDocument: documentWithCamera(state.doc, state.camera),
 					workspaceLayout: null,
 					customPoses: [],
 					name: state.name,
