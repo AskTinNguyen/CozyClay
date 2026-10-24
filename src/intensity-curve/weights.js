@@ -7,10 +7,14 @@
 //
 // Changelog:
 // - v1 (intensity-curve rev 1): seven camera components, weights sum to 1.
+// - v2 (colour-script rev 1): the tone component (TONE_COMPONENT), weight 0.1,
+//   counted only when a shot in the range carries a look (or the caller hands
+//   measured tones); then the combined value is the weighted mean over eight.
+//   Without it every value is v1's.
 //
 // Pure data and arithmetic: no DOM, no three.js.
 
-export const INTENSITY_VERSION = 1;
+export const INTENSITY_VERSION = 2;
 
 const clamp01 = (value) => (Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0);
 
@@ -51,6 +55,17 @@ export const INTENSITY_COMPONENTS = Object.freeze([
 export const INTENSITY_COMPONENT_IDS = Object.freeze(INTENSITY_COMPONENTS.map((row) => row.id));
 
 /**
+ * The tone component (colour-script A6): how far a shot's colour sits from a
+ * neutral mid-key, from its measured palette or its look's planned tone
+ * (colour-script/script.js plannedTone). Its cut contrast is the colour change
+ * itself, so a warm-to-cold cut at one brightness still counts.
+ */
+export const TONE_COMPONENT = Object.freeze({ id: "tone", label: "tone", weight: 0.1,
+	formula: "low key and colour push: 0.7 x (1 - luminance) + 0.3 x |warmth|; at a cut: (|luminance change| + |warmth change|) / 0.6",
+	value: (raw) => clamp01(0.7 * (1 - raw.luminance) + 0.3 * Math.abs(raw.warmth)),
+	cut: (a, b) => clamp01((Math.abs(b.luminance - a.luminance) + Math.abs(b.warmth - a.warmth)) / 0.6) });
+
+/**
  * How a cut's contrast reads per component: the jump between the outgoing shot's
  * last frame and the incoming shot's first frame (size, height, lens, roll), the
  * change in rate (movement, cutting), and the screen jump itself.
@@ -69,9 +84,9 @@ export const STRUCTURE_LIMITS = Object.freeze({
 export const BUILD_KINDS = Object.freeze(["reveal", "threat", "decision"]);
 export const BEAT_STRENGTH = Object.freeze({ threat: 3, reveal: 3, decision: 3, disclosure: 2, event: 1, input: 1 });
 
-/** The combined value: the weighted sum of the components (weights sum to 1), over the components given. */
+/** The combined value: the weighted sum of the components (weights sum to 1), over the components given (tone among them when the curve is toned). */
 export function combine(components, ids = INTENSITY_COMPONENT_IDS) {
-	const rows = INTENSITY_COMPONENTS.filter((row) => ids.includes(row.id));
+	const rows = [...INTENSITY_COMPONENTS, TONE_COMPONENT].filter((row) => ids.includes(row.id));
 	const total = rows.reduce((sum, row) => sum + row.weight, 0);
 	return total > 0 ? rows.reduce((sum, row) => sum + row.weight * (components[row.id] ?? 0), 0) / total : 0;
 }

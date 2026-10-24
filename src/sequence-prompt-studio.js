@@ -38,7 +38,7 @@ export function studioSequenceDocument(s, { title } = {}) {
 		.map((row) => motionEntry(row, row.sessionMotion, compileTake(row.sessionMotion, row, s.objects)));
 	return sequenceDocument({
 		title: title ?? s.sceneName, shots: s.shots ?? [], characters: s.characters ?? [], fps: 24, aspect: s.aspect ?? s.stage?.shotAspect ?? null, filmback: s.filmback,
-		frameCount: s.frameCount, activeCharacterId: s.activeCharacterId, look: s.stage?.style, environment: s.stage?.environment, environmentImage: s.stage?.environmentImage, motion, storyBeats: s.storyBeats,
+		frameCount: s.frameCount, activeCharacterId: s.activeCharacterId, look: s.stage?.style, environment: s.stage?.environment, environmentImage: s.stage?.environmentImage, motion, storyBeats: s.storyBeats, stage: s.stage,
 	});
 }
 

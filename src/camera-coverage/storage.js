@@ -2,11 +2,13 @@
 // the shot document (shot-authoring.js): the technique stack it was framed
 // with, the coverage pattern that laid it (and, for a group or branching
 // pattern, its setup and branch), the line of action authored on it
-// (camera.setLine), and the transition into it. Each is
+// (camera.setLine), the transition into it, and its look (colour-script:
+// shot.setLook, stage-shot-look.js). Each is
 // absent unless set, so older bodies stay byte-identical. Dependency-light on
 // purpose: the shot document repair imports it.
 import { repairShotTechnique } from "../camera-techniques/storage.js";
 import { repairTransition, repairTransitionOut } from "./transitions.js";
+import { repairShotLook } from "../stage-shot-look.js";
 
 const text = (value, max) => (typeof value === "string" ? Array.from(value.trim()).slice(0, max).join("") : "");
 
@@ -32,6 +34,6 @@ export function repairLine(value) {
 /** The technique, coverage and transition fields of one stored shot, each only when present. */
 export function repairShotExtras(entry) {
 	const technique = repairShotTechnique(entry?.technique), coverage = repairCoverage(entry?.coverage), transition = repairTransition(entry?.transition), transitionOut = repairTransitionOut(entry?.transitionOut);
-	const line = repairLine(entry?.line);
-	return { ...(technique ? { technique } : {}), ...(coverage ? { coverage } : {}), ...(line ? { line } : {}), ...(transition ? { transition } : {}), ...(transitionOut ? { transitionOut } : {}) };
+	const line = repairLine(entry?.line), look = repairShotLook(entry?.look);
+	return { ...(technique ? { technique } : {}), ...(coverage ? { coverage } : {}), ...(line ? { line } : {}), ...(transition ? { transition } : {}), ...(transitionOut ? { transitionOut } : {}), ...(look ? { look } : {}) };
 }

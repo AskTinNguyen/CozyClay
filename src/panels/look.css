@@ -1,0 +1,12 @@
+/* The Look section (LookPanel.jsx, colour-script): the recipe, the partial
+   look over the stage, the intended and the measured palette. Theme tokens
+   only, like coverage.css. */
+.look-number { grid-template-columns: 76px minmax(0, 1fr) 36px; }
+.look-number output { color: var(--text-2, #a1a1aa); font-family: var(--mono); font-size: 11px; text-align: right; }
+.look-colour { grid-template-columns: 76px 40px auto; }
+.look-colour input[type="color"], .look-swatches input[type="color"] { width: 32px; height: 22px; padding: 0; border: 1px solid var(--surface-active, #26262a); border-radius: 3px; background: none; }
+.look-swatches { display: flex; align-items: center; gap: 4px; min-height: 22px; }
+.look-swatches > span { width: 76px; flex: none; color: var(--text-2, #a1a1aa); }
+.look-swatches.measured i { display: block; height: 18px; border-radius: 2px; border: 1px solid var(--surface-active, #26262a); }
+.look-swatches em { color: var(--text-3, #636369); font-style: normal; }
+.look-readout { margin: 0; color: var(--text-2, #a1a1aa); font-family: var(--mono); font-size: 11px; }

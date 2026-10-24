@@ -9,6 +9,8 @@ import { checkCoverage } from "../camera-coverage/completeness.js";
 import { checkMotivation } from "../camera-motivation/check.js";
 import { checkShotAgainstPreset, presetById } from "../model-presets.js";
 import { checkStructure, structureWords } from "../intensity-curve/structure.js";
+import { colourCutWords, colourScript, colourScriptWords } from "../colour-script/script.js";
+import { looksLit } from "../stage-shot-look.js";
 
 const flag = (check, shotId, rule, severity, message, frames = null) => ({ check, shotId, rule, severity, message, ...(frames ? { frames } : {}) });
 
@@ -63,6 +65,16 @@ function structure({ document, shots, placeAt }) {
 			issues: result.issues.map((issue) => ({ rule: issue.rule, severity: issue.severity, frames: issue.frames, shotIds: issue.shotIds })) } } };
 }
 
+/** The colour script (colour-script A3, A6), once a shot in the range carries a look: each shot's look and intended palette, and a hard colour cut as a note on the incoming shot. */
+function colour({ document, shots }) {
+	if (!shots.some((row) => looksLit(row.look) || row.look?.palette)) return null;
+	const script = colourScript({ shots, stage: document.stage, storyBeats: document.storyBeats });
+	const flags = script.cuts.filter((cut) => cut.kind === "hard").map((cut) => flag("colour", cut.to, "hard-colour-cut", "low", `${colourCutWords(cut)}.`));
+	return { summary: colourScriptWords(script).replace(/\.$/, ""), flags, notes: [],
+		section: { id: "colour", data: { words: colourScriptWords(script), shots: script.shots.map((row) => ({ shotId: row.shotId, words: row.words || null, intended: row.intended, planned: row.planned })),
+			cuts: script.cuts.map(({ cutFrame, from, to, luminance, warmth, kind }) => ({ cutFrame, from, to, luminance, warmth, kind })) } } };
+}
+
 /** Every check the packet reports, in the order its notes list them. A check that answers null has nothing to say for this range and is left out. */
 export const PACKET_CHECKS = Object.freeze([
 	{ id: "cuts", label: "Cuts", run: cuts },
@@ -70,6 +82,7 @@ export const PACKET_CHECKS = Object.freeze([
 	{ id: "motivation", label: "Motivation", run: motivation },
 	{ id: "shot", label: "Shot", run: shot },
 	{ id: "structure", label: "Structure", run: structure },
+	{ id: "colour", label: "Colour", run: colour },
 ]);
 
 /**

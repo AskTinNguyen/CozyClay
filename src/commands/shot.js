@@ -17,6 +17,7 @@ import './elements/shot.js';
 import { changedIds, fail, shotLabel } from './shared.js';
 import { composeStoredFraming } from '../camera-coverage/composition.js';
 import { SUBJECT_HEIGHT_M } from '../shot.js';
+import { lookDeclarations, registerShotLook } from './shot-look.js';
 
 const id = StudioSchemas.TargetGuard.properties.targetId;
 const TAKE_FRAME_MAX = 28800;
@@ -44,7 +45,7 @@ const extra = [
   { ...mutation('shot.setStylized', 'Set stylized panel image', input({ shotId: id, assetId: { oneOf: [{ type: 'string' }, { type: 'null' }] } })), exposure: 'ui-only' },
   { ...mutation('shot.placeCamera', 'Place camera', input(Object.fromEntries(['x', 'y', 'z', 'lookAtX', 'lookAtY', 'lookAtZ', 'focalMm'].map(key => [key, number])), [])), exposure: 'ui-only' },
 ];
-export const declarations = Object.freeze([extra[0], ...existing, ...extra.slice(1).map(entry => entry.id === 'shot.frame' ? entry : { ...entry, exposure: 'ui-only' })]);
+export const declarations = Object.freeze([extra[0], ...existing, ...extra.slice(1).map(entry => entry.id === 'shot.frame' ? entry : { ...entry, exposure: 'ui-only' }), ...lookDeclarations]);
 
 // shot.setRange also takes range: [startFrame, endFrameExclusive] or flat startFrame/endFrameExclusive
 // fields; both become range: { startFrame, endFrameExclusive } before validation (registry normalizeArgs).
@@ -207,7 +208,7 @@ export function register(registry, ports) {
     'shot.clearCameraRail': state => state.shots.some(shot => createCameraBlock(shot.camera).cameraRail) || 'No shot has a camera rail; lay one with shot.setCameraRail.',
   };
   registerElementSet(registry, ports, extra[0]);
-  for (const declaration of declarations.filter(row => row.id !== 'shot.set')) registry.register({ ...declaration,
+  for (const declaration of declarations.filter(row => row.id !== 'shot.set' && !lookDeclarations.includes(row))) registry.register({ ...declaration,
     ...(declaration.id === 'shot.setRange' ? { normalizeArgs: lenientRange } : {}),
     available: state => mounted() === true ? (availability[declaration.id] ?? (existing.includes(declaration) ? hasShots : () => true))(state) : mounted(),
     run(args, context) {
@@ -241,5 +242,7 @@ export function register(registry, ports) {
     owner().write(rows => rows.map(entry => (entry.id === shot.id ? { ...entry, cameraKeys: entry.cameraKeys.map(item => (item.id === key.id ? { ...item, framing: result.framing } : item)) } : entry)));
     return result;
   }
+  // shot.setLook and shot.colourScript (shot-look.js), last as their declarations are.
+  registerShotLook(registry, ports);
   if (ports.storeDomain?.('shot')) registry.registerToolAlias('frame_shot', 'shot.frame');
 }

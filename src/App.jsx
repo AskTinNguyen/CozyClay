@@ -4430,7 +4430,7 @@ export default function App() {
 		duplicateSelectedSceneObject,
 		addCharacterWaypoint, moveCharacterWaypoint, removeCharacterWaypoint, clearCharacterWaypoints, setWaypointMode,
 		setCharacterIkKey, removeCharacterIkKey, clearCharacterIkKeys, attachSceneObject, setShotCameraRail, clearShotCameraRail,
-		choosePartColours, setGuideMode, setInsetCollapsed, exportShotVideo, exportDirectorPacket,
+		choosePartColours, setGuideMode, setInsetCollapsed, exportShotVideo, exportDirectorPacket, renderFrameBuffer: (frame) => appContext.ports.renderFrameBuffer(frame),
 		readView: readStudioState, publishView: operateStudio, canPose: () => !poseRefusal,
 		switchSceneDocument, addSceneDocument, duplicateSceneDocument, renameSceneDocument, deleteSceneDocument,
 		afterRender: () => new Promise(resolve => renderWaitersRef.current.push(resolve)),
@@ -4663,8 +4663,8 @@ export default function App() {
 								planZoom={workspaceLayout.planZoom}
 							/>
 							{/* Sky, fog and exposure of the stage look (stage-sky.jsx), for every pane and export. */}
-							<StageAtmosphere lighting={lighting} keyLight={keyLight} theme={uiTheme} grid={gridView} />
-							<StageLights keyLight={keyLight} lighting={lighting} neutral={gridView} light={uiTheme === "light"} />
+							<StageAtmosphere lighting={lighting} keyLight={keyLight} shots={shots} frameRef={propFrameRef} theme={uiTheme} grid={gridView} />
+							<StageLights keyLight={keyLight} lighting={lighting} shots={shots} neutral={gridView} light={uiTheme === "light"} />
 							<KeyLightPuck
 								keyLight={keyLight}
 								selected={keyLightSelected}

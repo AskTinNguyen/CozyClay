@@ -9,6 +9,7 @@ import StatusBar from "./StatusBar.jsx";
 import PreferencesSlot from "./PreferencesSlot.jsx";
 import SequencePromptDialog from "./SequencePromptDialog.jsx";
 import DirectorPacketDialog from "./DirectorPacketDialog.jsx";
+import ColourScriptDialog from "./ColourScriptDialog.jsx";
 import "./shell.css";
 import "./glass.css";
 import "./glass-regions.css";
@@ -47,6 +48,7 @@ export default function StudioShell({ viewport, children, ...props }) {
 			<TopBar preferences={<PreferencesSlot />} />
 			<SequencePromptDialog />
 			<DirectorPacketDialog />
+			<ColourScriptDialog />
 			<div className="main">
 				<div className="workspace">
 					{viewport}

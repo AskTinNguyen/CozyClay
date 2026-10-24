@@ -4,13 +4,17 @@
 // measureShotCamera, shot length as cutting rate, roll, and the subject's
 // screen-position jump at the cut), normalised and weighted by the D1 data
 // module (weights.js), plus each cut's contrast: the jump in every component
-// across it. Fixed rounding, no clock: the same document gives the same
+// across it. When a shot in the range carries a look (colour-script), the tone
+// component joins them: each shot's planned tone, or the measured one the
+// caller hands in. Fixed rounding, no clock: the same document gives the same
 // bytes. Pure: no DOM, no three.js.
 import { castAt, shotSubject, sizeRung } from "../camera-coverage/cut-geometry.js";
 import { eyePoint, measureComposition } from "../camera-coverage/composition.js";
 import { engineScene, measureShotCamera } from "../shot-prompt-engine/measure.js";
 import { SUBJECT_HEIGHT_M } from "../shot.js";
-import { combine, CUT_JUMP, INTENSITY_COMPONENTS, INTENSITY_COMPONENT_IDS, INTENSITY_VERSION } from "./weights.js";
+import { combine, CUT_JUMP, INTENSITY_COMPONENTS, INTENSITY_COMPONENT_IDS, INTENSITY_VERSION, TONE_COMPONENT } from "./weights.js";
+import { looksLit, mergeShotLook } from "../stage-shot-look.js";
+import { plannedTone } from "../colour-script/script.js";
 
 const DEG = 180 / Math.PI;
 const r3 = (value) => Math.round((Number.isFinite(value) ? value : 0) * 1000) / 1000;
@@ -62,23 +66,28 @@ const rounded = (values) => Object.fromEntries(Object.entries(values).map(([key,
 
 /**
  * @param {object} document  a sequence document (shot-prompt-engine/document.js)
- * @param {{ range?: object, placeAt?: Function }} [options]  range as the brief takes it; placeAt(row, shot, frame) places the cast (default castAt)
+ * @param {{ range?: object, placeAt?: Function, tones?: Record<string, { luminance, warmth }> }} [options]  range as the brief takes it; placeAt(row, shot, frame) places the cast (default castAt);
+ *   tones: measured tones by shot id (colour-script), which also turn the tone component on
  * @returns {{ version, components: string[], weights: object, shots: Array<{ index, shotId, shotName, startFrame, endFrame, subjectId, unmeasured?, components, combined, raw }>,
  *   cuts: Array<{ cutFrame, from, to, contrast, total }>, peak: { index, shotId, combined } | null }}
  */
-export function sequenceIntensity(document, { range = null, placeAt = castAt } = {}) {
+export function sequenceIntensity(document, { range = null, placeAt = castAt, tones = null } = {}) {
 	const scene = engineScene(document), shots = intensityShots(document, range);
 	const raws = shots.map((shot) => shotRaw(document, shot, scene, placeAt));
+	// The tone component (weights.js v2) only once a shot has a look or a measured tone is given: otherwise every value is v1's.
+	const toned = Boolean(tones) || shots.some((shot) => looksLit(shot.look));
+	const tone = shots.map((shot) => (toned ? tones?.[shot.id] ?? plannedTone(mergeShotLook(document.stage ?? {}, shot.look)) : null));
+	const ids = toned ? [...INTENSITY_COMPONENT_IDS, TONE_COMPONENT.id] : INTENSITY_COMPONENT_IDS, weighted = toned ? [...INTENSITY_COMPONENTS, TONE_COMPONENT] : INTENSITY_COMPONENTS;
 	const jumps = raws.map((raw, i) => {
 		const before = raws[i - 1]?.ends?.[1], after = raw.ends?.[0];
 		return before && after && before.screenX !== null && after.screenX !== null ? Math.abs(after.screenX - before.screenX) : 0;
 	});
 	const rows = shots.map((shot, i) => {
-		const raw = raws[i], components = rounded(shotComponents(raw, jumps[i]));
+		const raw = raws[i], components = rounded({ ...shotComponents(raw, jumps[i]), ...(toned ? { tone: TONE_COMPONENT.value(tone[i]) } : {}) });
 		const stated = raw.ends ? { rung: raw.ends.map((end) => end.rung), elevationDeg: raw.ends.map((end) => r3(end.elevationDeg)), focalMm: raw.ends.map((end) => r3(end.focalMm)),
 			rollDeg: raw.ends.map((end) => r3(end.rollDeg)), screenX: raw.ends.map((end) => end.screenX), speedMps: r3(raw.speedMps), panDps: r3(raw.panDps), tiltDps: r3(raw.tiltDps), zoomMmps: r3(raw.zoomMmps) } : {};
 		return { index: i + 1, shotId: shot.id, shotName: shot.name ?? shot.id, startFrame: shot.startFrame, endFrame: shot.endFrame, subjectId: raw.subjectId,
-			...(raw.unmeasured ? { unmeasured: true } : {}), components, combined: r3(combine(components)), raw: { seconds: r3(raw.seconds), screenJump: r3(jumps[i]), ...stated } };
+			...(raw.unmeasured ? { unmeasured: true } : {}), components, combined: r3(combine(components, ids)), raw: { seconds: r3(raw.seconds), screenJump: r3(jumps[i]), ...stated, ...(toned ? { luminance: r3(tone[i].luminance), warmth: r3(tone[i].warmth) } : {}) } };
 	});
 	const cuts = rows.slice(1).map((row, k) => {
 		const a = rows[k], ra = raws[k], rb = raws[k + 1], contrast = {};
@@ -86,10 +95,11 @@ export function sequenceIntensity(document, { range = null, placeAt = castAt } =
 			const kind = CUT_JUMP[id];
 			contrast[id] = r3(kind === "ends" ? (ra.ends && rb.ends ? Math.abs(endValue(id, rb.ends[0]) - endValue(id, ra.ends[1])) : 0) : kind === "incoming" ? row.components[id] : Math.abs(row.components[id] - a.components[id]));
 		}
-		const total = INTENSITY_COMPONENTS.reduce((sum, c) => sum + c.weight * contrast[c.id], 0);
+		if (toned) contrast.tone = r3(TONE_COMPONENT.cut(tone[k], tone[k + 1]));
+		const total = weighted.reduce((sum, c) => sum + c.weight * contrast[c.id], 0);
 		return { cutFrame: row.startFrame, from: a.shotId, to: row.shotId, index: row.index, contrast, total: r3(total) };
 	});
 	const peak = rows.reduce((best, row) => (!best || row.combined > best.combined ? row : best), null);
-	return { version: INTENSITY_VERSION, components: [...INTENSITY_COMPONENT_IDS], weights: Object.fromEntries(INTENSITY_COMPONENTS.map((row) => [row.id, row.weight])),
+	return { version: INTENSITY_VERSION, components: [...ids], weights: Object.fromEntries(weighted.map((row) => [row.id, row.weight])),
 		shots: rows, cuts, peak: peak ? { index: peak.index, shotId: peak.shotId, combined: peak.combined } : null };
 }

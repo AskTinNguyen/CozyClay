@@ -2,8 +2,8 @@
 // shots. A header (format, total length, aspect, look, the model it is shaped
 // for), the cast with stable descriptors, numbered beats with timecodes (what
 // the camera does in the classifier's words and measured, size, angle, lens,
-// rig, composition, coverage role, the transition in, and the story beats the
-// cast's motion makes there), then where it builds and peaks (the intensity
+// rig, composition, coverage role, the transition in, the shot's own look and
+// intended palette, and the story beats the cast's motion makes there), then where it builds and peaks (the intensity
 // curve) and the continuity line. The same document gives the same bytes
 // (D1): no clock, no randomness, fixed rounding.
 import { describeBeat, castName } from "./beat.js";
@@ -14,6 +14,8 @@ import { referenceManifest } from "./references.js";
 import { PREVIS_WORDS, clipsFor, moveTag, profileById, profileWarnings } from "../model-profiles.js";
 import { checkMotivation, motivationReason } from "../camera-motivation/check.js";
 import { checkStructure, structureWords } from "../intensity-curve/structure.js";
+import { shotLookWords } from "../stage-shot-look.js";
+import { lookRecipe } from "../colour-script/recipes.js";
 
 const DEFAULT_LOOK = "cinematic, natural light";
 const pad = (value) => String(value).padStart(2, "0");
@@ -43,7 +45,7 @@ function castLines(document, scene, beats) {
 }
 
 // Timecodes are delivery time: the selected shots back to back, as the delivered video plays them (no gaps).
-function beatLines(beat, { fps, profile, actions, clipLabel, story = [], motives = [] }) {
+function beatLines(beat, { fps, profile, actions, clipLabel, story = [], motives = [], look = "" }) {
 	const from = beat.deliveryStart, to = from + beat.frames - 1, seconds = beat.frames / fps;
 	const head = profile.id === "kling-3" ? `Shot ${beat.index}, ${sec(seconds)}` : `${beat.index}.`;
 	const tag = profile.cameraStyle === "tags" ? `${moveTag(beat.moveId)} ` : "";
@@ -56,6 +58,8 @@ function beatLines(beat, { fps, profile, actions, clipLabel, story = [], motives
 		`   Frame: ${beat.size}; ${beat.angle}; lens ${beat.lens}${beat.composition ? `; ${beat.composition}` : ""}.`,
 		...(beat.rig.length ? [`   Rig: ${beat.rig.join("; ")}.`] : []),
 		...(beat.coverage ? [`   Coverage: ${beat.coverage}.`] : []),
+		// The shot's own look and the palette it should read as (colour-script), the same words for every model.
+		...(look ? [`   Look: ${look}.`] : []),
 		...actions.map((action) => `   Action ${timecode(from + action.frame - beat.startFrame, fps)} (f${action.frame}${action.takeFrame !== action.frame ? `, take f${action.takeFrame}` : ""}): ${action.words}.`),
 		// Authored story beats in the shot, and why each camera move happens (camera-motivation).
 		...story.map((row) => `   Story ${timecode(from + row.frame - beat.startFrame, fps)} (f${row.frame}): ${row.kind}, ${row.label}.`),
@@ -103,7 +107,8 @@ export function buildSequencePrompt(document, { range = null, profile: profileId
 	const motivation = new Map(checkMotivation(document, { shotIds: shots.map((shot) => shot.id) }).shots.map((row) => [row.shotId, row.segments]));
 	const motives = (beat) => (motivation.get(beat.id) ?? []).map((segment) => motivationReason(segment, beat.subjectName)).filter(Boolean);
 	const story = (beat) => (document.storyBeats ?? []).filter((row) => row.frame >= beat.startFrame && row.frame <= beat.endFrame);
-	clips.forEach((clip, c) => clip.forEach((beat, k) => lines.push(...beatLines(beat, { fps, profile, actions: beatsIn(actions, shots[beat.index - 1]), story: story(beat), motives: motives(beat),
+	const shotLook = (shot) => (shot?.look ? shotLookWords(shot.look, { label: lookRecipe(shot.look.recipe)?.label ?? null }) : "");
+	clips.forEach((clip, c) => clip.forEach((beat, k) => lines.push(...beatLines(beat, { fps, profile, actions: beatsIn(actions, shots[beat.index - 1]), story: story(beat), motives: motives(beat), look: shotLook(shots[beat.index - 1]),
 		clipLabel: clips.length > 1 && k === 0 ? `CLIP ${c + 1} of ${clips.length} (${sec(clip.reduce((sum, row) => sum + row.frames / fps, 0))})${profile.cuts === "per-clip" ? ": generate on its own" : ""}` : null }))));
 	lines.push(`STRUCTURE: ${structureWords(checkStructure(document, { range }))}`);
 	lines.push(`CONTINUITY: ${continuity.text}`, `KEEP OUT: the previs itself (${PREVIS_WORDS.slice(0, 4).join(", ")}): render real people in a real place in the look above.`);

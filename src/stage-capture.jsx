@@ -3,6 +3,7 @@ import { useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { GIZMO_LAYER } from "./dualview.jsx";
 import { LENS_CAPTURE_SAMPLES, renderLens } from "./lens-render.js";
+import { applyShotLookForDraw } from "./stage-shot-look-draw.js";
 
 export const CAPTURE_W = 1920;
 export const CAPTURE_H = 1080;
@@ -50,6 +51,8 @@ export function CaptureRig({ apiRef, camRef, width = CAPTURE_W, height = CAPTURE
 					if (!cam.view?.enabled) cam.aspect = width / height;
 					cam.updateProjectionMatrix();
 					const previous = gl.getRenderTarget();
+					// The frame's own shot look (colour-script), when it is not the one on screen: put back in the finally below.
+					const restoreLook = applyShotLookForDraw(scene);
 					// The viewport's fog dissolves the deck into the background by ~54 m
 					// so the working view has no horizon to distract from blocking. An
 					// exported frame wants the opposite: the horizon IS the vanishing
@@ -92,6 +95,7 @@ export function CaptureRig({ apiRef, camRef, width = CAPTURE_W, height = CAPTURE
 						scene.environmentIntensity = environmentIntensity;
 						scene.backgroundIntensity = backgroundIntensity;
 						if (fogColor) fog.color.copy(fogColor);
+						restoreLook();
 					}
 					return buffer;
 				},

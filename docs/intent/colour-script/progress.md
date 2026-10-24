@@ -1,9 +1,9 @@
 # Colour Script: Progress
 
 - Working under rev: 1
-- Worker: none yet (planned)
-- Current step: none
-- Next step: start when the `Waits for` line in prompt.md is met
+- Worker: cloud worker agent (colour-script)
+- Current step: 2, browser QA (A7 ui:qa, A3/A7 ui:shot)
+- Next step: docs (A9), then the suite gate (A8)
 - PR: none yet
 
 ## Acceptance

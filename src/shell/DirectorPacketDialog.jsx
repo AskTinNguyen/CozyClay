@@ -90,10 +90,10 @@ function DirectorPacketBody({ onClose, readStudioState, shots, recording }) {
 						{packet.notes.map((note, i) => <li key={`${note.rule}-${i}`} data-note={note.rule}>{`${note.check}: ${note.message}`}</li>)}
 						{packet.continuity && <li data-note="continuity">{`${ko("Continuity", "연속성")}: ${packet.continuity}`}</li>}
 					</ul>
-					<p className="director-packet-files" data-testid="packet-files">{`${ko("In the sequence pack", "시퀀스 팩 안에")}: ${packetFileNames({ plan: true, contactSheet: true, intensity: Boolean(packet.intensity) }).join(", ")}`}</p>
+					<p className="director-packet-files" data-testid="packet-files">{`${ko("In the sequence pack", "시퀀스 팩 안에")}: ${packetFileNames({ plan: true, contactSheet: true, intensity: Boolean(packet.intensity), colourScript: true }).join(", ")}`}</p>
 					<div className="sequence-prompt-actions">
 						<button type="button" className="sequence-prompt-button primary" data-testid="packet-download" disabled={recording || !packet.shots.length}
-							title={ko("The sequence pack for these shots with packet/ inside: index.html, plan.png, contact-sheet.png, intensity.png, shot-list.csv, shot-list.md", "이 샷들의 시퀀스 팩, 안에 packet/: index.html, plan.png, contact-sheet.png, intensity.png, shot-list.csv, shot-list.md")}
+							title={ko("The sequence pack for these shots with packet/ inside: index.html, plan.png, contact-sheet.png, intensity.png, colour-script.png, shot-list.csv, shot-list.md", "이 샷들의 시퀀스 팩, 안에 packet/: index.html, plan.png, contact-sheet.png, intensity.png, colour-script.png, shot-list.csv, shot-list.md")}
 							onClick={download}>{ko("Download director packet", "디렉터 패킷 다운로드")}</button>
 					</div>
 				</div>
