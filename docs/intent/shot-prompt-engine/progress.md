@@ -4,7 +4,7 @@
 - Worker: `shot-prompt-engine-worker`
 - Current step: done; PR open for review
 - Next step: orchestrator review of the ui:shot images (A7) and A9 docs, then merge
-- PR: none yet
+- PR: https://github.com/AskTinNguyen/CozyClay/pull/6
 
 ## Acceptance
 
