@@ -1,0 +1,13 @@
+{
+	"version": 1,
+	"entries": [
+		{ "bookId": "film-directing-shot-by-shot", "page": 3, "title": "FIXTURE PAGE TITLE", "excerpt": "FIXTURE EXCERPT MUST NOT LEAK", "confidence": "high", "tags": ["camera-shot", "close-up"], "evidence": ["close-up", "CU"] },
+		{ "bookId": "film-directing-shot-by-shot", "page": 4, "title": "FIXTURE PAGE TITLE", "excerpt": "FIXTURE EXCERPT MUST NOT LEAK", "confidence": "medium", "tags": ["close-up"], "evidence": ["closeup"] },
+		{ "bookId": "film-directing-shot-by-shot", "page": 5, "title": "FIXTURE PAGE TITLE", "excerpt": "FIXTURE EXCERPT MUST NOT LEAK", "confidence": "medium", "tags": [], "evidence": ["close-up"] },
+		{ "bookId": "film-directing-shot-by-shot", "page": 12, "title": "FIXTURE PAGE TITLE", "excerpt": "FIXTURE EXCERPT MUST NOT LEAK", "confidence": "medium", "tags": ["camera-movement"], "evidence": [] },
+		{ "bookId": "film-directing-shot-by-shot", "page": 20, "title": "FIXTURE PAGE TITLE", "excerpt": "FIXTURE EXCERPT MUST NOT LEAK", "confidence": "high", "tags": ["camera-shot"], "evidence": ["shot"] },
+		{ "bookId": "master-shots-vol2", "page": 2, "title": "FIXTURE PAGE TITLE", "excerpt": "FIXTURE EXCERPT MUST NOT LEAK", "confidence": "high", "tags": ["axis-eyeline"], "evidence": ["line of action"] },
+		{ "bookId": "master-shots-vol2", "page": 6, "title": "FIXTURE PAGE TITLE", "excerpt": "FIXTURE EXCERPT MUST NOT LEAK", "confidence": "medium", "tags": [], "evidence": ["close-up"] },
+		{ "bookId": "fixture-novel", "page": 1, "title": "FIXTURE PAGE TITLE", "excerpt": "FIXTURE EXCERPT MUST NOT LEAK", "confidence": "high", "tags": ["close-up"], "evidence": ["close-up", "line of action"] }
+	]
+}
