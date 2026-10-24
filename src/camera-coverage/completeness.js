@@ -14,7 +14,7 @@ import { castAt, lineSide, shotCameraAt, shotSubject, sizeRung } from "./cut-geo
 import { authoredLine, cutPair, pairLabel } from "./cut-line.js";
 import { projectPoint } from "./composition.js";
 
-const NEUTRAL_M = 0.2, SAME_SETUP_M = 0.05, WIDE_RUNG = SIZE_LADDER.indexOf("medium-wide shot");
+const NEUTRAL_M = 0.2, SAME_SETUP_M = 0.05, SAME_ANGLE_DEG = 2, SAME_FOV_DEG = 0.5, WIDE_RUNG = SIZE_LADDER.indexOf("medium-wide shot");
 const nameOf = (row) => String(row?.name ?? row?.subject ?? row?.id ?? "").split(",")[0].trim();
 const GROUP_IDS = new Set(["master-shot", "establishing-shot", "three-shot", "two-shot"]);
 const stackIds = (shot) => (shot.technique?.stack ?? []).map((item) => item.id);
@@ -33,13 +33,27 @@ function readShot(shot, scene, aspect) {
 	return { shot, start, end, people, subject, seen, cutaway: Boolean(start) && (stackIds(shot).includes("insert-shot") || !seen.length) };
 }
 
-/** The signed side of a pair's line a camera sits on (0 within the neutral band). */
+/** The signed side of a pair's line a camera sits on (0 within the neutral band; null when it cannot be measured, which is never neutral). */
 function sideOf(camera, pair, people) {
 	// One direction per pair, whichever order it was named in.
 	const [a, b] = [...pair].sort().map((id) => people.find((row) => row.id === id));
-	if (!camera || !a || !b) return 0;
+	if (!camera || !a || !b) return null;
 	const value = lineSide(camera.pos, a, { x: b.x - a.x, z: b.z - a.z });
 	return Math.abs(value) > NEUTRAL_M ? Math.sign(value) : 0;
+}
+
+const degrees = (radians) => (Math.abs(Math.atan2(Math.sin(radians), Math.cos(radians))) * 180) / Math.PI;
+/** How a repeated setup differs from the model's camera (position, aim, lens, at both ends), or null when it is the same setup. */
+function setupDifference(mine, model) {
+	for (const [label, a, b] of [["", mine.start, model.start], [" at its end", mine.end, model.end]]) {
+		if (!a || !b) { if (a !== b) return `its camera cannot be measured${label}`; continue; }
+		const metres = Math.hypot(a.pos.x - b.pos.x, a.pos.y - b.pos.y, a.pos.z - b.pos.z);
+		if (metres > SAME_SETUP_M) return `its camera stands ${metres.toFixed(2)} m from the other branches'${label}`;
+		const turn = Math.max(degrees((a.yaw ?? 0) - (b.yaw ?? 0)), degrees((a.pitch ?? 0) - (b.pitch ?? 0)));
+		if (turn > SAME_ANGLE_DEG) return `its camera is turned ${turn.toFixed(0)} degrees from the other branches'${label}`;
+		if (Math.abs((a.fovDeg ?? 0) - (b.fovDeg ?? 0)) > SAME_FOV_DEG) return `its lens differs from the other branches' (${(a.fovDeg ?? 0).toFixed(1)} vs ${(b.fovDeg ?? 0).toFixed(1)} degrees of view)${label}`;
+	}
+	return null;
 }
 
 /**
@@ -111,13 +125,14 @@ export function checkCoverage(shots, scene, { range = null, castIds = null, bran
 			const mine = entries.find((entry) => setupKey(entry) === key), say = `${model.shot.coverage?.role ?? "shot"}${model.subject ? ` on ${nameOf(model.subject)}` : ""}`;
 			const suggest = { stack: model.shot.technique?.stack ?? [{ id: "medium-close-up" }], subjectId: model.subject?.id, text: `lay the ${say} setup in branch ${n + 1} with the same stack` };
 			if (!mine) gap("branch", `Branch ${n + 1} (${spans[n].startFrame}-${spans[n].endFrame}) has no ${say} setup that the other branches use.`, suggest, { branch: n });
-			else if (mine.start && model.start && Math.hypot(mine.start.pos.x - model.start.pos.x, mine.start.pos.y - model.start.pos.y, mine.start.pos.z - model.start.pos.z) > SAME_SETUP_M) {
-				gap("branch", `Branch ${n + 1}'s ${say} is not the same setup: its camera stands ${Math.hypot(mine.start.pos.x - model.start.pos.x, mine.start.pos.z - model.start.pos.z).toFixed(2)} m from the other branches'.`, suggest, { branch: n, shotId: mine.shot.id });
+			else if (mine !== model) {
+				const differs = setupDifference(mine, model);
+				if (differs) gap("branch", `Branch ${n + 1}'s ${say} is not the same setup: ${differs}.`, suggest, { branch: n, shotId: mine.shot.id });
 			}
 		}
 	});
 
 	return { complete: gaps.length === 0, range: span, shots: clips.length, cast: cast.map((row) => row.id), gaps,
 		checks: { master: Boolean(master), sizes: gaps.every((row) => row.kind !== "sizes"), lineChanges: gaps.every((row) => row.kind !== "line-change"), branches: spans.length ? gaps.every((row) => row.kind !== "branch") : null },
-		measures: { master: master?.shot.id ?? null, sizes, lineChanges, branches: spans.map((b, n) => ({ ...b, setups: perBranch[n].map(setupKey) })) } };
+		measures: { master: master?.shot.id ?? null, unmeasured: read.filter((entry) => !entry.start || !entry.end).map((entry) => entry.shot.id), sizes, lineChanges, branches: spans.map((b, n) => ({ ...b, setups: perBranch[n].map(setupKey) })) } };
 }

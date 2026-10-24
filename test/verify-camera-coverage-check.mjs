@@ -97,6 +97,40 @@ check("gapped: a branch missing a setup, and a branch whose setup camera moved",
 	suggestions(missing);
 });
 
+check("unmeasurable cameras (a follow cam, a shot with no keys) never bridge a line change; the report names them", () => {
+	const shots = laid("triangle-dialogue", TRIO).slice(1), before = checkCoverage(shots, scene(TRIO));
+	const changes = before.gaps.filter((gap) => gap.kind === "line-change").length;
+	assert.ok(changes >= 1, "the triangle without its master has a line change to bridge");
+	const end = shots.at(-1).endFrame, blind = [
+		{ ...shots[0], id: "follow", name: "Follow", startFrame: end + 1, endFrame: end + 40, camera: { mode: "follow" }, coverage: null, line: undefined },
+		{ ...shots[0], id: "nokeys", name: "No keys", startFrame: end + 41, endFrame: end + 80, cameraKeys: [], coverage: null, line: undefined },
+	];
+	const after = checkCoverage([...shots, ...blind], scene(TRIO));
+	assert.equal(after.gaps.filter((gap) => gap.kind === "line-change").length, changes, after.measures.lineChanges.map((row) => `${row.cutFrame}:${row.bridge}`).join());
+	assert.ok(after.measures.lineChanges.every((row) => !["follow", "nokeys"].includes(row.bridge)), "an unknown side is not a neutral");
+	assert.deepEqual(after.measures.unmeasured, ["follow", "nokeys"]);
+	assert.deepEqual(before.measures.unmeasured, []);
+});
+
+check("branch setups compare aim and lens as well as position, at both ends", () => {
+	const shots = laid("branching-dialogue", DUO, { branches: 3 });
+	const alter = (fn) => checkCoverage(shots.map((row) => (row.coverage.branch === 1 && row.coverage.setup === "single-1" ? fn(row) : row)), scene(DUO));
+	const keys = (row, framing) => ({ ...row, cameraKeys: row.cameraKeys.map((key, i) => ({ ...key, framing: framing(key.framing, i, row.cameraKeys.length) })) });
+	const turned = alter((row) => keys(row, (framing) => ({ ...framing, yaw: framing.yaw + Math.PI })));
+	assert.ok(turned.gaps.some((gap) => gap.kind === "branch" && /Single on Mara is not the same setup: its camera is turned 180 degrees/.test(gap.message)), turned.gaps.map((gap) => gap.message).join(" | "));
+	const tilted = alter((row) => keys(row, (framing) => ({ ...framing, pitch: (framing.pitch ?? 0) + 0.2 })));
+	assert.ok(tilted.gaps.some((gap) => gap.kind === "branch" && /turned 11 degrees/.test(gap.message)), tilted.gaps.map((gap) => gap.message).join(" | "));
+	const lens = alter((row) => keys(row, (framing) => ({ ...framing, fovDeg: framing.fovDeg / 2 })));
+	assert.ok(lens.gaps.some((gap) => gap.kind === "branch" && /its lens differs/.test(gap.message)), lens.gaps.map((gap) => gap.message).join(" | "));
+	// A moving setup that ends elsewhere: same start, a later key moved (the shot gains an end key when it had one).
+	const moved = alter((row) => {
+		const last = row.cameraKeys.at(-1), extra = { ...last, frame: row.endFrame, framing: { ...last.framing, pos: { ...last.framing.pos, x: last.framing.pos.x + 1 } } };
+		return { ...row, cameraKeys: last.frame === row.endFrame && row.cameraKeys.length > 1 ? [...row.cameraKeys.slice(0, -1), extra] : [...row.cameraKeys, extra] };
+	});
+	assert.ok(moved.gaps.some((gap) => gap.kind === "branch" && /at its end/.test(gap.message)), moved.gaps.map((gap) => gap.message).join(" | "));
+	assert.equal(checkCoverage(shots, scene(DUO)).checks.branches, true, "unchanged branches still match");
+});
+
 check("camera.checkCoverage through the bus: read only, from words, a cast and a range", () => {
 	const characters = [createCharacterEntry({ id: "actor-a", model: "y-bot-tpose", x: 0, z: 0, rot: 90, subject: "Mara" }), createCharacterEntry({ id: "actor-b", model: "y-bot-tpose", x: 4, z: 0, rot: -90, subject: "Joon" })];
 	const f = shotsFixture({ characters });
