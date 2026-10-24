@@ -207,6 +207,7 @@ import { shotCaptureMeta } from "./shot-meta.js";
 import { buildShotPrompt } from "./shot-prompt.js";
 import { buildKeyframePack, keyframePackEntries, keyframePackName, slugifyTitle } from "./keyframe-pack.js";
 import { sequencePackExporter, shotSequenceFiles } from "./sequence-prompt-studio.js";
+import { directorPacketExporter } from "./director-packet/studio.js";
 import { buildZip } from "./zip-store.js";
 import { composeStoryboard } from "./storyboard.js";
 import { DEPTH_RANGE_M, depthRangeFromFrames, passFileName, renderPass } from "./render-passes.js";
@@ -4401,6 +4402,8 @@ export default function App() {
 		showRefusal: appContext.notify,
 		emitCommandEvent: detail => window.dispatchEvent(new CustomEvent("cozyclay:command", { detail })),
 	});
+	/** export.directorPacket: the sequence pack for some shots with packet/ inside (src/director-packet/studio.js). */
+	function exportDirectorPacket(shotIds, options) { return directorPacketExporter({ exportSequencePack: sequencePackExporter({ readStudioState, executeExportRequest, exportRequest, buildShotKeyframePack, saveExport, setToast, isRecording: () => Boolean(recRef.current) }), readStudioState, renderFrameBuffer: (frame) => appContext.ports.renderFrameBuffer(frame) })(shotIds, options); }
 	appContext.updateActionPorts({
 		// Shots and objects come from the synchronously published read model, so
 		// an action sees its own edit before React renders it.
@@ -4427,7 +4430,7 @@ export default function App() {
 		duplicateSelectedSceneObject,
 		addCharacterWaypoint, moveCharacterWaypoint, removeCharacterWaypoint, clearCharacterWaypoints, setWaypointMode,
 		setCharacterIkKey, removeCharacterIkKey, clearCharacterIkKeys, attachSceneObject, setShotCameraRail, clearShotCameraRail,
-		choosePartColours, setGuideMode, setInsetCollapsed, exportShotVideo,
+		choosePartColours, setGuideMode, setInsetCollapsed, exportShotVideo, exportDirectorPacket,
 		readView: readStudioState, publishView: operateStudio, canPose: () => !poseRefusal,
 		switchSceneDocument, addSceneDocument, duplicateSceneDocument, renameSceneDocument, deleteSceneDocument,
 		afterRender: () => new Promise(resolve => renderWaitersRef.current.push(resolve)),

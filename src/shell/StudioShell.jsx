@@ -8,6 +8,7 @@ import BottomDock from "./BottomDock.jsx";
 import StatusBar from "./StatusBar.jsx";
 import PreferencesSlot from "./PreferencesSlot.jsx";
 import SequencePromptDialog from "./SequencePromptDialog.jsx";
+import DirectorPacketDialog from "./DirectorPacketDialog.jsx";
 import "./shell.css";
 import "./glass.css";
 import "./glass-regions.css";
@@ -45,6 +46,7 @@ export default function StudioShell({ viewport, children, ...props }) {
 		<div {...props} data-shell="glass" data-dock-tab={shownTab}>
 			<TopBar preferences={<PreferencesSlot />} />
 			<SequencePromptDialog />
+			<DirectorPacketDialog />
 			<div className="main">
 				<div className="workspace">
 					{viewport}

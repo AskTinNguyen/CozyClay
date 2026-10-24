@@ -15,7 +15,7 @@ import { checkCuts } from "../camera-coverage/cut-rules.js";
 import { runPacketChecks } from "./checks.js";
 import { planPrimitives } from "./plan.js";
 
-export const PACKET_VERSION = 1;
+const PACKET_VERSION = 1;
 const r = (value, places = 2) => Math.round(value * 10 ** places) / 10 ** places + 0;
 const LETTERS = "ABCDEFGH";
 

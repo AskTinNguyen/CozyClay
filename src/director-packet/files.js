@@ -6,10 +6,10 @@
 import { packetPage } from "./page.js";
 import { shotListCsv, shotListMarkdown } from "./shot-list.js";
 
-export const PACKET_FOLDER = "packet";
+const PACKET_FOLDER = "packet";
 
 /** The pictures a packet can carry, in page order. `images[id]` holds the PNG bytes the Studio rendered. */
-export const PACKET_PICTURES = Object.freeze([
+const PACKET_PICTURES = Object.freeze([
 	{ id: "plan", file: "plan.png", title: "Plan", caption: "Top-down plan: numbered cameras with their frustums and moves, the lines of action, the cast's marks and paths." },
 	{ id: "contactSheet", file: "contact-sheet.png", title: "Contact sheet", caption: "One frame per shot at its middle, numbered as in the shot list." },
 ]);

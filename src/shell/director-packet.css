@@ -1,0 +1,14 @@
+/* File > Export > Director packet: the range, the plan preview, the shot list
+   with its flags, the notes, and the download (topbar.css .menubar-dialog). */
+@layer regions {
+	.menubar-dialog.director-packet { width: min(1080px, 100%); }
+	.director-packet-body { display: flex; flex-direction: column; gap: var(--sp-1, 8px); max-height: min(82vh, 980px); overflow: auto; }
+	.director-packet-plan { width: 100%; height: auto; aspect-ratio: 1600 / 1131; border: 1px solid var(--surface-active, #26262a); border-radius: var(--r-1, 4px); background: #fbfaf6; }
+	.director-packet-table { width: 100%; border-collapse: collapse; font-size: var(--secondary-size); }
+	.director-packet-table th, .director-packet-table td { padding: 3px 6px; border-bottom: 1px solid var(--surface-active, #26262a); text-align: left; vertical-align: top; color: var(--text-row, #c9c9ce); }
+	.director-packet-table th { color: var(--text-2, #9b9ba1); font-weight: 600; }
+	.director-packet-table .flag { color: var(--select, #e8a33d); }
+	.director-packet-notes { margin: 0; padding-left: 20px; color: var(--text-row, #c9c9ce); font-size: var(--secondary-size); }
+	.director-packet-notes li + li { margin-top: 3px; }
+	.director-packet-files { margin: 0; color: var(--text-3, #636369); font-family: var(--mono); font-size: var(--secondary-size); }
+}

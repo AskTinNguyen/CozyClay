@@ -1,10 +1,11 @@
 // Export commands: the Export menu's Video (mp4), the same export, awaited to
-// its file. A failure was already shown in the export panel, so it refuses
-// silently.
+// its file, and the director packet (director-packet.js). A failure was
+// already shown in the export panel, so it refuses silently.
 import { studioActionDeclaration } from "../studio-actions.js";
 import { fail, shotLabel, shotOf } from "./shared.js";
+import { packetDeclarations, registerDirectorPacket } from "./director-packet.js";
 
-export const declarations = Object.freeze(["export.shotVideo"].map(studioActionDeclaration));
+export const declarations = Object.freeze([...["export.shotVideo"].map(studioActionDeclaration), ...packetDeclarations]);
 
 export function register(registry, ports) {
 	registry.register({ ...studioActionDeclaration("export.shotVideo"),
@@ -17,4 +18,5 @@ export function register(registry, ports) {
 			return { affectedIds: shot ? [shot.id] : [], output: { fileName: result.fileName, frameCount: result.frameCount },
 				summary: `Recorded ${scope === "timeline" ? "the whole timeline" : shot ? shotLabel(shot) : "the shot"} to ${result.fileName} (${result.frameCount} frames); it was handed to the configured export folder or the browser download.` };
 		} });
+	registerDirectorPacket(registry, ports);
 }
