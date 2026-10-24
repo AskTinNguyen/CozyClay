@@ -3,8 +3,10 @@
 // figure's proportions (a share of its stature) and its place and heading from
 // the character's placement at that frame (its take root, its walked path or
 // its shot override), so the rig follows the body frame by frame and the
-// subject holds still in frame while the world moves behind it. With a baked
-// take the rig also rises and falls with the hips (the walk bob).
+// subject holds still in frame while the world moves behind it. A baked take
+// v3 moves the body through its hips (rig space, under the character's
+// placement), so the rig rides the hips: their path, their heading and their
+// rise and fall (the walk bob).
 import { placementAt } from "../root-path.js";
 import { isProxyFigure } from "../scenes.js";
 import { SUBJECT_HEIGHT_M } from "../shot.js";
@@ -17,29 +19,60 @@ const PROXY_FACE = { height: 1.58 / 1.8, forward: 0 };
 
 const castRows = (scene) => (Array.isArray(scene?.cast) ? scene.cast : []);
 
+const DEG = 180 / Math.PI;
+
+/** A take's per-frame xyz track (v3 `hips`, else `rootPos`) at a fractional frame, or null. */
+function trackAt(take, frame) {
+	const track = take?.hips ?? take?.rootPos, count = take?.frameCount ?? take?.frames;
+	if (!track || !(count > 1) || track.length < count * 3 || !Number.isFinite(frame)) return null;
+	const at = Math.max(0, Math.min(count - 1, frame)), lo = Math.floor(at), hi = Math.min(lo + 1, count - 1), k = at - lo;
+	const value = (axis) => track[lo * 3 + axis] + (track[hi * 3 + axis] - track[lo * 3 + axis]) * k;
+	return { x: value(0), y: value(1), z: value(2), first: { x: track[0], y: track[1], z: track[2] } };
+}
+
 /** How far a take's hips have risen (m, + up) at a take frame since its first frame: a v3 take's `hips`, else `rootPos`. 0 without one. */
 export function hipsRise(take, frame) {
-	const track = take?.hips ?? take?.rootPos, count = take?.frameCount ?? take?.frames;
-	if (!track || !(count > 1) || track.length < count * 3 || !Number.isFinite(frame)) return 0;
-	const at = Math.max(0, Math.min(count - 1, frame)), lo = Math.floor(at), hi = Math.min(lo + 1, count - 1);
-	const rise = track[lo * 3 + 1] + (track[hi * 3 + 1] - track[lo * 3 + 1]) * (at - lo) - track[1];
+	const at = trackAt(take, frame), rise = at ? at.y - at.first.y : 0;
 	return Number.isFinite(rise) ? rise : 0;
+}
+
+/** The hips' heading in rig space (degrees, 0 faces +Z) at the nearest frame of a take v3, or 0. */
+function hipsYaw(take, frame) {
+	const at = Math.max(0, take?.bones?.indexOf("Hips") ?? -1), count = take?.frameCount;
+	if (!take?.rot || !take.bones?.length || !(count > 0)) return 0;
+	const i = (Math.max(0, Math.min(count - 1, Math.round(frame))) * take.bones.length + at) * 4, [x, y, z, w] = [take.rot[i], take.rot[i + 1], take.rot[i + 2], take.rot[i + 3]];
+	const yaw = Math.atan2(2 * (x * z + w * y), 1 - 2 * (x * x + y * y)) * DEG;
+	return Number.isFinite(yaw) ? yaw : 0;
+}
+
+/**
+ * Where a take v3 carries the body at a take frame, in world space: the hips' path and heading under the
+ * character's placement (as bakeTake stored them: rig space = un-yawed from the character's place), scaled
+ * with the character. Null for a take without a `hips` track (a legacy take rides its `rootPos` root).
+ */
+function takeBody(entry, take, frame) {
+	if (!take?.hips) return null;
+	const at = trackAt(take, frame);
+	if (!at) return null;
+	const scale = entry.scale ?? 1, r = ((entry.rot ?? 0) * Math.PI) / 180, c = Math.cos(r), s = Math.sin(r);
+	return { x: (entry.x ?? 0) + (c * at.x + s * at.z) * scale, z: (entry.z ?? 0) + (-s * at.x + c * at.z) * scale, rot: (entry.rot ?? 0) + hipsYaw(take, frame) };
 }
 
 /**
  * A cast member's placement at a frame: { x, z, rot (degrees), height, bob, proxy? }, or
- * null when the scene does not hold that id. The camera subject with a take
+ * null when the scene does not hold that id. Its take is the subject's
+ * `scene.motion` or another member's session take. A take v3 places the body
+ * where its hips are (path and heading); the camera subject with an older take
  * stands on its sampled root (`subjectPoint`), so slow motion and follow
- * tracks agree with the body the renderer draws. `bob` is the hips' rise
- * from its take (the subject's `scene.motion`, another member's session take),
+ * tracks agree with the body the renderer draws. `bob` is the hips' rise,
  * scaled with the character; a proxy figure does not bob.
  */
 export function castPlacementAt(scene, shot, id, frame, subjectPoint = null) {
 	const entry = castRows(scene).find((row) => row?.id === id) ?? (scene?.subject?.id === id ? scene.subject : null);
 	if (!entry) return null;
-	const takeRoot = scene.subject?.id === id && subjectPoint && (scene.motion || scene.subjectTrack) ? { x: subjectPoint.x, z: subjectPoint.z } : null;
+	const proxy = isProxyFigure(entry), take = scene.subject?.id === id ? scene.motion : entry.sessionMotion, body = proxy ? null : takeBody(entry, take, frame);
+	const takeRoot = body ?? (scene.subject?.id === id && subjectPoint && (scene.motion || scene.subjectTrack) ? { x: subjectPoint.x, z: subjectPoint.z } : null);
 	const placed = placementAt(entry, frame, { shotAt: () => shot ?? null, takeRoot });
-	const proxy = isProxyFigure(entry), take = scene.subject?.id === id ? scene.motion : entry.sessionMotion;
 	const bob = proxy ? 0 : Math.round(hipsRise(take, frame) * (entry.scale ?? 1) * 1e6) / 1e6;
 	return { x: placed.x ?? 0, z: placed.z ?? 0, rot: placed.rot ?? 0, height: SUBJECT_HEIGHT_M * (entry.scale ?? 1), bob, ...(proxy ? { proxy: true } : {}) };
 }
