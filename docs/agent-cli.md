@@ -729,9 +729,12 @@ Film vocabulary is one command. `camera.applyTechnique` takes a director's
 sentence (`request`) or a stack of technique ids (`stack`), compiles it into
 the shot's camera keys or rail as one undo entry, and answers what the camera
 actually does: `checks.move` is the move the classifier read back from the
-keys, `checks.moveVerified` says it is the move the technique promises, and a
-`PROMPT_ONLY` warning names a technique the camera cannot do yet (roll,
-focus, shake, slow motion, blur), which is then stated in the prompt only.
+keys, `checks.moveVerified` says it is the move the technique promises, and
+the capability techniques (Dutch Angle, Canted Frame, Rack Focus, Handheld
+Shot, Snorricam, Slow Motion, Whip Pan's blur) answer what they set:
+`checks.rollDeg`, `focus` and `focusDistances`, `shakeAmplitude`, `mountBone`,
+`speed`, `shutterDeg`. A `PROMPT_ONLY` warning is left only for
+Shot-Reverse-Shot, which waits for a coverage generator.
 
 ```sh
 cclay live run camera.techniques --args '{"query":"uneasy"}'
@@ -748,6 +751,34 @@ A stack holds one size, one angle, one roll, one move and one coverage
 framing plus any modifiers (`{"stack":["low-angle",{"id":"push-in","params":{"speed":"slow"}}]}`);
 two moves are refused with the reason. The applied stack is stored on the
 shot and the export prompt states it until the camera is edited by hand.
+
+## Camera capabilities
+
+`camera.set` gives a shot's camera roll, a lens, shake, a body mount, a speed
+and a shutter; `camera.setKey` keys roll and focus at a frame. Both are one
+undo entry and answer the result sampled through the lens.
+
+```sh
+cclay live run camera.set --args '{"shotId":"shot-rack","rollDeg":12,"lens":{"fStop":1.4,"focusTarget":"char-mara"},"shutterDeg":180}'
+cclay live run camera.setKey --args '{"shotId":"shot-rack","frame":120,"focus":{"targetId":"char-joon"}}'
+cclay live run camera.set --args '{"shotId":"shot-snorri","mount":{"characterId":"char-ana","bone":"chest"},"shake":{"style":"handheld","amplitude":0.6,"seed":7}}'
+cclay live run camera.set --args '{"shotId":"shot-slow","speed":0.5}'
+cclay live run camera.set --args '{"shotId":"shot-rack","rollDeg":null,"lens":null}'
+```
+```json
+{"ok":true,"summary":"Camera set on Rack [48, 144): roll 12°; f/1.4 focus Mara (4.28 m); 180° shutter.","checks":{"rollDeg":12,"fStop":1.4,"focus":"Mara","focusDistances":[4.28],"shutterDeg":180}, …}
+```
+
+`rollDeg` turns the camera about the lens (+ counter-clockwise: the horizon
+falls to the right); `lens.fStop` turns on depth of field in the Shot Camera
+preview and every capture, focused on `focusTarget` (followed per frame) or
+`focusDistance` (metres), the subject when neither is given; `shake` is seeded
+and deterministic (`handheld` or `vehicle`, amplitude 0-1); `mount` rides a
+character's `chest`, `head`, `hips` or `back` and looks at the face (or
+forward); `speed` below 1 plays the take slower over the shot (slow motion);
+`shutterDeg` blurs fast camera moves. `null` clears a field; a `lens` patch
+merges. `cclay live capture --framing` renders through the lens, and the
+exports (`camera.json`, USD, OTIO, the prompt) carry the same values.
 
 ## Limits
 
