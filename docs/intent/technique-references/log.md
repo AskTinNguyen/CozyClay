@@ -17,3 +17,17 @@ The orchestrator compared the owner's cinematic-atlas repo (a local study site o
 Written as `planned`; the `Waits for` lines carry the recommended order.
 
 Proposal 7 bundled a colour script (Scene and Viewport) and technique references (Camera and Shots); the contract gives each intent one area, so it was written as two intents, `colour-script` and `technique-references`.
+
+## L-3 (2026-10-24) | class: decision | -> rev 2
+
+> https://github.com/AskTinNguyen/CozyClay/pull/8
+>
+> Spawn Agent Sessions to work on these intents and merge them into main
+
+The owner's go-ahead for the cinematic-atlas plan. A cloud orchestrator session runs workers and merges after proof under the contract's `after-proof` authority.
+
+## L-4 (2026-10-24) | class: decision | -> rev 2
+
+> Acceptable regarding licensing because we are using this tool internally for prototyping and proof of concepts
+
+Resolves F-1 with option (a): citations only, limited to the camera and directing books, with atlas links only when the owner sets its URL.

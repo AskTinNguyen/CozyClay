@@ -145,3 +145,20 @@
 
 /* The applied stack on the timeline Shot block (timeline.jsx), after its frames. */
 .tl-shot-label small .tl-shot-technique { color: var(--camera, #c9b5f4); font-weight: 600; letter-spacing: .02em; }
+
+/* Further reading (FurtherReading.jsx): book citations; pages link to the owner's atlas once its URL is set. */
+.technique-reading { display: grid; gap: 4px; font-size: 11px; line-height: 1.4; color: var(--text-2, #9b9ba1); }
+.technique-reading strong { font-size: 10.5px; font-weight: 600; letter-spacing: .02em; color: var(--label, var(--text-3, #636369)); }
+.technique-reading ul { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.technique-reading cite { font-style: italic; color: var(--text-1, #e4e4e7); }
+.technique-reading a { color: var(--select-text, #a78bfa); font-variant-numeric: tabular-nums; }
+.technique-reading p { margin: 0; color: var(--text-3, #636369); }
+.technique-reading .technique-atlas { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 6px; }
+.technique-reading .technique-atlas input {
+	box-sizing: border-box; width: 100%; height: 22px; padding: 0 6px; border: 0; border-radius: 6px;
+	background: var(--field, #0f0f11); color: var(--text-1, #e4e4e7); font: inherit; font-size: 11px;
+}
+.technique-reading .technique-atlas button {
+	height: 22px; padding: 0 8px; border: 0; border-radius: 6px; background: var(--chip-fill, rgba(255, 255, 255, .06));
+	color: var(--text-1, #e4e4e7); font: inherit; font-size: 11px; cursor: pointer;
+}

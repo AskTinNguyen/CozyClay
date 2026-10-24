@@ -243,6 +243,16 @@ third, Centre, Right third), Headroom (Tight, Normal, Loose) and Lead room
 (None, Facing, Travel, More); each change re-applies the shot's stack with the
 composition, and the shot guide overlay (Thirds) shows the lines.
 
+The popover ends with **Further reading**: the technique's book citations
+(author, title, edition and year, pages) from the owner's cinematic-atlas, or
+a line saying the atlas has no page for it, then the grokfilm.app link and an
+**Atlas** field with **Set**. The field holds the address where the owner runs
+the atlas locally (a per-browser setting, `cozyclay.atlasUrl`); once set, every
+page number becomes a link to `<atlas URL>#/book/<id>/<page>` opening in a new
+tab, and blank clears it so the pages read as plain text again. The Coverage
+section shows the chosen pattern's Further reading under its description, with
+the same links.
+
 Below Camera rig, a **Coverage** section picks a pattern, Cast A and B and (for
 a repeating pattern) the shot count, and **Lay over** the selected shot runs
 `camera.cover`. A **Cut** section inspects the cut into the selected shot: its

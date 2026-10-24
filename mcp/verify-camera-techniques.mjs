@@ -31,6 +31,18 @@ try {
 	const full = JSON.parse(await call("list_camera_techniques", { id: "zolly" }));
 	check("an alias reads one technique in full", full.id === "dolly-zoom" && full.expectedMove === "dolly-zoom" && full.params.direction);
 
+	// technique-references A4: the index stays its size and carries no citations; a detail request brings them.
+	check("the index stays within its size and carries no book references", Buffer.byteLength(index) <= 3400 && !/ p\. \d|Katz|Kenworthy/.test(index), `${Buffer.byteLength(index)} bytes`);
+	const closeUp = JSON.parse(await call("list_camera_techniques", { id: "close-up" }));
+	check("a technique id brings its book references (book, pages, cite)", closeUp.references.length >= 1 && closeUp.references.every((ref) => Object.keys(ref).join() === "book,pages,cite"
+		&& ref.pages.every(Number.isInteger) && ref.cite.includes(`p. ${ref.pages.join(", ")}`)), JSON.stringify(closeUp.references));
+	check("a technique the atlas has no page for answers an empty list", Array.isArray(full.references) && JSON.stringify(JSON.parse(await call("list_camera_techniques", { id: "trunk-shot" })).references) === "[]");
+	const refs = await call("list_camera_techniques", { references: true });
+	check("references: true lists the citations for techniques, coverage patterns and cut rules in one receipt", Buffer.byteLength(refs) <= 8192
+		&& /\nbooks\n/.test(refs) && /\nclose-up: [a-z0-9-]+ p\. \d/.test(refs) && /\ncoverage patterns\nshot-reverse-shot: /.test(refs) && /\ncut rules\nline: /.test(refs), refs.slice(0, 300));
+	const withId = JSON.parse(await call("list_camera_techniques", { id: "push-in", references: true }));
+	check("references: true with an id reads that technique in full", withId.id === "push-in" && withId.references.length >= 1);
+
 	const push = await call("apply_camera_technique", { request: "low-angle slow push-in" });
 	check("words apply a low-angle push-in in memory", /^Applied LOW · PUSH-IN · \d+mm/.test(push) && /verified by the move classifier/.test(push), push);
 	const named = await call("describe_camera_move", { duration_s: 3 });
