@@ -1,10 +1,10 @@
 # Colour Script: Progress
 
-- Working under rev: 1
+- Working under rev: 1 (rev 2 changed only A1's proof file name, F-1)
 - Worker: cloud worker agent (colour-script)
 - Current step: 6, suite regressions fixed; full suite green apart from the known timing checks
-- Next step: review
-- PR: none yet
+- Next step: none; squash-merge after Codex review
+- PR: #18
 
 ## Acceptance
 
@@ -18,7 +18,7 @@
 | A6 | met | `node test/verify-colour-script.mjs`: constructed hard and soft cut, tone component (INTENSITY_VERSION 2 with looks, v1 path without): pass 3 fail 0. |
 | A7 | met | ui:qa `test/verify-colour-script-browser.mjs` via tools/qa-browser.mjs on slot 13: 21 PASS, 0 FAIL. ui:shot `proofs/look-panel-warm-safety.png`. |
 | A8 | met | 91857e60: `SUITE-ALL: 480 files, 478 passed, 2 failed` (only the known timing checks: verify-motion3-exitcar compile+QA CPU, verify-motion3-repair exit car under 10 s). `npm run lint`: knip 138 (0 new, 1 fixed), loc 0 violations, eslint 0 regressions; `npm run build` ok. |
-| A9 | review | mcp/README.md, docs/agent-cli.md, docs/studio-ui-ia.md, CHANGELOG.md Unreleased, director-evals README (f46d700f). |
+| A9 | met (review R1) | mcp/README.md, docs/agent-cli.md, docs/studio-ui-ia.md, CHANGELOG.md Unreleased, director-evals README (f46d700f). |
 
 ## Steps
 
@@ -38,3 +38,16 @@
 - A preset look keeps the stage's HDR environment (applyLightingRecipe skips lighting.hdr).
 
 ## Reconciliations
+
+## Reviews
+
+- R1 (cloud orchestrator, 2026-10-24, at 8896a42c): opened the two proof images.
+  - `proofs/look-panel-warm-safety.png`: the Look section with the warm safety recipe. It shows the interior preset, exposure 1.05, fill 0.75, the intended 'amber hearth' swatches beside the measured palette (luminance 0.52, warmth 0.12, saturation 0.23), and "Back to the stage look".
+  - `proofs/colour-script-warm-to-cold.png`: the Colour script dialog over 6 shots, running from warm safety through tender memory into cold isolation and night menace. Each shot has its measured palette and intended swatches. The hard measured cuts into shots 4 and 6 are marked red, the soft cut into 3 is marked amber, and there is a beat tick. A table lists each look and its measured colours.
+  - A8: before handing over, the orchestrator's own suite run on 884cae7c found 6 regressions. The worker fixed them in 91857e60:
+    - capture: a `draw()` hook replaces a new import;
+    - setLook coverage added to the shots-commands and undo-hygiene lists;
+    - the StageAtmosphere literal in the grid-view and theme tests updated for the new props, which keeps their theme and grid assertions.
+    - Suite after the fix: 480 files, 478 passed, 2 failed (the known timing checks only).
+  - A9: `mcp/README.md`, `docs/agent-cli.md`, `docs/studio-ui-ia.md`, CHANGELOG and the director-evals README describe `shot.setLook`, `shot.colourScript`, `shot_look`, the Look panel and the export.
+  - F-1 is resolved as prompt rev 2.
