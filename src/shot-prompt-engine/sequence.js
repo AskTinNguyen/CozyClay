@@ -3,8 +3,9 @@
 // for), the cast with stable descriptors, numbered beats with timecodes (what
 // the camera does in the classifier's words and measured, size, angle, lens,
 // rig, composition, coverage role, the transition in, and the story beats the
-// cast's motion makes there), then the continuity line. The same document
-// gives the same bytes (D1): no clock, no randomness, fixed rounding.
+// cast's motion makes there), then where it builds and peaks (the intensity
+// curve) and the continuity line. The same document gives the same bytes
+// (D1): no clock, no randomness, fixed rounding.
 import { describeBeat, castName } from "./beat.js";
 import { engineScene } from "./measure.js";
 import { motionBeats, beatsIn } from "./motion-beats.js";
@@ -13,6 +14,7 @@ import { referenceManifest } from "./references.js";
 import { PREVIS_WORDS, clipsFor, moveTag, profileById, profileWarnings } from "../model-profiles.js";
 import { checkMotivation, motivationReason } from "../camera-motivation/check.js";
 import { depthWords, shotLayers } from "../camera-depth/layers.js";
+import { checkStructure, structureWords } from "../intensity-curve/structure.js";
 
 const DEFAULT_LOOK = "cinematic, natural light";
 const pad = (value) => String(value).padStart(2, "0");
@@ -107,6 +109,7 @@ export function buildSequencePrompt(document, { range = null, profile: profileId
 	const story = (beat) => (document.storyBeats ?? []).filter((row) => row.frame >= beat.startFrame && row.frame <= beat.endFrame);
 	clips.forEach((clip, c) => clip.forEach((beat, k) => lines.push(...beatLines(beat, { fps, profile, actions: beatsIn(actions, shots[beat.index - 1]), story: story(beat), motives: motives(beat),
 		clipLabel: clips.length > 1 && k === 0 ? `CLIP ${c + 1} of ${clips.length} (${sec(clip.reduce((sum, row) => sum + row.frames / fps, 0))})${profile.cuts === "per-clip" ? ": generate on its own" : ""}` : null }))));
+	lines.push(`STRUCTURE: ${structureWords(checkStructure(document, { range }))}`);
 	lines.push(`CONTINUITY: ${continuity.text}`, `KEEP OUT: the previs itself (${PREVIS_WORDS.slice(0, 4).join(", ")}): render real people in a real place in the look above.`);
 	if (warnings.length) lines.push("WARNINGS:", ...warnings.map((warning) => `- ${warning.message} Fix: ${warning.fix}`));
 	return { text: lines.join("\n"), beats, warnings, profile, aspect, seconds, clips, references, continuity, actions };

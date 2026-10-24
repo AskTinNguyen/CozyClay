@@ -47,7 +47,7 @@ function readAnswer(out) {
 // Motivation rows run through check_motivation and story_beats; camera.alignMove retimes editor keys, so it has no in-memory tool (studio_run reaches it live).
 const tools = { "camera.applyTechnique": "apply_camera_technique", none: "apply_camera_technique", "camera.cover": "cover_scene", "camera.checkCuts": "check_cuts",
 	"camera.checkCoverage": "check_coverage", "camera.setLine": "apply_camera_technique",
-	"camera.checkMotivation": "check_motivation", "story.addBeat": "story_beats", "story.moveBeat": "story_beats", "story.removeBeat": "story_beats" };
+	"camera.checkMotivation": "check_motivation", "story.addBeat": "story_beats", "story.moveBeat": "story_beats", "story.removeBeat": "story_beats", "camera.checkStructure": "check_structure" };
 const rows = loadScenarios().filter((row) => row.tier === "core" && !row.expected.composition && tools[row.expected.action]);
 const byTool = {};
 await call("cover_scene", { request: "cover this conversation" }); // check_cuts in memory reads a plan.

@@ -4,6 +4,15 @@
 
 Camera
 
+- Intensity curve: `camera.checkStructure` reads a sequence's visual
+  structure from the measured cameras (size, height, lens, movement, cutting
+  rate, roll, screen jump per shot; each cut's contrast) and flags where it
+  goes flat, peaks off its strongest story beat, or does not build into a
+  reveal, threat or decision, each with a technique stack to apply. An
+  Intensity strip under the timeline's shot blocks with a toggle per
+  component, a Structure section in Camera mode, a `STRUCTURE:` line in the
+  sequence brief, the strip as an image, MCP `check_structure`, and 8
+  director-eval scenarios.
 - Group coverage: three to six people. Triangle Dialogue, Group Singles and
   Branching Dialogue lay a scene's coverage with every pair's cameras on one
   side of that pair's own line; the cut rules judge each cut against the pair

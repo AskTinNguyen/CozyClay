@@ -11,7 +11,7 @@ const NO_STORE = { subscribe: () => () => {}, read: () => null };
 const RULE_TAG = { unmotivated: "NO MOTIVE", "starts-off-beat": "OFF BEAT", "settles-off-beat": "OFF BEAT" };
 
 /** The shot document's state (its story beats and frame count), re-read when the shot domain changes. */
-function useShotState() {
+export function useShotState() {
 	const store = useContext(AppContext)?.storeDomain?.("shot")?.documentStore ?? NO_STORE;
 	return useSyncExternalStore(store.subscribe, () => store.read("shot"), () => store.read("shot"));
 }

@@ -3,6 +3,8 @@ import { speedLabel } from "../camera-capabilities/speed.js";
 // Cut flags (camera-coverage) ride the Shots lane beside the rig keys.
 export { CutFlagMarks } from "./cut-flags.jsx";
 export { MotivationMarks } from "./motivation-marks.jsx";
+// The intensity strip (intensity-curve) under the Shots lane's blocks.
+export { IntensityStrip } from "./intensity-strip.jsx";
 
 /** The camera technique stack a Shot block carries ("LOW · PUSH-IN · 35mm"),
  * shown only while it still describes the shot's camera, then the shot's

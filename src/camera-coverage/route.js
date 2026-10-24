@@ -9,6 +9,7 @@ import { normalizePhrase, parseRequest } from "../camera-techniques/resolve.js";
 import { resolveCameraRequest } from "./resolve.js";
 import { resolveMotivationRequest } from "../camera-motivation/resolve.js";
 import { parseForeground, resolveShotCheck } from "../camera-depth/resolve.js";
+import { resolveStructureRequest } from "../intensity-curve/resolve.js";
 
 // Everyday senses of "shot", in CozyClay's own grouping (after the cinematic-atlas generator's false-positive idea).
 const DRINKS = "whiskey|whisky|tequila|vodka|rum|gin|bourbon|espresso|jello|jelly|sake|soju|schnapps|absinthe";
@@ -46,13 +47,13 @@ const techniqueConfidence = (matched) => (matched.some((row) => row.via === "moo
 
 /**
  * A request -> { action, args, via, matched, confidence, resolved?, dropped?, reason? }.
- * action is camera.applyTechnique, camera.cover, camera.checkCuts, camera.checkCoverage, camera.setLine, camera.checkShots, a motivation action (camera-motivation/resolve.js), or "none" (no camera action; reason says why).
+ * action is camera.applyTechnique, camera.cover, camera.checkCuts, camera.checkCoverage, camera.setLine, camera.checkShots, a motivation action (camera-motivation/resolve.js), camera.checkStructure (intensity-curve/resolve.js), or "none" (no camera action; reason says why).
  * A foreground in the words ("put the lamp in the foreground", camera-depth/resolve.js) rides on the composition.
  * @param {string} text
  * @param {{cast?: Array<{id:string,name?:string}>, props?: Array<{id:string,name?:string}>}} [options]
  */
 export function routeCameraRequest(text, { cast = [], props = [] } = {}) {
-	const motivated = resolveMotivationRequest(text) ?? resolveShotCheck(text);
+	const motivated = resolveMotivationRequest(text) ?? resolveStructureRequest(text) ?? resolveShotCheck(text);
 	if (motivated) return motivated;
 	const phrase = normalizePhrase(text), everyday = notCameraShot(phrase);
 	const near = parseForeground(phrase, { cast, props }), rest = [everyday?.phrase, near?.phrase].filter(Boolean).reduce((left, words) => left.replace(words, " "), phrase);

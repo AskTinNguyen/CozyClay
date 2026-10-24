@@ -1,0 +1,14 @@
+{
+	"category": "structure",
+	"label": "sequence structure and the intensity curve",
+	"scenarios": [
+		{"id": "structure-where-flat", "tier": "core", "category": "structure", "request": "where does this sequence go flat?", "cast": ["mara", "joon"], "expected": {"action": "camera.checkStructure", "confidence": "high"}, "why": "A flat stretch is a run of cuts that change nothing; the structure check finds it across the sequence."},
+		{"id": "structure-build-reveal", "tier": "core", "category": "structure", "request": "build to the reveal", "cast": ["mara"], "expected": {"action": "camera.checkStructure", "beat": "reveal", "confidence": "high"}, "why": "Building names the beat the curve must rise into; the check measures the rise and suggests the stack that makes it."},
+		{"id": "structure-show-intensity", "tier": "core", "category": "structure", "request": "show me the intensity", "cast": ["mara", "joon"], "expected": {"action": "camera.checkStructure", "confidence": "high"}, "why": "The intensity is the curve itself, read per shot and per cut, not a mood for one shot."},
+		{"id": "structure-lacks-contrast", "tier": "core", "category": "structure", "request": "the edit lacks contrast in the middle, find it", "cast": ["mara", "joon"], "expected": {"action": "camera.checkStructure", "confidence": "high"}, "why": "Missing contrast between cuts is the flat rule's measure, so it asks for the structure check."},
+		{"id": "structure-peak-decision", "tier": "core", "category": "structure", "request": "does the scene peak on the decision?", "cast": ["mara", "joon"], "expected": {"action": "camera.checkStructure", "beat": "decision", "confidence": "medium"}, "why": "Whether the peak lands on a beat is the peak-off-beat rule; the beat named is the one to check against."},
+		{"id": "structure-escalate-confession", "tier": "core", "category": "structure", "request": "escalate the scene into the confession", "cast": ["mara"], "expected": {"action": "camera.checkStructure", "beat": "confession", "confidence": "high"}, "why": "Escalating into a beat asks the curve to rise into it, whatever kind of beat it is."},
+		{"id": "structure-tension-curve", "tier": "core", "category": "structure", "request": "chart the tension curve of my cut", "cast": ["mara", "joon"], "expected": {"action": "camera.checkStructure", "confidence": "high"}, "why": "A tension curve over the cut is the intensity curve, so no technique is laid."},
+		{"id": "structure-intense-not-curve", "tier": "core", "category": "structure", "request": "an intense extreme close-up on Mara", "cast": ["mara"], "expected": {"action": "camera.applyTechnique", "stack": ["extreme-close-up"], "subject": "mara"}, "why": "Intense is a mood for one shot, not a question about the curve; the size is the request."}
+	]
+}

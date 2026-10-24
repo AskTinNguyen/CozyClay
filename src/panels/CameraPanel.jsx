@@ -7,6 +7,7 @@ import TechniquePicker from "./TechniquePicker.jsx";
 import CameraRigPanel from "./CameraRigPanel.jsx";
 import CoveragePanel from "./CoveragePanel.jsx";
 import MotivationPanel from "./MotivationPanel.jsx";
+import StructurePanel from "./StructurePanel.jsx";
 
 export default function CameraPanel({ isCameraSelection, shot, moveSequence, cameraKeys, activeShot }) {
 	const { run } = useBus();
@@ -68,5 +69,7 @@ export default function CameraPanel({ isCameraSelection, shot, moveSequence, cam
 					<CoveragePanel hidden={!isCameraSelection} activeShot={activeShot} />
 					{/* Story beats and why each camera move happens, with the fix for each flag (camera-motivation). */}
 					<MotivationPanel hidden={!isCameraSelection} activeShot={activeShot} />
+					{/* The sequence's intensity curve against its story beats, with a technique stack for each flag (intensity-curve). */}
+					<StructurePanel hidden={!isCameraSelection} />
 	</>);
 }
