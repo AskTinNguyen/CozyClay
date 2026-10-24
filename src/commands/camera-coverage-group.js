@@ -48,7 +48,8 @@ export function registerGroupCoverage(registry, ports, { owner, visible, scene, 
     const ids = new Set(targets.map(row => row.id)), cuts = checkCuts(owner().read(), scene()).cuts.filter(cut => ids.has(cut.from) || ids.has(cut.to));
     const issues = cuts.reduce((sum, cut) => sum + cut.issues.length, 0), names = line ? line.between.map(castId => (named.find(row => row.id === castId)?.name ?? castId).split(',')[0]).join('–') : null;
     return { affectedIds: [...ids], summary: `${line ? `The ${names} line` : 'No authored line'} on ${targets.length === 1 ? shotLabel(targets[0]) : `${targets.length} shots`}; ${cuts.length} cut${cuts.length === 1 ? '' : 's'} touching them, ${issues ? `${issues} issue${issues === 1 ? '' : 's'}` : 'clean'}.`.slice(0, 240),
-      checks: { shots: targets.length, cuts: cuts.length, issues },
+      // A one-shot line is a single write, so its receipt carries no output: the matched words ride in checks too.
+      checks: { shots: targets.length, cuts: cuts.length, issues, ...(routed?.action === 'camera.setLine' ? { matched: routed.matched, confidence: routed.confidence } : {}) },
       output: { line, shotIds: [...ids], cuts: cuts.map(compactCut), ...(routed?.action === 'camera.setLine' ? { matched: routed.matched, confidence: routed.confidence } : {}) } };
   }
 

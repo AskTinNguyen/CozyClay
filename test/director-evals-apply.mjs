@@ -5,7 +5,9 @@
 // the resolved name: the move classifier verdict, the size step, the camera
 // height against the eyes, every camera on one side of the line, the eyes'
 // screen position (measureComposition through every stored key), and the
-// camera.checkCuts flags. Negatives must be refused, naming their words.
+// camera.checkCuts flags, the camera.checkCoverage verdict and the line
+// camera.setLine stores. A row that names Sela runs on a scene with her in it
+// (three people). Negatives must be refused, naming their words.
 import { shotsFixture, framing } from "./bus/shots-fixture.mjs";
 import { createShot } from "../src/cuts.js";
 import { createCharacterEntry } from "../src/scenes.js";
@@ -16,8 +18,9 @@ import { CAST } from "./director-evals-data.mjs";
 
 const TOL = 0.015;
 // The fixture's loaded rigs answer to actor-a and actor-b; the scenarios name Mara and Joon.
-const BUS_ID = { mara: "actor-a", joon: "actor-b" };
-const characters = CAST.map((row) => createCharacterEntry({ id: BUS_ID[row.id], model: "y-bot-tpose", x: row.x, z: row.z, rot: row.rot, subject: row.name }));
+const BUS_ID = { mara: "actor-a", joon: "actor-b", sela: "actor-c" };
+const entry = (row) => createCharacterEntry({ id: BUS_ID[row.id], model: "y-bot-tpose", x: row.x, z: row.z, rot: row.rot, subject: row.name });
+const characters = CAST.filter((row) => row.id !== "sela").map(entry), trio = CAST.map(entry);
 const seed = (start, end, id = "shot-a") => ({ ...createShot("Scene", start, end, [{ id: `key-${id}`, frame: start, framing }]), id });
 
 /** The scene a cut-check row asks about, laid through the bus. */
@@ -30,6 +33,8 @@ const SETUPS = {
 		return f.run("shot.frame", { shotId: third.id, subjectIds: [BUS_ID.mara], framing: { exact: { position: { x: key.framing.pos.x, y: key.framing.pos.y, z: -key.framing.pos.z * 3 }, lookAt: { x: 0, y: 1.5, z: 0 }, focalMm: 60 } } }, "agent");
 	},
 	// Two shots of Mara from the same place at the same size.
+	master: (f) => f.run("camera.cover", { pattern: "master-coverage", cast: [BUS_ID.mara, BUS_ID.joon], shotId: "shot-a" }, "agent"),
+	triangle: (f) => f.run("camera.cover", { pattern: "triangle-dialogue", cast: [BUS_ID.mara, BUS_ID.joon, BUS_ID.sela], shotId: "shot-a" }, "agent"),
 	jump: (f) => {
 		load(f, [seed(0, 95), seed(96, 191, "shot-b")]);
 		f.run("camera.applyTechnique", { shotId: "shot-a", subjectId: BUS_ID.mara, stack: ["medium-shot"] }, "agent");
@@ -55,7 +60,8 @@ function measure(f, row, receipt) {
 	}
 	if (!receipt.ok) return { problems: [`refused ${receipt.code}: ${receipt.message}`], line: "refused" };
 	const checks = receipt.checks ?? {}, output = receipt.output ?? {};
-	if (!output.matched?.length || !output.confidence) problems.push("the receipt states no matched words or confidence");
+	// A single-write mutation (camera.setLine on one shot) carries them in checks: its receipt has no output.
+	if (!(output.matched ?? checks.matched)?.length || !(output.confidence ?? checks.confidence)) problems.push("the receipt states no matched words or confidence");
 	if (want.move) {
 		if (checks.move !== want.move || checks.moveVerified !== true) problems.push(`move ${checks.move} (verified ${checks.moveVerified}), want ${want.move} verified`);
 		said.push(`move ${checks.move}${checks.moveVerified ? " verified" : ""}`);
@@ -94,24 +100,41 @@ function measure(f, row, receipt) {
 		if (row.expected.frame !== undefined && (output.cuts?.length !== 1 || Math.abs(output.cuts[0].cutFrame - row.expected.frame) > 1)) problems.push(`the cut checked is ${output.cuts?.map((cut) => cut.cutFrame)}, want the one at ${row.expected.frame}`);
 		said.push(`${output.cuts?.length ?? 0} cut(s), flags [${flags.join(",")}]`);
 	}
+	if (want.complete !== undefined) {
+		if (checks.complete !== want.complete) problems.push(`complete ${checks.complete}, want ${want.complete}: ${(output.gaps ?? []).map((gap) => gap.message).join(" | ")}`);
+		said.push(`${checks.complete ? "enough to edit" : `${checks.gaps} gap(s)`}`);
+	}
+	if (want.line) {
+		const stored = shotsOf(f).find((entry) => entry.id === "shot-a")?.line?.between ?? [];
+		if (JSON.stringify(stored) !== JSON.stringify(want.line.map((id) => BUS_ID[id]))) problems.push(`line ${JSON.stringify(stored)}, want ${want.line}`);
+		said.push(`line ${stored.join("-")} on shot-a`);
+	}
 	return { problems, line: said.join("; ") };
+}
+
+/** The action a row runs on the bus: read-only questions and the line run their own action; the rest go through camera.applyTechnique. */
+function runRow(f, row) {
+	if (row.expected.action === "camera.checkCuts" || row.expected.action === "camera.checkCoverage") return f.run(row.expected.action, { request: row.request }, "agent");
+	if (row.expected.action === "camera.setLine") return f.run("camera.setLine", { shotId: "shot-a", request: row.request }, "agent");
+	return f.run("camera.applyTechnique", { shotId: "shot-a", request: row.request }, "agent");
 }
 
 /** Run each row on a fresh scene; answers Map(id -> { problems, line }). */
 export async function applyScenarios(rows) {
-	const out = new Map(), f = shotsFixture({ characters });
+	const out = new Map(), pair = shotsFixture({ characters }), group = shotsFixture({ characters: trio });
+	group.live.current.rigs[BUS_ID.sela] = group.live.current.rigs[BUS_ID.mara]; // the fixture loads two rigs; Sela borrows one for her bounds
 	try {
 		for (const row of rows) {
-			const coverage = row.expected.action === "camera.cover" || row.apply.setup;
+			const f = row.cast.includes("sela") ? group : pair, coverage = !["camera.applyTechnique", "none"].includes(row.expected.action) || row.apply.setup;
 			load(f, [coverage ? seed(0, 191) : seed(0, 95)]);
 			if (row.apply.setup) {
 				const laid = SETUPS[row.apply.setup](f);
 				if (!laid.ok) { out.set(row.id, { problems: [`setup ${row.apply.setup} refused: ${laid.message}`], line: "" }); continue; }
 			}
 			// A cut question runs camera.checkCuts itself: camera.applyTechnique answers one too, but as a no-op mutation its receipt keeps no cut list (findings F-1).
-			const receipt = row.expected.action === "camera.checkCuts" ? f.run("camera.checkCuts", { request: row.request }, "agent") : f.run("camera.applyTechnique", { shotId: "shot-a", request: row.request }, "agent");
+			const receipt = runRow(f, row);
 			out.set(row.id, measure(f, row, receipt));
 		}
-	} finally { f.dispose(); }
+	} finally { pair.dispose(); group.dispose(); }
 	return out;
 }

@@ -47,7 +47,7 @@ const { tools } = await client.listTools();
 check("every tool has a description", tools.every((t) => t.description?.length > 20));
 console.log(`${tools.length} tools registered`);
 // 27 tools, the camera technique pair, set_camera_capabilities, and the coverage pair (cover_scene, check_cuts).
-check("32 tools registered", tools.length === 32, `${tools.length}`);
+check("33 tools registered", tools.length === 33, `${tools.length}`);
 
 /* ---------------------------- framing matrix ----------------------------- */
 

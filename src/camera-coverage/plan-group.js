@@ -8,7 +8,8 @@
 import { compileStack } from "../camera-techniques/compile.js";
 import { lineSide } from "./cut-geometry.js";
 import { pairLabel } from "./cut-line.js";
-import { planCoverage, splitRange } from "./plan.js";
+import { planCoverage, plannedShot, splitRange } from "./plan.js";
+import { checkCuts } from "./cut-rules.js";
 import { groupPattern } from "./patterns-group.js";
 
 const fail = (code, message) => { throw Object.assign(new Error(message), { code }); };
@@ -45,6 +46,18 @@ function planGroupCoverage(patternId, ctx) {
 	if (members.length < pattern.cast) fail("TARGET_NOT_READY", `${pattern.name} covers ${pattern.cast} people or more; the scene shows ${members.length}.`);
 	if (members.length > pattern.castMax) fail("INVALID_ARGUMENT", `${pattern.name} covers up to ${pattern.castMax} people; name ${pattern.castMax} or fewer.`);
 	if (pattern.id === "group-singles" || (pattern.branching && members.length > 2)) members = roundTheGroup(members);
+	if (pattern.id !== "triangle-dialogue") return layOut(pattern, members, ctx);
+	// A triangle: the pairs are the same in any order, but which pair opens (and the master keeps) decides the cuts between them.
+	// Try the orders from the one asked for and keep the first that cuts clean, else the one with the fewest flags.
+	const [a, b, c] = members, scored = [[a, b, c], [a, c, b], [b, a, c], [b, c, a], [c, a, b], [c, b, a]].map((order) => {
+		const plan = layOut(pattern, order, ctx);
+		return { plan, flags: checkCuts(plan.shots.map((row) => ({ ...plannedShot(row, ctx.filmback), ...(row.line ? { line: { between: row.line } } : {}) })), { cast: ctx.cast, filmback: ctx.filmback }).issueCount + plan.notes.length };
+	});
+	return (scored.find((row) => row.flags === 0) ?? [...scored].sort((p, q) => p.flags - q.flags)[0]).plan;
+}
+
+/** The plan of a group pattern for these members, in this order. */
+function layOut(pattern, members, ctx) {
 	const rows = pattern.shots(members.length), spans = pattern.branching ? branchSpans(ctx.range, ctx.branches) : [ctx.range];
 	const ranges = spans.map((span) => splitRange(span, rows.length)), notes = [];
 	// Each pair's side: away from the rest of the group (outside it); with nobody else, the first shot picks it.

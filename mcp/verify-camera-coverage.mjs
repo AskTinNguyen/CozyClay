@@ -5,7 +5,8 @@
  * (createToolHandlers + each tool's zod schema): cover_scene plans each
  * pattern from words for the in-memory cast and checks its cuts, check_cuts
  * reads the plan again (one cut by frame or by a question), and a character
- * moved across the line afterwards is flagged. No editor is connected.
+ * moved across the line afterwards is flagged; then three people: the group
+ * patterns (a cast of three) and check_coverage. No editor is connected.
  */
 import { createToolHandlers } from "./tool-handlers.mjs";
 
@@ -21,7 +22,7 @@ const check = (label, ok, detail = "") => {
 };
 const shotLines = (out) => out.split("\n").filter((line) => line.startsWith("shot "));
 
-check("both coverage tools are registered and annotated", registry.get("cover_scene")?.annotations?.destructiveHint === true && registry.get("check_cuts")?.annotations?.readOnlyHint === true);
+check("the coverage tools are registered and annotated", registry.get("cover_scene")?.annotations?.destructiveHint === true && registry.get("check_cuts")?.annotations?.readOnlyHint === true && registry.get("check_coverage")?.annotations?.readOnlyHint === true);
 const empty = await call("check_cuts");
 check("check_cuts before any plan says what to do", /plan some with cover_scene/.test(empty), empty);
 const alone = await call("cover_scene", { request: "cover this conversation" });
@@ -48,6 +49,26 @@ const crossed = await call("check_cuts", { frame: 88 });
 check("a character moved across the cameras' line is flagged with a fix", /high line: .* crosses the .* line/.test(crossed) && /Fix: move/.test(crossed), crossed);
 const named = await call("cover_scene", { pattern: "dialogue-singles", cast: ["B", "A"] });
 check("cast by letter, Joon first", /SINGLES 1 · Single Joon/.test(named), named);
+
+
+// group-coverage A5: three people in memory, the group patterns and check_coverage.
+const gapped = await call("check_coverage", { request: "is my coverage enough to edit?" });
+check("check_coverage on two clean singles reads the gaps: no master, one size each, with suggested stacks", /^3 gap\(s\): the dialogue-singles plan/.test(gapped) && /gap {7}master: .* Suggest \[master-shot\]/.test(gapped)
+	&& (gapped.match(/gap {7}sizes: /g) ?? []).length === 2 && /resolved {2}camera\.checkCoverage · matched "coverage", "enough" · confidence high/.test(gapped), gapped);
+await call("place_character", { character: "B", x: 2.4, z: 0, facing: -90 });
+await call("add_character", { subject: "Sela", x: 1.2, z: 2.1, facing: 180 });
+const triangle = await call("cover_scene", { request: "cover this three-way argument" });
+check("\"cover this three-way argument\" plans a triangle dialogue for three: 13 shots, a line per pair, every cut clean", /^Planned Triangle Dialogue over 0-359/.test(triangle) && shotLines(triangle).length === 13
+	&& (triangle.match(/^line {6}\S+-\S+: every camera of the pair on its (left|right)$/gm) ?? []).length === 3 && /every cut clean/.test(triangle) && /OTS .* \[over-the-shoulder\]/.test(triangle), triangle);
+const enough = await call("check_coverage", { request: "is my coverage enough to edit?" });
+check("check_coverage reads the triangle as enough to edit", /^Enough to edit: the triangle-dialogue plan over 0-359, 13 shots/.test(enough) && /master yes · two sizes each yes · line changes covered yes/.test(enough), enough);
+const cast3 = await call("cover_scene", { pattern: "group-singles", cast: ["A", "B", "C"] });
+check("cover_scene takes a cast of three by letter (group singles: a wide and three singles)", /^Planned Group Singles/.test(cast3) && shotLines(cast3).length === 4 && /every cut clean/.test(cast3), cast3);
+const branching = await call("cover_scene", { request: "branching dialogue, three branches" });
+check("\"branching dialogue, three branches\" repeats the setups in three branch ranges", /^Planned Branching Dialogue/.test(branching) && /^branches {2}\d+-\d+, \d+-\d+, \d+-\d+: the same setups in each$/m.test(branching) && /every cut clean/.test(branching), branching);
+check("check_coverage finds every branch covered by the same setups", /branches match yes/.test(await call("check_coverage")));
+const line = await call("apply_camera_technique", { request: "keep the line between Joon and Sela" });
+check("\"keep the line between Joon and Sela\" names camera.setLine (an editor action)", /asks for camera\.setLine: use studio_run camera\.setLine/.test(line) && /resolved {2}camera\.setLine · matched "keep", "line" · confidence high/.test(line), line);
 
 console.log(`\n${passes} passed, ${failures} failed`);
 process.exit(failures ? 1 : 0);
