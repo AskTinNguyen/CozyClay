@@ -6,6 +6,7 @@ import { useStudioShell } from "../shell/studio-shell-context.js";
 import { COVERAGE_PATTERNS, coveragePattern } from "../camera-coverage/patterns.js";
 import { TRANSITION_TYPES, repairTransition, transitionWords } from "../camera-coverage/transitions.js";
 import { useCutChecks } from "../motion/cut-flags.jsx";
+import FurtherReading from "./FurtherReading.jsx";
 import "./coverage.css";
 
 const REPEATING = new Set(["shot-reverse-shot", "dialogue-singles"]);
@@ -36,7 +37,7 @@ function CoverageAction({ activeShot, characters, run }) {
 					{COVERAGE_PATTERNS.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}
 				</select>
 			</label>
-			<p className="inspector-hint v2-details-hint">{coveragePattern(pattern).description}</p>
+			<p className="inspector-hint v2-details-hint">{coveragePattern(pattern).description}</p><FurtherReading section="patterns" id={pattern} />
 			{castSelect(first, setA, "a", ko("Cast A", "인물 A"))}
 			{coveragePattern(pattern).cast > 1 || pattern === "action-coverage" ? castSelect(second, setB, "b", ko("Cast B", "인물 B")) : null}
 			{REPEATING.has(pattern) && (
