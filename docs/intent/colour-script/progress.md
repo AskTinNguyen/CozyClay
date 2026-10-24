@@ -2,8 +2,8 @@
 
 - Working under rev: 1
 - Worker: cloud worker agent (colour-script)
-- Current step: 4, the suite gate (A8)
-- Next step: review; merge origin/main when depth-staging (#17) lands, keeping both sides
+- Current step: 5, merged origin/main (depth-staging #17); the A8 suite run is still open
+- Next step: run `node /home/claude/local-tools/suite-all.mjs --jobs 4` with no dev server and quote SUITE-ALL; then review
 - PR: none yet
 
 ## Acceptance
@@ -17,7 +17,7 @@
 | A5 | met | `node test/bus/verify-sequence-prompt.mjs`: pass 7 fail 0 (byte-identical, profiles unaffected). |
 | A6 | met | `node test/verify-colour-script.mjs`: constructed hard and soft cut, tone component (INTENSITY_VERSION 2 with looks, v1 path without): pass 3 fail 0. |
 | A7 | met | ui:qa `test/verify-colour-script-browser.mjs` via tools/qa-browser.mjs on slot 13: 21 PASS, 0 FAIL. ui:shot `proofs/look-panel-warm-safety.png`. |
-| A8 | pending | suite running |
+| A8 | open | `npm run lint`: knip 138 (0 new, 1 fixed), loc 0 violations, eslint 0 regressions; `npm run build` ok on 38a10e92. Full suite not yet run: the runs were stopped at the background limit (the first at 10 min, the second waited on its own process name). |
 | A9 | review | mcp/README.md, docs/agent-cli.md, docs/studio-ui-ia.md, CHANGELOG.md Unreleased, director-evals README (f46d700f). |
 
 ## Steps
@@ -25,6 +25,9 @@
 1. 752f1feb: shot look (merge, preview, export relight), measured palette, recipes, colour script, resolver, shot.setLook / shot.colourScript, Look panel, File > Export > Colour script, MCP shot_look, sequence brief Look lines, tone component, packet colour check and picture, 9 eval rows. Evidence: the gates in A1-A6; lint knip 138 (1 fixed), loc 0 violations, eslint 0 regressions; build ok.
 2. 603df496: browser QA (A7). Found and fixed: the Look panel measured a just-picked recipe before the 3D tree re-rendered (the scene's props lag the DOM by seconds under software GL), so shot.colourScript renders inside withDrawShots(document.shots) and the export draw compares the look's content; the Look section overflowed the sidebar (grid column pinned). 21 PASS, 0 FAIL; two proof shots.
 3. f46d700f: docs (A9). `node test/motion3/verify-motion3-prompt.mjs`: all checks passed (prompt cap holds).
+
+4. ae97ec67: progress and acceptance evidence.
+5. 38a10e92: merged origin/main 540afc37 (depth-staging #17), keeping both sides: 39 MCP tools, 141 registry actions, PACKET_CHECKS colour and depth, eval categories depth and look, routing chain with resolveShotCheck then resolveLookRequest. Reran: mcp/verify.mjs all checks passed; verify-tool-annotations 39 tools; verify-tool-handlers 39 tools; verify-live ok; command registry 141; director evals core 128/128 (look 9/9); mcp director evals 113 passed; shot-look 16 passed; camera-shot-checks 11 passed; director packet node/zip/mcp pass; colour-script, shot-look-merge, sequence-prompt pass; motion3 prompt cap passed; build ok.
 
 ## Decisions
 
