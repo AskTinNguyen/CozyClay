@@ -2,9 +2,9 @@
 
 - Working under rev: 1
 - Worker: `camera-techniques-worker`
-- Current step: A8 repository gates on the final tree
-- Next step: open the PR, then report
-- PR: none yet
+- Current step: none (every Acceptance row has its proof; A5/A6 images await the orchestrator review row)
+- Next step: orchestrator review of the proofs and PR #3
+- PR: https://github.com/AskTinNguyen/CozyClay/pull/3
 
 ## Acceptance
 
@@ -17,7 +17,7 @@
 | A5 | met (pending orchestrator review of the images) | ui:shot: `test/qa-camera-technique-live-browser.mjs` exit 0 -> `proofs/live-low-angle-close-up.png`, `proofs/live-push-in-start.png`, `proofs/live-push-in-end.png`, `proofs/live-over-the-shoulder.png` |
 | A6 | met (pending orchestrator review of the images) | ui:qa: `node tools/qa-browser.mjs -- node test/verify-camera-technique-picker-browser.mjs` exit 0 (`camera technique picker browser QA passed`); ui:shot `proofs/picker.png`, `proofs/applied.png` |
 | A7 | met | `node test/verify-camera-technique-prompt.mjs` -> `6 checks passed` (save/reload, older body, prompt TECHNIQUE line carries the classifier's phrase, keyframe pack prompt.txt, prompt-only words, edited camera drops it); MCP render_prompt in `mcp/verify-camera-techniques.mjs` |
-| A8 | open | final gate run in progress |
+| A8 | met (known exception) | `npm run lint` exit 0 (`knip: 138 findings, 0 new, 1 fixed (baseline 139)`, `loc: ... 0 violations`, `eslint: ... 0 regressions`); `npm run build` exit 0; `node tools/run-tests.mjs --jobs 4` stops on its only failure `FAIL exit car, hips sunk: under 10 s — 10480 ms` (test/motion3/verify-motion3-repair.mjs), which also fails on b6806868 under the same suite load: `FAIL exit car, hips sunk: under 10 s — 10518 ms`; every manifest RUN file on the final tree, run to the end: `ran 434, failed 0` |
 | A9 | met (review) | `mcp/README.md` (29 tools, two rows, Camera techniques section), `docs/agent-cli.md` (Camera techniques section), `docs/studio-ui-ia.md` (Techniques section), `CHANGELOG.md` Unreleased > Camera; commit 0b593dbc |
 
 ## Steps
@@ -35,6 +35,8 @@
    - `proofs/live-push-in-end.png` (frame 95): the same angle much closer; Mara from the waist up fills the centre, the floor grid still behind her.
    - `proofs/live-over-the-shoulder.png` ("over the shoulder of Joon onto Mara, medium close-up", `MCU · OTS · 50mm`): Joon's head and shoulder soft at the left edge, Mara facing the lens from the chest up.
 7. A9 (0b593dbc): docs as listed in the Acceptance row.
+
+8. A8 (final tree 3482466a + progress): `npm run lint` -> `LINT_EXIT 0`, `knip: 138 findings, 0 new, 1 fixed (baseline 139)`, `loc: 72 files over 250 (baseline 72), 0 violations`, `eslint: 399 errors across 20 rules (baseline 403), 0 regressions` (no baseline file touched). `npm run build` -> `BUILD_EXIT 0`, `1733 modules transformed`. `node tools/run-tests.mjs --jobs 4` twice: both stop on the timing check (`FAIL exit car, hips sunk: under 10 s — 10891 ms`, then `— 10480 ms`); the runner stops dispatching after a first failure. The same file alone passes on this branch (`PASS exit car, hips sunk: under 10 s`) and on b6806868. Base under suite load (b6806868 exported with `git archive` to a scratch folder, node_modules junctioned, `npm run build`, `node tools/run-tests.mjs --jobs 4`): `FAIL exit car, hips sunk: under 10 s — 10518 ms`. To show nothing else fails, every `RUN node …` line of `node tools/run-tests.mjs --list` ran to the end with 4 workers (a scratch keep-going loop): `ran 434, failed 0`.
 
 ## Decisions
 
