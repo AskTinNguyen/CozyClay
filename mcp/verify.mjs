@@ -46,8 +46,8 @@ const slateOf = (body) => body.split("\n").find((line) => line.includes("·")) ?
 const { tools } = await client.listTools();
 check("every tool has a description", tools.every((t) => t.description?.length > 20));
 console.log(`${tools.length} tools registered`);
-// 27 tools, the camera technique pair, set_camera_capabilities, the coverage tools (cover_scene, check_cuts, check_coverage) and the motivation pair (check_motivation, story_beats), and check_structure.
-check("36 tools registered", tools.length === 36, `${tools.length}`);
+// 27 tools, the camera technique pair, set_camera_capabilities, the coverage tools (cover_scene, check_cuts, check_coverage) and the motivation pair (check_motivation, story_beats), check_structure and check_shots.
+check("37 tools registered", tools.length === 37, `${tools.length}`);
 
 /* ---------------------------- framing matrix ----------------------------- */
 
