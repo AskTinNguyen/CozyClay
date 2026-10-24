@@ -1,6 +1,8 @@
 import { useEffect, useMemo } from "react";
 import * as THREE from "three";
 import { stageLook } from "./stage-lighting.js";
+import { useShotLook } from "./stage-shot-look-draw.js";
+import { keyLightColor } from "./stage-key-color.js";
 // Patches three's PCF filter before any material compiles (16 taps past radius 1).
 import "./soft-shadows.js";
 export { StageAtmosphere } from "./stage-sky.jsx";
@@ -117,16 +119,6 @@ export function Room({ light = false }) {
  * The key is the USER'S light: `keyLight` carries its grabbable position and
  * the rig's master brightness — fill and rim ride the same dimmer so turning
  * the key down darkens the whole stage instead of flattening it. */
-// Warm/cool slider → light colour. 0.5 is the tuned default (neutral white,
-// so the grey set and the grey clay stay grey); 0 pulls toward cool daylight,
-// 1 toward sunset amber.
-export function keyLightColor(warmth = 0.5) {
-	const w = Math.max(0, Math.min(1, warmth ?? 0.5));
-	const base = new THREE.Color("#ffffff");
-	if (w < 0.5) return base.clone().lerp(new THREE.Color("#e8f0ff"), (0.5 - w) * 2).getStyle();
-	if (w > 0.5) return base.clone().lerp(new THREE.Color("#ffc27a"), (w - 0.5) * 2).getStyle();
-	return "#ffffff";
-}
 
 /**
  * One neutral rig (Blender's workbench studio light idea): a white sky over
@@ -134,16 +126,19 @@ export function keyLightColor(warmth = 0.5) {
  * and the ambient is lifted so authored colours stay saturated without any
  * pretend floor. `lighting` (stage.lighting) scales and tints the rig into a
  * look — night, golden hour, a black stage — through stageLook(); its studio
- * default renders the tuned rig unchanged.
+ * default renders the tuned rig unchanged. A shot with a look of its own
+ * (stage-shot-look.js) lights the stage its way while the playhead is in it;
+ * each light is tagged (userData.stageLight) so an export frame can relight it.
  */
-export function StageLights({ keyLight = { x: 6, y: 9, z: 4, intensity: 1.12, warmth: 0.5 }, lighting = null, neutral = false, light = false }) {
+export function StageLights({ keyLight: stageKey = { x: 6, y: 9, z: 4, intensity: 1.12, warmth: 0.5 }, lighting: stageLighting = null, shots = null, neutral = false, light = false }) {
+	const { lighting, keyLight } = useShotLook(stageLighting, stageKey, shots);
 	const look = stageLook({ lighting, keyLight, theme: light ? "light" : "dark", grid: neutral });
 	return (
 		<>
-			<hemisphereLight args={[look.hemi.sky, look.hemi.ground, 0.9]} intensity={look.hemi.intensity} />
+			<hemisphereLight args={[look.hemi.sky, look.hemi.ground, 0.9]} intensity={look.hemi.intensity} userData={{ stageLight: "hemi" }} />
 			{/* The light stage is a bright room: more ambient, so the clay's shaded
 			    side stays soft grey instead of going charcoal against white. */}
-			<ambientLight intensity={look.ambient} />
+			<ambientLight intensity={look.ambient} userData={{ stageLight: "ambient" }} />
 			{/* Only the key casts: one soft, unambiguous contact shadow reads as
 			    ground contact, while three overlapping shadows read as noise. The
 			    map covers the blocking area rather than the whole 500 m deck — a
@@ -153,6 +148,7 @@ export function StageLights({ keyLight = { x: 6, y: 9, z: 4, intensity: 1.12, wa
 				position={[keyLight.x, keyLight.y, keyLight.z]}
 				intensity={keyLight.intensity}
 				castShadow
+				userData={{ stageLight: "key" }}
 				shadow-mapSize-width={2048}
 				shadow-mapSize-height={2048}
 				shadow-camera-left={-14}
@@ -172,8 +168,8 @@ export function StageLights({ keyLight = { x: 6, y: 9, z: 4, intensity: 1.12, wa
 				shadow-normalBias={look.shadowNormalBias}
 				shadow-radius={look.shadowRadius}
 			/>
-			<directionalLight color="#eef2f4" position={[-6, 4, -4]} intensity={look.fill} />
-			<directionalLight color="#ffffff" position={[2, 3, 9]} intensity={look.rim} />
+			<directionalLight color="#eef2f4" position={[-6, 4, -4]} intensity={look.fill} userData={{ stageLight: "fill" }} />
+			<directionalLight color="#ffffff" position={[2, 3, 9]} intensity={look.rim} userData={{ stageLight: "rim" }} />
 		</>
 	);
 }

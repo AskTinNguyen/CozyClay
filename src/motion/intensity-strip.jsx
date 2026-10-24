@@ -24,10 +24,11 @@ const toggles = {
 
 /** camera.checkStructure's measure of the shot list (intensity-curve/structure.js), recomputed when shots, cast or beats change. */
 export function useStructureCheck(shots) {
-	const { characters = EMPTY, filmback, sceneObjects } = useStudioShell() ?? {};
+	const { characters = EMPTY, filmback, sceneObjects, keyLight, lighting } = useStudioShell() ?? {};
 	const state = useShotState(), storyBeats = state?.storyBeats ?? EMPTY, frameCount = state?.frameCount;
-	return useMemo(() => checkStructure({ ...studioSequenceDocument({ characters, filmback, objects: sceneObjects, frameCount }), shots: shots ?? EMPTY, storyBeats }),
-		[shots, characters, filmback, sceneObjects, frameCount, storyBeats]);
+	// The stage look the shots' own looks merge over: the tone component (colour-script) reads it.
+	return useMemo(() => checkStructure({ ...studioSequenceDocument({ characters, filmback, objects: sceneObjects, frameCount, stage: { keyLight, lighting } }), shots: shots ?? EMPTY, storyBeats }),
+		[shots, characters, filmback, sceneObjects, frameCount, storyBeats, keyLight, lighting]);
 }
 
 /** The intensity strip under the Shots lane's blocks: the combined curve, a toggle per component, the story beats and the flagged stretches. */

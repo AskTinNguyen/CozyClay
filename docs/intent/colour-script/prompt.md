@@ -1,7 +1,7 @@
 # Colour Script
 
-- Rev: 1
-- Status: planned
+- Rev: 2
+- Status: completed
 - Waits for: `director-packet` completed (the packet carries the colour script strip). Seventh in the cinematic-atlas plan.
 - Area: Scene and Viewport
 - Owner: TinNguyen
@@ -32,7 +32,7 @@ CozyClay's look is one global `stage.lighting` (`src/stage-lighting.js`, `LIGHTI
 
 ## Acceptance
 
-- A1: Shot look. `shot.setLook { shotId, look }` stores a partial lighting look on the shot: preset, key warmth or colour, exposure, fill, fog, sky. It can also carry an optional intended `palette` (three to five hex swatches with a word). The preview, captures, video export and the keyframe pack all honour it, and a dissolve blends the two looks. Proof: gate: `node test/verify-shot-look.mjs` (merge, sampling at frames, dissolve blend), with older documents unchanged.
+- A1: Shot look. `shot.setLook { shotId, look }` stores a partial lighting look on the shot: preset, key warmth or colour, exposure, fill, fog, sky. It can also carry an optional intended `palette` (three to five hex swatches with a word). The preview, captures, video export and the keyframe pack all honour it, and a dissolve blends the two looks. Proof: gate: `node test/verify-shot-look-merge.mjs` (merge, sampling at frames, dissolve blend), with older documents unchanged. (rev 2: `test/verify-shot-look.mjs` is an unrelated look-through test, F-1.)
 - A2: Measured palette. `measurePalette(rgba, w, h)` returns the dominant colours, mean luminance, warmth and saturation. Each shot's palette is measured from its middle frame capture. Proof: gate: `node test/verify-palette-measure.mjs` on constructed buffers.
 - A3: Colour script. A strip with one column per shot (measured swatches, the intended palette beside them), with beats overlaid. It appears in File › Export and as `packet/colour-script.png` in the director packet. Proof: gate: pack file check; plus ui:shot of the strip for a sequence with a warm-to-cold change.
 - A4: Recipes and agents. Look recipes keyed to story words are data in CozyClay's own words (for example "warm safety", "cold isolation", "danger accent"). Resolver phrases reach them: "make the confession shot colder", "colour script for this scene", "the same look as shot 2". An MCP tool sets and reads shot looks. `director-evals` gains at least 5 core scenarios. Proof: gate: `node mcp/verify-shot-look.mjs` and `node test/verify-director-evals.mjs`.
@@ -55,3 +55,5 @@ CozyClay's look is one global `stage.lighting` (`src/stage-lighting.js`, `LIGHTI
 ## Changelog
 
 - rev 1 (2026-10-24): written as a planned intent from the cinematic-atlas review (L-1, L-2).
+- rev 2 (2026-10-24): A1's proof file is `test/verify-shot-look-merge.mjs`, as F-1 proposed (the named file already held an unrelated test).
+- rev 2 (2026-10-24): completed; squash-merged into `main` by the cloud orchestrator under `after-proof` (#18).

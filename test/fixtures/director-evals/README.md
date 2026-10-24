@@ -4,7 +4,7 @@ Scenarios in a director's words, each with the camera action CozyClay should ans
 
 ## Files
 
-One file per category: `size.json`, `angle.json`, `move.json`, `lens.json`, `coverage.json`, `composition.json`, `cuts.json`, `motivation.json`, `structure.json`, `depth.json`, `negative.json`. Each is `{ "category", "label", "scenarios": [ ... ] }`, one row per line. The runner reads every `*.json` here, so a new category is a new file plus its name in `CATEGORIES` (`test/director-evals-data.mjs`).
+One file per category: `size.json`, `angle.json`, `move.json`, `lens.json`, `coverage.json`, `composition.json`, `cuts.json`, `motivation.json`, `structure.json`, `depth.json`, `look.json`, `negative.json`. Each is `{ "category", "label", "scenarios": [ ... ] }`, one row per line. The runner reads every `*.json` here, so a new category is a new file plus its name in `CATEGORIES` (`test/director-evals-data.mjs`).
 
 ## A row
 
@@ -26,6 +26,7 @@ One file per category: `size.json`, `angle.json`, `move.json`, `lens.json`, `cov
 - `camera.checkCuts` with optional `frame`.
 - `camera.checkMotivation` (a question about why the camera moves), `camera.alignMove` with `beat` (a beat id, a label word, or a frame) and `edge` (`start` or `settle`), and `story.addBeat` / `story.moveBeat` / `story.removeBeat` with `frame`, `label`, `kind` and `beat`, only the keys named are compared.
 - `camera.checkStructure` (a question about the sequence's intensity curve), with `beat` when it names a beat to build into ("build to the reveal": `reveal`).
+- `shot.setLook` with `recipe`, `adjust`, `sameAs` and `shot` (a shot by name word or number), only the keys named are compared; `shot.colourScript` (a request for the colour script).
 - `camera.checkShots` (a question about what a shot's camera does with the set), with `rule` when it names one (`occluded`, `inside`, `crop`); none checks every rule. A foreground request is a `camera.applyTechnique` row with `composition.foreground` (`{ id, share? }`).
 - `none`: no camera action (a drink, a gunshot, a sports shot, a turn of phrase, or no camera words).
 

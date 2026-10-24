@@ -1,0 +1,15 @@
+{
+	"category": "look",
+	"label": "shot looks and the colour script",
+	"scenarios": [
+		{"id": "look-confession-colder", "tier": "core", "category": "look", "request": "make the confession shot colder", "cast": ["mara", "joon"], "expected": {"action": "shot.setLook", "adjust": "colder", "shot": "confession", "confidence": "high"}, "why": "Colder is a nudge to the shot's look, not a camera move; the shot is named by its story word."},
+		{"id": "look-colour-script-scene", "tier": "core", "category": "look", "request": "colour script for this scene", "cast": ["mara", "joon"], "expected": {"action": "shot.colourScript", "confidence": "high"}, "why": "A colour script is the palette of every shot across the scene, read without changing a shot."},
+		{"id": "look-same-as-shot-two", "tier": "core", "category": "look", "request": "the same look as shot 2", "cast": ["mara"], "expected": {"action": "shot.setLook", "sameAs": 2, "confidence": "high"}, "why": "Matching another shot's look copies its partial lighting and palette onto this shot."},
+		{"id": "look-cold-isolation-kitchen", "tier": "core", "category": "look", "request": "give the kitchen shot a cold isolation look", "cast": ["mara"], "expected": {"action": "shot.setLook", "recipe": "cold-isolation", "shot": "kitchen", "confidence": "high"}, "why": "Cold isolation is a look recipe named in story words; it sets the shot's light, not its framing."},
+		{"id": "look-danger-accent-number", "tier": "core", "category": "look", "request": "danger accent on shot 3", "cast": ["mara", "joon"], "expected": {"action": "shot.setLook", "recipe": "danger-accent", "shot": 3, "confidence": "high"}, "why": "A danger accent is the red-key recipe; the shot is named by its number in the cut."},
+		{"id": "look-palette-sequence", "tier": "core", "category": "look", "request": "show me the palette of the sequence", "cast": ["mara", "joon"], "expected": {"action": "shot.colourScript", "confidence": "high"}, "why": "The palette across a sequence is the colour script, one column a shot."},
+		{"id": "look-darker-here", "tier": "core", "category": "look", "request": "make it darker", "cast": ["mara"], "expected": {"action": "shot.setLook", "adjust": "darker", "confidence": "high"}, "why": "Darker lowers this shot's exposure; no shot named means the one under the playhead."},
+		{"id": "look-lonely-feel", "tier": "core", "category": "look", "request": "a lonely look for this moment", "cast": ["mara"], "expected": {"action": "shot.setLook", "recipe": "cold-isolation", "confidence": "medium"}, "why": "Lonely with a look word reads as the cold isolation recipe, less sure than its own name."},
+		{"id": "look-warm-close-up-not-look", "tier": "core", "category": "look", "request": "a close-up on Mara, she feels warm toward him", "cast": ["mara", "joon"], "expected": {"action": "camera.applyTechnique", "stack": ["close-up"], "subject": "mara"}, "why": "Warm here is a feeling between people, not a colour request; the size is the camera action."}
+	]
+}

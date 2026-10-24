@@ -2,12 +2,15 @@
 // packet for a range of the editor's shots, its plan drawn on a canvas
 // (plan-draw.js) and its contact sheet rendered through the export path (one
 // frame per shot at its middle, the shot camera, tiled by
-// studio-contact-sheet.js and numbered as the shot list numbers them), written
+// studio-contact-sheet.js and numbered as the shot list numbers them), the
+// colour script measured from those same middle frames (colour-script), written
 // as packet/ inside the sequence pack for the same range.
 import { directorPacket } from "./packet.js";
 import { drawPacketPlan } from "./plan-draw.js";
 import { packetFiles } from "./files.js";
 import { intensityStrip } from "./intensity.js";
+import { colourScript } from "../colour-script/script.js";
+import { colourScriptPng, measureFrame } from "../colour-script/studio.js";
 import { buildContactSheet } from "../studio-contact-sheet.js";
 import { studioSequenceDocument } from "../sequence-prompt-studio.js";
 import { ko } from "../locale.js";
@@ -84,7 +87,11 @@ export function directorPacketExporter(deps) {
 		if (!packet.shots.length) return null;
 		const result = await deps.exportSequencePack(shotIds, null, async (job) => {
 			job.label = ko("Director packet: plan and contact sheet", "디렉터 패킷: 플랜과 콘택트 시트");
-			return packetFiles(packet, { plan: planPng(packet), contactSheet: contactSheetPng(packet, deps.renderFrameBuffer), intensity: intensityPng(packet) });
+			// Each middle frame the contact sheet renders is measured as it comes back: the colour script's palettes.
+			const measured = new Map(), render = (frame) => { const image = deps.renderFrameBuffer(frame); measured.set(frame, measureFrame(image)); return image; };
+			const contactSheet = contactSheetPng(packet, render), sequence = studioSequenceDocument(deps.readStudioState());
+			const script = colourScript(sequence, { range: { shotIds }, measured: Object.fromEntries(packet.shots.map((row) => [row.shotId, measured.get(Math.floor((row.frames.start + row.frames.end) / 2))])) });
+			return packetFiles(packet, { plan: planPng(packet), contactSheet, intensity: intensityPng(packet), colourScript: colourScriptPng(script) });
 		});
 		return result ? { ...result, packet } : null;
 	};

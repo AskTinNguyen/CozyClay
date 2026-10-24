@@ -50,6 +50,8 @@ export function CaptureRig({ apiRef, camRef, width = CAPTURE_W, height = CAPTURE
 					if (!cam.view?.enabled) cam.aspect = width / height;
 					cam.updateProjectionMatrix();
 					const previous = gl.getRenderTarget();
+					// The frame's own shot look (colour-script), when it is not the one on screen: put back in the finally below.
+					const restoreLook = scene.userData.shotLook?.draw() ?? (() => {});
 					// The viewport's fog dissolves the deck into the background by ~54 m
 					// so the working view has no horizon to distract from blocking. An
 					// exported frame wants the opposite: the horizon IS the vanishing
@@ -92,6 +94,7 @@ export function CaptureRig({ apiRef, camRef, width = CAPTURE_W, height = CAPTURE
 						scene.environmentIntensity = environmentIntensity;
 						scene.backgroundIntensity = backgroundIntensity;
 						if (fogColor) fog.color.copy(fogColor);
+						restoreLook();
 					}
 					return buffer;
 				},

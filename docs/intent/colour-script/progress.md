@@ -1,25 +1,60 @@
 # Colour Script: Progress
 
-- Working under rev: 1
-- Worker: none yet (planned)
-- Current step: none
-- Next step: start when the `Waits for` line in prompt.md is met
-- PR: none yet
+- Working under rev: 1 (rev 2 changed only A1's proof file name, F-1)
+- Worker: cloud worker agent (colour-script)
+- Current step: 6, suite regressions fixed; full suite green apart from the known timing checks
+- Next step: none; squash-merge after Codex review
+- PR: #18
 
 ## Acceptance
 
 | Item | Verdict | Evidence |
 | --- | --- | --- |
-| A1 | open | |
-| A2 | open | |
-| A3 | open | |
-| A4 | open | |
-| A5 | open | |
-| A6 | open | |
-| A7 | open | |
-| A8 | open | |
-| A9 | open | |
+| A1 | met (proof file per F-1) | `node test/verify-shot-look-merge.mjs`: pass 4 fail 0 (merge, frames, dissolve blend, older documents unchanged). The A7 browser run: Dialogue capture warmth -0.003 -> 0.119 with warm-safety, Exchange unchanged. |
+| A2 | met | `node test/verify-palette-measure.mjs`: pass 3 fail 0. |
+| A3 | met | `node test/verify-colour-script.mjs` A3 (columns, beats, 960x200 picture, packet colour check, `packet/colour-script.png` in packetFiles and index.html): pass. ui:shot `proofs/colour-script-warm-to-cold.png` (6 shots, hard measured cuts into 4 and 6). |
+| A4 | met | `node mcp/verify-shot-look.mjs`: 16 passed, 0 failed. `node test/verify-director-evals.mjs`: look core 9/9; core 118/118. |
+| A5 | met | `node test/bus/verify-sequence-prompt.mjs`: pass 7 fail 0 (byte-identical, profiles unaffected). |
+| A6 | met | `node test/verify-colour-script.mjs`: constructed hard and soft cut, tone component (INTENSITY_VERSION 2 with looks, v1 path without): pass 3 fail 0. |
+| A7 | met | ui:qa `test/verify-colour-script-browser.mjs` via tools/qa-browser.mjs on slot 13: 21 PASS, 0 FAIL. ui:shot `proofs/look-panel-warm-safety.png`. |
+| A8 | met | 91857e60: `SUITE-ALL: 480 files, 478 passed, 2 failed` (only the known timing checks: verify-motion3-exitcar compile+QA CPU, verify-motion3-repair exit car under 10 s). `npm run lint`: knip 138 (0 new, 1 fixed), loc 0 violations, eslint 0 regressions; `npm run build` ok. |
+| A9 | met (review R1) | mcp/README.md, docs/agent-cli.md, docs/studio-ui-ia.md, CHANGELOG.md Unreleased, director-evals README (f46d700f). |
 
 ## Steps
 
+1. 752f1feb: shot look (merge, preview, export relight), measured palette, recipes, colour script, resolver, shot.setLook / shot.colourScript, Look panel, File > Export > Colour script, MCP shot_look, sequence brief Look lines, tone component, packet colour check and picture, 9 eval rows. Evidence: the gates in A1-A6; lint knip 138 (1 fixed), loc 0 violations, eslint 0 regressions; build ok.
+2. 603df496: browser QA (A7). Found and fixed: the Look panel measured a just-picked recipe before the 3D tree re-rendered (the scene's props lag the DOM by seconds under software GL), so shot.colourScript renders inside withDrawShots(document.shots) and the export draw compares the look's content; the Look section overflowed the sidebar (grid column pinned). 21 PASS, 0 FAIL; two proof shots.
+3. f46d700f: docs (A9). `node test/motion3/verify-motion3-prompt.mjs`: all checks passed (prompt cap holds).
+
+4. ae97ec67: progress and acceptance evidence.
+5. 38a10e92: merged origin/main 540afc37 (depth-staging #17), keeping both sides: 39 MCP tools, 141 registry actions, PACKET_CHECKS colour and depth, eval categories depth and look, routing chain with resolveShotCheck then resolveLookRequest. Reran: mcp/verify.mjs all checks passed; verify-tool-annotations 39 tools; verify-tool-handlers 39 tools; verify-live ok; command registry 141; director evals core 128/128 (look 9/9); mcp director evals 113 passed; shot-look 16 passed; camera-shot-checks 11 passed; director packet node/zip/mcp pass; colour-script, shot-look-merge, sequence-prompt pass; motion3 prompt cap passed; build ok.
+6. 91857e60: fixed the six regressions the coordinator's suite run found on 884cae7c (`SUITE-ALL: 480 files, 472 passed, 8 failed`): verify-export-capture (CaptureRig had a new free import; it now calls the scene hook's draw()), verify-shots-commands and verify-studio-undo-hygiene / verify-final-suite-compatibility (shot.setLook, a new mutation, had no input in their coverage lists; hygiene count 79), verify-grid-view and verify-theme (they pin StageAtmosphere's exact JSX; the literal now includes shots and frameRef). Each passes alone; full suite `SUITE-ALL: 480 files, 478 passed, 2 failed` (known timing only); browser QA rerun 21 PASS, 0 FAIL.
+
+## Decisions
+
+- The tone component joins the intensity curve only when a shot has a look (or tones are passed); INTENSITY_VERSION is 2, and a sequence without looks scores as before.
+- The packet's `colour` check is present only when a shot has a look; a hard colour cut is a low-severity flag.
+- An export frame relights the tagged lights, background, fog colour, exposure, haze and environment strength; the environment map and AO pass stay those of the look on screen.
+- A preset look keeps the stage's HDR environment (applyLightingRecipe skips lighting.hdr).
+
 ## Reconciliations
+
+## Reviews
+
+- R1 (cloud orchestrator, 2026-10-24, at 8896a42c): opened the two proof images.
+  - `proofs/look-panel-warm-safety.png`: the Look section with the warm safety recipe. It shows the interior preset, exposure 1.05, fill 0.75, the intended 'amber hearth' swatches beside the measured palette (luminance 0.52, warmth 0.12, saturation 0.23), and "Back to the stage look".
+  - `proofs/colour-script-warm-to-cold.png`: the Colour script dialog over 6 shots, running from warm safety through tender memory into cold isolation and night menace. Each shot has its measured palette and intended swatches. The hard measured cuts into shots 4 and 6 are marked red, the soft cut into 3 is marked amber, and there is a beat tick. A table lists each look and its measured colours.
+  - A8: before handing over, the orchestrator's own suite run on 884cae7c found 6 regressions. The worker fixed them in 91857e60:
+    - capture: a `draw()` hook replaces a new import;
+    - setLook coverage added to the shots-commands and undo-hygiene lists;
+    - the StageAtmosphere literal in the grid-view and theme tests updated for the new props, which keeps their theme and grid assertions.
+    - Suite after the fix: 480 files, 478 passed, 2 failed (the known timing checks only).
+  - A9: `mcp/README.md`, `docs/agent-cli.md`, `docs/studio-ui-ia.md`, CHANGELOG and the director-evals README describe `shot.setLook`, `shot.colourScript`, `shot_look`, the Look panel and the export.
+  - F-1 is resolved as prompt rev 2.
+- R2 (cloud orchestrator, 2026-10-24, at 97b1d4ff): Codex's three findings are fixed with checks that fail on the old code:
+  - a dense palette on swatch edits;
+  - the target look's environment map during an export draw;
+  - in-memory `shot_look` stored on the planned shots, so `render_prompt` and `render_packet` see it.
+  - Suite: 481 files, 479 passed, 2 failed (the known timing checks only).
+  - The browser QA has 19 checks; earlier reports of 21 were a miscount.
+  - The committed `proofs/colour-script-warm-to-cold.png` shows the pre-fix measured cut values. The hard cut into shot 4 now reads darker by 0.12 and colder by 0.37, where the image shows 0.16 and 0.34. The image still shows the same layout and cut marks.

@@ -10,21 +10,23 @@ import { techniqueById } from "../src/camera-techniques/index.js";
 import { coveragePattern } from "../src/camera-coverage/patterns.js";
 
 const DIR = new URL("./fixtures/director-evals/", import.meta.url);
-export const CATEGORIES = Object.freeze(["size", "angle", "move", "lens", "coverage", "composition", "cuts", "negative", "motivation", "structure", "depth"]);
+export const CATEGORIES = Object.freeze(["size", "angle", "move", "lens", "coverage", "composition", "cuts", "negative", "motivation", "structure", "depth", "look"]);
 // The motivation actions (camera-motivation): the check, the retime, and the story beats.
 const MOTIVATION_KEYS = { "camera.checkMotivation": ["confidence"], "camera.alignMove": ["beat", "edge", "confidence"], "story.addBeat": ["frame", "label", "kind", "confidence"], "story.moveBeat": ["beat", "frame", "confidence"], "story.removeBeat": ["beat", "confidence"] };
 // The structure check (intensity-curve): a question about the intensity curve, or a beat it must build into.
 const STRUCTURE_KEYS = { "camera.checkStructure": ["beat", "confidence"] };
 // The shot checks (depth-staging): occluded, inside or crop, or every rule.
 const DEPTH_KEYS = { "camera.checkShots": ["rule", "confidence"] };
-const ACTIONS = ["camera.applyTechnique", "camera.cover", "camera.checkCuts", "camera.checkCoverage", "camera.setLine", "none", ...Object.keys(MOTIVATION_KEYS), ...Object.keys(STRUCTURE_KEYS), ...Object.keys(DEPTH_KEYS)];
+// Shot looks and the colour script (colour-script): a recipe, a nudge or another shot's look on a shot, or the read.
+const LOOK_KEYS = { "shot.setLook": ["recipe", "adjust", "sameAs", "shot", "confidence"], "shot.colourScript": ["confidence"] };
+const ACTIONS = ["camera.applyTechnique", "camera.cover", "camera.checkCuts", "camera.checkCoverage", "camera.setLine", "none", ...Object.keys(MOTIVATION_KEYS), ...Object.keys(STRUCTURE_KEYS), ...Object.keys(DEPTH_KEYS), ...Object.keys(LOOK_KEYS)];
 const CONFIDENCE = ["high", "medium", "low"];
 // The fixture cast every scenario names its people from (ids are what `cast` and `expected.subject` hold).
 // Sela (group-coverage) watches the two from 3.4 m off their line; a row brings her in by naming her in its cast.
 export const CAST = Object.freeze([{ id: "mara", name: "Mara", x: 0, z: 0, rot: 90 }, { id: "joon", name: "Joon", x: 4, z: 0, rot: -90 }, { id: "sela", name: "Sela", x: 2, z: 3.4, rot: 180 }]);
 const FIELDS = ["id", "tier", "category", "request", "cast", "expected", "why"];
 const EXPECTED_KEYS = { "camera.applyTechnique": ["stack", "params", "subject", "composition", "confidence"], "camera.cover": ["pattern", "cast", "branches", "confidence"],
-	"camera.checkCuts": ["frame", "confidence"], "camera.checkCoverage": ["cast", "confidence"], "camera.setLine": ["between", "confidence"], none: ["confidence"], ...MOTIVATION_KEYS, ...STRUCTURE_KEYS, ...DEPTH_KEYS };
+	"camera.checkCuts": ["frame", "confidence"], "camera.checkCoverage": ["cast", "confidence"], "camera.setLine": ["between", "confidence"], none: ["confidence"], ...MOTIVATION_KEYS, ...STRUCTURE_KEYS, ...DEPTH_KEYS, ...LOOK_KEYS };
 const APPLY_KEYS = ["move", "size", "sizes", "height", "screenX", "eyeLineY", "shots", "oneSide", "issues", "setup", "flags", "refused", "complete", "line"];
 
 /** Every scenario row, in file then row order, each with the file it came from. */
@@ -96,7 +98,7 @@ export function resolutionMismatch(expected, got) {
 	if (expected.action === "camera.checkCuts") want("frame", expected.frame, got.frame);
 	else if (expected.frame !== undefined) want("frame", expected.frame, got.frame);
 	if (expected.action === "camera.checkShots") want("rule", expected.rule, got.rule);
-	for (const key of ["label", "kind", "beat", "edge"]) if (expected[key] !== undefined) want(key, expected[key], got[key]);
+	for (const key of ["label", "kind", "beat", "edge", "recipe", "adjust", "sameAs", "shot"]) if (expected[key] !== undefined) want(key, expected[key], got[key]);
 	if (expected.confidence) want("confidence", expected.confidence, got.confidence);
 	return problems;
 }
@@ -105,7 +107,7 @@ export function resolutionMismatch(expected, got) {
 export function resolutionOf(routed) {
 	const args = routed.args ?? {};
 	return { action: routed.action, stack: args.stack, subject: args.subjectId, composition: args.composition, pattern: args.pattern, cast: args.cast, frame: args.frame, between: args.between, branches: args.branches, confidence: routed.confidence,
-		label: args.label, kind: args.kind, beat: args.beat, edge: args.edge, rule: args.rule };
+		label: args.label, kind: args.kind, beat: args.beat, edge: args.edge, rule: args.rule, recipe: args.recipe, adjust: args.adjust, sameAs: args.sameAs, shot: args.shot };
 }
 
 /** A receipt states the words it matched (each one in the request) and a confidence (A4). */

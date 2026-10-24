@@ -180,3 +180,33 @@ test('intensity-curve: the brief states where the sequence builds and peaks', ()
     console.log(`PASS A4 structure: ${marked.text.split('\n').find((line) => line.startsWith('STRUCTURE: '))}`);
   } finally { f.dispose(); }
 });
+
+// colour-script A5: each beat states its shot's look and intended palette in words, the same for every model;
+// what a model profile shapes (clips, warnings, the shot headers) does not change with a look.
+test('colour-script: each beat states its look and intended palette; model profiles are unaffected', async () => {
+  const { MODEL_PROFILES } = await import('../../src/model-profiles.js');
+  const { f, document: plain } = coveredSequence();
+  try {
+    const shots = [...f.live.current.shots].sort((a, b) => a.startFrame - b.startFrame);
+    assert.equal(f.run('shot.setLook', { shotId: shots[0].id, recipe: 'warm-safety' }, 'agent').ok, true);
+    assert.equal(f.run('shot.setLook', { shotId: shots[2].id, look: { preset: 'night', exposure: 0.8 }, palette: { swatches: ['#0b1426', '#34507f', '#9db6e6'], word: 'cold blue' } }, 'agent').ok, true);
+    const document = documentOf(f), out = buildSequencePrompt(document), lines = out.text.split('\n');
+    const looks = lines.filter((line) => line.startsWith('   Look: '));
+    assert.deepEqual(looks, [
+      "   Look: warm safety: interior preset, exposure 1.05, fill 0.75; intended palette 'amber hearth' #f2c38b, #c9814a, #6e4529, #2b2621.",
+      "   Look: night preset, exposure 0.8; intended palette 'cold blue' #0b1426, #34507f, #9db6e6.",
+    ]);
+    const beat = (n) => lines.findIndex((line) => line.startsWith(`${n}. `));
+    assert.ok(lines.indexOf(looks[0]) > beat(1) && lines.indexOf(looks[0]) < beat(2) && lines.indexOf(looks[1]) > beat(3) && lines.indexOf(looks[1]) < beat(4), 'each under its own beat');
+    assert.ok(!buildSequencePrompt(plain).text.includes('   Look: '), 'a shot without a look adds no line');
+    assert.equal(buildSequencePrompt(structuredClone(document)).text, out.text, 'byte-identical on a second run');
+    for (const profile of MODEL_PROFILES) {
+      const withLook = buildSequencePrompt(document, { profile: profile.id }), without = buildSequencePrompt(plain, { profile: profile.id });
+      assert.deepEqual(withLook.text.split('\n').filter((line) => line.startsWith('   Look: ')), looks, `${profile.id}: the same look words`);
+      assert.deepEqual([withLook.clips.map((clip) => clip.length), withLook.warnings], [without.clips.map((clip) => clip.length), without.warnings], `${profile.id}: clips and warnings unchanged`);
+      const strip = (text) => text.split('\n').filter((line) => !line.startsWith('   Look: ') && !line.startsWith('STRUCTURE: ')).join('\n');
+      assert.equal(strip(withLook.text), strip(without.text), `${profile.id}: every other line unchanged`);
+    }
+    console.log(`PASS A5 look lines (${MODEL_PROFILES.length} profiles unaffected): ${looks[1].trim()}`);
+  } finally { f.dispose(); }
+});

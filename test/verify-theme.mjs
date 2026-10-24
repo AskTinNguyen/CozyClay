@@ -36,7 +36,7 @@ expect("current frame uses the v2 selection token", css.includes(".tl-frame-box"
 expect("new installs start in light mode", theme.includes('export const DEFAULT_THEME = "light"'));
 // The stage is the grey workbench (editor, preview, exports), dark or light
 // with the UI theme; grid view only trades the deck for the reference grid.
-expect("Canvas uses the grey workbench background", app.includes("<StageAtmosphere lighting={lighting} keyLight={keyLight} theme={uiTheme} grid={gridView} />")
+expect("Canvas uses the grey workbench background", app.includes("<StageAtmosphere lighting={lighting} keyLight={keyLight} shots={shots} frameRef={propFrameRef} theme={uiTheme} grid={gridView} />")
 	&& look.includes("const sky = themed ? (grid ? GRID_BACKGROUND : stageBackground(theme)) : l.sky;"));
 expect("Character uses white clay", app.includes('const CLAY = "#ffffff"'));
 expect("Room uses a grey deck a step above the sky", room.includes('const FLOOR = "#5b5d63"'));

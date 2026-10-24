@@ -1,7 +1,8 @@
 // The director packet's files inside the sequence pack (director-packet A3):
 // packet/index.html, packet/shot-list.csv, packet/shot-list.md,
 // packet/packet.json and the pictures the Studio rendered (plan.png,
-// contact-sheet.png, and each further picture a landed feature adds). A picture
+// contact-sheet.png, and each further picture a landed feature adds:
+// intensity.png, colour-script.png). A picture
 // that was not rendered is left out of the folder and off the page. Pure.
 import { packetPage } from "./page.js";
 import { shotListCsv, shotListMarkdown } from "./shot-list.js";
@@ -13,6 +14,7 @@ const PACKET_PICTURES = Object.freeze([
 	{ id: "plan", file: "plan.png", title: "Plan", caption: "Top-down plan: numbered cameras with their frustums and moves, the lines of action, the cast's marks and paths." },
 	{ id: "contactSheet", file: "contact-sheet.png", title: "Contact sheet", caption: "One frame per shot at its middle, numbered as in the shot list." },
 	{ id: "intensity", file: "intensity.png", title: "Intensity", caption: "The intensity curve over the range (white: combined; orange size, blue lens, pink movement), story beats as ticks, structure issues as bands." },
+	{ id: "colourScript", file: "colour-script.png", title: "Colour script", caption: "One column per shot: the palette measured from its middle frame (top), the palette it is meant to read as (middle), its tone and warmth (bottom); hard colour cuts in red, soft in amber, story beats as dashed ticks." },
 ]);
 
 /** The file names a packet folder holds, given which pictures were rendered. */

@@ -13,11 +13,11 @@ const state = { shots: [], objects: [], characters: [], frame: 0, frameCount: 48
  project: { name: null, hasFile: false, fileAccess: false, gesture: false }, aiShot: { mode: 'image', imageModel: 'gpt_image_2' },
  i2vMotion: { enabled: false, status: 'idle', dailyRemaining: null } };
 const registry = createStudioAppActions({ state: () => state });
-assert.equal(registry.ids().length, 139, 'the registry includes the camera technique, capability, coverage (with camera.setLine and camera.checkCoverage) motivation (story beats) and structure and depth actions (camera.checkShots, camera.fixShot), export.directorPacket, owned cast, motion (with the take timing edits), motion3, kits and IK actions (and sculpt.compare)');
+assert.equal(registry.ids().length, 141, 'the registry includes the camera technique, capability, coverage (with camera.setLine and camera.checkCoverage) motivation (story beats) and structure and depth actions (camera.checkShots, camera.fixShot), export.directorPacket, the shot looks (shot.setLook, shot.colourScript), owned cast, motion (with the take timing edits), motion3, kits and IK actions (and sculpt.compare)');
 assert.deepEqual([...registry.ids()].sort(), [...new Set([...STUDIO_ACTION_IDS, ...['stage', 'objects', 'kits', 'scene', 'project', 'shot', 'camera', 'cast', 'motion', 'motion3', 'view', 'export'].flatMap(name => COMMAND_MODULES[name].declarations.map(entry => entry.id))])].sort(), 'legacy ids plus the owned domain commands');
 assert.deepEqual(registry.ids(), Object.values(COMMAND_MODULES).flatMap(module => module.declarations.map(entry => entry.id)), 'each id comes from its command module');
 const listed = registry.list();
-assert.equal(listed.length, 139, 'every action answers availability over the published state');
+assert.equal(listed.length, 141, 'every action answers availability over the published state');
 assert.equal(registry.state(), state, 'the registry reads the port object\'s state');
 
 // App.jsx keeps no registration of its own: no registry factory and no entry.

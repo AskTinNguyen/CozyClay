@@ -8,6 +8,7 @@ import CameraRigPanel from "./CameraRigPanel.jsx";
 import CoveragePanel from "./CoveragePanel.jsx";
 import MotivationPanel from "./MotivationPanel.jsx";
 import StructurePanel from "./StructurePanel.jsx";
+import LookPanel from "./LookPanel.jsx";
 
 export default function CameraPanel({ isCameraSelection, shot, moveSequence, cameraKeys, activeShot }) {
 	const { run } = useBus();
@@ -67,6 +68,8 @@ export default function CameraPanel({ isCameraSelection, shot, moveSequence, cam
 					<CameraRigPanel hidden={!isCameraSelection} activeShot={activeShot} />
 					{/* Coverage patterns over the selected shot's range, and the cut into it: transition and editing-rule readout. */}
 					<CoveragePanel hidden={!isCameraSelection} activeShot={activeShot} />
+					{/* The shot's own look: a recipe in story words, the partial look, the intended and the measured palette (colour-script). */}
+					<LookPanel hidden={!isCameraSelection} activeShot={activeShot} />
 					{/* Story beats and why each camera move happens, with the fix for each flag (camera-motivation). */}
 					<MotivationPanel hidden={!isCameraSelection} activeShot={activeShot} />
 					{/* The sequence's intensity curve against its story beats, with a technique stack for each flag (intensity-curve). */}

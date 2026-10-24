@@ -2,6 +2,9 @@ import { useEffect, useLayoutEffect, useRef } from "react";
 import { useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { stageLook } from "./stage-lighting.js";
+import { shotLookAt } from "./stage-shot-look.js";
+import { applyShotLookForDraw, lookSignature, useShotLook } from "./stage-shot-look-draw.js";
+import { keyLightColor } from "./stage-key-color.js";
 import { ENV_HEIGHT, ENV_WIDTH, environmentPixels } from "./stage-environment.js";
 import { installOcclusion } from "./stage-occlusion.js";
 import { useHdrMap } from "./stage-hdr-map.js";
@@ -81,10 +84,12 @@ function prefiltered(gl, texture) {
  * hdrBackground the map itself is the perspective backdrop, the deck fading
  * into the map's horizon colour. Until a file loads, the look's own sky lights.
  */
-export function StageAtmosphere({ lighting = null, keyLight, theme = "dark", grid = false }) {
+export function StageAtmosphere({ lighting: stageLighting = null, keyLight: stageKey, shots = null, frameRef = null, theme = "dark", grid = false }) {
 	// The scene and renderer are read inside the effects: they are three objects
 	// this component configures, not React state.
 	const get = useThree((state) => state.get), invalidate = useThree((state) => state.invalidate);
+	// A shot's own look while the playhead is in it (stage-shot-look.js); an export frame relights through the hook below.
+	const shown = useShotLook(stageLighting, stageKey, shots), { lighting, keyLight } = shown;
 	const look = stageLook({ lighting, keyLight, theme, grid });
 	const { sky, skyTop, exposure } = look, { near, far } = look.fog;
 	const hazeNear = look.captureFog?.near ?? null, hazeFar = look.captureFog?.far ?? null;
@@ -132,6 +137,23 @@ export function StageAtmosphere({ lighting = null, keyLight, theme = "dark", gri
 			invalidate();
 		};
 	}, [get, invalidate, hdrTexture, envSource]);
+	// An export frame lit as another shot's look gets that look's environment map: prefiltered once per look, kept for the next frames.
+	const envMaps = useRef(new Map());
+	useEffect(() => () => { for (const target of envMaps.current.values()) target.dispose(); envMaps.current.clear(); }, []);
+	useLayoutEffect(() => {
+		const { scene } = get(), cache = envMaps.current;
+		const envMap = (spec) => {
+			const key = JSON.stringify(spec);
+			if (!cache.has(key)) {
+				if (cache.size >= 6) { const [oldest, target] = cache.entries().next().value; target.dispose(); cache.delete(oldest); }
+				cache.set(key, environmentMap(get().gl, spec));
+			}
+			return cache.get(key).texture;
+		};
+		scene.userData.shotLook = { at: (frame, list) => shotLookAt({ lighting: stageLighting, keyLight: stageKey }, list ?? shots, frame), frameRef, shown: lookSignature(shown), shownEnv: envSource, envMap, theme, grid,
+			keyColor: (key) => key.color ?? keyLightColor(key.warmth), sky: gradientSky, draw: () => applyShotLookForDraw(scene) };
+		return () => { delete scene.userData.shotLook; };
+	}, [get, stageLighting, stageKey, shots, frameRef, shown, envSource, theme, grid]);
 	useLayoutEffect(() => {
 		const { scene } = get();
 		scene.environmentIntensity = hdrLight ?? envIntensity;
