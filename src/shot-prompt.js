@@ -92,6 +92,8 @@ export function buildShotPrompt(meta, options = {}) {
 		referenceOwnsCamera ? `CAMERA: ${CAMERA_FOLLOWS_REFERENCE}` : `CAMERA: ${cameraWords(meta.cameraMove)}`,
 		// The applied camera technique, in the words the move classifier proved.
 		...(meta.technique?.phrase ? [`TECHNIQUE: ${meta.technique.label ? `${meta.technique.label}: ` : ""}${meta.technique.phrase}`] : []),
+		// What the shot camera itself does beyond its framing: roll, focus, shake, mount, speed, shutter.
+		...(meta.capabilityWords?.length ? [`RIG: ${meta.capabilityWords.join("; ")}`] : []),
 		`LIGHT: ${lightWords(meta.keyLight)}`,
 		`CAST: ${(meta.cast || []).map((member) => member.name).join(", ") || "none"}`,
 		`LOOK: ${intent || NEUTRAL_LOOK}`,

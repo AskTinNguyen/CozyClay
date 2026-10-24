@@ -5,6 +5,8 @@ import { createCameraBlock } from "./camera-block.js";
 import { railCameraOwner, resolveRailSchedule, isRailUsable, RAIL_OWNER_KEYS } from "./camera-rail-schedule.js";
 import { cameraMoveAt } from "./camera-move.js";
 import { DEFAULT_SENSOR_FORMAT, SENSOR_FORMATS, fovToFocalMm } from "./shot.js";
+import { shutterSamples, withCapabilities } from "./camera-capabilities/sample.js";
+import { retimeFrame } from "./camera-capabilities/speed.js";
 
 const clamp = (value, min, max) => Math.max(min, Math.min(value, max));
 const cleanZero = (value) => (Math.abs(value) < 1e-12 ? 0 : value);
@@ -76,7 +78,13 @@ function cameraOnTrack(track, frame, scene) {
  * Return the complete playback-facing state for one absolute timeline frame.
  * `scene` is a sealed runtime envelope: { frameCount, subject, motion,
  * subjectTrack, cameraTrack, cameraAnchor, fovDeg, sensorId/filmback }.
- * Camera is always { pos, yaw, pitch, fovDeg, focalMm, sensorId }.
+ * Camera is always { pos, yaw, pitch, fovDeg, focalMm, sensorId }, plus the
+ * shot camera's capabilities where its block carries them (camera-capabilities):
+ * rollDeg, fStop, focusDistance, shutterDeg and blur (the poses the open shutter
+ * sees). A mount and a shake are already in pos/yaw/pitch. `scene.cast` (the
+ * characters) lets focus targets and mounts resolve per frame. A shot with a
+ * speed samples its take at the retimed frame (subject, motionFrame); subject and
+ * camera tracks are timeline-indexed and already retimed by their builder.
  * Nothing in either input is
  * mutated and every returned nested value is independently owned.
  */
@@ -86,13 +94,20 @@ export function sampleAt(scene, shot, frame) {
 		? Math.max(0, Math.round(source.frameCount) - 1)
 		: Math.max(0, (source.subjectTrack?.length ?? source.cameraTrack?.length ?? 1) - 1);
 	const sampledFrame = clamp(Number.isFinite(frame) ? frame : 0, 0, maxFrame);
+	const takeFrame = retimeFrame(shot, sampledFrame);
 	const subject = pointOnTrack(source.subjectTrack, sampledFrame)
-		?? rootAt(source.motion, sampledFrame)
+		?? rootAt(source.motion, takeFrame)
 		?? copyPoint(source.subject);
+	const block = shot ? createCameraBlock(shot.camera) : null;
 
-	let camera = null;
-	if (shot) {
-		const block = createCameraBlock(shot.camera);
+	// The camera at any (fractional, clamped) frame: the shutter samples around one.
+	const cameraAt = (at) => {
+		const atFrame = clamp(at, 0, maxFrame), atTake = retimeFrame(shot, atFrame);
+		const point = atFrame === sampledFrame ? subject : pointOnTrack(source.subjectTrack, atFrame) ?? rootAt(source.motion, atTake) ?? copyPoint(source.subject);
+		return withCapabilities(baseCamera(atFrame), { scene: source, shot: { ...shot, camera: block }, frame: atFrame, takeFrame: atTake, subjectPoint: point });
+	};
+	function baseCamera(sampledFrame) {
+		let camera;
 		const keyedCamera = () => sharedCamera(cameraMoveAt(
 			shot.cameraKeys,
 			source.cameraAnchor ?? source.subject ?? { x: 0, z: 0 },
@@ -123,13 +138,16 @@ export function sampleAt(scene, shot, frame) {
 		} else {
 			camera = cameraOnTrack(source.cameraTrack, sampledFrame, source);
 		}
+		return camera;
 	}
+	let camera = shot ? cameraAt(sampledFrame) : null;
+	if (camera?.shutterDeg) camera = { ...camera, blur: shutterSamples(cameraAt, sampledFrame, camera.shutterDeg) };
 
 	return {
 		frame: sampledFrame,
 		motionFrame: source.motion?.frames > 0
-			? clamp(Math.round(sampledFrame), 0, source.motion.frames - 1)
-			: Math.round(sampledFrame),
+			? clamp(Math.round(takeFrame), 0, source.motion.frames - 1)
+			: Math.round(takeFrame),
 		subject,
 		camera,
 	};

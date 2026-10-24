@@ -13,6 +13,7 @@ import { elementByPath } from "./studio-elements.js";
 import { isImageAssetId } from "./scene-assets.js";
 import { createCharacterEntry } from "./scenes.js";
 import { repairShotTechnique } from "./camera-techniques/storage.js";
+import { cameraCapabilities } from "./camera-capabilities/fields.js";
 
 const VIDEO_MODEL_IDS = new Set(VIDEO_MODEL_PRESETS.map((preset) => preset.id));
 const CAMERA_KEY_LIMITS = elementByPath("shot.cameraKeys"), KEY_EASES = new Set(["linear", "in", "out"]);
@@ -63,8 +64,7 @@ const CAPTION_MAX = 500;
 const POSTURES = new Set(["stand", "sit", "lie"]);
 
 /** clip length sanity bounds, frames @ 24 fps: 1 s .. 20 min */
-const FRAME_COUNT_MIN = 24;
-const FRAME_COUNT_MAX = 28800;
+const FRAME_COUNT_MIN = 24, FRAME_COUNT_MAX = 28800;
 const DEFAULT_FRAME_COUNT = 144;
 export const STILL_FRAME_COUNT_MAX = FRAME_COUNT_MAX;
 const RAIL_MAX_POINTS = 512;
@@ -302,7 +302,8 @@ function repairCamera(value) {
 		// The dolly's speed curve rides the rail the same way; the envelope
 		// module owns its repair (parse-don't-validate, flat heals to null).
 		dollyTiming: cameraRail ? repairDollyTiming(source.dollyTiming) : null,
-		...railShotFields(source, cameraRail),
+		// Roll, lens, shake, mount, speed, shutter and rig keys (camera-capabilities/fields.js): absent unless set.
+		...railShotFields(source, cameraRail), ...cameraCapabilities(source),
 	};
 }
 

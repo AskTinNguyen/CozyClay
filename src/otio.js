@@ -6,6 +6,7 @@ import { sampleAt } from "./sample-at.js";
 import { TIMELINE_FRAME_FPS } from "./scenes.js";
 import { usedSensorHeightMm } from "./shot.js";
 import { shotHold } from "./shot-authoring.js";
+import { cameraCapabilities } from "./camera-capabilities/fields.js";
 
 const OTIO_TIMELINE_FPS = TIMELINE_FRAME_FPS;
 const OTIO_START_TIMECODE = "00:00:00:00";
@@ -96,10 +97,13 @@ function checkedShot(shot, index) {
 export function shotMetadata(scene, shot) {
 	const source = scene && typeof scene === "object" ? scene : {};
 	const checked = checkedShot(shot, 0);
-	const camera = sampleAt(source, checked, checked.startFrame).camera;
-	if (!camera) throw new Error(`Shot ${checked.name || checked.id || "1"} has no camera at frame ${checked.startFrame}`);
+	const { blur, ...camera } = sampleAt(source, checked, checked.startFrame).camera ?? {};
+	if (!camera.pos) throw new Error(`Shot ${checked.name || checked.id || "1"} has no camera at frame ${checked.startFrame}`);
+	// Roll, lens, shake, mount, speed, shutter and rig keys the shot camera carries (absent without).
+	const capabilities = cameraCapabilities(checked.camera);
 	return {
 		camera,
+		...(Object.keys(capabilities).length ? { capabilities } : {}),
 		lens: {
 			focalMm: camera.focalMm,
 			sensorId: camera.sensorId,

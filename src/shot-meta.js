@@ -13,6 +13,8 @@
  */
 
 import { currentTechnique } from "./camera-techniques/storage.js";
+import { cameraCapabilities } from "./camera-capabilities/fields.js";
+import { capabilityWords } from "./camera-capabilities/words.js";
 
 const finite = (value) => (Number.isFinite(value) ? value : null);
 
@@ -30,6 +32,14 @@ const finite = (value) => (Number.isFinite(value) ? value : null);
  *   camera, used when the shot's own camera block carries no lens — the block
  *   stores the MOVE (rail, crane, follow), while the lens lives on the stage.
  */
+function capabilityMeta(camera, cast, fps) {
+	const capabilities = cameraCapabilities(camera);
+	if (!Object.keys(capabilities).length) return {};
+	// A cast member's typed description starts with its name ("Mara, a woman in a red coat").
+	const castName = (id) => { const entry = (Array.isArray(cast) ? cast : []).find((row) => row?.id === id); return (entry?.name ?? entry?.subject ?? id).split(",")[0]; };
+	return { capabilities, capabilityWords: capabilityWords(capabilities, { castName, fps: finite(fps) ?? 24 }) };
+}
+
 export function shotCaptureMeta({ shot = null, stage = null, cast = [], fps = null, aspectKey = null, size = null, frame = null, shotIndex = null, lens = null } = {}) {
 	const camera = shot?.camera ?? null;
 	return {
@@ -67,5 +77,7 @@ export function shotCaptureMeta({ shot = null, stage = null, cast = [], fps = nu
 		// The camera technique stack applied to the shot, while it still describes
 		// the camera (an edited camera drops it): words for the prompt.
 		...(currentTechnique(shot) ? { technique: { label: currentTechnique(shot).label, phrase: currentTechnique(shot).phrase } } : {}),
+		// The shot camera's capabilities (roll, lens, shake, mount, speed, shutter, rig keys) and their words.
+		...capabilityMeta(camera, cast, fps),
 	};
 }

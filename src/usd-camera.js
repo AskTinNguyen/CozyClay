@@ -2,6 +2,7 @@
 // makes every unit, axis and time-sampling decision visible in review.
 
 import { shotMetadata } from "./otio.js";
+import { cameraCapabilities } from "./camera-capabilities/fields.js";
 import { sampleAt } from "./sample-at.js";
 import { DEFAULT_ASPECT_RATIO, DEFAULT_SENSOR_FORMAT, SENSOR_FORMATS } from "./shot.js";
 
@@ -67,6 +68,38 @@ function aperturesMm(scene, metadata) {
 	return { horizontal, vertical };
 }
 
+/** Three's YXZ Euler with roll, qY(yaw) * qX(pitch) * qZ(roll), as a USDA (real, i, j, k) tuple. */
+function rolledQuaternion(camera) {
+	const half = (angle) => [Math.cos(angle / 2), Math.sin(angle / 2)];
+	const [cy, sy] = half(camera.yaw), [cp, sp] = half(camera.pitch), [cr, sr] = half((camera.rollDeg * Math.PI) / 180);
+	const [w, x, y, z] = [cy * cp, cy * sp, sy * cp, -sy * sp];
+	return [w * cr - z * sr, x * cr + y * sr, y * cr - x * sr, z * cr + w * sr];
+}
+
+/**
+ * The camera capabilities a shot carries, as USD attributes (camera-capabilities):
+ * schema fStop, focusDistance (metres on this stage) and shutter:open/close (in
+ * frames, centred on the frame like the studio's shutter samples), plus
+ * cozyclay:* records of roll, shutter angle, speed, shake and mount. Shake and
+ * mount are already baked into the translate and orient samples. Empty without.
+ */
+function capabilityAttributes(samples, shot) {
+	const camera = cameraCapabilities(shot?.camera), line = (text) => `    ${text}
+`, timed = (type, name, valueAt) => line(`${type} ${name} = ${valueAt(samples[0])}`) + line(`${type} ${name}.timeSamples = {
+${samplesBlock(samples, valueAt)}
+    }`);
+	let custom = "", schema = "";
+	if (samples.some(({ camera: sampled }) => sampled.rollDeg)) custom += timed("custom float", "cozyclay:rollDeg", ({ camera: sampled }) => number(sampled.rollDeg ?? 0));
+	if (camera.shake) custom += line(`custom string cozyclay:shake = ${quoted(`${camera.shake.style} amplitude ${camera.shake.amplitude} at ${camera.shake.frequency} Hz, seed ${camera.shake.seed} (baked into xformOp samples)`)}`);
+	if (camera.mount) custom += line(`custom string cozyclay:mount = ${quoted(`${camera.mount.characterId} ${camera.mount.bone}, looking at the ${camera.mount.look} (baked into xformOp samples)`)}`);
+	if (camera.shutterDeg) custom += line(`custom float cozyclay:shutterAngleDeg = ${number(camera.shutterDeg)}`);
+	if (camera.speed) custom += line(`custom float cozyclay:speed = ${number(camera.speed)}`);
+	if (samples[0].camera.fStop) schema += line(`float fStop = ${number(samples[0].camera.fStop)}`);
+	if (samples.every(({ camera: sampled }) => Number.isFinite(sampled.focusDistance))) schema += timed("float", "focusDistance", ({ camera: sampled }) => number(sampled.focusDistance));
+	if (camera.shutterDeg) schema += line(`double shutter:close = ${number(camera.shutterDeg / 720)}`) + line(`double shutter:open = ${number(-camera.shutterDeg / 720)}`);
+	return { custom, schema };
+}
+
 /**
  * Serialize one inclusive Shot range as an animated UsdGeomCamera.
  *
@@ -84,6 +117,7 @@ export function serializeUsdCamera(scene, shot) {
 	const toUsdOpticalUnit = (millimetres) => millimetres / MILLIMETRES_PER_TENTH_METRE;
 	const translation = ({ camera }) => tuple([camera.pos.x, camera.pos.y, camera.pos.z]);
 	const orientation = ({ camera }) => {
+		if (camera.rollDeg) return tuple(rolledQuaternion(camera));
 		const halfPitch = camera.pitch / 2;
 		const halfYaw = camera.yaw / 2;
 		const sinPitch = Math.sin(halfPitch);
@@ -101,6 +135,7 @@ export function serializeUsdCamera(scene, shot) {
 	};
 	const focalMm = ({ camera }) => number(camera.focalMm);
 	const focalUsd = ({ camera }) => number(toUsdOpticalUnit(camera.focalMm));
+	const capabilities = capabilityAttributes(samples, shot);
 
 	return `#usda 1.0
 (
@@ -122,13 +157,13 @@ def Camera "Camera"
 ${samplesBlock(samples, focalMm)}
     }
     custom float cozyclay:horizontalApertureMm = ${number(aperture.horizontal)}
-    custom string cozyclay:sensorId = ${quoted(metadata.lens.sensorId)}
+${capabilities.custom}    custom string cozyclay:sensorId = ${quoted(metadata.lens.sensorId)}
     custom float cozyclay:verticalApertureMm = ${number(aperture.vertical)}
     float focalLength = ${focalUsd(first)}
     float focalLength.timeSamples = {
 ${samplesBlock(samples, focalUsd)}
     }
-    float horizontalAperture = ${number(toUsdOpticalUnit(aperture.horizontal))}
+${capabilities.schema}    float horizontalAperture = ${number(toUsdOpticalUnit(aperture.horizontal))}
     token projection = "perspective"
     float verticalAperture = ${number(toUsdOpticalUnit(aperture.vertical))}
     quatf xformOp:orient = ${orientation(first)}
