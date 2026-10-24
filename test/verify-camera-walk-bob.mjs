@@ -88,9 +88,11 @@ check("on a compiled walk (take v3) the mount rides the hips' path and heading, 
 	const midway = castPlacementAt(scene, shot, "char-mara", 150).rot, off = (a) => Math.abs(((a - 180) % 360 + 540) % 360 - 180);
 	assert.ok(off(midway) < 15, `walking toward -z the heading reads ${midway.toFixed(1)}° from the hips, not the character's 90°`);
 	assert.ok(faceSpread < 0.01, `face spread ${faceSpread.toFixed(4)} NDC across the walk`);
+	const headings = Array.from({ length: 21 }, (_, i) => castPlacementAt(scene, shot, "char-mara", 90 + i * 5).rot), twist = Math.max(...headings) - Math.min(...headings);
+	assert.ok(twist < 3, `the pelvis twist stays out of the heading on the straight (${twist.toFixed(2)}°)`);
 	const bobRange = Math.max(...rises) - Math.min(...rises);
 	assert.ok(bobRange > 0.01 && bobRange < 0.06, `the walk bobs ${(bobRange * 100).toFixed(1)} cm`);
-	console.log(`  walked to (${end.x.toFixed(2)}, ${end.z.toFixed(2)}), heading ${start.rot.toFixed(0)}° -> ${end.rot.toFixed(0)}°, face spread ${faceSpread.toFixed(4)} NDC, bob ${(bobRange * 100).toFixed(1)} cm`);
+	console.log(`  walked to (${end.x.toFixed(2)}, ${end.z.toFixed(2)}), heading ${start.rot.toFixed(0)}° -> ${end.rot.toFixed(0)}°, heading twist ${twist.toFixed(2)}°, face spread ${faceSpread.toFixed(4)} NDC, bob ${(bobRange * 100).toFixed(1)} cm`);
 });
 
 done("camera-polish A3 walk bob");

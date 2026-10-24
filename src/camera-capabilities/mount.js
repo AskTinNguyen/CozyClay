@@ -36,26 +36,41 @@ export function hipsRise(take, frame) {
 	return Number.isFinite(rise) ? rise : 0;
 }
 
-/** The hips' heading in rig space (degrees, 0 faces +Z) at the nearest frame of a take v3, or 0. */
-function hipsYaw(take, frame) {
+/** The hips' heading in rig space (degrees, 0 faces +Z) at one frame of a take v3, as a unit vector. */
+function hipsFacing(take, at, frame) {
+	const i = (Math.max(0, Math.min(take.frameCount - 1, frame)) * take.bones.length + at) * 4, [x, y, z, w] = [take.rot[i], take.rot[i + 1], take.rot[i + 2], take.rot[i + 3]];
+	const yaw = Math.atan2(2 * (x * z + w * y), 1 - 2 * (x * x + y * y));
+	return Number.isFinite(yaw) ? { s: Math.sin(yaw), c: Math.cos(yaw) } : { s: 0, c: 1 };
+}
+
+// The pelvis twists a few degrees each step while the chest and head hold their line, so the heading a
+// mount follows is the hips' heading averaged over about one stride: turns come through, the twist does not.
+const STRIDE_HALF_FRAMES = 20;
+
+/** The body's heading in rig space (degrees) at a take frame of a take v3: the hips' heading over one stride, or 0. */
+function bodyYaw(take, frame) {
 	const at = Math.max(0, take?.bones?.indexOf("Hips") ?? -1), count = take?.frameCount;
-	if (!take?.rot || !take.bones?.length || !(count > 0)) return 0;
-	const i = (Math.max(0, Math.min(count - 1, Math.round(frame))) * take.bones.length + at) * 4, [x, y, z, w] = [take.rot[i], take.rot[i + 1], take.rot[i + 2], take.rot[i + 3]];
-	const yaw = Math.atan2(2 * (x * z + w * y), 1 - 2 * (x * x + y * y)) * DEG;
-	return Number.isFinite(yaw) ? yaw : 0;
+	if (!take?.rot || !take.bones?.length || !(count > 0) || !Number.isFinite(frame)) return 0;
+	const centre = Math.round(frame);
+	let s = 0, c = 0;
+	for (let f = centre - STRIDE_HALF_FRAMES; f <= centre + STRIDE_HALF_FRAMES; f++) { const v = hipsFacing(take, at, f); s += v.s; c += v.c; }
+	return Math.atan2(s, c) * DEG;
 }
 
 /**
- * Where a take v3 carries the body at a take frame, in world space: the hips' path and heading under the
+ * Where a take v3 carries the body at a take frame, in world space: the hips' stride path and heading under the
  * character's placement (as bakeTake stored them: rig space = un-yawed from the character's place), scaled
  * with the character. Null for a take without a `hips` track (a legacy take rides its `rootPos` root).
  */
 function takeBody(entry, take, frame) {
-	if (!take?.hips) return null;
-	const at = trackAt(take, frame);
-	if (!at) return null;
+	if (!take?.hips || !trackAt(take, frame)) return null;
+	// The pelvis also sways side to side each step; the line the body travels is its mean over a stride
+	// (a centred window: no lag at a steady pace). The rise and fall stays per frame (hipsRise).
+	let x = 0, z = 0, n = 0;
+	for (let f = frame - STRIDE_HALF_FRAMES; f <= frame + STRIDE_HALF_FRAMES; f++) { const at = trackAt(take, f); x += at.x; z += at.z; n += 1; }
+	x /= n; z /= n;
 	const scale = entry.scale ?? 1, r = ((entry.rot ?? 0) * Math.PI) / 180, c = Math.cos(r), s = Math.sin(r);
-	return { x: (entry.x ?? 0) + (c * at.x + s * at.z) * scale, z: (entry.z ?? 0) + (-s * at.x + c * at.z) * scale, rot: (entry.rot ?? 0) + hipsYaw(take, frame) };
+	return { x: (entry.x ?? 0) + (c * x + s * z) * scale, z: (entry.z ?? 0) + (-s * x + c * z) * scale, rot: (entry.rot ?? 0) + bodyYaw(take, frame) };
 }
 
 /**
