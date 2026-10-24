@@ -1,7 +1,7 @@
 # Camera Polish
 
 - Rev: 2
-- Status: active
+- Status: completed
 - Area: Camera and Shots
 - Owner: TinNguyen
 - Skill: `none`
@@ -60,6 +60,8 @@ Orchestrator review of the ui:shot images and the docs, branch `intent/camera-po
 | A3 | `proofs/snorricam-bob-f103.png`, `proofs/snorricam-bob-f113.png` | Chest-mounted camera looking back at Mara mid-walk, the lowest and highest hips of a step (2.1 cm apart). The head holds its place within about 7 px; the pillars behind shift a few pixels. The bob is real and subtle at 2 cm, as a chest rig on a walk is. | met |
 | A6 | `CHANGELOG.md`, camera-capabilities and camera-coverage prompt residual-risk lines | Unreleased › Camera entry; both residual-risk lines point here. | met |
 
+PR review (Codex, one P2 on a4fd1193) fixed in 2d42e7e5: the smear's pitch component had the wrong sign, so a diagonal pan-and-tilt smeared along the opposite diagonal; the conversion is now `smearUv` (lens-plan.js) and `verify-camera-blur-sweep` checks pan, tilt and both diagonals against `projectPoint` (`6 checks passed`). Lint and build exit 0 after the fix; the whip-pan proof is a pure pan and unchanged. Thread replied to and resolved.
+
 Residual risks recorded at close: the head bone's own motion (nod, counter-sway) is not tracked, so the face drifts a few pixels in frame on a walk; the stride window (±20 frames) assumes a walking stride and softens very fast turns; the OTS shoulder share is modelled from a fixed shoulder width (0.23 m), so rigs with other proportions read a little more or less shoulder; blur sub-renders cap at 96, so extreme whips rely on the smear.
 
 ## Changelog
@@ -67,3 +69,4 @@ Residual risks recorded at close: the head bone's own motion (nod, counter-sway)
 - rev 1 (2026-10-24): created from the camera library's residual risks at the owner's request.
 - rev 1 (2026-10-24): D1 and A1 name the per-sub-render smear before any code (the cap alone leaves gaps on a fast whip).
 - rev 2 (2026-10-24): F-1 accepted as D5, F-2 as D6 (A2 range).
+- rev 2 (2026-10-24): completed. Every Acceptance row met with review; the PR review finding fixed; PR #9 squash-merged.
