@@ -49,6 +49,19 @@ Three rough edges the camera library closed with (camera-capabilities and camera
 - Keep the owner's own studio on ports 5180 / 5184 untouched; use slot n=6.
 - Keep the branch merged with `origin/main` and pushed after every step (contract, Git And Merge).
 
+## Reviews
+
+Orchestrator review of the ui:shot images and the docs, branch `intent/camera-polish`, 2026-10-24.
+
+| Item | Image or file | What it shows | Verdict |
+| --- | --- | --- | --- |
+| A1 | `proofs/whip-pan-blur-before.png`, `proofs/whip-pan-blur-after.png` | The same whip pan (270° shutter) from `test/qa-camera-capabilities-live-browser.mjs`. Before: dozens of hard vertical stripes through the pillars and the figure. After: one continuous horizontal smear, no stripes. | met |
+| A2 | `proofs/ots-mara.png`, `proofs/ots-joon.png` | Live shot-reverse-shot. Over Mara: her head and shoulder fill the left quarter, Joon on the right third, eyes near the upper third line. Over Joon: his head and shoulder fill about the right third, Mara on the left third. A dirty OTS on both sides. | met |
+| A3 | `proofs/snorricam-bob-f103.png`, `proofs/snorricam-bob-f113.png` | Chest-mounted camera looking back at Mara mid-walk, the lowest and highest hips of a step (2.1 cm apart). The head holds its place within about 7 px; the pillars behind shift a few pixels. The bob is real and subtle at 2 cm, as a chest rig on a walk is. | met |
+| A6 | `CHANGELOG.md`, camera-capabilities and camera-coverage prompt residual-risk lines | Unreleased › Camera entry; both residual-risk lines point here. | met |
+
+Residual risks recorded at close: the head bone's own motion (nod, counter-sway) is not tracked, so the face drifts a few pixels in frame on a walk; the stride window (±20 frames) assumes a walking stride and softens very fast turns; the OTS shoulder share is modelled from a fixed shoulder width (0.23 m), so rigs with other proportions read a little more or less shoulder; blur sub-renders cap at 96, so extreme whips rely on the smear.
+
 ## Changelog
 
 - rev 1 (2026-10-24): created from the camera library's residual risks at the owner's request.

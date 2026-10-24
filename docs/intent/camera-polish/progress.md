@@ -4,7 +4,7 @@
 - Worker: control session (implements directly)
 - Current step: S6 gates done
 - Next step: PR, review, merge
-- PR: none yet
+- PR: https://github.com/AskTinNguyen/CozyClay/pull/9
 
 ## Acceptance
 
