@@ -47,7 +47,8 @@ function shotRow(beat, shot, fps, flags) {
  */
 export function directorPacket(document, { range = null, placeAt = castAt } = {}) {
 	const fps = document.fps ?? 24, scene = engineScene(document), picked = rangeOf(document, range), shots = picked.shots;
-	const brief = buildSequencePrompt(document, { range: { shotIds: shots.map((shot) => shot.id) } });
+	// An empty range briefs nothing (an empty shotIds list would read as every shot).
+	const brief = shots.length ? buildSequencePrompt(document, { range: { shotIds: shots.map((shot) => shot.id) } }) : { beats: [], seconds: 0, aspect: null, continuity: null };
 	const checkScene = { cast: scene.cast, filmback: document.filmback ?? {}, fovDeg: document.fovDeg, placeAt };
 	const { checks, flags, notes } = runPacketChecks({ document, shots, scene: checkScene, placeAt });
 	const aspectRatio = document.filmback?.aspectRatio ?? 16 / 9;
