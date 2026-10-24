@@ -9,6 +9,8 @@
 import { cameraCapabilities, LIMITS, MOUNT_BONES, MOUNT_LOOKS, SHAKE_STYLES } from "../src/camera-capabilities/fields.js";
 import { capabilityWords } from "../src/camera-capabilities/words.js";
 import { shotAtFrame } from "../src/cuts.js";
+// The coverage tools (cover_scene, check_cuts) ride the registry beside this one.
+export { cameraCoverageTools, COVERAGE_TOOL_ANNOTATIONS } from "./camera-coverage-tools.mjs";
 
 /** What render_prompt says the camera does: the live shot under the playhead, else the in-memory camera. */
 export function promptCapabilities(state, scene, isLive) {

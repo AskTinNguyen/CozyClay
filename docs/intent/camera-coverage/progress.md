@@ -2,7 +2,7 @@
 
 - Working under rev: 1
 - Worker: `camera-coverage-worker`
-- Current step: A5 agents (resolver phrases, MCP tools, agent prompt pointer)
+- Current step: A7 controls
 - Next step: A7 controls (Coverage action, composition fields, cut inspector, timeline marks), then A6 captures
 - PR: none yet
 
@@ -14,7 +14,7 @@
 | A2 | met (gate) | `node test/bus/verify-camera-composition.mjs` -> `tests 3, pass 3, fail 0`: three-js projection of the eyes through every stored key within 0.012 of each third/centre and each headroom line (`PASS 9 placements x 3 stacks`), lead room by facing and `more`, `shot.frame` the same; receipt `screenX`/`eyeLineY` |
 | A3 | partly (gate met; timeline marks and MCP tool to come) | `node test/verify-camera-cut-rules.mjs` -> `6 checks passed` (good/bad cut per rule, `48 plans, 120 cuts, 0 flags`); `camera.checkCuts` in `test/bus/verify-camera-coverage.mjs` |
 | A4 | partly (gate met; dissolve capture is A6) | `node test/bus/verify-camera-transitions.mjs` -> `tests 3, pass 3, fail 0` (storage, undo, reload, OTIO Transition.1 / metadata, prompt and prompt.txt, preview lens-plan weights) |
-| A5 | open | |
+| A5 | met (gate) | `node test/verify-camera-coverage-resolve.mjs` -> `5 checks passed` (14 coverage, 8 composition, 6 cut-question phrases; technique phrases untouched; prompt pointer, length 12,789 <= 12,790); `node mcp/verify-camera-coverage.mjs` -> `14 passed, 0 failed` (cover_scene / check_cuts in memory); `node mcp/verify.mjs` -> `32 tools registered`, `all checks passed`; `node test/motion3/verify-motion3-prompt.mjs` -> `all checks passed`; live `cclay live run` in the A6 run |
 | A6 | open | |
 | A7 | open | |
 | A8 | open | |
@@ -24,6 +24,7 @@
 
 1. Setup: `npm ci` and `npm --prefix mcp ci` in the worktree (both exit 0). Baseline `npm run lint` on 7f92eaac: `knip: 138 findings, 0 new, 1 fixed (baseline 139)`, `loc: 72 files over 250 (baseline 72), 0 violations`, `eslint: 396 errors across 20 rules (baseline 403), 0 regressions`.
 2. A1-A4 core (commit below): `src/camera-coverage/` (`patterns.js` six patterns, `plan.js` range split and side-of-line choice by compiling each stack both ways, `composition.js` thirds/centre/headroom/lead room by turning the aim and measuring the projected eyes, `cut-geometry.js` + `cut-rules.js` line/jump/screen/eyeline, `transitions.js`, `transition-sample.js`, `resolve.js`, `storage.js`); `src/commands/camera-coverage.js` (`camera.cover`, `camera.checkCuts`, `camera.setTransition`, registered from `commands/camera.js`); `camera.applyTechnique` takes `side` and `composition` and routes coverage/cut requests; `shot.frame` takes `composition`; the compiler takes a shared `side`; OTIO, prompt, capture meta, lens plan and preview rig carry transitions. Results: `node test/bus/verify-camera-coverage.mjs` -> `pass 4, fail 0`; `node test/bus/verify-camera-composition.mjs` -> `pass 3, fail 0`; `node test/verify-camera-cut-rules.mjs` -> `6 checks passed`; `node test/bus/verify-camera-transitions.mjs` -> `pass 3, fail 0`; earlier camera files still pass: `verify-camera-techniques-apply` `pass 5, fail 0`, `verify-camera-capability-techniques` `pass 3, fail 0`, `verify-camera-technique-prompt` `6 checks passed`, `verify-camera-techniques` `12 checks passed`.
+3. A5 agents: `mcp/camera-coverage-tools.mjs` (`cover_scene`, `check_cuts`; live -> `camera.cover` / `camera.checkCuts`, memory -> plan + cut check), registered line-neutral in `mcp/tool-handlers.mjs` (re-exported through `camera-capability-tools.mjs`); agent prompt: the film-terms sentence names coverage and step 4 names `camera.checkCuts` (12,789 characters, budget 12,790; camera-techniques F-1). Results: `node test/verify-camera-coverage-resolve.mjs` -> `5 checks passed`; `node mcp/verify-camera-coverage.mjs` -> `14 passed, 0 failed`; `node mcp/verify.mjs` -> `32 tools registered ... all checks passed`; `node test/verify-tool-handlers.mjs` -> `PASS tool handler registry (32 tools, importable without an MCP server)`; `node mcp/verify-tool-annotations.mjs` -> `PASS G005 tools/list safety contract (32 tools; deterministic order)`; `node mcp/verify-live.mjs` -> `tool list: 32 tools, identical to the recorded list`; `node test/bus/verify-command-registry.mjs` -> `PASS #437 acceptance 3: the registry lists 127 actions read from 13 command modules`; `node test/motion3/verify-motion3-prompt.mjs` -> `verify-motion3-prompt: all checks passed`.
 
 ## Decisions
 
