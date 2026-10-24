@@ -102,6 +102,51 @@ export function groupFraming(members, state, filmback) {
 const OTS_COVER = 0.36, SHOULDER_LOW = -0.75, SHOULDER = { edge: 0.23, height: 0.82 }, OTS_LENS_Y = 1.55;
 
 /**
+ * The dirty-foreground solve, shared by the over-the-shoulder and a composition's foreground
+ * (camera-techniques/foreground.js): the camera stands behind `anchor` (the near figure or prop)
+ * on the far side from `target`, steps back until `measure` says the near thing's top is in frame
+ * (low >= SHOULDER_LOW), then slides across until it covers `cover` of the frame width from the
+ * near edge, aimed so the target's eyes land on `far` (default the far third). `reach` (m) widens
+ * the search by the near thing's own half size, `slide` lets the camera slide further across the
+ * further back it stands, `settle` keeps stepping back (up to `depth` m) until the share is reached
+ * (the shoulder solve keeps neither). measure(exact) answers { cover, low }.
+ * @returns {{ exact: object, cover: number }}
+ */
+export function solveForeground(target, anchor, state, filmback, { measure, cover, lensY, scale, far = null, reach = 0, slide = 0, settle = false, depth = 3 }) {
+	const toward = unit({ x: target.x - anchor.x, z: target.z - anchor.z }), right = { x: -toward.z, z: toward.x };
+	const side = state.side === "left" ? -1 : 1;
+	const height = SUBJECT_HEIGHT_M * scaleOf(target), spec = SIZE_SPECS[state.size] ?? SIZE_SPECS["medium close-up"], gate = usedSensorHeightMm(filmback.sensorId, filmback.aspectRatio);
+	const eye = eyePoint(target), aim = far ?? { x: side / 3, y: 1 / 3 };
+	const at = (behind, lateral) => {
+		const position = { x: anchor.x - toward.x * behind + right.x * side * lateral, y: lensY, z: anchor.z - toward.z * behind + right.z * side * lateral };
+		const distance = Math.hypot(target.x - position.x, target.z - position.z, FRAMING_PIVOT_Y * scaleOf(target) - position.y);
+		const focalMm = clampFocal(state.focalMm ?? (gate * spec.fraction * distance) / height, filmback);
+		const exact = aimFraming({ position, lookAt: { x: target.x, y: spec.aim * height, z: target.z }, focalMm }, eye, aim, filmback);
+		return { exact, ...measure(exact) };
+	};
+	const across = (behind) => {
+		// The near thing covers less of the frame the further across the camera slides.
+		let lo = 0.05 * scale, hi = 1.2 * scale + reach + slide * behind;
+		// Past the widest angle between the two the cover grows again: with settle, bisect only where it falls.
+		if (settle) hi = Array.from({ length: 25 }, (_, i) => lo + ((hi - lo) * i) / 24).reduce((best, lateral) => (at(behind, lateral).cover < at(behind, best).cover ? lateral : best), hi);
+		if (at(behind, hi).cover >= cover) return at(behind, hi);
+		if (at(behind, lo).cover <= cover) return at(behind, lo);
+		for (let i = 0; i < 32; i++) { const mid = (lo + hi) / 2; if (at(behind, mid).cover > cover) lo = mid; else hi = mid; }
+		return at(behind, (lo + hi) / 2);
+	};
+	let best = null, nearest = null;
+	for (let behind = 0.55 * scale + reach; behind <= depth * scale + reach; behind += 0.05 * scale) {
+		best = across(behind);
+		if (best.low >= SHOULDER_LOW && (!nearest || Math.abs(best.cover - cover) < Math.abs(nearest.cover - cover))) nearest = best;
+		// In frame (and, with settle, at its share: a near thing too wide to slide off here steps back further).
+		if (best.low >= SHOULDER_LOW && (!settle || Math.abs(best.cover - cover) < 0.01)) break;
+	}
+	// A share settle never reached: the in-frame setup that came nearest it.
+	if (settle && nearest) best = nearest;
+	return { exact: best.exact, cover: best.cover };
+}
+
+/**
  * Past the near shoulder of `over` onto `target`'s face; the lens sets the size. The camera steps back
  * from the shoulder until its top is in frame, then slides across the back until the shoulder covers
  * OTS_COVER of the frame from the near edge, aimed so the target's eyes land on the far third.
@@ -110,31 +155,13 @@ const OTS_COVER = 0.36, SHOULDER_LOW = -0.75, SHOULDER = { edge: 0.23, height: 0
 export function shoulderFraming(target, over, state, filmback) {
 	const sOver = scaleOf(over), toward = unit({ x: target.x - over.x, z: target.z - over.z }), right = { x: -toward.z, z: toward.x };
 	const side = state.side === "left" ? -1 : 1, aspect = filmback.aspectRatio ?? 16 / 9;
-	const height = SUBJECT_HEIGHT_M * scaleOf(target), spec = SIZE_SPECS[state.size] ?? SIZE_SPECS["medium close-up"], gate = usedSensorHeightMm(filmback.sensorId, filmback.aspectRatio);
 	// The inner edge of the foreground silhouette: its shoulder on the camera's side, at shoulder height.
 	const edge = { x: over.x + right.x * side * SHOULDER.edge * sOver, y: SHOULDER.height * SUBJECT_HEIGHT_M * sOver, z: over.z + right.z * side * SHOULDER.edge * sOver };
-	const eye = eyePoint(target), far = { x: side / 3, y: 1 / 3 };
-	const at = (behind, lateral) => {
-		const position = { x: over.x - toward.x * behind + right.x * side * lateral, y: OTS_LENS_Y * sOver, z: over.z - toward.z * behind + right.z * side * lateral };
-		const distance = Math.hypot(target.x - position.x, target.z - position.z, FRAMING_PIVOT_Y * scaleOf(target) - position.y);
-		const focalMm = clampFocal(state.focalMm ?? (gate * spec.fraction * distance) / height, filmback);
-		const exact = aimFraming({ position, lookAt: { x: target.x, y: spec.aim * height, z: target.z }, focalMm }, eye, far, filmback);
+	const measure = (exact) => {
 		const ndc = projectPoint(framingOf(exact, filmback), edge, aspect);
-		return { exact, cover: ndc.depth > 0 ? (1 + side * ndc.x) / 2 : 0, low: ndc.y };
+		return { cover: ndc.depth > 0 ? (1 + side * ndc.x) / 2 : 0, low: ndc.y };
 	};
-	const across = (behind) => {
-		// The shoulder covers less of the frame the further across the back the camera slides.
-		let lo = 0.05 * sOver, hi = 1.2 * sOver;
-		if (at(behind, hi).cover >= OTS_COVER) return at(behind, hi);
-		if (at(behind, lo).cover <= OTS_COVER) return at(behind, lo);
-		for (let i = 0; i < 32; i++) { const mid = (lo + hi) / 2; if (at(behind, mid).cover > OTS_COVER) lo = mid; else hi = mid; }
-		return at(behind, (lo + hi) / 2);
-	};
-	let best = null;
-	for (let behind = 0.55 * sOver; behind <= 3 * sOver; behind += 0.05 * sOver) {
-		best = across(behind);
-		if (best.low >= SHOULDER_LOW) break;
-	}
+	const best = solveForeground(target, over, state, filmback, { measure, cover: OTS_COVER, lensY: OTS_LENS_Y * sOver, scale: sOver });
 	return { ...best.exact, shoulderCover: Math.round(best.cover * 1000) / 1000 };
 }
 

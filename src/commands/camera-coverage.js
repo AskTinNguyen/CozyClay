@@ -22,7 +22,8 @@ import { groupDeclarations, registerGroupCoverage } from './camera-coverage-grou
 const id = StudioSchemas.TargetGuard.properties.targetId;
 const input = (properties, required = []) => ({ type: 'object', properties, required, additionalProperties: false });
 const frame = { type: 'integer', minimum: 0 };
-export const compositionSchema = input({ place: { type: 'string', enum: COMPOSITION_PLACES }, headroom: { type: 'string', enum: HEADROOMS }, leadRoom: { type: 'string', enum: LEAD_ROOMS } });
+export const compositionSchema = input({ place: { type: 'string', enum: COMPOSITION_PLACES }, headroom: { type: 'string', enum: HEADROOMS }, leadRoom: { type: 'string', enum: LEAD_ROOMS },
+  foreground: input({ id: { type: 'string', minLength: 1, maxLength: 80 }, share: { type: 'number', minimum: 0.1, maximum: 0.6 } }, ['id']) });
 const span = input({ startFrame: frame, endFrameExclusive: { type: 'integer', minimum: 1 } }, ['startFrame', 'endFrameExclusive']);
 const RULE_CODES = { line: 'CUT_LINE', jump: 'CUT_JUMP', screen: 'CUT_SCREEN', eyeline: 'CUT_EYELINE' };
 
