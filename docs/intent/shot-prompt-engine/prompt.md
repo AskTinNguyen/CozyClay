@@ -1,7 +1,7 @@
 # Shot Prompt Engine
 
-- Rev: 1
-- Status: active
+- Rev: 2
+- Status: completed
 - Area: Export
 - Owner: TinNguyen
 - Skill: `none`
@@ -31,6 +31,8 @@ This intent builds that engine, and raises the agent prompt budget that the came
 - D1 (rev 1): The engine is pure and deterministic, a function of the document. The same document gives the same prompt text, so it can be tested byte for byte and diffed between versions. Source: orchestrator.
 - D2 (rev 1): Model profiles are data (`src/model-presets.js` or a sibling), each with limits, preferred phrasing and a `checkedAt` date with its source. Model facts that cannot be confirmed from a public page without signing in are marked unverified rather than guessed. Source: orchestrator under D3.
 - D3 (rev 1): Owner is away and asked not to wait; reserved calls are decided by the orchestrator on the recommended option and recorded. Source: camera-techniques L-3.
+- D4 (rev 2, from F-1): Model profiles carry the facts read on 2026-10-24 from public vendor pages: Kling 3.0 (3-15 s, replaces Kling 2.0), Veo 3.1 (4, 6 or 8 s), MiniMax H3 hosted (4-15 s, a preset beside the self-hosted 10 s one), Seedance 2.5 (4-30 s). Facts no public page states (Kling aspects and fps, cuts inside one clip for Veo, H3 and Seedance, the self-hosted H3 limits) stay marked `unverified`; older stored ids read as their successors. Source: orchestrator under D3.
+- D5 (rev 2, from F-2): The Studio agent system prompt cap is 13,400 characters (from 12,790), for the restored `shot.setCameraMode` sentence and one camera-library paragraph (+566 characters, 13,355 used). A larger addition raises the cap again on purpose, with its own decision. The motion part's 2,690 cap is unchanged. Source: orchestrator under D3.
 
 ## Acceptance
 
@@ -65,6 +67,24 @@ This intent builds that engine, and raises the agent prompt budget that the came
 - Keep the branch merged with `origin/main` and pushed after every step (contract, Git And Merge).
 - The Prompt Edition review notes are reference only and are never committed or quoted.
 
+## Reviews
+
+Orchestrator review of the ui:shot images and the docs, branch `intent/shot-prompt-engine` at 24d847ed, 2026-10-24.
+
+| Item | Image or file | What it shows | Verdict |
+| --- | --- | --- | --- |
+| A7 | `proofs/sequence-prompt-all.png` | File › Export › Sequence prompt over the Studio: From 1. Dialogue, To 6. MASTER+ 5 · CU Joon, Model Any model; `6 beats · 18s · 16:9 · 1 clip · 18 references`; the brief with header, look, set, cast A/B with stable descriptors, references (missing sheets named), beat 1 with timecodes, measured hold, framing with thirds position; Copy brief and Download sequence pack. | met |
+| A7 | `proofs/sequence-prompt-veo-warnings.png` | Model Veo 3.1: `6 clips · limits checked 2026-10-24`, five warnings "Beat N … runs 2s; Veo 3.1 makes 4, 6, 8 s clips. Extend to 4s.", the brief reshaped (`FOR: Veo 3.1 …`, `DELIVERY: one clip per beat`, `CLIP 1 of 6 (8s): generate on its own`). | met |
+| A9 | `mcp/README.md`, `docs/agent-cli.md`, `docs/studio-ui-ia.md`, `CHANGELOG.md` (84ec6393) | `render_prompt` scope/profile/range row, a `## Sequence prompt` section with live examples, the Export menu item and dialog controls, an Unreleased › Export entry. | met |
+
+Gates re-run by the orchestrator in the worktree (Git Bash, no dev server) at 24d847ed: `verify-sequence-measure` pass 2, `-motion-beats` pass 3, `-profiles` pass 3, `-prompt` pass 3, `-references` pass 3 (fail 0 each); `mcp/verify-render-prompt-sequence` `18 passed, 0 failed`; `mcp/verify.mjs` `all checks passed`; `verify-motion3-prompt` `all checks passed`; `verify-camera-coverage-resolve` 5 checks; `verify-model-presets`, `verify-shot-meta`, `verify-agent-context-budget`, `verify-export-recovery`, `verify-camera-speed` exit 0; `npm run lint` exit 0 (`knip: 138 findings, 0 new`, `0 violations`, `0 regressions`); `npm run build` exit 0; no diff to `tools/*-baseline.json` or the frozen motion files (`tools/run-tests.mjs` only lists the new tests). `node tools/run-tests.mjs --jobs 4` stops at its first failure, `FAIL exit car, hips sunk: under 10 s — 11737 ms` (known exception), so every one of its 453 RUN files was then run to the end, 4 at a time: `files 453, ok 452, failed 1`, the only failure that same check (`— 11731 ms`). An earlier run, with the worker running tests beside it, missed `verify-motion3-exitcar` "compile + QA stay fast (< 3 s CPU) — 3250 ms"; alone it passed twice.
+
+PR review (Codex, three P2 findings on 84ec6393) fixed in 24d847ed with regression checks: character-sheet paths carry the stable character id (non-Latin names no longer collide); motion beats map through the shot's speed (`timelineFrame`, retimeFrame's inverse); beat, action and warning timecodes use delivery time so gaps between shots no longer shift them. Threads replied to and resolved.
+
+Residual risks recorded at close: through MCP the sequence brief has no motion beats (they need the Studio's installed takes); take edits (retimed segments) are not remapped, a take is assumed to play from frame 0; the model facts marked `unverified` in D4 need re-checking when vendors publish them; the motion3 timing checks (`verify-motion3-repair`, `verify-motion3-exitcar`) miss their limits under parallel load on this PC.
+
 ## Changelog
 
 - rev 1 (2026-10-24): created from the Prompt Edition review (L-1) and camera-techniques F-1.
+- rev 2 (2026-10-24): F-1 and F-2 accepted as D4 and D5. No Acceptance change.
+- rev 2 (2026-10-24): completed. Every Acceptance row met with orchestrator review; PR review findings fixed; PR #6 squash-merged.

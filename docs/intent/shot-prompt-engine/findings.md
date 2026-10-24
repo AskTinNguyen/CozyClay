@@ -27,6 +27,7 @@ Discoveries that may change the intent. The worker adds entries; the orchestrato
 
 - What I did: Kling 2.0 became Kling 3.0 (`kling-3`; the stored id `kling-2` reads as it, so older shot documents keep their target), Veo 3 became Veo 3.1 with 4/6/8 s (`veo-3` reads as it), Seedance 2.5's floor moved from 2 s (a reference-clip limit) to its 4 s output minimum, and MiniMax H3's hosted API got its own 15 s preset beside the self-hosted 10 s one. Existing tests that encoded the old numbers (`test/verify-model-presets.mjs`, `test/verify-shot-meta.mjs`, `test/qa-shot-meta-browser.mjs`) were updated to the new facts.
 - Proposed amendment: none. Re-check the unverified rows when Kling publishes its API parameters.
+- Resolution (orchestrator, rev 2): accepted as D4.
 
 ## F-2: Studio agent prompt budget raised from 12,790 to 13,400 characters (blocking: no; decision)
 
@@ -35,3 +36,4 @@ Discoveries that may change the intent. The worker adds entries; the orchestrato
 - Why: without these sentences the agent knew the camera library only from action descriptions it has to fetch first; the three camera phases added four commands and an MCP scope the prompt never named. 45 characters of headroom stay for small fixes; a larger addition should raise the cap again on purpose.
 - This is not a lint baseline (`tools/*-baseline.json` unchanged).
 - Proposed amendment: none.
+- Resolution (orchestrator, rev 2): accepted as D5.

@@ -21,3 +21,7 @@ The orchestrator reviewed the collection with Sonnet agents and proposed a promp
 > continue your work, use the ARtifact to maintain the progress update
 
 Progress is mirrored in the Camera Library Build Log artifact. Started after `camera-coverage` merged (#5, 8a15bbca).
+
+## L-5 (2026-10-24) | class: decision | -> rev 2
+
+Orchestrator under D3 (owner away): F-1 accepted as D4 (model facts with sources, unverified rows kept), F-2 accepted as D5 (agent prompt cap 13,400). Reviews recorded; intent closed after PR #6 merged.
