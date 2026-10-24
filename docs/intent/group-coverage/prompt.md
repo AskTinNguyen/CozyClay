@@ -1,7 +1,7 @@
 # Group Coverage
 
 - Rev: 1
-- Status: planned
+- Status: active
 - Waits for: `director-evals` completed. Third in the cinematic-atlas plan. It may run beside `camera-motivation` only if neither edits `src/commands/camera-coverage.js` or `src/camera-coverage/cut-rules.js`; otherwise it runs after it.
 - Area: Camera and Shots
 - Owner: TinNguyen
