@@ -2962,7 +2962,7 @@ export default function App() {
 			cam.fov = cameraSnapshot.fov;
 			cam.updateProjectionMatrix();
 			look.current.yaw = cameraSnapshot.yaw;
-			look.current.pitch = cameraSnapshot.pitch; look.current.roll = cameraSnapshot.roll; cam.userData.lens = cameraSnapshot.lens;
+			look.current.pitch = cameraSnapshot.pitch; if (cameraSnapshot.roll === undefined) delete look.current.roll; else look.current.roll = cameraSnapshot.roll; if (cameraSnapshot.lens) cam.userData.lens = cameraSnapshot.lens; else delete cam.userData.lens;
 			propFrameRef.current = propFrame;
 			syncCarriers();
 			propSyncRef.current?.();
