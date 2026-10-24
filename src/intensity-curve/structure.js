@@ -92,8 +92,8 @@ function noBuild(curve, beats, limits, asked) {
  */
 export function checkStructure(document, { range = null, placeAt = castAt, limits = {}, beat = null } = {}) {
 	const curve = sequenceIntensity(document, { range, placeAt }), limit = { ...STRUCTURE_LIMITS, ...limits };
-	const first = curve.shots[0], last = curve.shots.at(-1);
-	const beats = first ? (document.storyBeats ?? []).filter((row) => row.frame >= first.startFrame && row.frame <= last.endFrame) : [];
+	// A beat counts only inside a measured shot: shotIds may skip shots, and their beats are not this range's.
+	const beats = (document.storyBeats ?? []).filter((row) => curve.shots.some((shot) => row.frame >= shot.startFrame && row.frame <= shot.endFrame));
 	const asked = beat === null || beat === undefined ? null : findStoryBeat(beats, beat) ?? beats.find((row) => row.kind === String(beat).toLowerCase().replace(/^the /, "")) ?? null;
 	const rules = beats.length ? STRUCTURE_RULES : ["flat"];
 	const issues = [...flatRuns(curve, limit), ...(beats.length ? [...peakOffBeat(curve, beats, limit), ...noBuild(curve, beats, limit, asked)] : [])]

@@ -96,6 +96,9 @@ test('A2: peak-off-beat and no-build read the story beats', () => {
 		assert.deepEqual(checkStructure({ ...document, storyBeats: [beat(inShot(5))] }).issues.map((issue) => issue.rule), ['no-build'], 'the reveal on the peak shot: on the peak, but the cut from close-up to close-up does not rise into it');
 		assert.equal(checkStructure({ ...document, storyBeats: [beat(inShot(4))] }).issueCount, 0, 'the peak holds or follows the beat');
 		assert.equal(checkStructure({ ...document, storyBeats: [beat(inShot(2), 'reveal'), beat(inShot(5), 'event', 'a door', 'story-beat-2')] }).issues[0].rule, 'peak-off-beat', 'the strongest beat decides, not the last');
+		const skip = checkStructure({ ...document, storyBeats: [beat(inShot(2))] }, { range: { shotIds: [shots[0].shotId, shots[4].shotId] } });
+		assert.equal(skip.beats.length, 0, 'shotIds that skip shot 2 leave its reveal out');
+		assert.equal(skip.issues.filter((issue) => issue.beat).length, 0, 'no beat rule judges a skipped shot\'s beat against the next selected shot');
 		// No build: the decision falls on the second of the two mediums (Joon's), which sits under Mara's.
 		const flatInto = checkStructure({ ...document, storyBeats: [beat(inShot(3), 'decision', 'Joon decides')] });
 		assert.ok(flatInto.issues.some((issue) => issue.rule === 'no-build' && issue.frames[0] === shots[1].startFrame && issue.frames[1] === inShot(3)), JSON.stringify(flatInto.issues.map((i) => i.message)));
