@@ -1,7 +1,7 @@
 # Intensity Curve
 
 - Rev: 1
-- Status: planned
+- Status: active
 - Waits for: `camera-motivation` completed (the curve is read against its story beats). Fifth in the cinematic-atlas plan.
 - Area: Camera and Shots
 - Owner: TinNguyen
