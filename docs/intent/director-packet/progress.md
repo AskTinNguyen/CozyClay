@@ -3,20 +3,20 @@
 - Working under rev: 1
 - Worker: cloud worker agent (director-packet)
 - Current step: done; every acceptance row met or ready for review
-- Next step: orchestrator review of the A2/A4 shots and A7 docs, F-1; PR (depth-staging, when it lands, adds its section through `PACKET_CHECKS` / `PACKET_PICTURES`)
-- PR: none yet
+- Next step: none; squash-merge after Codex review
+- PR: #16
 
 ## Acceptance
 
 | Item | Verdict | Evidence |
 | --- | --- | --- |
 | A1 | met (gate) | `node test/verify-director-packet.mjs` -> `# pass 4 # fail 0`: `PASS A1 5 rows; checks cuts: 4 cuts, 0 flagged; coverage: enough to edit: 5 shots, 2 cast; motivation: 1 move, 1 flagged; structure: intensity builds from 0.20 at beat 1 to a peak of 0.52 at beat 4, then releases to 0.49 by beat 5`; beats only when present, a range, cut flags on a mirrored camera, the shot model check, byte-identical JSON on three runs (step 1, 4) |
-| A2 | met (gate); ui:shot ready for review | same file: `PASS A2 master and coverage {"cameras":5,"moving":1,"lines":1,"marks":2,"walks":0,"legendRows":4}`, with a walk `"marks":6,"walks":1`, `PASS A2 triangle {"cameras":13,"moving":0,"lines":3,"marks":3,...}`, every point on the A4-landscape page. Shots: `proofs/plan-master-coverage.png`, `proofs/plan-triangle-dialogue.png` (step 6) |
+| A2 | met (gate; ui:shot accepted, R1) | same file: `PASS A2 master and coverage {"cameras":5,"moving":1,"lines":1,"marks":2,"walks":0,"legendRows":4}`, with a walk `"marks":6,"walks":1`, `PASS A2 triangle {"cameras":13,"moving":0,"lines":3,"marks":3,...}`, every point on the A4-landscape page. Shots: `proofs/plan-master-coverage.png`, `proofs/plan-triangle-dialogue.png` (step 6) |
 | A3 | met (gate) | `node test/verify-director-packet-zip.mjs` -> `# pass 1 # fail 0`: `PASS A3 39 entries, packet/: 7 files; unzip -t: No errors detected in compressed data of .../cozyclay-sequence-rooftop.zip.` (index.html, shot-list.csv, shot-list.md, packet.json, plan.png, contact-sheet.png, intensity.png; CSV/MD/HTML/JSON checked against the data; keyframe pack entries unchanged). `node test/verify-keyframe-pack.mjs` passes in the suite (step 7) |
-| A4 | met (ui:qa); ui:shot ready for review | `test/verify-director-packet-browser.mjs` exit 0, 33 PASS, `director packet browser QA passed` (step 6): the dialog previews 18/13/5 shots, the downloaded zip passes `unzip -t` with the 7 packet files. Shots: `proofs/packet-preview-master-coverage.png`, `proofs/packet-preview-triangle-dialogue.png` |
+| A4 | met (ui:qa; ui:shot accepted, R1) | `test/verify-director-packet-browser.mjs` exit 0, 33 PASS, `director packet browser QA passed` (step 6): the dialog previews 18/13/5 shots, the downloaded zip passes `unzip -t` with the 7 packet files. Shots: `proofs/packet-preview-master-coverage.png`, `proofs/packet-preview-triangle-dialogue.png` |
 | A5 | met (gate) | `node mcp/verify-director-packet.mjs` -> `11 passed, 0 failed`; live half in the A4 QA: `cclay live run export.directorPacket` -> `Exported cozyclay-sequence-coverage.zip: 1 shot with packet/ (...)`, the written zip checked with `unzip -t`; `cclay live tool render_packet` answers the editor's five shots |
 | A6 | met (gate, known exception) | step 7: `npm run lint` exit 0 (`knip: 138 findings, 0 new`, `loc: ... 0 violations`, `eslint: ... 0 regressions`, no baseline changed); `npm run build` built; `SUITE-ALL: 471 files, 469 passed, 2 failed` (the two known timing checks only) |
-| A7 | ready for review | `mcp/README.md` (37 tools, `render_packet` row, Director packet section), `docs/agent-cli.md` (Director packet), `docs/studio-ui-ia.md` (Export menu item and dialog test ids), `CHANGELOG.md` Unreleased > Export (step 5) |
+| A7 | met (review R1) | `mcp/README.md` (37 tools, `render_packet` row, Director packet section), `docs/agent-cli.md` (Director packet), `docs/studio-ui-ia.md` (Export menu item and dialog test ids), `CHANGELOG.md` Unreleased > Export (step 5) |
 
 ## Steps
 
@@ -46,3 +46,13 @@
 - No Studio agent system prompt text added.
 
 ## Reconciliations
+
+## Reviews
+
+- R1 (cloud orchestrator, 2026-10-24, at f83dbe4a): opened the four proof images.
+  - `proofs/plan-master-coverage.png`: an A4-landscape plan on a 1 m grid. It shows cameras 1-5 with lens and frustum, the Mara-Joon line dashed, and Mara, Joon and Sela as cast marks with their facing. Camera 2's 6.24 m move is drawn with its path and arrow. The legend has four rows.
+  - `proofs/plan-triangle-dialogue.png`: 13 numbered cameras and the three pair lines (Mara-Joon, Joon-Sela, Sela-Mara). Each pair's singles and OTS sit on one side of their line. It is dense where the frustums overlap in the middle, but the numbers and lenses stay readable.
+  - `proofs/packet-preview-master-coverage.png`: the File > Export > Director packet dialog. It has From/To pickers, a summary line (5 shots, 3 cast, 6 flags; cuts, coverage, motivation and structure), the plan, and the shot table. Flags link to their check, for example "cuts/line, coverage/line-change, motivation/unmotivated" on shot 2.
+  - `proofs/packet-preview-triangle-dialogue.png`: the same dialog over the triangle dialogue.
+  - A7: `mcp/README.md`, `docs/agent-cli.md`, `docs/studio-ui-ia.md` and CHANGELOG describe `render_packet`, `export.directorPacket` and the dialog.
+  - F-1 is resolved as option 1 (see findings).

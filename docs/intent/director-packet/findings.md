@@ -2,7 +2,7 @@
 
 Discoveries that may change the intent. The worker adds entries; the orchestrator resolves them.
 
-## F-1 (2026-10-24): an agent writes the pack without a click (non-blocking, continued on the recommendation)
+## F-1 (2026-10-24): an agent writes the pack without a click (resolved, not blocking)
 
 A5 asks that `cclay live` write the full pack, so `export.directorPacket` must run for an agent. `export.shotVideo`, the other export action, has exposure `confirm` ("Exporting writes a video file outside the Studio"), and MCP cannot mint a confirmation token, so a `confirm` exposure would refuse every agent call with CONFIRMATION_REQUIRED.
 
@@ -11,3 +11,5 @@ Options:
 2. `confirm` exposure: agents are refused until the owner confirms in the Studio; A5's live half then needs a person.
 
 Recommendation: 1, the action only writes a download the same way the menu does. Reverse it by adding `exposure: "confirm"` to `packetDeclarations` in `src/commands/director-packet.js`.
+
+Resolution (cloud orchestrator, 2026-10-24): option 1. The action writes a download the same way the menu item does. It changes nothing in the document and costs nothing, and A5 asks that an agent can produce the pack. The PR names the choice for the owner, and the one-line reversal above stays available.
