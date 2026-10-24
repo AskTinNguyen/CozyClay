@@ -76,7 +76,7 @@ function lightWords(keyLight) {
 }
 
 // meta = { focalMm, fovDeg, aspect, size, cameraMove, keyLight, cast,
-//          frameRange, fps, shotTitle, intent }
+//          frameRange, fps, shotTitle, intent, technique? { label, phrase } }
 // options = { target: "image" | "video", referenceOwnsCamera: boolean (default true) }
 export function buildShotPrompt(meta, options = {}) {
 	const target = options.target === "video" ? "video" : "image";
@@ -90,6 +90,8 @@ export function buildShotPrompt(meta, options = {}) {
 		`SHOT: ${meta.shotTitle || "untitled shot"}, ${secondsText(seconds)}, ${meta.aspect || ""}`.trimEnd(),
 		`LENS: ${meta.focalMm}mm, ${lensWord(meta)} shot`,
 		referenceOwnsCamera ? `CAMERA: ${CAMERA_FOLLOWS_REFERENCE}` : `CAMERA: ${cameraWords(meta.cameraMove)}`,
+		// The applied camera technique, in the words the move classifier proved.
+		...(meta.technique?.phrase ? [`TECHNIQUE: ${meta.technique.label ? `${meta.technique.label}: ` : ""}${meta.technique.phrase}`] : []),
 		`LIGHT: ${lightWords(meta.keyLight)}`,
 		`CAST: ${(meta.cast || []).map((member) => member.name).join(", ") || "none"}`,
 		`LOOK: ${intent || NEUTRAL_LOOK}`,

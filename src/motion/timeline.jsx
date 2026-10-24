@@ -10,6 +10,7 @@ import { NumberField } from "../ui.jsx";
 import { flatTiming, timingIsFlat, envelopeDrag, insertCut, removeCut, CUT_MIN_GAP } from "../speed-envelope.js";
 import { checkShotAgainstPreset, presetById } from "../model-presets.js";
 import { TakeSegmentClips, TakeSegmentTools } from "./take-segments.jsx"; import { BeatBoard } from "./beat-board.jsx";
+import ShotTechniqueTag from "./shot-technique-tag.jsx";
 import "./timeline.css";
 export { timelineTake } from "./take-segments.jsx";
 
@@ -1985,16 +1986,12 @@ export default function Timeline({
 												) : (
 													<span className="tl-shot-label">
 														<b>{shot.name}</b>
-														<small>{shot.startFrame}–{lastFrame} · {durationS.toFixed(1)}{ko("s", "초")}</small>
+														<small>{shot.startFrame}–{lastFrame} · {durationS.toFixed(1)}{ko("s", "초")}<ShotTechniqueTag shot={shot} /></small>
 														{shot.kind === "still" && shot.caption && <small className="tl-shot-caption" title={shot.caption}>{shot.caption}</small>}
 													</span>
 												)}
 												{modelWarnings.length > 0 && (
-													<span
-														className="tl-shot-warn"
-														role="status"
-														title={modelWarnings.join("; ")}
-													>
+													<span className="tl-shot-warn" role="status" title={modelWarnings.join("; ")}>
 														⚠ {targetPreset.name}
 													</span>
 												)}

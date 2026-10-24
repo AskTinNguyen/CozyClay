@@ -12,9 +12,10 @@ import { VIDEO_MODEL_PRESETS } from "./model-presets.js";
 import { elementByPath } from "./studio-elements.js";
 import { isImageAssetId } from "./scene-assets.js";
 import { createCharacterEntry } from "./scenes.js";
+import { repairShotTechnique } from "./camera-techniques/storage.js";
 
 const VIDEO_MODEL_IDS = new Set(VIDEO_MODEL_PRESETS.map((preset) => preset.id));
-const CAMERA_KEY_LIMITS = elementByPath("shot.cameraKeys");
+const CAMERA_KEY_LIMITS = elementByPath("shot.cameraKeys"), KEY_EASES = new Set(["linear", "in", "out"]);
 
 export const SHOT_AUTHORING_VERSION = 5;
 export const SHOT_AUTHORING_KEY = "cozyclay.shot-authoring.v5";
@@ -146,14 +147,13 @@ function repairKeys(entries, minFrame, maxFrame, ids = new Set()) {
 		if (!finite(key.frame) || !validFraming(key.framing)) continue;
 		const frame = Math.max(firstFrame, Math.min(maxFrame, Math.round(key.frame)));
 		byFrame.set(frame, {
-			id: key.id,
-			frame,
+			id: key.id, frame,
 			framing: {
 				pos: { x: key.framing.pos.x, y: key.framing.pos.y, z: key.framing.pos.z },
-				yaw: key.framing.yaw,
-				pitch: key.framing.pitch,
-				fovDeg: key.framing.fovDeg,
+				yaw: key.framing.yaw, pitch: key.framing.pitch, fovDeg: key.framing.fovDeg,
 			},
+			// The segment this key starts: absent eases in and out (camera-move.js KEY_EASES).
+			...(KEY_EASES.has(key.ease) ? { ease: key.ease } : {}),
 		});
 	}
 	return [...byFrame.values()].sort((a, b) => a.frame - b.frame);
@@ -200,6 +200,8 @@ function repairShots(entries, frameCount, inheritedCamera = null, ids = new Set(
 			caption: repairCaption(entry.caption),
 			cast: repairCast(entry.cast),
 			stylizedAssetId: isImageAssetId(entry.stylizedAssetId) ? entry.stylizedAssetId : null,
+			// The camera technique stack applied to this shot (camera.applyTechnique); absent unless one was.
+			...(repairShotTechnique(entry.technique) ? { technique: repairShotTechnique(entry.technique) } : {}),
 		};
 	});
 }

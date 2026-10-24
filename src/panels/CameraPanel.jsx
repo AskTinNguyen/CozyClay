@@ -3,10 +3,11 @@ import { ko, isKo } from "../locale.js";
 import { Field } from "../ui.jsx";
 import { VIDEO_MODEL_PRESETS } from "../model-presets.js";
 import { useBus } from "../app-context.js";
+import TechniquePicker from "./TechniquePicker.jsx";
 
 export default function CameraPanel({ isCameraSelection, shot, moveSequence, cameraKeys, activeShot }) {
 	const { run } = useBus();
-	return (
+	return (<>
 <Foldout hidden={!isCameraSelection} title={ko("Camera", "카메라")}>
 						<div className="readout v2-details-readout">
 						<span title={ko("camera to subject", "카메라와 피사체 거리")}><small>{ko("Distance", "거리")}</small> {shot.distance.toFixed(2)} m</span>
@@ -56,5 +57,7 @@ export default function CameraPanel({ isCameraSelection, shot, moveSequence, cam
 							</select>
 						</Field>
 					</Foldout>
-	);
+					{/* The camera technique library: pick, stack and tune film techniques for the selected shot. */}
+					<TechniquePicker hidden={!isCameraSelection} activeShot={activeShot} />
+	</>);
 }

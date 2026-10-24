@@ -35,7 +35,7 @@ Then point a client at it. For Claude Desktop, in `claude_desktop_config.json`:
 }
 ```
 
-Restart the client; 27 tools appear.
+Restart the client; 29 tools appear.
 
 Prefer a long-lived endpoint? `node server.mjs --http 5183` serves Streamable HTTP at
 `http://127.0.0.1:5183/mcp` (one isolated session per client), with a plain status page at `/`.
@@ -78,6 +78,8 @@ generated frame matches the blocking instead of drifting off into a generic shot
 | `apply_batch` | execute up to 100 object mutations as one user-visible undo transaction |
 | `render_prompt` | the shot as an AI image or video prompt |
 | `mark_camera_move` / `describe_camera_move` | name a move between two camera positions |
+| `list_camera_techniques` | the camera technique library: 65 film techniques (sizes, angles, moves, lens moves, coverage, modifiers) as an index, a search by name, alias, misspelling or mood (`query: "uneasy"`), or one technique in full (`id`) |
+| `apply_camera_technique` | apply a technique stack from words (`request: "low-angle slow push-in on her"`) or ids (`stack`); with an editor it runs `camera.applyTechnique` (one undo entry, a receipt with the classifier-verified move); in memory it sets the camera and marks the move's start for `describe_camera_move`. `render_prompt` then states the technique |
 | `add_scene` / `switch_scene` | multiple scenes per project |
 | `open_project` / `save_project` | read and write `.cclayproject` files |
 
@@ -115,6 +117,18 @@ thin terminal front end over this hub, not a parallel surface, so anything true 
 above (admission envelopes, receipts, per-workspace exclusion) is true of it too. The
 terminal-agent guide for it is [`../docs/agent-cli.md`](../docs/agent-cli.md).
 
+## Camera techniques
+
+The library lives in `src/camera-techniques/`: each technique has an id, aliases, a kind, mood tags, a
+short description written for CozyClay, parameters with defaults and a recipe. A stack holds one size,
+one angle, one roll, one move and one coverage framing plus any modifiers; it compiles to the camera
+primitives the editor already has (`shot.frame` keys, `shot.setCameraRail`), and the move the geometry
+classifier reads back is checked against the move the technique promises. Techniques that need a camera
+capability the editor does not have yet (roll, focus, handheld shake, a body mount, slow motion, motion
+blur, a coverage generator) apply as prompt words only, and every answer says so. Through `studio_run`
+the same library is `camera.techniques`, `camera.describeTechnique` and `camera.applyTechnique`.
+The names are general film vocabulary; https://grokfilm.app is good further reading.
+
 ## Motion
 
 Motion is compiled, not generated: run `motion.compile` through `studio_run` with a motion
@@ -125,7 +139,7 @@ frame on the rig, answers the QA groups, and installs the take; `motion.sample` 
 
 ## Storyboard projects and capsule figures
 
-The tool list is fixed when the server starts, so it is the same 27 tools in every project. A
+The tool list is fixed when the server starts, so it is the same 29 tools in every project. A
 tool that does not apply to the project or to its target answers a structured refusal instead
 of acting; nothing is sent to the editor and nothing changes. The refusal is the tool's only
 text content, with `isError: true`:

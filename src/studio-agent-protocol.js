@@ -118,7 +118,7 @@ const characterOp = union(
  * records what an element IS, not how JSON carries it. */
 const dataImage = { ...text(2 * 1024 * 1024), pattern: "^data:image/[A-Za-z0-9.+-]+[;,]" };
 
-const cameraKey = object({ frame: integer(), framing: object({ pos: vec3, yaw: number(), pitch: number(), fovDeg: number(1, 179) }) }, { id });
+const cameraKey = object({ frame: integer(), framing: object({ pos: vec3, yaw: number(), pitch: number(), fovDeg: number(1, 179) }) }, { id, ease: choices(["linear", "in", "out"]) });
 // A mark is an arc fraction, or { t, bank, pitch } when the object should lean
 // there (degrees, +-90). The route normaliser (src/object-path.js) owns the
 // rules; this only carries the shape through untouched.
@@ -264,10 +264,10 @@ const patchedValue = object({ path: text(120) }, { number: number(), text: nulla
 const readback = object({}, { position: vec3, yawDeg: number(), rotationDeg: vec3, scale: union(positive, positiveVec3), name, color: text(32), hidden: bool, modelId: id, renderer: id,
 	parentId: nullable(id), childIds: ids(100, 0), childCount: integer(0), bounds: nullable(bounds), removed: bool, range, camera, keyId: id, frame: integer(), subjectIds: ids(24, 0), selection, activeCharacterId: nullable(id), shotId: nullable(id), view, token: id, takeId: nullable(id), statureM: positive,
 	patched: array(patchedValue, 32, 1) });
-const CAMERA_SIDES = ["left", "right", "on-axis"];
-const checks = object({ coverage: name }, { relationSatisfied: bool, overlapIds: ids(100, 0), actualGapM: number(), requestedGapM: number(0), maximumFootprintOverlapM: number(0),
+const CAMERA_SIDES = ["left", "right", "on-axis"], checks = object({ coverage: name }, { relationSatisfied: bool, overlapIds: ids(100, 0), actualGapM: number(), requestedGapM: number(0), maximumFootprintOverlapM: number(0),
 	basis: choices(STUDIO_VARIANTS.positionBases), clipped: bool, occluded: bool, behindCamera: bool, screenFraction: number(0), derivedSize: choices(STUDIO_VARIANTS.framingSizes), support: name, baseY: number(), facesTargetId: id,
-	cameraSide: choices(CAMERA_SIDES), axisConsistent: bool, evaluatedFrames: integer(1), sampledFrames: array(integer(), 64, 1), sampledChecks: array(object({ frame: integer(), screenFraction: number(), clipped: bool, behindCamera: bool, occluded: bool }), 64, 1), issueFrames: array(object({ frame: integer(), codes: array(name, 4, 1), screenFraction: number() }), 64, 0) });
+	cameraSide: choices(CAMERA_SIDES), axisConsistent: bool, evaluatedFrames: integer(1), sampledFrames: array(integer(), 64, 1), sampledChecks: array(object({ frame: integer(), screenFraction: number(), clipped: bool, behindCamera: bool, occluded: bool }), 64, 1), issueFrames: array(object({ frame: integer(), codes: array(name, 4, 1), screenFraction: number() }), 64, 0),
+	technique: name, expectedMove: name, move: name, moveVerified: bool, fromSize: name, toSize: name, membersInFrame: integer(0), members: integer(0) });
 // Code-computed shot geometry verify_result carries beside a framing check
 // (src/studio-geometry-facts.js): bounded to 8 shots and 24 subjects.
 const geometryFacts = object({

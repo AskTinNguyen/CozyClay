@@ -208,6 +208,19 @@ panel, a drag reorders the panels, and Delete on a focused card removes it.
 The card actions show on hover or focus, so Board adds no always-visible
 controls beyond `+ Panel`.
 
+Camera mode's Details gains a **Techniques** section under Camera (the camera
+technique library). It has a search field (names, aliases, misspellings and
+moods), kind tabs (All, Size, Angle, Move, Lens, Coverage, Modifier), a mood
+filter and the technique list. Clicking a technique applies it to the selected
+shot through `camera.applyTechnique` and opens its parameter popover: a
+top-down plan of the camera path drawn from the recipe, the description, the
+parameters (changing one re-applies) and the receipt line. A pick stacks on the
+shot's applied stack (a new size, angle, roll, move or coverage replaces the one
+in its slot; a modifier adds), and the applied chips above the search remove one
+technique each. The timeline Shot block shows the applied stack after its frame
+range ("0–119 · 5.0s · LOW · PUSH-IN · 35mm") while it still describes the
+camera. The picker adds no always-visible control outside Camera Details.
+
 G10 leaves exactly two visible add routes: viewport **+ Add** (the object
 catalogue plus Character and Camera) and **Content › Basic Shapes** (drag or
 double-click a primitive). The Outliner right-click **Create ▸** accelerator
