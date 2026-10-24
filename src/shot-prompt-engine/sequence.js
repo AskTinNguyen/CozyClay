@@ -11,6 +11,7 @@ import { motionBeats, beatsIn } from "./motion-beats.js";
 import { continuityLine } from "./continuity.js";
 import { referenceManifest } from "./references.js";
 import { PREVIS_WORDS, clipsFor, moveTag, profileById, profileWarnings } from "../model-profiles.js";
+import { checkMotivation, motivationReason } from "../camera-motivation/check.js";
 
 const DEFAULT_LOOK = "cinematic, natural light";
 const pad = (value) => String(value).padStart(2, "0");
@@ -40,7 +41,7 @@ function castLines(document, scene, beats) {
 }
 
 // Timecodes are delivery time: the selected shots back to back, as the delivered video plays them (no gaps).
-function beatLines(beat, { fps, profile, actions, clipLabel }) {
+function beatLines(beat, { fps, profile, actions, clipLabel, story = [], motives = [] }) {
 	const from = beat.deliveryStart, to = from + beat.frames - 1, seconds = beat.frames / fps;
 	const head = profile.id === "kling-3" ? `Shot ${beat.index}, ${sec(seconds)}` : `${beat.index}.`;
 	const tag = profile.cameraStyle === "tags" ? `${moveTag(beat.moveId)} ` : "";
@@ -54,6 +55,9 @@ function beatLines(beat, { fps, profile, actions, clipLabel }) {
 		...(beat.rig.length ? [`   Rig: ${beat.rig.join("; ")}.`] : []),
 		...(beat.coverage ? [`   Coverage: ${beat.coverage}.`] : []),
 		...actions.map((action) => `   Action ${timecode(from + action.frame - beat.startFrame, fps)} (f${action.frame}${action.takeFrame !== action.frame ? `, take f${action.takeFrame}` : ""}): ${action.words}.`),
+		// Authored story beats in the shot, and why each camera move happens (camera-motivation).
+		...story.map((row) => `   Story ${timecode(from + row.frame - beat.startFrame, fps)} (f${row.frame}): ${row.kind}, ${row.label}.`),
+		...(motives.length ? [`   Motive: the camera ${motives.join("; then ")}.`] : []),
 	];
 }
 
@@ -94,7 +98,10 @@ export function buildSequencePrompt(document, { range = null, profile: profileId
 		`REFERENCES: references.json lists ${references.entries.length} stills by role (first and last frames, composition guides, character sheets, the set)${references.missing.length ? `; missing: ${references.missing.map((row) => row.subject ? `${row.role} for ${row.subject}` : row.role).join(", ")}` : ""}.`,
 		"BEATS:",
 	];
-	clips.forEach((clip, c) => clip.forEach((beat, k) => lines.push(...beatLines(beat, { fps, profile, actions: beatsIn(actions, shots[beat.index - 1]),
+	const motivation = new Map(checkMotivation(document, { shotIds: shots.map((shot) => shot.id) }).shots.map((row) => [row.shotId, row.segments]));
+	const motives = (beat) => (motivation.get(beat.id) ?? []).map((segment) => motivationReason(segment, beat.subjectName)).filter(Boolean);
+	const story = (beat) => (document.storyBeats ?? []).filter((row) => row.frame >= beat.startFrame && row.frame <= beat.endFrame);
+	clips.forEach((clip, c) => clip.forEach((beat, k) => lines.push(...beatLines(beat, { fps, profile, actions: beatsIn(actions, shots[beat.index - 1]), story: story(beat), motives: motives(beat),
 		clipLabel: clips.length > 1 && k === 0 ? `CLIP ${c + 1} of ${clips.length} (${sec(clip.reduce((sum, row) => sum + row.frames / fps, 0))})${profile.cuts === "per-clip" ? ": generate on its own" : ""}` : null }))));
 	lines.push(`CONTINUITY: ${continuity.text}`, `KEEP OUT: the previs itself (${PREVIS_WORDS.slice(0, 4).join(", ")}): render real people in a real place in the look above.`);
 	if (warnings.length) lines.push("WARNINGS:", ...warnings.map((warning) => `- ${warning.message} Fix: ${warning.fix}`));

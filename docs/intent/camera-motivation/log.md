@@ -15,3 +15,11 @@ The orchestrator compared the owner's cinematic-atlas repo (a local study site o
 > Write all seven proposals as planned intents in docs/intent/, ordered as you recommended.
 
 Written as `planned`; the `Waits for` lines carry the recommended order.
+
+## L-3 (2026-10-24) | class: decision | -> rev 2
+
+> https://github.com/AskTinNguyen/CozyClay/pull/8
+>
+> Spawn Agent Sessions to work on these intents and merge them into main
+
+The owner's go-ahead for the cinematic-atlas plan; `director-evals` is completed (#10), so this intent's `Waits for` is met. The owner did not answer F-1 directly, and asked for the plan to be carried through without waiting; the orchestrator takes F-1's recommended option (a), authored story beats, under the contract's away rule. The owner can reverse it. It runs beside `group-coverage` on condition that this intent does not edit `src/commands/camera-coverage.js` or `src/camera-coverage/cut-rules.js`.

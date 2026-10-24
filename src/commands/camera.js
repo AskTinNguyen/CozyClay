@@ -17,6 +17,7 @@ import { fail, shotLabel } from './shared.js';
 import { registerRig, rigDeclarations } from './camera-rig.js';
 import { capabilityReadback, capabilityScene } from '../camera-capabilities/readback.js';
 import { compositionSchema, coverageDeclarations, registerCoverage } from './camera-coverage.js';
+import { motivationDeclarations, registerMotivation } from './camera-motivation.js';
 import { routeCameraRequest } from '../camera-coverage/route.js';
 import { eyePoint, measureComposition } from '../camera-coverage/composition.js';
 import { travelAt } from '../camera-coverage/cut-geometry.js';
@@ -44,6 +45,8 @@ export const declarations = Object.freeze([
   ...rigDeclarations,
   // camera.cover, camera.checkCuts and camera.setTransition (camera-coverage.js).
   ...coverageDeclarations,
+  // story.addBeat / moveBeat / removeBeat, camera.checkMotivation and camera.alignMove (camera-motivation.js).
+  ...motivationDeclarations,
 ]);
 
 const scaled = row => SUBJECT_HEIGHT_M * (row.scale ?? 1);
@@ -71,6 +74,7 @@ export function register(registry, ports) {
     target: args => args.shotId, run(args, context) { return apply(args, context); } });
   registerRig(registry, ports);
   registerCoverage(registry, ports, { castRow });
+  registerMotivation(registry, ports);
 
   function apply(args, context) {
     const view = ports.readView(), visible = view.characters.filter(row => !row.hidden), named = visible.map(row => ({ id: row.id, name: row.subject ?? row.name }));
@@ -78,7 +82,7 @@ export function register(registry, ports) {
     // One router (camera-coverage/route.js) for every request: a non-camera "shot" names no action.
     const routed = args.request ? routeCameraRequest(args.request, { cast: named }) : null;
     if (routed?.action === 'none' && !args.stack && !args.composition) fail('INVALID_ARGUMENT', `No camera action in "${args.request}": ${routed.reason} (confidence ${routed.confidence}); name a technique (push-in, low angle, OTS), a coverage or a mood. Read camera.techniques.`);
-    if (routed && !args.stack && routed.action !== 'camera.applyTechnique' && routed.action !== 'none') return context.run(routed.action, { ...routed.args, ...(args.shotId && (routed.action === 'camera.cover' || routed.action === 'camera.setLine') ? { shotId: args.shotId } : {}), request: args.request });
+    if (routed && !args.stack && routed.action !== 'camera.applyTechnique' && routed.action !== 'none') return context.run(routed.action, { ...routed.args, ...(args.shotId && ['camera.cover', 'camera.alignMove', 'camera.setLine'].includes(routed.action) ? { shotId: args.shotId } : {}), request: args.request });
     const parsed = routed?.action === 'camera.applyTechnique' ? { stack: routed.args.stack ?? [], subjectId: routed.args.subjectId, dropped: routed.dropped, matched: routed.resolved } : null;
     const composition = args.composition ?? routed?.args.composition;
     let shot = args.shotId ? owner().read().find(row => row.id === args.shotId) ?? fail('STALE_TARGET', `Shot ${args.shotId} is not in this scene.`)

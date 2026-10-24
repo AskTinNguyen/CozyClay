@@ -8,7 +8,7 @@
 // prompt agrees with each beat.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { coveredSequence } from './sequence-fixture.mjs';
+import { coveredSequence, documentOf } from './sequence-fixture.mjs';
 import { createShot } from '../../src/cuts.js';
 import { buildSequencePrompt, shotsInRange, timecode } from '../../src/shot-prompt-engine/sequence.js';
 import { classifyKeys } from '../../src/camera-techniques/readback.js';
@@ -125,5 +125,22 @@ test('group-coverage A6: with three cast the continuity line names each pair\'s 
     const again = buildSequencePrompt(structuredClone(document));
     assert.equal(Buffer.from(again.text).equals(Buffer.from(out.text)), true, 'byte-identical on a second run');
     console.log(`PASS A6 group continuity: ${continuity}`);
+  } finally { f.dispose(); }
+});
+
+// camera-motivation A7: a motivated move states its reason; an unmotivated one states none.
+test('camera-motivation: the brief states why a move happens', () => {
+  const { f, document } = coveredSequence({ roll: false, dissolve: false });
+  try {
+    const shots = shotsInRange(document), pushed = shots[1], start = pushed.cameraKeys[0].frame;
+    assert.ok(!/^ {3}Motive: /m.test(buildSequencePrompt(document).text), 'the push-in with no beat states no reason');
+    assert.equal(f.run('story.addBeat', { frame: start, label: 'Mara makes her admission', kind: 'disclosure' }, 'agent').ok, true);
+    const out = buildSequencePrompt(documentOf(f));
+    assert.match(out.text, /^ {3}Motive: the camera pushes in as Mara makes her admission\.$/m, 'beat 2 says why it pushes in');
+    assert.equal(out.text.split('\n').filter((line) => line.startsWith('   Motive: ')).length, 1, 'held shots state no motive');
+    const walk = coveredSequence({ pattern: 'walk-and-talk', push: false, roll: false, dissolve: false });
+    try { assert.match(buildSequencePrompt(walk.document).text, /^ {3}Motive: the camera tracks with Mara\.$/m, 'a tracking two-shot travels with its subject'); } finally { walk.f.dispose(); }
+    assert.equal(buildSequencePrompt(structuredClone(documentOf(f))).text, out.text, 'byte-identical on a second run');
+    console.log(`PASS A7 motive: ${out.text.split('\n').find((line) => line.startsWith('   Motive: ')).trim()}`);
   } finally { f.dispose(); }
 });

@@ -22,7 +22,7 @@ export function engineScene(document) {
 }
 
 /** The shot camera at a frame: sampleAt's camera, or the integrated rail when no track was baked. */
-function cameraAt(scene, shot, frame) {
+export function cameraAt(scene, shot, frame) {
 	const sampled = sampleAt(scene, shot, frame).camera;
 	if (sampled?.pos) return sampled;
 	const pose = shotCameraAt(shot, frame, { cast: scene.cast, filmback: scene.filmback ?? {}, fovDeg: scene.fovDeg ?? 40 });
@@ -30,7 +30,7 @@ function cameraAt(scene, shot, frame) {
 	return { ...pose, focalMm: fovToFocalMm((pose.fovDeg / DEG), scene.filmback?.sensorId, scene.filmback?.aspectRatio) };
 }
 
-const steady = (shot) => {
+export const steady = (shot) => {
 	if (!shot?.camera?.shake) return shot;
 	const { shake, ...camera } = shot.camera;
 	return { ...shot, camera };

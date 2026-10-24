@@ -35,7 +35,7 @@ Then point a client at it. For Claude Desktop, in `claude_desktop_config.json`:
 }
 ```
 
-Restart the client; 33 tools appear.
+Restart the client; 35 tools appear.
 
 Prefer a long-lived endpoint? `node server.mjs --http 5183` serves Streamable HTTP at
 `http://127.0.0.1:5183/mcp` (one isolated session per client), with a plain status page at `/`.
@@ -83,6 +83,8 @@ generated frame matches the blocking instead of drifting off into a generic shot
 | `cover_scene` | lay several shots at once from a coverage pattern (`shot-reverse-shot`, `master-coverage`, `dialogue-singles`, `walk-and-talk`, `action-coverage`, `establish-detail`) or words ("cover this conversation", "master and coverage", "reverse on Joon"); `cast` names A then B. Group patterns take a `cast` of three to six: `triangle-dialogue` (three, a master then OTS and singles per speaking pair), `group-singles` (a wide master and two sizes of everyone) and `branching-dialogue` (`branches`: a count or frame ranges, each branch with the same setups). With an editor it runs `camera.cover` (one undo entry; every camera on one side of its pair's line); in memory it plans the shots and checks their cuts |
 | `check_coverage` | is there enough here to edit: a master, two sizes of everyone, every line change with a neutral, cutaway or group shot to cut through, and (with `branches`) every branch holding the same setups. Each gap names a suggested shot as a technique stack; read only. With an editor it runs `camera.checkCoverage`; in memory it checks the `cover_scene` plan |
 | `check_cuts` | the editing rules at every cut: 180-degree line crossings, jump cuts, screen-direction flips, shot-reverse-shot eyelines, each with severity, frames and a fix; read only. With an editor it runs `camera.checkCuts`; in memory it checks the `cover_scene` plan |
+| `check_motivation` | why each camera move happens: every move segment is motivated by a beat (a story beat, or with an editor a motion beat of an installed take), by its subject (follow camera, mount, tracking rail, a camera keeping a travelling subject on screen), or unmotivated; a beat more than `tolerance` frames (default 6) from the move's start or rest is `starts-off-beat` / `settles-off-beat`. Each issue has a severity, frames and a fix; read only. With an editor it runs `camera.checkMotivation`; in memory it checks the `cover_scene` plan and the `mark_camera_move` move against story beats and subject travel only, and says so |
+| `story_beats` | add, move, remove or list the story beats the check reads (a line, a reveal, a decision: `frame`, `label`, `kind`), or words ("add a beat 'confession' at 120"). With an editor it runs `story.addBeat` / `story.moveBeat` / `story.removeBeat` (one undo entry each), and lists through `story.listBeats` (every beat with its id, frame, label and kind) |
 | `set_camera_capabilities` | give the shot camera what placement cannot: `roll_deg` (Dutch angle), `f_stop` with `focus_on` (a character, followed per frame) or `focus_distance` (depth of field), `shake` (handheld or vehicle, seeded), `mount` (a Snorricam on a character's chest, head, hips or back), `speed` (0.5 = slow motion) and `shutter_deg` (motion blur); `at_frame` keys roll and focus (two focus keys rack focus). With an editor it runs `camera.set` / `camera.setKey`; in memory `render_prompt` states them |
 | `add_scene` / `switch_scene` | multiple scenes per project |
 | `open_project` / `save_project` | read and write `.cclayproject` files |
@@ -182,6 +184,16 @@ the coverage as a whole and answers `checks.complete` with each gap (`master`, `
 `line-change`, `branch`) and its suggested stack; with three or more people the sequence prompt's
 continuity line names every pair's line and the side its cameras keep.
 
+## Camera motivation
+
+Story beats are authored on the shot document (`storyBeats: [{ id, frame, label, kind }]`, kinds
+`disclosure`, `reveal`, `threat`, `decision`, `input`, `event`); OTIO writes each as a marker and the
+sequence brief names them (`Story 00:00:05:10 (f130): disclosure, Mara makes her admission.`) with a
+`Motive:` line per beat. `check_motivation` (`camera.checkMotivation`) splits each shot's measured
+camera into moves and judges each one; `camera.alignMove { shotId, beat, edge }` (through
+`studio_run`) retimes a move's camera keys or rig keys so it starts or comes to rest on the beat, as
+one undo entry, and answers the re-check. Holds and follow cameras are never flagged.
+
 ## Camera requests in words
 
 Every camera request in words goes through one router (`src/camera-coverage/route.js`): coverage,
@@ -206,7 +218,7 @@ frame on the rig, answers the QA groups, and installs the take; `motion.sample` 
 
 ## Storyboard projects and capsule figures
 
-The tool list is fixed when the server starts, so it is the same 33 tools in every project. A
+The tool list is fixed when the server starts, so it is the same 35 tools in every project. A
 tool that does not apply to the project or to its target answers a structured refusal instead
 of acting; nothing is sent to the editor and nothing changes. The refusal is the tool's only
 text content, with `isError: true`:

@@ -10,15 +10,17 @@ import { techniqueById } from "../src/camera-techniques/index.js";
 import { coveragePattern } from "../src/camera-coverage/patterns.js";
 
 const DIR = new URL("./fixtures/director-evals/", import.meta.url);
-export const CATEGORIES = Object.freeze(["size", "angle", "move", "lens", "coverage", "composition", "cuts", "negative"]);
-const ACTIONS = ["camera.applyTechnique", "camera.cover", "camera.checkCuts", "camera.checkCoverage", "camera.setLine", "none"];
+export const CATEGORIES = Object.freeze(["size", "angle", "move", "lens", "coverage", "composition", "cuts", "negative", "motivation"]);
+// The motivation actions (camera-motivation): the check, the retime, and the story beats.
+const MOTIVATION_KEYS = { "camera.checkMotivation": ["confidence"], "camera.alignMove": ["beat", "edge", "confidence"], "story.addBeat": ["frame", "label", "kind", "confidence"], "story.moveBeat": ["beat", "frame", "confidence"], "story.removeBeat": ["beat", "confidence"] };
+const ACTIONS = ["camera.applyTechnique", "camera.cover", "camera.checkCuts", "camera.checkCoverage", "camera.setLine", "none", ...Object.keys(MOTIVATION_KEYS)];
 const CONFIDENCE = ["high", "medium", "low"];
 // The fixture cast every scenario names its people from (ids are what `cast` and `expected.subject` hold).
 // Sela (group-coverage) watches the two from 3.4 m off their line; a row brings her in by naming her in its cast.
 export const CAST = Object.freeze([{ id: "mara", name: "Mara", x: 0, z: 0, rot: 90 }, { id: "joon", name: "Joon", x: 4, z: 0, rot: -90 }, { id: "sela", name: "Sela", x: 2, z: 3.4, rot: 180 }]);
 const FIELDS = ["id", "tier", "category", "request", "cast", "expected", "why"];
 const EXPECTED_KEYS = { "camera.applyTechnique": ["stack", "params", "subject", "composition", "confidence"], "camera.cover": ["pattern", "cast", "branches", "confidence"],
-	"camera.checkCuts": ["frame", "confidence"], "camera.checkCoverage": ["cast", "confidence"], "camera.setLine": ["between", "confidence"], none: ["confidence"] };
+	"camera.checkCuts": ["frame", "confidence"], "camera.checkCoverage": ["cast", "confidence"], "camera.setLine": ["between", "confidence"], none: ["confidence"], ...MOTIVATION_KEYS };
 const APPLY_KEYS = ["move", "size", "sizes", "height", "screenX", "eyeLineY", "shots", "oneSide", "issues", "setup", "flags", "refused", "complete", "line"];
 
 /** Every scenario row, in file then row order, each with the file it came from. */
@@ -88,6 +90,8 @@ export function resolutionMismatch(expected, got) {
 	if (expected.between) want("between", expected.between, got.between);
 	if (expected.branches) want("branches", expected.branches, got.branches);
 	if (expected.action === "camera.checkCuts") want("frame", expected.frame, got.frame);
+	else if (expected.frame !== undefined) want("frame", expected.frame, got.frame);
+	for (const key of ["label", "kind", "beat", "edge"]) if (expected[key] !== undefined) want(key, expected[key], got[key]);
 	if (expected.confidence) want("confidence", expected.confidence, got.confidence);
 	return problems;
 }
@@ -95,7 +99,8 @@ export function resolutionMismatch(expected, got) {
 /** A routeCameraRequest answer in the fields resolutionMismatch compares. */
 export function resolutionOf(routed) {
 	const args = routed.args ?? {};
-	return { action: routed.action, stack: args.stack, subject: args.subjectId, composition: args.composition, pattern: args.pattern, cast: args.cast, frame: args.frame, between: args.between, branches: args.branches, confidence: routed.confidence };
+	return { action: routed.action, stack: args.stack, subject: args.subjectId, composition: args.composition, pattern: args.pattern, cast: args.cast, frame: args.frame, between: args.between, branches: args.branches, confidence: routed.confidence,
+		label: args.label, kind: args.kind, beat: args.beat, edge: args.edge };
 }
 
 /** A receipt states the words it matched (each one in the request) and a confidence (A4). */
