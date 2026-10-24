@@ -1,7 +1,7 @@
 # Camera Technique Library
 
 - Rev: 1
-- Status: active
+- Status: completed
 - Area: Camera and Shots
 - Owner: TinNguyen
 - Skill: `none`
@@ -49,6 +49,22 @@ Aerial Shot, Bird's Eye View, Close-Up Shot, Dutch Angle, Dolly Shot, Establishi
 - Keep the owner's own studio on ports 5180 / 5184 untouched; use slot n=1.
 - Descriptions are original text (D1).
 
+## Reviews
+
+Orchestrator review of the ui:shot images and the docs, against branch `intent/camera-techniques` at f9aacf16, 2026-10-24.
+
+| Item | Image or file | What it shows | Verdict |
+| --- | --- | --- | --- |
+| A6 | `proofs/picker.png` | Camera mode, Techniques section: LOW and PUSH-IN chips with 35mm, search box, kind tabs, mood select, technique list with slate tags, the Push In popover with its top-down plan (subject dot, start wedge, path toward the subject), params, and the receipt "Applied LOW · PUSH-IN · 35mm … (verified)". The timeline Shot block reads "0–119 · 5.0s · LOW · PUSH-IN · 35mm". | met |
+| A6 | `proofs/applied.png` | After adding OTS: chips LOW, PUSH-IN, OTS, 50mm; Shot Camera preview framed past the partner's shoulder; Shot block "LOW · OTS · PUSH-IN · 50mm"; OTS plan with two cast dots. | met |
+| A5 | `proofs/live-low-angle-close-up.png` | Lens below the subject's eye line looking up: head and shoulders against the sky, no floor visible. | met |
+| A5 | `proofs/live-push-in-start.png`, `live-push-in-end.png` | Start: wide frame with both characters full-body on the grid. End: the same subject at medium close-up, centred; the camera has moved in. | met |
+| A5 | `proofs/live-over-the-shoulder.png` | The partner's shoulder and head soft in the left foreground, the subject facing the lens at medium shot. | met |
+| A9 | `mcp/README.md`, `docs/agent-cli.md`, `docs/studio-ui-ia.md`, `CHANGELOG.md` (0b593dbc) | Tool rows and a Camera techniques section, the live verb usage, the Techniques controls, an Unreleased line. | met |
+
+Gates re-run by the orchestrator in the worktree: the eight verify files exit 0 (`12 checks passed`, apply suite pass, `6 checks passed`, `all checks passed`, `14 passed, 0 failed`, `29 tools`, motion3 prompt, `122 actions read from 13 command modules`); `npm run lint` exit 0 (`knip: 138 findings, 0 new`, `0 violations`, `0 regressions`); `npm run build` exit 0; no diff to `tools/*-baseline.json` or the frozen motion files; `node tools/run-tests.mjs --jobs 4` from Git Bash: only failure `FAIL exit car, hips sunk: under 10 s — 10320 ms` (the known exception; base b6806868 fails it too, `— 10518 ms`, per the worker). Run from PowerShell, `test/verify-keyframe-pack.mjs` also fails with `spawn unzip ENOENT` (no `unzip` on that PATH); it passes from Git Bash. Suite gates run from Git Bash from now on.
+
 ## Changelog
 
 - rev 1 (2026-10-24): created from L-1, L-2 and L-3.
+- rev 1 (2026-10-24): completed. Every Acceptance row met with orchestrator review; F-1 and F-2 resolved; PR #3 squash-merged.
