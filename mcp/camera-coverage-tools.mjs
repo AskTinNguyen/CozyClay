@@ -13,6 +13,7 @@ import { COVERAGE_PATTERN_IDS, coveragePattern } from "../src/camera-coverage/pa
 import { planCoverage, plannedShot } from "../src/camera-coverage/plan.js";
 import { resolveCameraRequest } from "../src/camera-coverage/resolve.js";
 import { SUBJECT_HEIGHT_M } from "../src/shot.js";
+import { resolvedLine } from "./camera-technique-tools.mjs";
 
 /** MCP annotations for the two tools (tool-handlers.mjs TOOL_ANNOTATIONS). */
 export const COVERAGE_TOOL_ANNOTATIONS = Object.freeze({
@@ -84,7 +85,8 @@ export function cameraCoverageTools(deps) {
 					}
 					const first = castIds[0] ?? deps.findCharacter(state.focus ?? "A")?.id ?? sceneRows()[0]?.id;
 					if (!first) return text("Add a character first; coverage frames the cast.");
-					return planInMemory({ pattern: chosen, castIds: [first, castIds[1]], start: start_frame ?? 0, end: (end_frame ?? state.timeline.frameCount) - 1, shots });
+					const planned = planInMemory({ pattern: chosen, castIds: [first, castIds[1]], start: start_frame ?? 0, end: (end_frame ?? state.timeline.frameCount) - 1, shots });
+					return routed?.action === "camera.cover" ? text(`${planned.content[0].text}\n${resolvedLine(routed)}`) : planned;
 				} catch (error) {
 					return error.code ? text(`Refused (${error.code}): ${error.message}`) : liveError(error);
 				}
@@ -108,12 +110,12 @@ export function cameraCoverageTools(deps) {
 					await deps.refreshLiveDescription();
 					if (deps.isLive()) return await deps.runStudioCommand({ action: "camera.checkCuts", args: { ...(Number.isInteger(frame) ? { frame } : {}), ...(request ? { request } : {}) } });
 					if (!state.coverage) return text("No shots to check in memory: plan some with cover_scene, or connect an editor.");
-					const at = frame ?? resolveCameraRequest(request ?? "")?.args?.frame;
+					const routed = request ? resolveCameraRequest(request) : null, at = frame ?? routed?.args?.frame;
 					let { cuts } = checkPlan();
 					if (Number.isInteger(at) && cuts.length) cuts = [cuts.reduce((best, cut) => (Math.abs(cut.cutFrame - at) < Math.abs(best.cutFrame - at) ? cut : best))];
 					const issues = issueLines(cuts);
 					return text([`${cuts.length} cut(s) checked in the ${state.coverage.pattern} plan: ${issues.length ? `${issues.length} issue(s)` : "no rule broken"}.`, ...issues,
-						...cuts.map((cut) => `cut ${cut.cutFrame}  ${cut.fromName} -> ${cut.toName}  ${JSON.stringify(cut.measures)}`)].join("\n"));
+						...cuts.map((cut) => `cut ${cut.cutFrame}  ${cut.fromName} -> ${cut.toName}  ${JSON.stringify(cut.measures)}`), ...(routed?.action === "camera.checkCuts" ? [resolvedLine(routed)] : [])].join("\n"));
 				} catch (error) {
 					return error.code ? text(`Refused (${error.code}): ${error.message}`) : liveError(error);
 				}

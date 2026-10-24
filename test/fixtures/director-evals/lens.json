@@ -1,0 +1,14 @@
+{
+	"category": "lens",
+	"label": "lens",
+	"scenarios": [
+		{"id": "lens-vertigo-roof", "tier": "core", "category": "lens", "request": "vertigo shot when Joon looks down from the roof", "cast": ["mara", "joon"], "expected": {"action": "camera.applyTechnique", "stack": ["vertigo-effect"], "subject": "joon"}, "apply": {"move": "dolly-zoom"}, "why": "The background stretches while he stays the same size: the drop below him."},
+		{"id": "lens-crash-shock", "tier": "core", "category": "lens", "request": "crash zoom on Mara's shocked face", "cast": ["mara", "joon"], "expected": {"action": "camera.applyTechnique", "stack": ["crash-zoom"], "subject": "mara"}, "apply": {"move": "zoom-in"}, "why": "A sudden zoom for the shock."},
+		{"id": "lens-rack-mara-joon", "tier": "core", "category": "lens", "request": "rack focus from Mara to Joon", "cast": ["mara", "joon"], "expected": {"action": "camera.applyTechnique", "stack": ["rack-focus"], "subject": "mara"}, "why": "Focus moves the attention from her to him without a cut."},
+		{"id": "lens-zolly-floor", "tier": "core", "category": "lens", "request": "zolly as the floor seems to fall away", "cast": ["mara", "joon"], "expected": {"action": "camera.applyTechnique", "stack": ["dolly-zoom"]}, "apply": {"move": "dolly-zoom"}, "why": "The dolly zoom is the falling floor; \"floor\" is not a floor shot."},
+		{"id": "lens-slow-zoom-photo", "tier": "core", "category": "lens", "request": "a slow zoom in on the photograph", "cast": ["mara", "joon"], "expected": {"action": "camera.applyTechnique", "stack": ["zoom-shot"], "params": {"zoom-shot": {"speed": "slow"}}}, "apply": {"move": "zoom-in"}, "why": "A slow lens zoom draws us into the picture."},
+		{"id": "lens-snap-comedy", "tier": "core", "category": "lens", "request": "snap zoom for the comedy beat", "cast": ["mara", "joon"], "expected": {"action": "camera.applyTechnique", "stack": ["crash-zoom"]}, "why": "A snap zoom is a crash zoom, here for a laugh."},
+		{"id": "lens-pull-focus-door", "tier": "core", "category": "lens", "request": "pull focus to the door", "cast": ["mara", "joon"], "expected": {"action": "camera.applyTechnique", "stack": ["rack-focus"]}, "why": "Pulling focus sends the eye to the door before anyone opens it."},
+		{"id": "lens-dolly-zoom-slower", "tier": "core", "category": "lens", "request": "dolly zoom on Joon, but slower", "cast": ["mara", "joon"], "expected": {"action": "camera.applyTechnique", "stack": ["dolly-zoom"], "subject": "joon", "params": {"dolly-zoom": {"speed": "slow"}}}, "why": "A comparative (\"slower\") should still set the speed."}
+	]
+}

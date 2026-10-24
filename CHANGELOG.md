@@ -10,6 +10,14 @@ Camera
   section; with the atlas URL set, each page opens there. Agents get them on a
   detail request (`list_camera_techniques { id }` or `{ references: true }`).
   Citations only; `tools/atlas-refs.mjs` regenerates them from a local atlas.
+- Director evals: 75 directing scenarios in CozyClay's own words (shot size,
+  angle, motivated moves, lens, coverage, composition, cut checks, and
+  non-camera "shots") with the expected camera action; the core rows are a
+  test gate, and the applied rows are measured in the document (move verdict,
+  size, side of the line, composition, cut flags). Camera requests now go
+  through one router: a drink, a gunshot or a basketball shot names no camera
+  action, everyday words ("floor", "full", "two") no longer add techniques, and
+  every receipt states the words it matched and a confidence.
 - Camera polish: a whip pan's motion blur is one smooth smear (the lens adds
   sub-renders with the sweep and smears each over its slice of the shutter);
   an over-the-shoulder is a real dirty OTS (the near shoulder fills about a
