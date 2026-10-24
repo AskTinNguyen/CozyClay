@@ -4,6 +4,7 @@ import { ANGLE_TECHNIQUES, SIZE_TECHNIQUES } from "./catalog-framing.js";
 import { MOVE_TECHNIQUES } from "./catalog-moves.js";
 import { COVERAGE_TECHNIQUES, MODIFIER_TECHNIQUES, RIG_TECHNIQUES } from "./catalog-rigs.js";
 import { PLANNED_CAPABILITIES, TECHNIQUE_KINDS } from "./entry.js";
+import { referencesFor } from "../camera-references/index.js";
 
 export const TECHNIQUES = Object.freeze([...SIZE_TECHNIQUES, ...ANGLE_TECHNIQUES, ...MOVE_TECHNIQUES, ...RIG_TECHNIQUES, ...COVERAGE_TECHNIQUES, ...MODIFIER_TECHNIQUES]);
 const BY_ID = new Map(TECHNIQUES.map((entry) => [entry.id, entry]));
@@ -52,6 +53,8 @@ export function describeTechnique(id) {
 		...(capabilityFields(entry).length ? { sets: capabilityFields(entry) } : {}),
 		...(entry.requires.length ? { requires: entry.requires, promptOnly: hasGeometry(entry) ? "partly" : "entirely",
 			missing: entry.requires.map((capability) => PLANNED_CAPABILITIES[capability]) } : {}),
+		// Citations only (book, pages), from the owner's cinematic-atlas; [] when the atlas has no page for it.
+		references: referencesFor("techniques", entry.id).map(({ book, pages, cite }) => ({ book, pages, cite })),
 		furtherReading: "https://grokfilm.app",
 	};
 }
