@@ -2,7 +2,7 @@
 
 - Working under rev: 2
 - Worker: cloud worker agent (technique-references)
-- Current step: A5 gates (suite)
+- Current step: none (A1, A2, A4, A5 met; A6 and A3's images ready for review; A3's ui:qa open on F-2)
 - Next step: orchestrator: run A3's ui:qa on a working browser host (F-2), review the A3 images and A6
 - PR: none yet
 
@@ -14,7 +14,7 @@
 | A2 | met (gate) | same file: `tools/atlas-refs.mjs` run twice on `test/fixtures/atlas-refs` -> identical bytes, `atlas-refs: 4 entries with references, 71 without, 2 books`, exact expected refs, no fixture excerpt / page title / source name / section title / non-citable book in the output; refuses without `ATLAS_DIR` |
 | A3 | partial (ui:qa blocked by the container, F-2); ui:shot ready for review | ui:qa `test/verify-technique-references-browser.mjs` in this container (F-2 workarounds): every rendering check PASS (plain citations on load, links `http://127.0.0.1:8000/#/book/<id>/<page>` on load with a stored URL, new tab, Coverage pattern linked, no-page line, storage write), FAIL only the live re-render after Set / clear (env: suspended React root, same as unchanged main's picker QA), exit 1. ui:shot ready for review: `proofs/further-reading-plain.png`, `proofs/further-reading-linked.png`, `proofs/further-reading-studio.png` |
 | A4 | met (gate) | `node mcp/verify-camera-techniques.mjs` -> `19 passed, 0 failed` (index 3,215 bytes, unchanged, no citations; `id: "close-up"` brings `references` [book, pages, cite]; a technique with none answers `[]`; `references: true` lists books, techniques, coverage patterns and cut rules in one receipt under 8 KiB; `references: true` with an id reads it in full); also `mcp/verify.mjs` `all checks passed`, `mcp/verify-tool-annotations.mjs` `PASS G005 ... (32 tools; deterministic order)`, `mcp/verify-live.mjs` exit 0 |
-| A5 | open | |
+| A5 | met (known exception) | `npm run lint` -> `knip: 138 findings, 0 new, 1 fixed (baseline 139)`, `loc: 72 files over 250 (baseline 72), 0 violations`, `eslint: 396 errors across 20 rules (baseline 403), 0 regressions` (no baseline touched); `npm run build` -> `BUILD_EXIT=0`; suite, no dev server, `env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_CA_BUNDLE node /home/claude/local-tools/suite-all.mjs --jobs 4` on cbd857b8 -> `SUITE-ALL: 460 files, 458 passed, 2 failed`: `verify-motion3-exitcar.mjs` (`FAIL compile + QA stay fast (< 3 s CPU) — 4290 ms CPU`) and `verify-motion3-repair.mjs` (`FAIL exit car, hips sunk: under 10 s — 29256 ms`), both CPU-timing checks that also fail on base 38111cb (`base-main-38111cb.txt`: `SUITE-ALL: 454 files, 451 passed, 3 failed`, the same two plus `verify-agent-login.mjs`, which the orchestrator traced to the container's cloud credentials) |
 | A6 | ready for review | `mcp/README.md` (`list_camera_techniques` row, Further reading paragraph), `docs/studio-ui-ia.md` (Further reading and the Atlas field in the technique popover; Coverage), `CHANGELOG.md` Unreleased > Camera; commit 09d7eca2 |
 
 ## Steps
@@ -28,5 +28,8 @@
    - `proofs/further-reading-linked.png`: the same popover after a reload with the atlas URL stored: every page number a link, the Atlas field holding `http://127.0.0.1:8000/`.
    - `proofs/further-reading-studio.png`: the whole studio in Camera mode with that popover in the Details column (the viewport is blank in this container's software GL; the red apply refusal is the container's unloaded rig).
 5. Merged `origin/main` 94c4b48d (director-evals #10): da2fde10; conflicts only in `CHANGELOG.md` (both entries kept) and the `tools/run-tests.mjs` manifest line (both files kept). Re-ran: `node mcp/verify-camera-techniques.mjs` -> `19 passed, 0 failed`; `node test/verify-technique-references.mjs` -> `6 checks passed`; `node test/verify-camera-techniques.mjs` -> `12 checks passed`; `node mcp/verify.mjs` -> `all checks passed`. `npm run build` -> `BUILD_EXIT=0` (`✓ built in 3.94s`, `sitemap: 6 urls`).
+6. A5 gates on cbd857b8 (dev server stopped): lint, build and the suite as in the A5 row.
 
 ## Reconciliations
+
+- Started under rev 2 (no rev change during the work).
