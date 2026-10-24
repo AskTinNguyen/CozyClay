@@ -35,7 +35,7 @@ Then point a client at it. For Claude Desktop, in `claude_desktop_config.json`:
 }
 ```
 
-Restart the client; 32 tools appear.
+Restart the client; 33 tools appear.
 
 Prefer a long-lived endpoint? `node server.mjs --http 5183` serves Streamable HTTP at
 `http://127.0.0.1:5183/mcp` (one isolated session per client), with a plain status page at `/`.
@@ -80,7 +80,8 @@ generated frame matches the blocking instead of drifting off into a generic shot
 | `mark_camera_move` / `describe_camera_move` | name a move between two camera positions |
 | `list_camera_techniques` | the camera technique library: 65 film techniques (sizes, angles, moves, lens moves, coverage, modifiers) as an index, a search by name, alias, misspelling or mood (`query: "uneasy"`), or one technique in full (`id`) |
 | `apply_camera_technique` | apply a technique stack from words (`request: "low-angle slow push-in on her"`) or ids (`stack`); with an editor it runs `camera.applyTechnique` (one undo entry, a receipt with the classifier-verified move); in memory it sets the camera and marks the move's start for `describe_camera_move`. `render_prompt` then states the technique |
-| `cover_scene` | lay several shots at once from a coverage pattern (`shot-reverse-shot`, `master-coverage`, `dialogue-singles`, `walk-and-talk`, `action-coverage`, `establish-detail`) or words ("cover this conversation", "master and coverage", "reverse on Joon"); `cast` names A then B. With an editor it runs `camera.cover` (one undo entry; every camera on one side of the A-B line); in memory it plans the shots and checks their cuts |
+| `cover_scene` | lay several shots at once from a coverage pattern (`shot-reverse-shot`, `master-coverage`, `dialogue-singles`, `walk-and-talk`, `action-coverage`, `establish-detail`) or words ("cover this conversation", "master and coverage", "reverse on Joon"); `cast` names A then B. Group patterns take a `cast` of three to six: `triangle-dialogue` (three, a master then OTS and singles per speaking pair), `group-singles` (a wide master and two sizes of everyone) and `branching-dialogue` (`branches`: a count or frame ranges, each branch with the same setups). With an editor it runs `camera.cover` (one undo entry; every camera on one side of its pair's line); in memory it plans the shots and checks their cuts |
+| `check_coverage` | is there enough here to edit: a master, two sizes of everyone, every line change with a neutral, cutaway or group shot to cut through, and (with `branches`) every branch holding the same setups. Each gap names a suggested shot as a technique stack; read only. With an editor it runs `camera.checkCoverage`; in memory it checks the `cover_scene` plan |
 | `check_cuts` | the editing rules at every cut: 180-degree line crossings, jump cuts, screen-direction flips, shot-reverse-shot eyelines, each with severity, frames and a fix; read only. With an editor it runs `camera.checkCuts`; in memory it checks the `cover_scene` plan |
 | `set_camera_capabilities` | give the shot camera what placement cannot: `roll_deg` (Dutch angle), `f_stop` with `focus_on` (a character, followed per frame) or `focus_distance` (depth of field), `shake` (handheld or vehicle, seeded), `mount` (a Snorricam on a character's chest, head, hips or back), `speed` (0.5 = slow motion) and `shutter_deg` (motion blur); `at_frame` keys roll and focus (two focus keys rack focus). With an editor it runs `camera.set` / `camera.setKey`; in memory `render_prompt` states them |
 | `add_scene` / `switch_scene` | multiple scenes per project |
@@ -161,6 +162,16 @@ tight|normal|loose, leadRoom none|facing|travel|more }` and answer `checks.scree
 (dissolve, fades, whip, match cut, J- or L-cut); OTIO writes it as a `Transition.1` where OTIO has one
 and as clip metadata always, and the prompt gains a `TRANSITION:` line.
 
+With three or more people each cut is judged against the line between the pair the two shots are
+about: the line authored on the shot (`camera.setLine { between: [a, b] }`, or the pair a group
+pattern laid it for), else the two subjects, else a subject and whom they look at; when it cannot
+tell it says so (`measures.line.unclear`), and a cut between two different pairs is a line change,
+not a crossing. A camera moving across the line inside a shot is legal; a neutral shot on the line or
+a cutaway clears a crossing. `check_coverage` (`camera.checkCoverage { range, cast, branches }`) reads
+the coverage as a whole and answers `checks.complete` with each gap (`master`, `sizes`,
+`line-change`, `branch`) and its suggested stack; with three or more people the sequence prompt's
+continuity line names every pair's line and the side its cameras keep.
+
 ## Camera requests in words
 
 Every camera request in words goes through one router (`src/camera-coverage/route.js`): coverage,
@@ -185,7 +196,7 @@ frame on the rig, answers the QA groups, and installs the take; `motion.sample` 
 
 ## Storyboard projects and capsule figures
 
-The tool list is fixed when the server starts, so it is the same 32 tools in every project. A
+The tool list is fixed when the server starts, so it is the same 33 tools in every project. A
 tool that does not apply to the project or to its target answers a structured refusal instead
 of acting; nothing is sent to the editor and nothing changes. The refusal is the tool's only
 text content, with `isError: true`:

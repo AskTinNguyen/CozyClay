@@ -245,7 +245,12 @@ composition, and the shot guide overlay (Thirds) shows the lines.
 
 Below Camera rig, a **Coverage** section picks a pattern, Cast A and B and (for
 a repeating pattern) the shot count, and **Lay over** the selected shot runs
-`camera.cover`. A **Cut** section inspects the cut into the selected shot: its
+`camera.cover`. A group pattern (Triangle Dialogue, Group Singles, Branching
+Dialogue) shows the cast as checkboxes in place of Cast A and B (Lay stays
+disabled until the pattern's count is ticked) and, for branching, a Branches
+count. **Coverage check** under it reads `camera.checkCoverage` over every shot:
+"Enough to edit" or each gap (master, sizes, line, branch) with its suggested
+shot. A **Cut** section inspects the cut into the selected shot: its
 Transition (Cut, Dissolve, Fade to or from black, Whip pan, Match cut, J-cut,
 L-cut, with Frames or an Audio offset) and the editing-rule readout (line,
 jump, screen direction, eyeline) with each fix; flagged cuts are listed as jump
