@@ -114,3 +114,61 @@ test('shot.frame takes the same composition and reports it', () => {
     console.log('PASS shot.frame left/right/centre with tight/normal/loose headroom');
   } finally { f.dispose(); }
 });
+
+// depth-staging A3: composition.foreground. The lamp's world box comes from its row (footprint x scale, height x scaleY),
+// each vertical edge is sampled through the three.js camera, and only the part inside the frame's height counts.
+function lampShare(key, row, aspect, side) {
+  const camera = new THREE.PerspectiveCamera(key.fovDeg, aspect, 0.05, 500);
+  camera.position.set(key.pos.x, key.pos.y, key.pos.z);
+  camera.rotation.order = 'YXZ';
+  camera.rotation.set(key.pitch, key.yaw, 0);
+  camera.updateMatrixWorld(true);
+  const hw = row.footprint.width * row.scaleX / 2, hd = row.footprint.depth * row.scaleZ / 2, top = row.height * row.scaleY, xs = [];
+  for (const dx of [-hw, hw]) for (const dz of [-hd, hd]) for (let i = 0; i <= 32; i++) {
+    const p = new THREE.Vector3(row.x + dx, top * i / 32, row.z + dz).project(camera);
+    if (Math.abs(p.y) <= 1) xs.push(side * p.x);
+  }
+  return (1 + Math.max(...xs)) / 2;
+}
+
+test('composition.foreground puts a named prop at its share of the frame width, the eyes on the far third; the OTS keeps its shoulder', () => {
+  const f = shotsFixture({ characters });
+  try {
+    const add = f.run('object.add', { kind: 'cylinder', placement: { x: 2.4, z: 1.4 }, name: 'Floor lamp' }, 'agent');
+    assert.equal(add.ok, true, JSON.stringify(add).slice(0, 300));
+    const lampId = f.actual.readStudioState().objects.find(row => row.name === 'Floor lamp').id;
+    const scaled = f.run('object.set', { id: lampId, set: { scale: { x: 0.35, y: 1.6, z: 0.35 } } }, 'agent');
+    assert.equal(scaled.ok, true, JSON.stringify(scaled).slice(0, 300));
+    const state = f.actual.readStudioState(), aspect = state.filmback.aspectRatio, mara = state.characters.find(row => row.id === 'actor-a'), lamp = state.objects.find(row => row.id === lampId);
+    const rows = [];
+    for (const side of ['right', 'left']) for (const share of [0.2, 0.3, 0.4]) for (const stack of [['medium-shot'], ['medium-close-up']]) {
+      fresh(f);
+      const receipt = f.run('camera.applyTechnique', { shotId: 'shot-a', subjectId: 'actor-a', stack, side, composition: { foreground: { id: 'lamp', share } } }, 'agent');
+      assert.equal(receipt.ok, true, JSON.stringify(receipt).slice(0, 400));
+      const key = shotOf(f).cameraKeys[0].framing, measured = lampShare(key, lamp, aspect, side === 'left' ? -1 : 1), eyes = measure(key, mara, aspect);
+      assert.ok(Math.abs(measured - share) < 0.02, `${side}/${share}/${stack}: the lamp covers ${measured.toFixed(3)} of the width, want ${share}`);
+      assert.ok(Math.abs(receipt.checks.foregroundShare - measured) < 0.01, `the receipt reports it: ${receipt.checks.foregroundShare}`);
+      assert.ok(Math.abs(eyes.x - (side === 'left' ? 1 / 3 : 2 / 3)) < TOL && Math.abs(eyes.y - 1 / 3) < TOL, `the eyes on the far third: ${eyes.x.toFixed(3)}, ${eyes.y.toFixed(3)}`);
+      assert.deepEqual(currentTechnique(shotOf(f)).composition.foreground, { id: lampId, share }, 'the foreground is stored by the id it resolved to');
+      rows.push(`${side}/${share}=${measured.toFixed(3)}`);
+    }
+    // In words, through the router, and stated in the prompt.
+    fresh(f);
+    const said = f.run('camera.applyTechnique', { shotId: 'shot-a', subjectId: 'actor-a', request: 'put the lamp in the foreground' }, 'agent');
+    assert.equal(said.ok, true, JSON.stringify(said).slice(0, 400));
+    assert.ok(Math.abs(said.checks.foregroundShare - 0.3) < 0.02, `"put the lamp in the foreground" resolves to it: ${said.checks.foregroundShare}`);
+    assert.match(buildShotPrompt(shotCaptureMeta({ shot: shotOf(f), fps: 24 })), /Floor lamp soft in the foreground/);
+    const missing = f.run('camera.applyTechnique', { shotId: 'shot-a', subjectId: 'actor-a', composition: { foreground: { id: 'piano' } } }, 'agent');
+    assert.equal(missing.ok, false, 'a foreground nothing in the scene answers to is refused');
+    // The over-the-shoulder keeps its own dirty shoulder (camera-polish): the same keys with or without the foreground ask.
+    fresh(f);
+    assert.equal(f.run('camera.applyTechnique', { shotId: 'shot-a', subjectId: 'actor-a', stack: ['over-the-shoulder'] }, 'agent').ok, true);
+    const ots = structuredClone(shotOf(f).cameraKeys.map(row => row.framing));
+    fresh(f);
+    const both = f.run('camera.applyTechnique', { shotId: 'shot-a', subjectId: 'actor-a', stack: ['over-the-shoulder'], composition: { foreground: { id: 'lamp' } } }, 'agent');
+    assert.equal(both.ok, true, JSON.stringify(both).slice(0, 400));
+    assert.deepEqual(shotOf(f).cameraKeys.map(row => row.framing), ots, 'the OTS framing is unchanged');
+    assert.ok(both.warnings.some(row => /keeps its own framing/.test(row.message)), JSON.stringify(both.warnings));
+    console.log(`PASS foreground shares ${rows.join(' ')}`);
+  } finally { f.dispose(); }
+});

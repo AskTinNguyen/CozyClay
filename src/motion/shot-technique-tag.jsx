@@ -5,6 +5,8 @@ export { CutFlagMarks } from "./cut-flags.jsx";
 export { MotivationMarks } from "./motivation-marks.jsx";
 // The intensity strip (intensity-curve) under the Shots lane's blocks.
 export { IntensityStrip } from "./intensity-strip.jsx";
+// Shot checks (depth-staging): blocked, inside the set, crop at a joint.
+export { ShotCheckMarks } from "./shot-check-marks.jsx";
 
 /** The camera technique stack a Shot block carries ("LOW · PUSH-IN · 35mm"),
  * shown only while it still describes the shot's camera, then the shot's

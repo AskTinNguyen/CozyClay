@@ -153,7 +153,7 @@ export function cameraTechniqueTools(deps) {
 					// The router camera.applyTechnique uses: a drink, a gunshot or a basketball "shot" names no camera action.
 					const routed = request && !stack ? routeCameraRequest(request, { cast: castRows }) : null;
 					if (routed?.action === "none") return text(`No camera action in "${request}": ${routed.reason}.\n${resolvedLine(routed)}`);
-					if (routed && routed.action !== "camera.applyTechnique") return text(`"${request}" asks for ${routed.action}: use ${{ "camera.cover": "cover_scene", "camera.checkCuts": "check_cuts", "camera.checkCoverage": "check_coverage" }[routed.action] ?? `studio_run ${routed.action} with an editor connected`}.\n${resolvedLine(routed)}`);
+					if (routed && routed.action !== "camera.applyTechnique") return text(`"${request}" asks for ${routed.action}: use ${{ "camera.cover": "cover_scene", "camera.checkCuts": "check_cuts", "camera.checkCoverage": "check_coverage", "camera.checkShots": "check_shots" }[routed.action] ?? `studio_run ${routed.action} with an editor connected`}.\n${resolvedLine(routed)}`);
 					const resolved = stack ?? routed.args.stack ?? [];
 					if (!resolved.length) return text(`No camera technique in "${request}". Try list_camera_techniques { query }.`);
 					const answer = applyInMemory(resolved, subject ?? routed?.args.subjectId, shared);

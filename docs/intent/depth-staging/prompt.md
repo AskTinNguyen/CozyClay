@@ -1,7 +1,7 @@
 # Depth Staging
 
 - Rev: 1
-- Status: planned
+- Status: completed
 - Waits for: `group-coverage` completed (both edit `src/camera-coverage/composition.js` and the shot checks) and `camera-polish` completed (it solves the dirty OTS that A3 builds on). Fourth in the cinematic-atlas plan.
 - Area: Camera and Shots
 - Owner: TinNguyen
@@ -62,3 +62,4 @@ This intent adds:
 
 - rev 1 (2026-10-24): written as a planned intent from the cinematic-atlas review (L-1, L-2).
 - rev 1 (2026-10-24): the dirty OTS left to `camera-polish` (D2, D6), which started meanwhile; A3 reuses its solve for any foreground object. Port slots shifted to n=7–14 across the plan because `camera-polish` holds n=6.
+- rev 1 (2026-10-24): completed; squash-merged into `main` by the cloud orchestrator under `after-proof` (#17).

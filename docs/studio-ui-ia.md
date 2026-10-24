@@ -273,7 +273,16 @@ jump, screen direction, eyeline) with each fix; flagged cuts are listed as jump
 buttons. On the timeline Shots lane a cut that breaks a rule carries a red or
 amber tag ("180°", "JUMP"), and a cut with a transition its tag ("DISS").
 
-Below Cut, a **Motivation** section adds a story beat at the playhead (label
+Below Cut, a **Shot check** section reads `camera.checkShots`
+over every shot: the count flagged, with a jump button per flagged shot, then the
+selected shot's issues (Blocked, Inside the set, Crop at a joint), each with its
+severity, frames and fix. **Apply fix** runs `camera.fixShot` (one undo entry), and
+a Depth line names what stands in front of and behind the subject. On the Shots
+lane a flagged shot carries a red or amber bar ("BLOCKED", "IN SET", "CROP")
+across the frames involved. The plan diagram rings the current shot's foreground
+props and people (dashed orange, "FG").
+
+Below Shot check, a **Motivation** section adds a story beat at the playhead (label
 and kind, `story.addBeat`), lists the beats with a remove each, and reads out
 why each move of the selected shot happens ("The camera pushes in as Mara makes
 her admission"); a flagged move shows its rule, severity and fix, and **Apply

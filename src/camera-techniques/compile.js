@@ -10,7 +10,8 @@ import { compileMove } from "./moves.js";
 import { slotOf } from "./resolve.js";
 import { focalMmToFov, nearestPrime } from "../shot.js";
 import { capabilityWords } from "../camera-capabilities/words.js";
-import { composeKeys, compositionLabel, compositionWords, normalizeComposition } from "../camera-coverage/composition.js";
+import { composeKeys, compositionLabel, compositionWords, eyeLineOf, framingOf, normalizeComposition } from "../camera-coverage/composition.js";
+import { boxCover, foregroundFraming } from "./foreground.js";
 
 const fail = (code, message) => { throw Object.assign(new Error(message), { code }); };
 const SHARED = ["speed", "focalMm", "direction", "degrees", "side"];
@@ -117,6 +118,14 @@ export function compileStack(stack, ctx, shared = {}) {
 		if (state.size) notes.push("a point-of-view shot takes its size from the eyes, so the stack's size was not used");
 		frameCoverage = (st) => povFraming(viewer, target, st, filmback);
 	} else if (recipe.reverse) frameCoverage = (st) => reverseFraming(subject, ctx.camera, st, filmback);
+	// A composition's foreground (depth-staging A3): the over-the-shoulder's solve, past a named prop or character (ctx.foreground { id, name, box }).
+	const composition = normalizeComposition(ctx.composition), near = composition?.foreground && ctx.foreground?.box ? ctx.foreground : null;
+	let foreground = null;
+	if (near && (frameCoverage || members)) notes.push(`${coverage.entry.name} keeps its own framing, so ${near.name} was not solved into the foreground`);
+	else if (near) {
+		foreground = near;
+		frameCoverage = (st) => foregroundFraming(subject, near, st, filmback, { share: composition.foreground.share, eyeLineY: eyeLineOf(composition.headroom) });
+	} else if (composition?.foreground) notes.push(`nothing named ${composition.foreground.id} stands in the scene to put in the foreground`);
 
 	// A coverage framing has no size ladder of its own: a move rescales its distance (or its lens) around the aim.
 	const frameAt = (over = {}) => {
@@ -137,10 +146,15 @@ export function compileStack(stack, ctx, shared = {}) {
 	}
 	let keys = compiled.keys?.map(({ offset, framing, ease }) => ({ frame: shot.startFrame + offset, framing, ...(ease ? { ease } : {}) })) ?? null;
 	// A composition (camera-coverage) turns each key's aim so the subject's eyes sit on a third or the centre with lead room.
-	const composition = normalizeComposition(ctx.composition), composable = composition && keys && !members && !coverage?.entry.recipe.pov;
-	if (composition && !composable) notes.push("a composition places one subject on keyed framings; this stack keeps its own framing");
-	let composedTarget = null;
+	// A solved foreground already aimed the eyes onto the far third, so the composition reports it rather than turning the aim again.
+	// A foreground the stack could not take (an over-the-shoulder keeps its own) leaves the aim alone too.
+	const composable = composition && keys && !members && !coverage?.entry.recipe.pov && !composition.foreground, side = state.side === "left" ? -1 : 1;
+	if (composition && !composable && !composition.foreground) notes.push("a composition places one subject on keyed framings; this stack keeps its own framing");
+	let composedTarget = foreground && keys ? { x: side / 3, y: eyeLineOf(composition.headroom), ahead: 0 } : null;
 	if (composable) { const composed = composeKeys(keys, subject, composition, filmback); keys = composed.keys; composedTarget = composed.target; notes.push(...composed.notes); }
+	const placedBy = composable || Boolean(foreground && keys);
+	const foregroundShare = placedBy && foreground ? Math.round(boxCover(framingOf(keys[0].framing, filmback), foreground.box, side, filmback.aspectRatio ?? 16 / 9).cover * 1000) / 1000 : null;
+	if (foregroundShare !== null && Math.abs(foregroundShare - composition.foreground.share) > 0.02) notes.push(`${foreground.name} stands too near ${subject.name ?? "the subject"} for this size to hold it at ${Math.round(composition.foreground.share * 100)} % of the frame; it covers ${Math.round(foregroundShare * 100)} %`);
 	if (keys && new Set(keys.map((key) => key.frame)).size !== keys.length) fail("TARGET_NOT_READY", `The shot is too short (${length} frames) to hold this move's ${keys.length} keys.`);
 	// The slate names the nearest real prime, as every other studio slate does (shot.js nearestPrime).
 	const prime = (mm) => nearestPrime(focalMmToFov(mm, filmback.sensorId, filmback.aspectRatio), filmback.sensorId, filmback.aspectRatio);
@@ -153,12 +167,14 @@ export function compileStack(stack, ctx, shared = {}) {
 		stack: items.map(({ entry, params }) => ({ id: entry.id, params: Object.fromEntries(Object.entries(params).filter(([, value]) => value !== null && value !== undefined)) })),
 		subjectIds, keys, rail: compiled.rail ?? null, expectedMove: compiled.expect, sizes: compiled.sizes ?? null, degrees: compiled.degrees ?? null,
 		label: [...tags, ...(lensText ? [lensText] : [])].join(" · "),
-		words: [...items.filter(({ entry }) => hasGeometry(entry) && slotOf(entry) !== "move" && !entry.requires.length).map(({ entry }) => entry.prompt), ...(composable ? [compositionWords(composedTarget)] : [])],
+		words: [...items.filter(({ entry }) => hasGeometry(entry) && slotOf(entry) !== "move" && !entry.requires.length).map(({ entry }) => entry.prompt), ...(placedBy ? [compositionWords(composedTarget)] : []),
+			...(foregroundShare !== null ? [`${foreground.name} soft in the foreground`] : [])],
 		moveWords: move && !move.entry.requires.length ? move.entry.prompt : null,
 		promptOnly, notes: [...new Set(notes)],
 		// What camera.set writes for roll, rack focus, shake, mount, slow motion and whip-pan blur, and its words.
 		capabilities, capabilityWords: capabilityWords(capabilities, { castName }),
 		members: members && members.map((row) => ({ id: row.id, inFrame: inFrame(base, row, filmback) })),
-		...(composable ? { composition: { ...composition, label: compositionLabel(composition), target: composedTarget } } : {}),
+		...(placedBy ? { composition: { ...composition, label: foreground ? `${foreground.name} in the foreground · ${composition.headroom} headroom` : compositionLabel(composition), target: composedTarget } } : {}),
+		...(foregroundShare !== null ? { foreground: { id: foreground.id, name: foreground.name, share: composition.foreground.share, measured: foregroundShare, side: state.side } } : {}),
 	};
 }

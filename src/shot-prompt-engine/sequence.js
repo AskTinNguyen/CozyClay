@@ -13,6 +13,7 @@ import { continuityLine } from "./continuity.js";
 import { referenceManifest } from "./references.js";
 import { PREVIS_WORDS, clipsFor, moveTag, profileById, profileWarnings } from "../model-profiles.js";
 import { checkMotivation, motivationReason } from "../camera-motivation/check.js";
+import { depthWords, shotLayers } from "../camera-depth/layers.js";
 import { checkStructure, structureWords } from "../intensity-curve/structure.js";
 
 const DEFAULT_LOOK = "cinematic, natural light";
@@ -54,6 +55,7 @@ function beatLines(beat, { fps, profile, actions, clipLabel, story = [], motives
 		`   Camera: ${tag}${beat.camera}.`,
 		`   Measured: ${beat.measured}.`,
 		`   Frame: ${beat.size}; ${beat.angle}; lens ${beat.lens}${beat.composition ? `; ${beat.composition}` : ""}.`,
+		...(beat.depth ? [`   Depth: ${beat.depth}.`] : []),
 		...(beat.rig.length ? [`   Rig: ${beat.rig.join("; ")}.`] : []),
 		...(beat.coverage ? [`   Coverage: ${beat.coverage}.`] : []),
 		...actions.map((action) => `   Action ${timecode(from + action.frame - beat.startFrame, fps)} (f${action.frame}${action.takeFrame !== action.frame ? `, take f${action.takeFrame}` : ""}): ${action.words}.`),
@@ -78,6 +80,8 @@ export function buildSequencePrompt(document, { range = null, profile: profileId
 	let delivered = 0;
 	const beats = shots.map((shot, i) => {
 		const beat = { ...describeBeat(document, shot, { scene, index: i + 1, first: shot === all[0] }), shotNumber: all.indexOf(shot) + 1, deliveryStart: delivered };
+		// What stands in front of and behind the subject (depth-staging): the cast and the set's props, through the opening camera.
+		beat.depth = depthWords(shotLayers(shot, beat.measure.start, beat.subjectId, { cast: scene.cast, objects: document.objects ?? [], aspectRatio: document.filmback?.aspectRatio, frameCount: document.frameCount }), beat.subjectName);
 		delivered += beat.frames;
 		return beat;
 	});

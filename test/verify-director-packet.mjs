@@ -54,7 +54,7 @@ test('A1: master and coverage: cast, shot rows and flags from the checks that ex
     assert.match(packet.shots[2].transitionIn, /12-frame dissolve/);
     assert.deepEqual(packet.shots[3].capabilities, ['a Dutch angle, the horizon tilted 12 degrees, falling to the right']);
     // Flags: the push-in has no beat (motivation); cut and coverage report clean; no shot aims at a model, so that check is left out.
-    assert.deepEqual(packet.checks.map((row) => row.id), ['cuts', 'coverage', 'motivation', 'structure']);
+    assert.deepEqual(packet.checks.map((row) => row.id), ['cuts', 'coverage', 'motivation', 'structure', 'depth']);
     assert.deepEqual(packet.shots.flatMap((row) => row.flags.map((flag) => [row.number, flag.check, flag.rule])), [[2, 'motivation', 'unmotivated']]);
     // The intensity section (intensity-curve landed): the curve per shot, its words, and each row's combined value.
     assert.match(packet.intensity.words, /^intensity /);
@@ -83,7 +83,7 @@ test('A1: beats when present, a range, cut flags and the shot model check', () =
     const range = directorPacket({ ...document, shots: aimed }, { range: { from: 2, to: 4 } });
     assert.deepEqual(range.shots.map((row) => row.name), shots.slice(1, 4).map((shot) => shot.name));
     assert.deepEqual([range.range.from, range.range.to, range.shots[0].timecode.in], [2, 4, '00:00:00:00']);
-    assert.deepEqual(range.checks.map((row) => row.id), ['cuts', 'coverage', 'motivation', 'shot', 'structure']);
+    assert.deepEqual(range.checks.map((row) => row.id), ['cuts', 'coverage', 'motivation', 'shot', 'structure', 'depth']);
     assert.ok(range.shots[1].flags.some((flag) => flag.check === 'shot' && /Veo 3\.1/.test(flag.message)), JSON.stringify(range.shots[1].flags));
     assert.equal(range.shots[1].targetModel, 'veo-3.1');
     // Mirror shot 3's camera across the Mara-Joon line: the cut into it and out of it cross the line.
@@ -135,5 +135,19 @@ test('A2: triangle dialogue plan: thirteen cameras, the three pair lines, three 
     assertFits(plan, 'triangle');
     assert.equal(JSON.stringify(directorPacket(structuredClone(document))), JSON.stringify(packet), 'byte-identical');
     console.log(`PASS A2 triangle ${JSON.stringify(plan.counts)}; lines ${kinds(plan, 'line').map((row) => row.label).join(', ')}`);
+  } finally { f.dispose(); }
+});
+
+test('depth staging in the packet: a pillar between shot 1 and its subject is that shot\'s depth flag, with the fix', () => {
+  const { f, document } = coveredSequence();
+  try {
+    const shot = document.shots[0], lens = shot.cameraKeys[0].framing.pos, subject = document.cast.find((row) => row.id === (shot.coverage?.subjectId ?? document.cast[0].id));
+    const pillar = { id: 'pillar', name: 'Pillar', renderer: 'cylinder', x: (lens.x + subject.x) / 2, y: 0, z: (lens.z + subject.z) / 2, rot: 0, scaleX: 0.5, scaleY: 3, scaleZ: 0.5, footprint: { width: 1, depth: 1 }, height: 1 };
+    const packet = directorPacket({ ...document, objects: [pillar] });
+    const depth = packet.shots[0].flags.filter((row) => row.check === 'depth');
+    assert.deepEqual(depth.map((row) => row.rule), ['occluded'], JSON.stringify(packet.shots[0].flags));
+    assert.match(depth[0].message, /Pillar hides \w+'s eyes from the lens on \d+ of \d+ sampled frames .*\. Fix: .+\.$/);
+    assert.match(packet.checks.find((row) => row.id === 'depth').summary, /^5 shots checked against the set, [1-5] flagged$/);
+    console.log(`PASS depth in the packet: ${depth[0].message}`);
   } finally { f.dispose(); }
 });

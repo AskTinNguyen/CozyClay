@@ -17,6 +17,7 @@ import { moveSequencePhrase } from '../../src/camera-move.js';
 import { shotCaptureMeta } from '../../src/shot-meta.js';
 import { buildShotPrompt } from '../../src/shot-prompt.js';
 import { transitionWords } from '../../src/camera-coverage/transitions.js';
+import { createSceneObject } from '../../src/scene-objects.js';
 
 test('a covered sequence becomes one brief with a beat per shot', () => {
   const { f, document } = coveredSequence();
@@ -142,6 +143,24 @@ test('camera-motivation: the brief states why a move happens', () => {
     try { assert.match(buildSequencePrompt(walk.document).text, /^ {3}Motive: the camera tracks with Mara\.$/m, 'a tracking two-shot travels with its subject'); } finally { walk.f.dispose(); }
     assert.equal(buildSequencePrompt(structuredClone(documentOf(f))).text, out.text, 'byte-identical on a second run');
     console.log(`PASS A7 motive: ${out.text.split('\n').find((line) => line.startsWith('   Motive: ')).trim()}`);
+  } finally { f.dispose(); }
+});
+
+test('depth-staging A4: each beat names what stands in front of and behind its subject, byte-identical across runs', () => {
+  const { f, document } = coveredSequence({ roll: false, dissolve: false });
+  try {
+    // A window on the wall behind Mara and a floor lamp behind Joon, both on the line between them.
+    const window = { ...createSceneObject('cube'), id: 'window', name: 'Window', x: -4.5, z: 0, scaleX: 0.1, scaleY: 2.2, scaleZ: 2.4 };
+    const lamp = { ...createSceneObject('cylinder'), id: 'lamp', name: 'Floor lamp', x: 6.5, z: 0, scaleX: 0.3, scaleY: 1.6, scaleZ: 0.3 };
+    const doc = { ...document, objects: [window, lamp] }, out = buildSequencePrompt(doc), lines = out.text.split('\n');
+    const depth = out.beats.map((beat) => beat.depth);
+    const beatOf = (name) => out.beats.find((beat) => beat.title.endsWith(name));
+    assert.equal(beatOf('MS Mara').depth, "Joon's shoulder soft in the foreground, the window behind", JSON.stringify(depth));
+    assert.match(beatOf('MS Joon').depth, /Mara's shoulder soft in the foreground, the floor lamp behind|the floor lamp behind/, JSON.stringify(depth));
+    const at = lines.findIndex((line) => line.endsWith('MS Mara'));
+    assert.ok(lines.slice(at, at + 7).includes("   Depth: Joon's shoulder soft in the foreground, the window behind."), lines.slice(at, at + 7).join('\n'));
+    assert.equal(Buffer.from(buildSequencePrompt(structuredClone(doc)).text).equals(Buffer.from(out.text)), true, 'byte-identical on a second run');
+    assert.ok(!buildSequencePrompt(document).text.includes('window'), 'without props the depth names the cast only');
   } finally { f.dispose(); }
 });
 

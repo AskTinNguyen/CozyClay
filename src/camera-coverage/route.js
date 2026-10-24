@@ -8,6 +8,7 @@
 import { normalizePhrase, parseRequest } from "../camera-techniques/resolve.js";
 import { resolveCameraRequest } from "./resolve.js";
 import { resolveMotivationRequest } from "../camera-motivation/resolve.js";
+import { parseForeground, resolveShotCheck } from "../camera-depth/resolve.js";
 import { resolveStructureRequest } from "../intensity-curve/resolve.js";
 
 // Everyday senses of "shot", in CozyClay's own grouping (after the cinematic-atlas generator's false-positive idea).
@@ -46,16 +47,20 @@ const techniqueConfidence = (matched) => (matched.some((row) => row.via === "moo
 
 /**
  * A request -> { action, args, via, matched, confidence, resolved?, dropped?, reason? }.
- * action is camera.applyTechnique, camera.cover, camera.checkCuts, camera.checkCoverage, camera.setLine, a motivation action (camera-motivation/resolve.js), camera.checkStructure (intensity-curve/resolve.js), or "none" (no camera action; reason says why).
+ * action is camera.applyTechnique, camera.cover, camera.checkCuts, camera.checkCoverage, camera.setLine, camera.checkShots, a motivation action (camera-motivation/resolve.js), camera.checkStructure (intensity-curve/resolve.js), or "none" (no camera action; reason says why).
+ * A foreground in the words ("put the lamp in the foreground", camera-depth/resolve.js) rides on the composition.
  * @param {string} text
- * @param {{cast?: Array<{id:string,name?:string}>}} [options]
+ * @param {{cast?: Array<{id:string,name?:string}>, props?: Array<{id:string,name?:string}>}} [options]
  */
-export function routeCameraRequest(text, { cast = [] } = {}) {
-	const motivated = resolveMotivationRequest(text) ?? resolveStructureRequest(text);
+export function routeCameraRequest(text, { cast = [], props = [] } = {}) {
+	const motivated = resolveMotivationRequest(text) ?? resolveStructureRequest(text) ?? resolveShotCheck(text);
 	if (motivated) return motivated;
 	const phrase = normalizePhrase(text), everyday = notCameraShot(phrase);
-	const rest = everyday ? phrase.replace(everyday.phrase, " ") : phrase;
-	const routed = resolveCameraRequest(rest, { cast });
+	const near = parseForeground(phrase, { cast, props }), rest = [everyday?.phrase, near?.phrase].filter(Boolean).reduce((left, words) => left.replace(words, " "), phrase);
+	const composed = resolveCameraRequest(rest, { cast });
+	const routed = near && (!composed || composed.action === "camera.applyTechnique")
+		? { action: "camera.applyTechnique", args: { ...composed?.args, composition: { ...composed?.args.composition, foreground: near.foreground } }, via: composed ? "composition and foreground words" : "foreground words", matched: [...near.matched, ...(composed?.matched ?? [])], confidence: composed?.confidence ?? "high" }
+		: composed;
 	if (routed && routed.action !== "camera.applyTechnique") return routed;
 	const parsed = parseRequest(rest.replace(COMPOSITION_WORDS, " "), { cast }), named = parsed.matched.filter((row) => row.via !== "mood");
 	// Beside an everyday shot, or beside composition words, a mood alone does not ask for a technique.
