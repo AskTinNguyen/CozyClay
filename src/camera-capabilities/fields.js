@@ -63,7 +63,7 @@ function repairMount(value) {
 	if (!plain(value) || !castId(value.characterId)) return null;
 	const bone = MOUNT_BONES.includes(value.bone) ? value.bone : "chest";
 	const raw = plain(value.offset) ? value.offset : {};
-	const fallback = bone === "back" ? { side: 0, up: 0.25, forward: -0.6 } : { side: 0, up: 0.05, forward: 0.5 };
+	const fallback = bone === "back" ? { side: 0, up: 0.25, forward: -0.6 } : { side: 0, up: 0.25, forward: 0.6 };
 	const offset = Object.fromEntries(["side", "up", "forward"].map((axis) => [axis, round(clamp(finite(raw[axis]) ? raw[axis] : fallback[axis], LIMITS.offset), 3)]));
 	return { characterId: value.characterId, bone, offset, look: MOUNT_LOOKS.includes(value.look) ? value.look : bone === "back" ? "forward" : "face" };
 }

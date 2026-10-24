@@ -24,7 +24,9 @@ function resources() {
 	if (shared) return shared;
 	const target = (samples) => new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples, depthBuffer: samples > 0 });
 	const accumulate = new THREE.ShaderMaterial({ vertexShader: VERTEX, fragmentShader: ACCUMULATE, uniforms: { tSample: { value: null }, weight: { value: 1 } },
-		blending: THREE.AdditiveBlending, depthTest: false, depthWrite: false, transparent: true, toneMapped: false });
+		// Plain sum (one x source + one x destination): the weight is in the shader, not in alpha.
+		blending: THREE.CustomBlending, blendSrc: THREE.OneFactor, blendDst: THREE.OneFactor, blendSrcAlpha: THREE.OneFactor, blendDstAlpha: THREE.OneFactor,
+		depthTest: false, depthWrite: false, transparent: true, toneMapped: false });
 	const resolve = new THREE.ShaderMaterial({ vertexShader: VERTEX, fragmentShader: RESOLVE, uniforms: { tAccum: { value: null } }, depthTest: false, depthWrite: false });
 	const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), accumulate), scene = new THREE.Scene();
 	quad.frustumCulled = false;

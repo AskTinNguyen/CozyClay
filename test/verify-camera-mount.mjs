@@ -19,9 +19,9 @@ const snorri = makeShot({ mount: { characterId: "walker", bone: "chest" } });
 const landmark = { x: -2, y: 1.2, z: -6 }; // behind the walker, in the lens looking back at the face
 const spread = (values) => Math.max(...values) - Math.min(...values);
 
-check("the mount is stored and repaired with its defaults (chest, 0.5 m out, looking at the face)", () => {
+check("the mount is stored and repaired with its defaults (chest, 0.6 m out and 0.25 m up, looking at the face)", () => {
 	const state = readShotAuthoring(serializeShotAuthoring({ shots: [snorri], frameCount: 96 })).state;
-	assert.deepEqual(state.shots[0].camera.mount, { characterId: "walker", bone: "chest", offset: { side: 0, up: 0.05, forward: 0.5 }, look: "face" });
+	assert.deepEqual(state.shots[0].camera.mount, { characterId: "walker", bone: "chest", offset: { side: 0, up: 0.25, forward: 0.6 }, look: "face" });
 	assert.equal(createCameraBlock({ mount: { characterId: "walker", bone: "back" } }).mount.look, "forward");
 	assert.equal(createCameraBlock({ mount: { bone: "chest" } }).mount, undefined, "a mount needs a character");
 });
@@ -29,8 +29,8 @@ check("the mount is stored and repaired with its defaults (chest, 0.5 m out, loo
 check("the camera follows the bone per frame: chest height, in front of the body", () => {
 	for (const frame of [0, 30, 60, 95]) {
 		const camera = sampleAt(scene, snorri, frame).camera, placed = castPlacementAt(scene, snorri, "walker", frame);
-		assert.ok(Math.abs(camera.pos.y - (BONE_HEIGHT.chest * 1.8 + 0.05)) < 1e-9);
-		assert.ok(Math.abs(Math.hypot(camera.pos.x - placed.x, camera.pos.z - placed.z) - 0.5) < 1e-9, "half a metre off the chest");
+		assert.ok(Math.abs(camera.pos.y - (BONE_HEIGHT.chest * 1.8 + 0.25)) < 1e-9);
+		assert.ok(Math.abs(Math.hypot(camera.pos.x - placed.x, camera.pos.z - placed.z) - 0.6) < 1e-9, "0.6 m off the chest");
 	}
 });
 
