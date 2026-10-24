@@ -9,7 +9,7 @@
 const DEG = 180 / Math.PI;
 
 /** The hips' heading (degrees, 0 faces +Z, + toward +X) per frame of a baked take v3, or [] without one. */
-export function takeYaw(take) {
+function takeYaw(take) {
 	const bones = take?.bones ?? [], frames = take?.frameCount ?? 0, at = Math.max(0, bones.indexOf("Hips"));
 	if (!take?.rot || !bones.length) return [];
 	const yaw = [];

@@ -66,8 +66,9 @@ export function buildSequencePrompt(document, { range = null, profile: profileId
 	const fps = document.fps ?? 24, profile = profileById(profileId), scene = engineScene(document);
 	const shots = shotsInRange(document, range);
 	if (!shots.length) return { text: "SEQUENCE: no shots in this range.", beats: [], warnings: [], profile, aspect: document.aspect ?? null, seconds: 0, clips: [], references: referenceManifest([], document), continuity: null, actions: [] };
-	const opening = shotsInRange(document)[0];
-	const beats = shots.map((shot, i) => describeBeat(document, shot, { scene, index: i + 1, first: shot === opening }));
+	// shotNumber: the shot's place in the whole sequence, which names its keyframe pack folder.
+	const all = shotsInRange(document);
+	const beats = shots.map((shot, i) => ({ ...describeBeat(document, shot, { scene, index: i + 1, first: shot === all[0] }), shotNumber: all.indexOf(shot) + 1 }));
 	const aspects = [...new Set(shots.map((shot) => shot.aspect ?? document.aspect).filter(Boolean))], aspect = aspects[0] ?? null;
 	const start = shots[0].startFrame, seconds = beats.reduce((sum, beat) => sum + beat.frames / fps, 0);
 	const actions = (document.motion ?? []).flatMap((take) => motionBeats(take)).sort((a, b) => a.frame - b.frame || a.name.localeCompare(b.name));

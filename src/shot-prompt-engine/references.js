@@ -17,8 +17,8 @@ function imageExtension(dataUrl) {
 	return EXT[mime] ?? null;
 }
 
-/** Where a beat's files sit in the pack: the keyframe pack's `<index>-<slug>` folder. */
-export const beatFolder = (beat) => `${beat.index}-${slugifyTitle(beat.title)}`;
+/** Where a beat's files sit in the pack: the keyframe pack's `<shot number>-<slug>` folder. */
+const beatFolder = (beat) => `${beat.shotNumber ?? beat.index}-${slugifyTitle(beat.title)}`;
 
 const nameOf = (row) => String(row.subject ?? row.name ?? row.id).split(",")[0].trim();
 
@@ -26,7 +26,7 @@ const nameOf = (row) => String(row.subject ?? row.name ?? row.id).split(",")[0].
  * The reference pictures a pack carries besides the frames: { name, dataUrl } per cast sheet and the set.
  * @param {object} document  { cast: [{ id, subject, identityImage? , hidden? }], set: { image? } }
  */
-export function referenceImages(document) {
+function referenceImages(document) {
 	const out = [];
 	for (const row of (document.cast ?? []).filter((entry) => !entry.hidden)) {
 		const ext = imageExtension(row.identityImage);
@@ -62,7 +62,7 @@ export function referenceManifest(beats, document) {
 }
 
 /** The composition guide of a beat as SVG text: the frame, its thirds, and the measured eye point with its numbers. */
-export function compositionGuideSvg(beat, aspectRatio = 16 / 9) {
+function compositionGuideSvg(beat, aspectRatio = 16 / 9) {
 	const width = 640, height = Math.round(width / aspectRatio), placed = beat.placed ?? { screenX: 0.5, eyeLineY: 0.5, inFront: false };
 	const x = r3(placed.screenX * width), y = r3(placed.eyeLineY * height), thirds = [1, 2].map((k) => [r3((k * width) / 3), r3((k * height) / 3)]);
 	const label = `${beat.index}. ${beat.title}: ${beat.subjectName} at ${r3(placed.screenX)} across, eyes ${r3(placed.eyeLineY)} down`.replace(/[<>&"]/g, "");
@@ -74,4 +74,33 @@ export function compositionGuideSvg(beat, aspectRatio = 16 / 9) {
 		`<text x="12" y="${height - 14}" fill="#e5e7eb" font-family="sans-serif" font-size="16">${label}</text>`,
 		"</svg>",
 	].filter(Boolean).join("\n") + "\n";
+}
+
+/** A data URL's bytes (base64 or percent-encoded). */
+function dataUrlBytes(dataUrl) {
+	const comma = dataUrl.indexOf(","), head = dataUrl.slice(0, comma), body = dataUrl.slice(comma + 1);
+	if (!head.includes(";base64")) return new TextEncoder().encode(decodeURIComponent(body));
+	const binary = atob(body), bytes = new Uint8Array(binary.length);
+	for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+	return bytes;
+}
+
+/**
+ * The files a keyframe pack carries for a brief, beside each shot's frames: sequence-prompt.txt and
+ * references.json at the root, each beat's composition.svg in its folder, the character sheets and
+ * the set under references/. Every name the manifest lists is among them or a frame the pack writes.
+ * @param {object} brief     buildSequencePrompt's answer
+ * @param {object} document  the sequence document
+ * @returns {Array<{ name: string, data: string | Uint8Array }>}
+ */
+export function sequencePackFiles(brief, document) {
+	const aspectRatio = document.filmback?.aspectRatio ?? 16 / 9;
+	return [
+		{ name: "sequence-prompt.txt", data: `${brief.text}
+` },
+		{ name: "references.json", data: `${JSON.stringify(brief.references, null, 2)}
+` },
+		...brief.beats.filter((beat) => beat.placed).map((beat) => ({ name: `${beatFolder(beat)}/composition.svg`, data: compositionGuideSvg(beat, aspectRatio) })),
+		...referenceImages(document).map((image) => ({ name: image.name, data: dataUrlBytes(image.dataUrl) })),
+	];
 }

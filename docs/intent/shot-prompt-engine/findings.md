@@ -27,3 +27,11 @@ Discoveries that may change the intent. The worker adds entries; the orchestrato
 
 - What I did: Kling 2.0 became Kling 3.0 (`kling-3`; the stored id `kling-2` reads as it, so older shot documents keep their target), Veo 3 became Veo 3.1 with 4/6/8 s (`veo-3` reads as it), Seedance 2.5's floor moved from 2 s (a reference-clip limit) to its 4 s output minimum, and MiniMax H3's hosted API got its own 15 s preset beside the self-hosted 10 s one. Existing tests that encoded the old numbers (`test/verify-model-presets.mjs`, `test/verify-shot-meta.mjs`, `test/qa-shot-meta-browser.mjs`) were updated to the new facts.
 - Proposed amendment: none. Re-check the unverified rows when Kling publishes its API parameters.
+
+## F-2: Studio agent prompt budget raised from 12,790 to 13,400 characters (blocking: no; decision)
+
+- Evidence: `STUDIO_SYSTEM_PROMPT` was 12,789 of 12,790 on base 8a15bbca (camera-techniques F-1). With the camera library paragraph it is 13,355 (`node -e "import('./bin/agent/studio-prompt.mjs').then(m=>console.log(m.STUDIO_SYSTEM_PROMPT.length))"` -> `13355`).
+- What I did (A6, recorded decision): restored `shot.setCameraMode { mode: keys | follow | rail } switches a shot's camera.` and added one camera-library paragraph after `Film terms ...: camera.applyTechnique { request }.`: the receipt's `checks.moveVerified`, `camera.set` / `camera.setKey` capabilities (roll, focus and rack focus, shake, mount, speed, shutter), `camera.cover` patterns on one side of the line, `camera.setTransition`, and `render_prompt { scope: "sequence", profile }` (+566 characters). The cap is now 13,400 in `test/motion3/verify-motion3-prompt.mjs` and `test/verify-camera-coverage-resolve.mjs` (which also checks the new sentences). The motion part (2,690 cap) is untouched; `node test/verify-agent-context-budget.mjs` still passes (`turn-3 system prompt: 25248 bytes after the hook`).
+- Why: without these sentences the agent knew the camera library only from action descriptions it has to fetch first; the three camera phases added four commands and an MCP scope the prompt never named. 45 characters of headroom stay for small fixes; a larger addition should raise the cap again on purpose.
+- This is not a lint baseline (`tools/*-baseline.json` unchanged).
+- Proposed amendment: none.

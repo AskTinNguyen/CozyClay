@@ -35,11 +35,7 @@ import { rankingRow, scoreSculptAgainstReference } from "../src/sculpt-compare.j
 import { DEFAULT_POSE } from "../src/poses.js";
 
 import {
-	CAMERA_MOVES,
 	DEFAULT_SENSOR_FORMAT,
-	IMAGE_MODELS,
-	VIDEO_MODELS,
-	composePrompt,
 	deriveShot,
 	focalMmToFov,
 	nearestPrime,
@@ -72,8 +68,9 @@ import { classifyMove, captureFraming, moveSlate } from "../src/camera-move.js";
 import { DEFAULT_PREVIS_MODE, PREVIS_MODES, createProjectDocument, readProjectDocument } from "../src/project.js";
 import { kindRefusal } from "../src/character-kind.js";
 import { documentWithCamera, splitSavedCamera } from "./project-camera.mjs";
-import { cameraTechniqueTools, promptTechnique } from "./camera-technique-tools.mjs";
-import { cameraCapabilityTools, cameraCoverageTools, COVERAGE_TOOL_ANNOTATIONS, promptCapabilities } from "./camera-capability-tools.mjs";
+import { cameraTechniqueTools } from "./camera-technique-tools.mjs";
+import { cameraCapabilityTools, cameraCoverageTools, COVERAGE_TOOL_ANNOTATIONS } from "./camera-capability-tools.mjs";
+import { renderPromptTool } from "./render-prompt-tool.mjs";
 
 /** The authoring state. One scene document, one camera, one project name. */
 export const state = {
@@ -326,9 +323,6 @@ const framing = () => {
 };
 
 const currentShot = () => deriveShot(state.camera, subject(), fov(), undefined, filmback());
-
-const modelById = (id) =>
-	[...VIDEO_MODELS, ...IMAGE_MODELS].find((m) => m.id === id) ?? null;
 
 /** Copy the protocol's deliberately small live description into the existing
  * scene shape. Formatting and film vocabulary below then remain exactly the
@@ -1474,72 +1468,7 @@ export const createToolHandlers = ({ projectRootPromise } = {}) => {
 			},
 		),
 
-		tool(
-			"render_prompt",
-			{
-				title: "Render the AI prompt for this shot",
-				description:
-					"Turn the current camera, cast and set into a prompt for an AI image or video model. " +
-					"The prompt carries the real framing — shot size, lens, angle and level — so the " +
-					"generated frame matches the blocking.",
-				inputSchema: {
-					mode: z.enum(["image", "video"]).default("video").describe("still or moving"),
-					model: z
-						.string()
-						.optional()
-						.describe(
-							`target model id. video: ${VIDEO_MODELS.map((m) => m.id).join(", ")}. ` +
-								`image: ${IMAGE_MODELS.map((m) => m.id).join(", ")}`,
-						),
-					environment: z
-						.string()
-						.describe('the real setting, e.g. "a rain-slicked Seoul side street at night"'),
-					style: z
-						.string()
-						.default("cinematic film still, natural light")
-						.describe('look and grade, e.g. "shot on 35mm film, warm practical light"'),
-					camera_move: z
-						.string()
-						.default(CAMERA_MOVES[0])
-						.describe(`camera move. Known: ${CAMERA_MOVES.filter((m) => m !== "Custom…").join(", ")}`),
-					pose_phrase: z.string().default("").describe("what character A is doing"),
-					pose2_phrase: z.string().default("").describe("what character B is doing"),
-				},
-			},
-			async ({ mode, model, environment, style, camera_move, pose_phrase, pose2_phrase }) => {
-				if (liveHub?.connected) {
-					try {
-						await refreshLiveDescription();
-					} catch (error) {
-						return liveError(error);
-					}
-				}
-				// An applied camera technique speaks for a default camera_move, in the words its classifier proved.
-				const st = stage(), technique = promptTechnique(state, scene(), Boolean(liveHub?.connected)), byTechnique = Boolean(technique) && camera_move === CAMERA_MOVES[0];
-				const known = CAMERA_MOVES.includes(camera_move);
-				// composePrompt frames two subjects: the one the camera is on, then the
-				// next visible member of the cast.
-				const framed = findCharacter(state.focus) ?? st.characters[0];
-				const other = st.characters.find((c) => c !== framed && !c.hidden) ?? null;
-				const prompt = composePrompt({
-					mode,
-					model: modelById(model) ?? undefined,
-					shot: currentShot(),
-					subject: framed.subject,
-					subject2: other?.subject ?? null,
-					posePhrase: pose_phrase,
-					pose2Phrase: other ? pose2_phrase : "",
-					environment,
-					style,
-					cameraMove: known && !byTechnique ? camera_move : "Custom…",
-					customMove: byTechnique ? technique.phrase : known ? "" : camera_move,
-					hasCharSheet: st.hasCharSheet === true,
-					hasEnvSheet: false,
-				});
-				const rig = promptCapabilities(state, scene(), Boolean(liveHub?.connected)).filter((words) => !technique?.phrase?.includes(words)); // roll, focus, shake, mount, speed, shutter the technique has not said
-				return text(`${slateLine(currentShot())}${technique ? `\ntechnique ${technique.label}: ${technique.phrase}` : ""}${rig.length ? `\nrig ${rig.join("; ")}` : ""}\n\n${prompt}${rig.length ? ` Camera: ${rig.join("; ")}.` : ""}`);
-			},
-		),
+		renderPromptTool({ tool, z, text, liveError, state, scene, stage, findCharacter, filmback, currentShot, refreshLiveDescription, isLive: () => Boolean(liveHub?.connected) }),
 
 		tool(
 			"mark_camera_move",
