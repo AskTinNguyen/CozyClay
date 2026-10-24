@@ -2,6 +2,7 @@
 	"category": "negative",
 	"label": "negatives",
 	"scenarios": [
+		{"id": "neg-shot-down-guard", "tier": "core", "category": "negative", "request": "the guard was shot down in the corridor", "cast": ["mara", "joon"], "expected": {"action": "none"}, "why": "Someone being shot down is gunfire in the story, not a camera shot."},
 		{"id": "neg-whiskey", "tier": "core", "category": "negative", "request": "pour Joon a shot of whiskey", "cast": ["mara", "joon"], "expected": {"action": "none"}, "apply": {"refused": "INVALID_ARGUMENT"}, "why": "A drink, not a camera shot."},
 		{"id": "neg-gunshot-panic", "tier": "core", "category": "negative", "request": "the gunshot makes Mara panic", "cast": ["mara", "joon"], "expected": {"action": "none"}, "apply": {"refused": "INVALID_ARGUMENT"}, "why": "A gunshot; the panic is a story beat, not a request for a vertigo shot."},
 		{"id": "neg-basketball", "tier": "core", "category": "negative", "request": "Joon lines up a basketball shot and misses", "cast": ["mara", "joon"], "expected": {"action": "none"}, "why": "A basketball shot is sport."},
