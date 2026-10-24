@@ -1,6 +1,6 @@
 # Camera Polish
 
-- Rev: 1
+- Rev: 2
 - Status: active
 - Area: Camera and Shots
 - Owner: TinNguyen
@@ -28,12 +28,14 @@ Three rough edges the camera library closed with (camera-capabilities and camera
 - D1 (rev 1): Blur follows the sweep, and each sub-render is smeared over its own step. `lensPlan` measures the shutter's sweep as a share of the frame (pan and tilt angle over the field of view, zoom as the field of view change, position travel as an angle at the focus or a 3 m reference) and uses enough sub-renders for a set step, between the caller's base count and a cap (preview 32, capture 96). Each sub-render also carries its screen step (pan and tilt between it and its neighbour), and the accumulate pass averages taps along that step, so the copies join into one streak even at the cap. Deterministic: the same frame gives the same plan. Source: orchestrator.
 - D2 (rev 1): A dirty OTS is solved, not guessed. `shoulderFraming` keeps the size's lens, puts the target's eyes on the far vertical third, and moves the camera across the foreground character's back until its near shoulder covers about a quarter to a third of the frame width from the near edge. Explicit side and size params keep their meaning. Source: orchestrator.
 - D3 (rev 1): Walk bob comes from the baked take. When the mounted character has a v3 take (`hips` per frame), the mount's height and its look-back target rise and fall by the hips' height change from the take's first frame, scaled by the character. With no take it is unchanged. Source: orchestrator; camera-capabilities D4 option (b).
+- D5 (rev 2, from F-1): A mount on a take v3 rides the body the take moves: the hips' path and heading under the character's placement (as `bakeTake` stored them), averaged over one stride (±20 frames, a centred window) so the pelvis's sway and twist stay out while turns come through; the hips' rise stays per frame (the bob). Source: orchestrator under D4.
+- D6 (rev 2, from F-2): The dirty OTS aims for 36 % cover of its modelled shoulder edge (0.23 m off the axis at 82 % of stature), which renders as about a quarter of the frame on the studio's rigs; A2 checks 25–40 % of the modelled edge. Source: orchestrator under D4.
 - D4 (rev 1): The owner asked for this follow-up in this session; reserved calls are decided by the orchestrator on the recommended option and recorded. Source: L-1.
 
 ## Acceptance
 
 - A1: Whip-pan blur without banding. Proof: gate: a verify file asserting the plan's sample count scales with the sweep (a whip pan gets more sub-renders than a slow pan, capped; a held camera keeps its base count), each sub-render's smear equals the step to its neighbour so the smeared copies tile the sweep without gaps, a held camera has no smear, and the plan is identical on two calls; plus ui:shot, a whip-pan capture with 180° shutter showing a smooth smear, next to the old banded proof.
-- A2: Dirty OTS. Proof: gate: a verify file projecting the framing: the target's eyes within tolerance of the far vertical third and on the upper third line, the foreground character's near shoulder covering 20–38% of the frame width from the near edge, for both sides, two lenses and two speaker distances; `camera.cover` shot-reverse-shot still has zero cut flags; plus ui:shot, a shot-reverse-shot contact sheet through the lens.
+- A2: Dirty OTS. Proof: gate: a verify file projecting the framing: the target's eyes within tolerance of the far vertical third and on the upper third line, the foreground character's modelled near shoulder covering 25–40% of the frame width from the near edge (D6), for both sides, two lenses and two speaker distances; `camera.cover` shot-reverse-shot still has zero cut flags; plus ui:shot, a shot-reverse-shot contact sheet through the lens.
 - A3: Snorricam walk bob. Proof: gate: a verify file with a take whose hips bob: the mounted camera's height follows the hips' change within 1 mm per frame, the face's screen position stays fixed within tolerance, and a take without hips data leaves the mount as before; plus ui:shot, two frames of a walking snorricam at the top and bottom of a step, with the horizon visibly shifted.
 - A4: Readbacks and words stay true: the technique receipts (`camera.applyTechnique` for over-the-shoulder and snorricam) and the existing camera verify files pass. Proof: gate: the camera-techniques, camera-capabilities and camera-coverage verify files.
 - A5: The repository gates hold. Proof: gate: `npm run lint` (no baseline raised), `npm run build`, `node tools/run-tests.mjs --jobs 4` from Git Bash with no dev server running, under the contract's known exception.
@@ -50,3 +52,5 @@ Three rough edges the camera library closed with (camera-capabilities and camera
 ## Changelog
 
 - rev 1 (2026-10-24): created from the camera library's residual risks at the owner's request.
+- rev 1 (2026-10-24): D1 and A1 name the per-sub-render smear before any code (the cap alone leaves gaps on a fast whip).
+- rev 2 (2026-10-24): F-1 accepted as D5, F-2 as D6 (A2 range).

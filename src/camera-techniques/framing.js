@@ -99,7 +99,7 @@ export function groupFraming(members, state, filmback) {
 
 // A dirty over-the-shoulder: the foreground shoulder fills about this share of the frame width from its
 // edge, its top no lower than SHOULDER_LOW in NDC, and the target's eyes sit on the far third.
-const OTS_COVER = 0.3, SHOULDER_LOW = -0.75, SHOULDER = { edge: 0.23, height: 0.82 }, OTS_LENS_Y = 1.55;
+const OTS_COVER = 0.36, SHOULDER_LOW = -0.75, SHOULDER = { edge: 0.23, height: 0.82 }, OTS_LENS_Y = 1.55;
 
 /**
  * Past the near shoulder of `over` onto `target`'s face; the lens sets the size. The camera steps back
