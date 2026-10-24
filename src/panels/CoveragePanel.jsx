@@ -7,6 +7,7 @@ import { ALL_COVERAGE_PATTERNS, coveragePattern } from "../camera-coverage/patte
 import { TRANSITION_TYPES, repairTransition, transitionWords } from "../camera-coverage/transitions.js";
 import { useCutChecks } from "../motion/cut-flags.jsx";
 import CoverageReadout from "./CoverageReadout.jsx";
+import FurtherReading from "./FurtherReading.jsx";
 import "./coverage.css";
 
 const REPEATING = new Set(["shot-reverse-shot", "dialogue-singles"]);
@@ -42,7 +43,7 @@ function CoverageAction({ activeShot, characters, run }) {
 					{ALL_COVERAGE_PATTERNS.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}
 				</select>
 			</label>
-			<p className="inspector-hint v2-details-hint">{coveragePattern(pattern).description}</p>
+			<p className="inspector-hint v2-details-hint">{coveragePattern(pattern).description}</p><FurtherReading section="patterns" id={pattern} />
 			{group ? (
 				<fieldset className="coverage-members" data-coverage-members={picked.length}>
 					<legend>{ko(`Cast (${spec.cast}–${spec.castMax})`, `인물 (${spec.cast}–${spec.castMax}명)`)}</legend>

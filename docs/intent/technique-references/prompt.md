@@ -1,8 +1,8 @@
 # Technique References
 
-- Rev: 1
-- Status: planned
-- Waits for: the owner's licensing decision (F-1, blocking). Otherwise independent of the rest of the cinematic-atlas plan, so it can run whenever F-1 is resolved.
+- Rev: 2
+- Status: completed
+- Waits for: nothing. F-1 resolved (L-4).
 - Area: Camera and Shots
 - Owner: TinNguyen
 - Skill: `none`
@@ -23,8 +23,9 @@ This intent gives each technique, coverage pattern and cut or shot rule a short 
 
 ## Decisions
 
-- D1 (rev 1): references are citations only: book id, title, author, edition, year, pages. No excerpt fields. Source: orchestrator; subject to F-1.
+- D1 (rev 1): references are citations only: book id, title, author, edition, year, pages. No excerpt fields. Source: orchestrator; confirmed by the owner's F-1 resolution (D3).
 - D2 (rev 1): the mapping is generated offline by a tool that reads a local atlas checkout (its camera-page tags and section titles) through a curated table from technique id to atlas tags. The result is committed as small data. The suite never needs the atlas. Source: orchestrator.
+- D3 (rev 2): F-1 resolved as option (a). The owner: the tool is used internally for prototyping and proofs of concept, so citations (no book text) are acceptable. Limit the books to camera and directing titles. Source: owner (L-4).
 
 ## Acceptance
 
@@ -38,7 +39,7 @@ This intent gives each technique, coverage pattern and cut or shot rule a short 
 ## Constraints
 
 - `CLAUDE.md`: the 250-line ratchet, knip and eslint baselines; new files stay under 250 lines.
-- Licensing is reserved for the owner (contract, Decisions); no worker starts before F-1 is resolved.
+- Licensing was decided by the owner (D3); nothing beyond citations (no excerpts, page images, PDFs) reaches the repo.
 - No machine path to the atlas is committed; it comes from `ATLAS_DIR` or a setting.
 - Keep the owner's own studio on ports 5180 / 5184 untouched; use slot n=14.
 - Keep the branch merged with `origin/main` and pushed after every step (contract, Git And Merge).
@@ -46,3 +47,5 @@ This intent gives each technique, coverage pattern and cut or shot rule a short 
 ## Changelog
 
 - rev 1 (2026-10-24): written as a planned intent from the cinematic-atlas review (L-1, L-2).
+- rev 2 (2026-10-24): F-1 resolved by the owner as option (a) (D3); status active.
+- rev 2 (2026-10-24): completed; squash-merged into `main` by the cloud orchestrator under `after-proof` (#12).

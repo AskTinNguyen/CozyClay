@@ -1,0 +1,7 @@
+[
+	{ "id": "film-directing-shot-by-shot", "title": "Fixture Camera Handbook", "author": "A. Fixture", "published": 2001, "sourceName": "FIXTURE-SOURCE-NAME.pdf",
+		"chapters": [{ "page": 1, "title": "Opening" }, { "page": 10, "title": "Pan Studies" }] },
+	{ "id": "master-shots-vol2", "title": "Fixture Dialogue Primer", "author": "B. Fixture", "published": 2002, "sourceName": "FIXTURE-SOURCE-NAME.pdf",
+		"chapters": [{ "page": 1, "title": "Crossing Lines" }, { "page": 5, "title": "Faces" }] },
+	{ "id": "fixture-novel", "title": "Fixture Novel", "author": "C. Fixture", "published": 2003, "chapters": [] }
+]
