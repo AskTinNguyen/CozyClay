@@ -51,3 +51,10 @@
     - Suite after the fix: 480 files, 478 passed, 2 failed (the known timing checks only).
   - A9: `mcp/README.md`, `docs/agent-cli.md`, `docs/studio-ui-ia.md`, CHANGELOG and the director-evals README describe `shot.setLook`, `shot.colourScript`, `shot_look`, the Look panel and the export.
   - F-1 is resolved as prompt rev 2.
+- R2 (cloud orchestrator, 2026-10-24, at 97b1d4ff): Codex's three findings are fixed with checks that fail on the old code:
+  - a dense palette on swatch edits;
+  - the target look's environment map during an export draw;
+  - in-memory `shot_look` stored on the planned shots, so `render_prompt` and `render_packet` see it.
+  - Suite: 481 files, 479 passed, 2 failed (the known timing checks only).
+  - The browser QA has 19 checks; earlier reports of 21 were a miscount.
+  - The committed `proofs/colour-script-warm-to-cold.png` shows the pre-fix measured cut values. The hard cut into shot 4 now reads darker by 0.12 and colder by 0.37, where the image shows 0.16 and 0.34. The image still shows the same layout and cut marks.
