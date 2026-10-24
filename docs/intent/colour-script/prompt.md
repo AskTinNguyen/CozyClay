@@ -1,7 +1,7 @@
 # Colour Script
 
 - Rev: 1
-- Status: planned
+- Status: active
 - Waits for: `director-packet` completed (the packet carries the colour script strip). Seventh in the cinematic-atlas plan.
 - Area: Scene and Viewport
 - Owner: TinNguyen

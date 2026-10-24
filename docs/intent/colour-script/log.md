@@ -17,3 +17,11 @@ The orchestrator compared the owner's cinematic-atlas repo (a local study site o
 Written as `planned`; the `Waits for` lines carry the recommended order.
 
 Proposal 7 bundled a colour script (Scene and Viewport) and technique references (Camera and Shots); the contract gives each intent one area, so it was written as two intents, `colour-script` and `technique-references`.
+
+## L-3 (2026-10-24) | class: decision | -> rev 1
+
+> https://github.com/AskTinNguyen/CozyClay/pull/8
+>
+> Spawn Agent Sessions to work on these intents and merge them into main
+
+The owner's go-ahead for the cinematic-atlas plan. `director-packet` is completed (#16), so this intent's `Waits for` is met. A cloud orchestrator session starts the worker and merges after proof under `after-proof`.
