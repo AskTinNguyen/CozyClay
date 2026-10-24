@@ -82,6 +82,37 @@ test('the request form, the settle edge, rig keys and a stored technique', () =>
   } finally { h.dispose(); }
 });
 
+test('the holds around a retimed move stay holds: a forward and a backward shift, camera keys and rig keys', () => {
+  const zs = shot => shotOf(...shot).cameraKeys.map(key => [key.frame, key.framing.pos.z]);
+  // One push over f20-60 between holds; moved to start at f90, the hold at f70 it sweeps past goes.
+  const f = setup([keyed('shot-hold', 0, 191, [[0, at(5)], [20, at(5)], [60, at(2.5)], [70, at(2.5)], [150, at(2.5)]])]);
+  try {
+    ok(f.run('story.addBeat', { frame: 90, label: 'the reveal', kind: 'reveal' }, 'agent'));
+    const aligned = ok(f.run('camera.alignMove', { shotId: 'shot-hold', beat: 'the reveal' }, 'agent'));
+    assert.deepEqual(zs([f, 'shot-hold']), [[0, 5], [90, 5], [130, 2.5], [150, 2.5]], 'hold, one push starting on the beat, hold');
+    const moves = ok(f.run('camera.checkMotivation', {}, 'agent')).output.shots[0].moves;
+    assert.deepEqual(moves.map(row => [row.move, row.startFrame, row.endFrame]), [['push-in', 90, 130]], 'one move, no reverse');
+    assert.equal(aligned.checks.issues, 0);
+  } finally { f.dispose(); }
+  // Backward: a push over f80-120 moved to start at f30; the hold at f10 before the swept interval stays.
+  const g = setup([keyed('shot-back', 0, 191, [[0, at(5)], [10, at(5)], [80, at(5)], [120, at(2.5)], [150, at(2.5)]])]);
+  try {
+    ok(g.run('story.addBeat', { frame: 30, label: 'the knock', kind: 'event' }, 'agent'));
+    ok(g.run('camera.alignMove', { shotId: 'shot-back', beat: 'the knock' }, 'agent'));
+    assert.deepEqual(zs([g, 'shot-back']), [[0, 5], [10, 5], [30, 5], [70, 2.5], [150, 2.5]]);
+    assert.deepEqual(ok(g.run('camera.checkMotivation', {}, 'agent')).output.shots[0].moves.map(row => [row.move, row.startFrame, row.endFrame]), [['push-in', 30, 70]]);
+  } finally { g.dispose(); }
+  // The same forward case on rig keys: a roll over f20-60 between roll holds.
+  const rolls = [[0, 0], [20, 0], [60, 12], [70, 12], [150, 12]].map(([offset, rollDeg]) => ({ offset, rollDeg }));
+  const h = setup([keyed('shot-rollhold', 0, 191, [[0, at(4)]], { camera: { mode: 'keys', rigKeys: rolls } })]);
+  try {
+    ok(h.run('story.addBeat', { frame: 90, label: 'the ground tilts', kind: 'event' }, 'agent'));
+    ok(h.run('camera.alignMove', { shotId: 'shot-rollhold', beat: 'the ground tilts' }, 'agent'));
+    assert.deepEqual(shotOf(h, 'shot-rollhold').camera.rigKeys.map(key => [key.offset, key.rollDeg]), [[0, 0], [90, 0], [130, 12], [150, 12]]);
+    console.log('PASS A4 holds: forward and backward shifts keep the surrounding holds (camera keys and rig keys)');
+  } finally { h.dispose(); }
+});
+
 test('refusals: a rail, a hold, an unknown beat, a move with no room', () => {
   const rail = { ...createShot('Rail', 0, 95, [{ id: 'r', frame: 0, framing: at(5) }]), id: 'shot-rail', camera: { mode: 'rail', cameraRail: [{ x: -2, z: 4 }, { x: 2, z: 4 }] } };
   const f = setup([keyed('shot-held', 96, 191, [[96, at(5)]]), rail]);

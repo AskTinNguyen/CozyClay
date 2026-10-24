@@ -7,10 +7,15 @@
  * subjects' travel, and says in its answer that motion beats (takes) are not
  * read in memory. A push marked with no beat is unmotivated; a beat on its
  * first frame motivates it; a beat 20 frames in flags starts-off-beat. The
- * director's words resolve the same way the router does. No editor is connected.
+ * director's words resolve the same way the router does. No editor is connected;
+ * the last checks stand a bus fixture in for one: story_beats edits through the
+ * story actions and lists through story.listBeats, every beat with its id and
+ * frame, the ones no move answers to included.
  */
 import { createToolHandlers } from "./tool-handlers.mjs";
 import { routeCameraRequest } from "../src/camera-coverage/route.js";
+import { cameraMotivationTools } from "./camera-motivation-tools.mjs";
+import { shotsFixture } from "../test/bus/shots-fixture.mjs";
 
 const registry = new Map(createToolHandlers().map((tool) => [tool.name, tool]));
 const call = async (name, args = {}) => {
@@ -57,6 +62,25 @@ const listed = await call("story_beats");
 check("story_beats with nothing to do lists the beats", /^0 story beat\(s\) in memory/.test(listed), listed);
 const routed = routeCameraRequest("start the push on the reveal");
 check("\"start the push on the reveal\" resolves to camera.alignMove on the reveal", routed.action === "camera.alignMove" && routed.args.beat === "reveal" && routed.args.edge === "start", JSON.stringify(routed));
+
+// With an editor: the same tool over a bus fixture standing in for the connected editor (the schema builder is a
+// chain stub: the handler is called directly, so its input schema is never read).
+const z = new Proxy(function chain() {}, { get: () => z, apply: () => z });
+const editor = shotsFixture(), calls = [];
+try {
+	const liveTools = new Map(cameraMotivationTools({ tool: (name, config, handler) => ({ name, ...config, handler }), z, text: (body) => ({ content: [{ type: "text", text: body }] }),
+		liveError: (error) => { throw error; }, state: {}, cast: () => [], filmback: () => null, framing: () => null, refreshLiveDescription: async () => {}, isLive: () => true,
+		runStudioCommand: async ({ action, args }) => { calls.push(action); return { content: [{ type: "text", text: JSON.stringify(editor.run(action, args, "agent")) }] }; } }).map((row) => [row.name, row]));
+	const liveCall = async (args) => JSON.parse((await liveTools.get("story_beats").handler(args)).content[0].text);
+	await liveCall({ frame: 40, label: "the letter", kind: "reveal" });
+	await liveCall({ request: "add a beat 'confession' at 12" });
+	const listed = await liveCall({ op: "list" });
+	check("live story_beats list runs story.listBeats and answers every beat with its id and frame",
+		calls.join(",") === "story.addBeat,story.addBeat,story.listBeats" && listed.ok === true
+		&& JSON.stringify(listed.output.beats.map((row) => [row.id, row.frame])) === JSON.stringify([["story-beat-2", 12], ["story-beat-1", 40]]), JSON.stringify({ calls, listed }).slice(0, 400));
+	const bare = await liveCall({});
+	check("live story_beats with nothing to do lists too", calls.at(-1) === "story.listBeats" && /^2 story beats: story-beat-2 disclosure "confession" at f12, story-beat-1 reveal "the letter" at f40\.$/.test(bare.summary), JSON.stringify(bare).slice(0, 300));
+} finally { editor.dispose(); }
 
 console.log(`\n${passes} passed, ${failures} failed`);
 process.exit(failures ? 1 : 0);

@@ -36,6 +36,8 @@ export const motivationDeclarations = [
   { id: 'camera.alignMove', label: 'Align move to beat', kind: 'mutation', undoDomain: 'shot',
     description: 'Retime one camera move so it starts (edge start) or comes to rest (edge settle) on a beat, as one undo entry: beat is a story beat (id or label, or its kind: "the reveal") or a frame (a motion beat\'s frame, as camera.checkMotivation names it); shotId defaults to the shot holding the beat, segment to the move nearest it, edge to the one the check flags. The move\'s camera keys and rig keys keep their poses and length (squeezed at a shot edge); a rail or follow camera is refused. Or request ("start the push on the reveal"). Answers the re-check.',
     input: input({ shotId: id, beat: ref, edge: { type: 'string', enum: ['start', 'settle'] }, segment: { type: 'integer', minimum: 0, maximum: 31 }, request }) },
+  { id: 'story.listBeats', label: 'List story beats', kind: 'job', domain: 'shot', timeoutMs: 5000, readOnly: true,
+    description: 'The scene\'s story beats in frame order, each with its id, frame, label and kind (output.beats), whether or not a camera move answers to it. Nothing changes.', input: input({}) },
 ];
 
 export function registerMotivation(registry, ports) {
@@ -77,6 +79,9 @@ export function registerMotivation(registry, ports) {
   } });
   registry.register({ ...motivationDeclarations[3], available, run(args) { return check(args); } });
   registry.register({ ...motivationDeclarations[4], available, target: args => args.shotId, run(args) { return align(args); } });
+  registry.register({ ...motivationDeclarations[5], available: () => mounted(), run() {
+    return { affectedIds: [], summary: `${beats().length} story beat${beats().length === 1 ? '' : 's'}${beats().length ? `: ${beats().map(row => `${row.id} ${storyBeatWords(row)}`).join(', ')}` : ''}.`.slice(0, 240), output: { beats: beats() } };
+  } });
 
   function check(args) {
     const hit = routed(args, ['camera.checkMotivation']), result = checkMotivation(document(), { tolerance: args.tolerance, shotIds: args.shotIds, placeAt });

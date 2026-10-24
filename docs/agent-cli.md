@@ -809,7 +809,8 @@ back as warnings (`CUT_LINE`, `CUT_JUMP`, `CUT_SCREEN`, `CUT_EYELINE`) and in
 ## Camera motivation
 
 `story.addBeat`, `story.moveBeat` and `story.removeBeat` author the story
-beats (a line, a reveal, a decision) each as one undo entry;
+beats (a line, a reveal, a decision) each as one undo entry, and
+`story.listBeats` reads them back (id, frame, label, kind);
 `camera.checkMotivation` says why each camera move happens (a story beat, a
 motion beat of an installed take, its subject, or nothing) and flags moves
 that are unmotivated or start or settle off their beat; `camera.alignMove`

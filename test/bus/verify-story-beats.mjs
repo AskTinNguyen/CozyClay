@@ -4,6 +4,7 @@
 // persist on the shot document (absent while there are none, so an older body
 // reads and writes back byte-identical), are written to OTIO as markers on the
 // Shots track, and the sequence brief names them in the beats they fall in.
+// story.listBeats reads them back, read only.
 // (The timeline drawing is checked in test/verify-camera-motivation-browser.mjs.)
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
@@ -35,6 +36,13 @@ test('story.addBeat, moveBeat and removeBeat each make one undo entry', () => {
     assert.deepEqual(beatsOf(f).map(row => [row.id, row.frame]), [['story-beat-1', 60], ['story-beat-2', 90]]);
     assert.equal(f.run('edit.undo', { receiptId: moved.receiptId }, 'agent').status, 'undone');
     assert.deepEqual(f.snapshot(), one, 'one undo puts the beat back');
+    // story.listBeats (read only): every beat with its id and frame, whether or not a camera move answers to it (no shots here).
+    const before = f.snapshot(), listed = f.run('story.listBeats', {}, 'agent');
+    assert.equal(listed.ok, true, JSON.stringify(listed).slice(0, 400));
+    assert.deepEqual(listed.output.beats.map(row => [row.id, row.frame, row.kind]), [['story-beat-2', 30, 'disclosure'], ['story-beat-1', 60, 'disclosure']]);
+    assert.equal(listed.summary, '2 story beats: story-beat-2 disclosure "confession" at f30, story-beat-1 disclosure "Mara makes her admission" at f60.');
+    assert.equal(listed.undo?.historyEntryId, undefined, 'listing makes no undo entry');
+    assert.deepEqual(f.snapshot(), before, 'and changes nothing');
     const removed = f.run('story.removeBeat', { beat: 'story-beat-1' }, 'agent');
     assert.equal(removed.ok, true);
     assert.deepEqual(beatsOf(f).map(row => row.id), ['story-beat-2']);

@@ -84,7 +84,7 @@ export function cameraMotivationTools(deps) {
 				description:
 					`Author the story beats a camera move answers to (a line, a reveal, a decision): add (frame, label, kind ${STORY_BEAT_KINDS.join(" | ")}), move (beat, frame), ` +
 					"remove (beat), or list; beat is an id, a label, or a frame near it. Or say it (\"add a beat 'confession' at 120\", \"move the beat 'confession' to 130\"). " +
-					"With an editor connected it runs story.addBeat / story.moveBeat / story.removeBeat (one undo entry each); in memory it keeps the beats check_motivation reads.",
+					"With an editor connected it runs story.addBeat / story.moveBeat / story.removeBeat (one undo entry each), and lists through story.listBeats (every beat with its id, frame, label and kind); in memory it keeps the beats check_motivation reads.",
 				inputSchema: {
 					request: z.string().max(300).optional().describe("the beat edit in words"),
 					op: z.enum(["add", "move", "remove", "list"]).optional().describe("what to do (default add with frame and label, else list)"),
@@ -101,7 +101,7 @@ export function cameraMotivationTools(deps) {
 				try {
 					await deps.refreshLiveDescription();
 					if (deps.isLive()) {
-						if (!action) return text("List the beats with studio_run camera.checkMotivation (its sources) or describe_scene; give op add, move or remove to edit.");
+						if (!action) return await deps.runStudioCommand({ action: "story.listBeats", args: {} });
 						return await deps.runStudioCommand({ action, args: { ...merged, ...(request ? { request } : {}) } });
 					}
 					if (action === "story.addBeat") {
