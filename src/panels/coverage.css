@@ -1,0 +1,67 @@
+/* Coverage and Cut panels (CoveragePanel.jsx) and the composition fields in the
+   technique popover (CompositionFields.jsx). Theme tokens only, matching the
+   camera rig panel and the technique picker. */
+
+.coverage-action,
+.cut-inspector {
+	display: grid;
+	gap: 5px;
+	padding: 0 var(--sp-2, 12px) var(--sp-1, 8px);
+	font-family: var(--sans, system-ui);
+	font-size: 12px;
+	color: var(--text-1, #e4e4e7);
+}
+
+.coverage-field {
+	display: grid;
+	grid-template-columns: 76px minmax(0, 1fr);
+	align-items: center;
+	gap: 6px;
+}
+
+.coverage-field > span { color: var(--text-2, #a1a1aa); }
+
+.coverage-field select,
+.coverage-field input {
+	box-sizing: border-box;
+	width: 100%;
+	height: 24px;
+	padding: 0 8px;
+	border: 0;
+	border-radius: 6px;
+	background: var(--field, #0f0f11);
+	color: var(--text-1, #e4e4e7);
+	font: inherit;
+	font-size: 11.5px;
+}
+
+.coverage-lay,
+.cut-summary button {
+	height: 24px;
+	padding: 0 10px;
+	border: 0;
+	border-radius: 6px;
+	background: var(--camera, #a78bfa);
+	color: var(--on-accent, #17141f);
+	font: inherit;
+	font-size: 11.5px;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.coverage-lay:disabled { opacity: 0.45; cursor: default; }
+
+.cut-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 0; color: var(--text-2, #a1a1aa); font-size: 11px; }
+.cut-summary button { height: 18px; padding: 0 6px; font-size: 10.5px; background: var(--danger, #d65f55); color: #fff; }
+.cut-title { margin: 2px 0 0; font-size: 11.5px; font-weight: 600; color: var(--text-1, #e4e4e7); }
+
+.cut-rules { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.cut-rule { padding: 5px 7px; border-radius: 6px; background: var(--field, #0f0f11); color: var(--text-2, #a1a1aa); font-size: 11px; line-height: 1.35; border-left: 3px solid var(--text-3, #636369); }
+.cut-rule strong { color: var(--text-1, #e4e4e7); }
+.cut-rule em { display: block; margin-top: 2px; font-style: normal; color: var(--text-1, #e4e4e7); }
+.cut-rule.high { border-left-color: var(--danger, #d65f55); }
+.cut-rule.medium { border-left-color: var(--warn, #f5b453); }
+.cut-rule.ok { border-left-color: var(--ok, #4fbf7a); }
+
+.technique-composition { display: grid; gap: 4px; margin: 4px 0 2px; padding-top: 4px; border-top: 1px solid var(--line, rgba(255, 255, 255, .08)); }
+.technique-composition input[type="checkbox"] { justify-self: start; width: auto; height: auto; }

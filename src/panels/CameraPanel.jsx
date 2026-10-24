@@ -5,6 +5,7 @@ import { VIDEO_MODEL_PRESETS } from "../model-presets.js";
 import { useBus } from "../app-context.js";
 import TechniquePicker from "./TechniquePicker.jsx";
 import CameraRigPanel from "./CameraRigPanel.jsx";
+import CoveragePanel from "./CoveragePanel.jsx";
 
 export default function CameraPanel({ isCameraSelection, shot, moveSequence, cameraKeys, activeShot }) {
 	const { run } = useBus();
@@ -62,5 +63,7 @@ export default function CameraPanel({ isCameraSelection, shot, moveSequence, cam
 					<TechniquePicker hidden={!isCameraSelection} activeShot={activeShot} />
 					{/* Roll, focus, shake, mount, speed and shutter on the selected shot's camera, with its rig keys. */}
 					<CameraRigPanel hidden={!isCameraSelection} activeShot={activeShot} />
+					{/* Coverage patterns over the selected shot's range, and the cut into it: transition and editing-rule readout. */}
+					<CoveragePanel hidden={!isCameraSelection} activeShot={activeShot} />
 	</>);
 }
