@@ -2,6 +2,7 @@
 	"category": "size",
 	"label": "shot size and intimacy",
 	"scenarios": [
+		{"id": "size-full-corridor", "tier": "core", "category": "size", "request": "full shot down the corridor as Mara walks in", "cast": ["mara", "joon"], "expected": {"action": "camera.applyTechnique", "stack": ["full-shot"], "subject": "mara"}, "why": "A full shot named outright; the shot down a corridor is a framing, not gunfire."},
 		{"id": "size-tight-news", "tier": "core", "category": "size", "request": "go tight on Joon when he hears the news", "cast": ["mara", "joon"], "expected": {"action": "camera.applyTechnique", "stack": ["close-up"], "subject": "joon"}, "apply": {"size": "close-up", "move": "static"}, "why": "Tight is the close-up: the news lands on his face, nothing else in frame."},
 		{"id": "size-ecu-lie", "tier": "core", "category": "size", "request": "an extreme close-up of Mara's eyes as she lies", "cast": ["mara", "joon"], "expected": {"action": "camera.applyTechnique", "stack": ["extreme-close-up"], "subject": "mara"}, "apply": {"move": "static"}, "why": "The lie lives in her eyes, so the frame holds only them."},
 		{"id": "size-wide-small", "tier": "core", "category": "size", "request": "hold Mara in a wide so she looks small in the empty hall", "cast": ["mara", "joon"], "expected": {"action": "camera.applyTechnique", "stack": ["wide-shot"], "subject": "mara"}, "apply": {"move": "static"}, "why": "A wide lets the empty room swallow her; size is the feeling."},
