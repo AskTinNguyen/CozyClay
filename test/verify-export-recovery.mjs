@@ -13,7 +13,7 @@ import { depthRangeFromFrames } from "../src/render-passes.js";
 import { shotsFixture } from "./bus/shots-fixture.mjs";
 import { isProxyFigure } from "../src/scenes.js";
 import { placementAt } from "../src/root-path.js";
-import { applyShotCamera } from "../src/shot-camera-apply.js";
+import { applyShotCamera, withTransition } from "../src/shot-camera-apply.js";
 import { takeFrameAt } from "../src/camera-capabilities/speed.js";
 import { framingRecord } from "../src/camera-capabilities/words.js";
 const shotFixtures = [];
@@ -107,7 +107,7 @@ function fixture() {
 		snapshotPlaybackBones: () => ({ position: bone.position.clone(), quaternion: bone.quaternion.clone() }),
 		restorePlaybackBones: (_rig, saved) => { bone.position.copy(saved.position); bone.quaternion.copy(saved.quaternion); },
 		poseMemberAtFrame: (_rig, clip, _ik, frame) => { if (clip) bone.position.x = frame; }, IK_CORRECTION_BLEND_FRAMES: 6, isProxyFigure,
-		sampleAt: (_scene, shot) => ({ camera: shot?.cameraKeys[0]?.framing }), placementAt, applyShotCamera, takeFrameAt, framingRecord,
+		sampleAt: (_scene, shot) => ({ camera: shot?.cameraKeys[0]?.framing }), placementAt, applyShotCamera, withTransition, takeFrameAt, framingRecord,
 		shotAtFrame: (list, frame) => list.find((shot) => frame >= shot.startFrame && frame <= shot.endFrame),
 		shotIndexAtFrame: (list, frame) => list.findIndex((shot) => frame >= shot.startFrame && frame <= shot.endFrame),
 		timelineContentExtent: () => 0, promptClips: [], multiModelFootage: null,
