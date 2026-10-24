@@ -35,7 +35,7 @@ Then point a client at it. For Claude Desktop, in `claude_desktop_config.json`:
 }
 ```
 
-Restart the client; 37 tools appear.
+Restart the client; 38 tools appear.
 
 Prefer a long-lived endpoint? `node server.mjs --http 5183` serves Streamable HTTP at
 `http://127.0.0.1:5183/mcp` (one isolated session per client), with a plain status page at `/`.
@@ -87,6 +87,7 @@ generated frame matches the blocking instead of drifting off into a generic shot
 | `story_beats` | add, move, remove or list the story beats the check reads (a line, a reveal, a decision: `frame`, `label`, `kind`), or words ("add a beat 'confession' at 120"). With an editor it runs `story.addBeat` / `story.moveBeat` / `story.removeBeat` (one undo entry each), and lists through `story.listBeats` (every beat with its id, frame, label and kind) |
 | `render_packet` | a range of shots as a director packet, in memory: the shot list (`shot-list.md`, or `format: "csv"`) and the packet data (cast, story beats, a row per shot with number, name, frames and timecode, duration, size, angle, lens mm, the move in measured words, capabilities, composition, coverage role, transition in and the flags of the cut, coverage, motivation, shot and structure checks; notes; the intensity curve; the plan primitives). `from_shot` / `to_shot` pick the range, `include_plan: false` keeps only the plan's counts. No pictures: the editor's `export.directorPacket` writes the full pack. Read only |
 | `check_structure` | the sequence's intensity curve against its story beats ("where does this sequence go flat?", "show me the intensity", "build to the reveal"): per shot size, height, lens, movement, cutting rate, roll and screen jump (each 0-1, weighted into one value), each cut's contrast, and `flat` / `peak-off-beat` / `no-build` issues with frames and a technique stack to apply (`apply_camera_technique`); without story beats only `flat` runs. `strip: true` adds the intensity strip as a PNG. Read only. With an editor it runs `camera.checkStructure`; in memory it reads the `cover_scene` plan against `story_beats` |
+| `shot_look` | a shot's own look, merged over the stage look while the shot plays (preview, captures, video, keyframe packs; a dissolve or whip blends two looks): `recipe` in story words (`warm-safety`, `cold-isolation`, `danger-accent`, `open-day`, `fading-hope`, `night-menace`, `tender-memory`, `sickly-unease`), a partial `look` (preset, warmth, keyColor, keyIntensity, exposure, fill, fog, sky, skyTop; null clears a field), an intended `palette` (3-5 swatches and a word), `adjust` (`colder`, `warmer`, `darker`, `brighter`, `hazier`, `clearer`), `same_as` another shot, or `clear`; `request` reads the words ("make the confession shot colder"). With nothing to change, `read: true` or "colour script for this scene" it reads the colour script: per shot its look, intended palette and the palette measured from its middle frame, and each cut's colour change (hard / soft / matched); `image: true` adds the colour script PNG. With an editor it runs `shot.setLook` / `shot.colourScript`; in memory it works on the `cover_scene` plan with planned tones only |
 | `set_camera_capabilities` | give the shot camera what placement cannot: `roll_deg` (Dutch angle), `f_stop` with `focus_on` (a character, followed per frame) or `focus_distance` (depth of field), `shake` (handheld or vehicle, seeded), `mount` (a Snorricam on a character's chest, head, hips or back), `speed` (0.5 = slow motion) and `shutter_deg` (motion blur); `at_frame` keys roll and focus (two focus keys rack focus). With an editor it runs `camera.set` / `camera.setKey`; in memory `render_prompt` states them |
 | `add_scene` / `switch_scene` | multiple scenes per project |
 | `open_project` / `save_project` | read and write `.cclayproject` files |
@@ -212,6 +213,22 @@ gains one `STRUCTURE:` line ("intensity builds from 0.20 at beat 1 to a peak of 
 releases to 0.49 by beat 5."), and `strip: true` returns the strip as a 960 x 160 PNG
 (`src/intensity-curve/strip.js` `stripImage`).
 
+## Shot looks and the colour script
+
+`shot_look` sets a look per shot (`shot.setLook`, one undo entry): a recipe from
+`src/colour-script/recipes.js` (story words over the existing lighting presets, warmth, exposure,
+fill, haze and sky, each with an intended palette of original swatches), a partial look, a nudge, or
+another shot's look. The look is merged over the stage look only while its shot plays, so a stage
+saved before looks existed renders unchanged. `shot.colourScript` renders each shot's middle frame
+through the export path and measures its palette (`src/colour-script/palette.js`, pure: grid
+samples binned at 4 bits a channel, up to 5 swatches with shares, mean Rec. 709 luminance, warmth as
+mean (R - B), saturation); a cut is hard when luminance moves 0.2 or warmth 0.25 or more, soft when
+their sum is 0.05 or more. The colour script is a 960 x 200 PNG (`src/colour-script/image.js`): the
+measured swatches, the intended palette and the tone per shot, hard cuts red, soft amber, story
+beats dashed. With looks set, the sequence brief gains a `Look:` line per beat, the intensity curve
+a tone component, and the director packet a `colour` check (a hard colour cut is a low flag) and
+`packet/colour-script.png`.
+
 ## Director packet
 
 `render_packet` answers a range of shots as a director packet
@@ -223,10 +240,10 @@ check, structure), the notes that belong to the range, the intensity curve with 
 and the plan's primitives on an A4-landscape page: each camera numbered with its frustum at its
 first frame and a path and arrow when it moves, every pair's line of action (authored, or the pair
 a cut is judged against), each cast member's mark at each shot's start and the walk over the range,
-and a legend. The packet adds no check of its own. In memory it reads the `cover_scene` plan; with
+and a legend. The packet's own check is `colour`, present only when a shot has a look. In memory it reads the `cover_scene` plan; with
 an editor connected, the editor's shots. The pictures are the editor's: `export.directorPacket`
 (File › Export › Director packet…) writes `packet/index.html`, `plan.png`, `contact-sheet.png`,
-`intensity.png`, `shot-list.csv`, `shot-list.md` and `packet.json` inside the range's sequence pack.
+`intensity.png`, `colour-script.png`, `shot-list.csv`, `shot-list.md` and `packet.json` inside the range's sequence pack.
 
 ## Camera requests in words
 

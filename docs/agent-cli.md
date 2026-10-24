@@ -903,7 +903,7 @@ sequence pack (`cozyclay-sequence-<title>.zip`), the same file File › Export �
 Director packet… downloads: every shot's keyframe pack, `sequence-prompt.txt`
 and `references.json`, plus `packet/index.html` (one printable page),
 `packet/plan.png` (the top-down plan), `packet/contact-sheet.png` (one frame per
-shot), `packet/intensity.png` (with two shots or more), `packet/shot-list.csv`,
+shot), `packet/intensity.png` (with two shots or more), `packet/colour-script.png`, `packet/shot-list.csv`,
 `packet/shot-list.md` and `packet/packet.json`. The file goes to the export
 folder or the browser download; the receipt names it and lists the packet's
 files. It renders each shot's frames and clip, so give it time. For the data
@@ -912,6 +912,24 @@ alone, without pictures, ask `render_packet`.
 ```sh
 cclay live run export.directorPacket --args '{"from":2,"to":4}' --timeout 300000
 cclay live tool render_packet --args '{"from_shot":2,"to_shot":4,"format":"csv"}'
+```
+
+## Shot looks and the colour script
+
+`shot.setLook` gives one shot its own look over the stage look: a `recipe` in
+story words (`warm-safety`, `cold-isolation`, `night-menace`, ...), a partial
+`look` (null clears a field), an intended `palette`, an `adjust` nudge
+(`colder`, `warmer`, `darker`, `brighter`, `hazier`, `clearer`), `sameAs`
+another shot, or `clear`; `request` takes the words. It is one undo entry.
+`shot.colourScript` renders each shot's middle frame, measures its palette
+and answers the colour script: per shot the look, intended and measured
+palette, and each cut's luminance and warmth change (hard, soft or matched).
+`measure: false` skips the render; `shotIds` or `from` / `to` pick the range.
+
+```sh
+cclay live run shot.setLook --args '{"shot":2,"recipe":"cold-isolation"}'
+cclay live run shot.setLook --args '{"request":"make the confession shot colder"}'
+cclay live run shot.colourScript --args '{}' --timeout 120000
 ```
 
 ## Limits

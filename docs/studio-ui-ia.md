@@ -196,7 +196,12 @@ plan as it prints, the shot list with each row's flags, the notes, the files the
 pack carries and Download director packet, which runs `export.directorPacket`
 (`data-testid` `director-packet-dialog`, `packet-from`, `packet-to`,
 `packet-summary`, `packet-plan`, `packet-shots`, `packet-notes`, `packet-files`,
-`packet-download`). **Edit** holds Undo, Redo and Preferences…. **Window** holds Agent,
+`packet-download`). Colour script (`export-colour-script`) opens a dialog that
+runs `shot.colourScript` over every shot: the summary line, the strip (measured
+swatches, intended palette, tone; hard cuts red, soft amber, beats dashed), a row
+per shot with its look and measured palette, the cuts, and Download PNG
+(`data-testid` `colour-script-dialog`, `colour-script-strip`,
+`colour-script-download`). **Edit** holds Undo, Redo and Preferences…. **Window** holds Agent,
 Content and Log. **Help** holds Tutorial, Keyboard shortcuts and About. The
 viewport **Show** pill owns Reference grid, Auto Color, Body part colours and
 Trails; Perspective owns camera selection and Clay Lit owns shading. Language,
@@ -290,6 +295,13 @@ combined curve as a step per shot, a toggle per component (size, height, lens,
 movement, cutting, roll, screen jump) draws that line beside it, story beats
 are dashed ticks, and flagged stretches are shaded with a tag ("FLAT", "OFF
 PEAK", "NO BUILD").
+
+After Coverage, a **Look** section (`data-look-panel`) gives the selected shot
+its own look over the stage look: a Recipe in story words, a Preset, Exposure,
+Key warmth, Fill and Haze sliders, Key colour and Sky, the five Intended palette
+swatches, and the Measured palette from the shot's middle frame with its
+luminance, warmth and saturation (re-measured after each change). **Back to the
+stage look** clears it. Every control runs `shot.setLook`.
 
 G10 leaves exactly two visible add routes: viewport **+ Add** (the object
 catalogue plus Character and Camera) and **Content › Basic Shapes** (drag or

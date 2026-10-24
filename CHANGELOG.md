@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+Scene
+
+- Colour script: a shot can carry its own look over the stage look (a recipe
+  in story words such as warm safety, cold isolation or night menace, a
+  partial look, an intended palette, a nudge such as colder or hazier, or
+  another shot's look). The preview, captures, video and keyframe packs light
+  each shot as its look, and a dissolve blends two looks. Each shot's palette
+  is measured from its middle frame; File › Export › Colour script shows the
+  measured and intended palettes, the tone and every hard or soft colour cut.
+  A Look section in Camera mode, a `Look:` line in the sequence brief, a tone
+  component in the intensity curve, a `colour` check and
+  `packet/colour-script.png` in the director packet, `shot.setLook` and
+  `shot.colourScript` (`cclay live run`), MCP `shot_look`, and 9 director-eval
+  scenarios.
+
 Export
 
 - Director packet: a range of shots as a shooting plan for a mocap team, a
