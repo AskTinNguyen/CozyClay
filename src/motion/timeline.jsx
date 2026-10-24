@@ -10,7 +10,7 @@ import { NumberField } from "../ui.jsx";
 import { flatTiming, timingIsFlat, envelopeDrag, insertCut, removeCut, CUT_MIN_GAP } from "../speed-envelope.js";
 import { checkShotAgainstPreset, presetById } from "../model-presets.js";
 import { TakeSegmentClips, TakeSegmentTools } from "./take-segments.jsx"; import { BeatBoard } from "./beat-board.jsx";
-import ShotTechniqueTag from "./shot-technique-tag.jsx";
+import ShotTechniqueTag, { RigKeyMarks } from "./shot-technique-tag.jsx";
 import "./timeline.css";
 export { timelineTake } from "./take-segments.jsx";
 
@@ -2212,6 +2212,7 @@ export default function Timeline({
 											}}
 										/>
 									)))}
+									{name === SHOTS_LANE && <RigKeyMarks shots={shots} framePct={framePct} frameCount={displayFrameCount} />}
 								</div>
 							</div>
 						))}

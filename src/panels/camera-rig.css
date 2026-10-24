@@ -1,0 +1,79 @@
+/* Camera rig panel (CameraRigPanel.jsx): roll, lens, shake, mount, speed and
+   shutter for the selected shot, plus its roll and focus rig keys. Theme
+   tokens only (src/styles/themes.css), matching the technique picker. */
+
+.camera-rig {
+	display: grid;
+	gap: 5px;
+	padding: 0 var(--sp-2, 12px) var(--sp-1, 8px);
+	font-family: var(--sans, system-ui);
+	font-size: 12px;
+	color: var(--text-1, #e4e4e7);
+}
+
+.camera-rig .camera-rig-row {
+	display: grid;
+	grid-template-columns: 64px minmax(0, 1fr) auto;
+	align-items: center;
+	gap: 6px;
+}
+
+.camera-rig .camera-rig-row > span { color: var(--text-2, #a1a1aa); }
+.camera-rig .camera-rig-row small { color: var(--text-3, #636369); font-size: 10.5px; }
+
+.camera-rig select,
+.camera-rig input {
+	box-sizing: border-box;
+	width: 100%;
+	height: 24px;
+	padding: 0 8px;
+	border: 0;
+	border-radius: 6px;
+	background: var(--field, #0f0f11);
+	color: var(--text-1, #e4e4e7);
+	font: inherit;
+	font-size: 11.5px;
+}
+
+.camera-rig .camera-rig-keys {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	margin-top: 2px;
+}
+
+.camera-rig .camera-rig-keys button,
+.camera-rig .camera-rig-key-list button {
+	height: 22px;
+	padding: 0 8px;
+	border: 0;
+	border-radius: 6px;
+	background: var(--field, #0f0f11);
+	color: var(--text-1, #e4e4e7);
+	font: inherit;
+	font-size: 11px;
+	cursor: pointer;
+}
+
+.camera-rig .camera-rig-keys button:disabled { opacity: 0.45; cursor: default; }
+.camera-rig .camera-rig-keys small { margin-left: auto; color: var(--camera, #a78bfa); font-weight: 600; }
+
+.camera-rig .camera-rig-key-list {
+	display: grid;
+	gap: 2px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.camera-rig .camera-rig-key-list li {
+	display: grid;
+	grid-template-columns: 72px minmax(0, 1fr) auto;
+	align-items: center;
+	gap: 6px;
+	color: var(--text-2, #a1a1aa);
+	font-size: 11px;
+}
+
+.camera-rig .camera-rig-status { margin: 2px 0 0; color: var(--text-2, #a1a1aa); font-size: 11px; line-height: 1.35; }
+.camera-rig .camera-rig-status.refused { color: var(--danger, #f87171); }

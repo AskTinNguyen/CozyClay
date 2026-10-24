@@ -218,7 +218,7 @@ const BROWSER_FILES = [
 	"test/qa-rail-lean-browser.mjs",
 	"test/qa-export-recovery-browser.mjs", "test/qa-export-workspace-browser.mjs",
 	"test/verify-camera-mode-browser.mjs",
-	"test/verify-camera-rail-browser.mjs", "test/verify-camera-technique-picker-browser.mjs",
+	"test/verify-camera-rail-browser.mjs", "test/verify-camera-technique-picker-browser.mjs", "test/verify-camera-rig-panel-browser.mjs",
 	"test/verify-cutout-browser.mjs",
 	"test/verify-mesh-browser.mjs",
 	"test/verify-first-success-guide-browser.mjs",
