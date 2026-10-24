@@ -2,8 +2,8 @@
 
 - Working under rev: 1
 - Worker: cloud worker agent (intensity-curve)
-- Current step: 2, docs (A7) and the repository gates (A6)
-- Next step: merge origin/main when it moves (group-coverage #14), suite gate
+- Current step: done; every acceptance row met or ready for review
+- Next step: orchestrator review of A3 shots and A7 docs; merge origin/main when group-coverage #14 lands; PR
 - PR: none yet
 
 ## Acceptance
@@ -15,7 +15,7 @@
 | A3 | ready for review (ui:qa passed, ui:shot) | `test/verify-intensity-curve-browser.mjs` exit 0, 17 PASS, `intensity curve browser QA passed` (step 1); shots `proofs/strip-flat.png`, `proofs/strip-master-coverage.png` |
 | A4 | met (gate) | `node test/bus/verify-sequence-prompt.mjs` -> `# pass 5 # fail 0` (`STRUCTURE: intensity builds from 0.20 at beat 1 to a peak of 0.52 at beat 4 on 'the letter', then releases to 0.49 by beat 5.`, byte-identical); strip image dimensions in `test/verify-intensity-curve.mjs` (`PASS A4 strip image: 960x160, 400x80`) |
 | A5 | met (gate) | `node mcp/verify-intensity-curve.mjs` -> `12 passed, 0 failed`; `node test/verify-director-evals.mjs` -> `structure: core 8/8`, `core: 99/99`; `node mcp/verify-director-evals.mjs` -> `87 passed, 0 failed`; `cclay live run camera.checkStructure` in the A3 QA run |
-| A6 | open | |
+| A6 | met (gate) | step 3: `npm run lint` 0 new / 0 violations / 0 regressions; `npm run build` built; `SUITE-ALL: 466 files, 464 passed, 2 failed`, only the known CPU-timing checks (exitcar, repair) |
 | A7 | ready for review | `mcp/README.md` (35 tools, `check_structure` row, Intensity curve section), `docs/agent-cli.md` (Intensity curve), `docs/studio-ui-ia.md` (Structure section, Intensity strip), `CHANGELOG.md` Unreleased > Camera, `test/fixtures/director-evals/README.md` (structure.json, camera.checkStructure); step 2 |
 
 ## Steps
@@ -25,6 +25,7 @@
    - ui:qa: dev server `COZYCLAY_LIVE_PORT=5311 npm run dev -- --port 5211`; `COZYCLAY_LIVE_PORT=5311 QA_SHOT_DIR=docs/intent/intensity-curve/proofs QA_CHROME_FLAGS='--no-sandbox --proxy-server=http://127.0.0.1:8444 --ignore-certificate-errors' CDP_PORT=9311 QA_URL=http://127.0.0.1:5211/app/ CHROME_PATH=/opt/pw-browsers/chromium node tools/qa-browser.mjs -- node test/verify-intensity-curve-browser.mjs` -> exit 0, 17 PASS: SRS laid by `cclay live run camera.cover` flagged FLAT on the strip; `cclay live run camera.checkStructure` -> `flat words`, flat issue; the size toggle draws its line; Apply suggestion -> `Applied LOW · CU · 85mm to SRS 3 · OTS Mara`; curve `0.396 0.463 0.463 0.463 0.089 -> 0.396 0.463 0.562 0.437 0.089`, flag gone, hub re-check `No flat issue.`; master and coverage `0.204 0.371 0.35 0.49 0.495 0.104` with a reveal on CU Mara. Dev server stopped.
 
 2. A7 docs, commit below: `mcp/README.md`, `docs/agent-cli.md`, `docs/studio-ui-ia.md`, `CHANGELOG.md`, the director-evals README. `node test/verify-mcp-invariants.mjs` exit 0.
+3. A6 gate on the step-2 commit, no dev server running: `env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_CA_BUNDLE node /home/claude/local-tools/suite-all.mjs --jobs 4` -> `SUITE-ALL: 466 files, 464 passed, 2 failed`: `test/motion3/verify-motion3-exitcar.mjs` (`compile + QA stay fast (< 3 s CPU)`, 4850 ms) and `test/motion3/verify-motion3-repair.mjs` (`exit car, hips sunk: under 10 s`), the base's known timing failures. `npm run lint` -> `knip: 138 findings, 0 new`, `loc: 72 files over 250 (baseline 72), 0 violations`, `eslint: ... 0 regressions`; `npm run build` built. origin/main unchanged (761cae7e).
 
 ## Decisions
 
