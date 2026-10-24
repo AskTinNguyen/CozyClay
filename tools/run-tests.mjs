@@ -182,7 +182,7 @@ const NODE_FILES = [
 	"test/verify-panel-stylize.mjs",
 	"test/verify-tool-handlers.mjs",
 	"test/verify-update-check.mjs",
-	"test/verify-usd-camera.mjs",
+	"test/verify-usd-camera.mjs", "test/verify-headless-studio-cli.mjs",
 	"test/verify-zip-store.mjs",
 	"test/verify-render-passes.mjs",
 	"mcp/verify.mjs", "mcp/verify-camera-techniques.mjs", "mcp/verify-camera-capabilities.mjs", "mcp/verify-camera-coverage.mjs", "mcp/verify-render-prompt-sequence.mjs",
@@ -424,7 +424,7 @@ const categories = new Map([
 	["test/verify-agent-script-tool.mjs", { kind: "node", reason: "runs directly under Node" }],
 	...BROWSER_FILES.map((file) => [file, { kind: "browser", reason: "requires the QA browser wrapper and a running Vite app" }]),
 	["test/process/verify-mcp-package-isolation.mjs", { kind: "package-integration", reason: "installs the MCP runtime from the npm registry with an isolated cache" }],
-	...["mcp/verify-live-batch.mjs", "mcp/verify-live-capture.mjs", "mcp/verify-live-editor-model.mjs", "mcp/verify-live-scene-parity.mjs", "test/qa-live-reconnect-browser.mjs"].map(
+	...["mcp/verify-live-batch.mjs", "mcp/verify-live-capture.mjs", "mcp/verify-live-editor-model.mjs", "mcp/verify-live-scene-parity.mjs", "test/qa-live-reconnect-browser.mjs", "test/verify-headless-studio-browser.mjs"].map(
 		(file) => [file, { kind: "browser", reason: "drives a real Chrome editor over the live socket" }],
 	),
 	...NODE_SQLITE_FILES.map((file) => [

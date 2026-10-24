@@ -15,4 +15,4 @@ Discoveries that may change the intent. The worker adds entries; the orchestrato
 - Evidence: `node tools/headless-studio.mjs --project test/fixtures/camera-techniques.cclayproject --port 5201 --live-port 5301 --cdp-port 9301` exits 1 with `ERR_MODULE_NOT_FOUND` for `tools/gt-render/browser.mjs`; the `tools/gt-render/` directory does not exist on `b6806868`.
 - What I did: ran the A5 live path inside `tools/qa-browser.mjs` against the dev server and its live hub (`test/qa-camera-technique-live-browser.mjs`), which is the contract's `ui:shot` route via `cclay live capture --out`.
 - Proposed amendment: none to this intent; restore or remove `headless-studio.mjs` in a Platform intent.
-- Resolution (orchestrator, 2026-10-24): accepted. The QA-browser route is a valid `ui:shot` per the contract. Fixing `headless-studio.mjs` is left as a follow-up Platform intent, outside the camera plan.
+- Resolution (orchestrator, 2026-10-24): accepted. The QA-browser route is a valid `ui:shot` per the contract. Fixing `headless-studio.mjs` is left as a follow-up Platform intent, outside the camera plan. Fixed by the `headless-studio` intent (`docs/intent/headless-studio/`).
