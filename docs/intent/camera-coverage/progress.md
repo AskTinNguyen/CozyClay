@@ -2,8 +2,8 @@
 
 - Working under rev: 1
 - Worker: `camera-coverage-worker`
-- Current step: A9 docs, then A8 gates
-- Next step: A8 gates, PR
+- Current step: none (every Acceptance row has its proof; A4/A6/A7 images and A9 await the orchestrator's review rows)
+- Next step: orchestrator review of the proofs and the PR
 - PR: none yet
 
 ## Acceptance
@@ -17,8 +17,8 @@
 | A5 | met (gate) | `node test/verify-camera-coverage-resolve.mjs` -> `5 checks passed` (14 coverage, 8 composition, 6 cut-question phrases; technique phrases untouched; prompt pointer, length 12,789 <= 12,790); `node mcp/verify-camera-coverage.mjs` -> `14 passed, 0 failed` (cover_scene / check_cuts in memory); `node mcp/verify.mjs` -> `32 tools registered`, `all checks passed`; `node test/motion3/verify-motion3-prompt.mjs` -> `all checks passed`; live `cclay live run` in the A6 run |
 | A6 | met (pending orchestrator review of the images) | ui:shot: `test/qa-camera-coverage-live-browser.mjs` exit 0 (`camera coverage live path QA passed`) -> `proofs/contact-shot-reverse-shot.png`, `contact-master-coverage.png`, `rule-of-thirds-lookthrough.png`, `dissolve-midpoint.png`; `test/verify-camera-coverage-browser.mjs` exit 0 -> `rule-of-thirds.png`, `timeline-flagged-cut.png` |
 | A7 | met (pending orchestrator review of the images) | ui:qa: `node tools/qa-browser.mjs -- node test/verify-camera-coverage-browser.mjs` exit 0, `camera coverage browser QA passed` (24 PASS: Coverage action lays SRS and master and coverage, composition fields store left-third, Cut inspector sets a 16-frame dissolve, a re-laid reverse is flagged on the timeline and read out); ui:shot `proofs/coverage-controls.png`, `rule-of-thirds.png`, `timeline-flagged-cut.png` |
-| A8 | open | |
-| A9 | open | |
+| A8 | met (known exception) | `npm run lint` -> `LINT_EXIT 0`, `knip: 138 findings, 0 new, 1 fixed (baseline 139)`, `loc: 72 files over 250 (baseline 72), 0 violations`, `eslint: 396 errors across 20 rules (baseline 403), 0 regressions` (no baseline or frozen motion file touched); `npm run build` -> `BUILD_EXIT 0`; `node tools/run-tests.mjs --jobs 4` (Git Bash, no dev server) stops on its only failure `FAIL exit car, hips sunk: under 10 s — 12396 ms`; base ba82c0cb under the same load: `FAIL exit car, hips sunk: under 10 s — 12277 ms` (the base copy also fails `test/process/verify-package-telemetry.mjs` only because a `git archive` copy has no `.git`: `fatal: not a git repository`); every manifest RUN file run to the end: `ran 447, failed 1` (that file) |
+| A9 | met (review) | `mcp/README.md` (32 tools, `cover_scene` / `check_cuts` rows, Camera coverage section, SRS line), `docs/agent-cli.md` (Camera coverage section), `docs/studio-ui-ia.md` (Compose, Coverage, Cut, timeline tags), `CHANGELOG.md` Unreleased > Camera; commit 81d1075d |
 
 ## Steps
 
@@ -35,6 +35,9 @@
    - `proofs/contact-master-coverage.png`: the master (both figures full length, side on, 24mm), MS Mara, MS Joon (35mm), CU Mara, CU Joon (50mm).
    - `proofs/rule-of-thirds-lookthrough.png`: the main viewport looking through the shot camera (SHOT CAMERA badge) with the Thirds guide: Mara's head sits on the left vertical third, her eyes just below the upper horizontal line (loose headroom), room to the right where she faces.
    - `proofs/dissolve-midpoint.png`: the frame at the cut into SRS 2: Mara (outgoing OTS) and Joon (incoming OTS) superimposed at about half opacity each, Mara's shoulder soft at the left edge.
+
+6. A9 docs (81d1075d) as in the Acceptance row.
+7. A8 gates on the final tree: lint (exit 0, lines in the row; one round fixed six knip exports and four `no-useless-escape` in an MCP description), build exit 0. The first suite run also failed `test/verify-export-recovery.mjs` (its source-eval seam lacked the new `withTransition` helper the export frame calls); injected like the capabilities worker did (commit after 81d1075d), then `node test/verify-export-recovery.mjs` -> `all export recovery seam checks PASS`. Final suite: only `FAIL exit car, hips sunk: under 10 s — 12396 ms`; keep-going over every `RUN node` manifest line with 4 workers: `ran 447, failed 1` (`test/motion3/verify-motion3-repair.mjs`). Base ba82c0cb exported with `git archive` to `C:\ccbase3` (node_modules junctioned, built): `FAIL exit car, hips sunk: under 10 s — 12277 ms` (the base copy also fails `test/process/verify-package-telemetry.mjs` only because a `git archive` copy has no `.git`: `fatal: not a git repository`). Temp base copy removed afterwards.
 
 ## Decisions
 
