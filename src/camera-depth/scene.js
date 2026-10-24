@@ -11,7 +11,7 @@ import { figureBox } from "../camera-techniques/foreground.js";
 import { normalizePhrase } from "../camera-techniques/resolve.js";
 import { castAt } from "../camera-coverage/cut-geometry.js";
 
-export const castName = (row) => String(row.subject ?? row.name ?? row.id).split(",")[0].trim();
+const castName = (row) => String(row.subject ?? row.name ?? row.id).split(",")[0].trim();
 const propName = (row) => String(row.name || row.kind || row.renderer || row.id);
 
 /**

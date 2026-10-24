@@ -30,12 +30,22 @@ const held = (keys, start = 0, end = 95) => ({ ...createShot("Hero", start, end,
 const scene = (objects = [], cast = [mara, joon]) => ({ cast, objects, filmback });
 const rules = (report) => report.issues.map((issue) => issue.rule);
 /** Apply a fix the way camera.fixShot does: every key moved by the delta and re-aimed. */
-const fixed = (shot, fix, cast) => ({ ...shot, cameraKeys: shot.cameraKeys.map((key) => ({ ...key, framing: movedCamera(key.framing, fix.delta, EYE, filmback.aspectRatio) })) });
+const fixed = (shot, fix) => ({ ...shot, cameraKeys: shot.cameraKeys.map((key) => ({ ...key, framing: movedCamera(key.framing, fix.delta, EYE, filmback.aspectRatio) })) });
 
 check("sampling: the first and last frame plus every k frames, k from the length (D2)", () => {
 	assert.deepEqual(sampleFrames({ startFrame: 0, endFrame: 95 }), [0, 12, 24, 36, 48, 60, 72, 84, 95]);
 	assert.deepEqual(sampleFrames({ startFrame: 10, endFrame: 13 }), [10, 11, 12, 13]);
 	assert.equal(sampleFrames({ startFrame: 0, endFrame: 959 }).length, 81, "k is capped at 12");
+});
+
+check("a shot that names no subject keeps the one it reads: the fix for a wall across a two-shot does not hand it to the other person", () => {
+	const left = createCharacterEntry({ id: "mara", subject: "Mara", x: -1.2, z: 0, rot: 90 }), right = createCharacterEntry({ id: "sela", subject: "Sela", x: 1.2, z: 0, rot: -90 });
+	const wall = prop("cube", { id: "wall", name: "Wall", x: 0, z: 3, scaleX: 1.4, scaleY: 3, scaleZ: 0.4 }), two = { cast: [left, right], objects: [wall], filmback };
+	const shot = { ...held([{ pos: { x: 0, y: 1.6, z: 6 }, yaw: 0, pitch: -0.05, fovDeg: 40 }]), subjectIds: [] };
+	const bad = checkShot(shot, two);
+	assert.deepEqual([bad.subjectId, rules(bad)], ["mara", ["occluded"]], JSON.stringify(bad.issues));
+	const after = checkShot(fixed(shot, bad.issues[0].fix), two);
+	assert.deepEqual([after.subjectId, rules(after)], ["mara", []], `${bad.issues[0].fix.text}: ${JSON.stringify(after.issues.map((row) => row.message))}`);
 });
 
 check("occluded: a pillar between a held camera and Mara's eyes is flagged on every frame; aside, it is not; the fix clears it", () => {

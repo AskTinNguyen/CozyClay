@@ -8,7 +8,7 @@ import { SUBJECT_HEIGHT_M } from "../shot.js";
 import { framingOf, projectPoint } from "../camera-coverage/composition.js";
 import { scaleOf, solveForeground } from "./framing.js";
 
-export const FOREGROUND_SHARE = Object.freeze({ min: 0.1, max: 0.6, default: 0.3 });
+const FOREGROUND_SHARE = Object.freeze({ min: 0.1, max: 0.6, default: 0.3 });
 const NEAR_M = 0.15, LENS_Y = 1.55;
 
 /** The eight corners of a world box { min, max }. */

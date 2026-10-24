@@ -49,13 +49,13 @@ function sizeSteps(camera, subject) {
  * The fix for one issue: { kind, metres, delta, size?, shotId, text }, or a { kind: "reframe", text } when no candidate clears it.
  * @param {string} rule  occluded | inside | crop
  * @param {Array} samples the shot's judged samples ({ frame, camera, people, props, subject, eye, state })
- * @param {object} context { scene, aspect, clears(rule, camera, sample) } from shot-checks.js
+ * @param {object} context { aspect, clears(rule, camera, sample), keeps?(camera, sample) } from shot-checks.js; keeps says the moved camera still reads the same subject
  */
-export function suggestFix(rule, shot, samples, { aspect, clears }) {
-	// A candidate clears the rule on every sample and leaves every other rule as clean as it was.
+export function suggestFix(rule, shot, samples, { aspect, clears, keeps = () => true }) {
+	// A candidate clears the rule on every sample, keeps the subject the check reads, and leaves every other rule as clean as it was.
 	const first = samples[0], ok = (candidate) => samples.every((row) => {
 		const camera = movedCamera(row.camera, candidate.delta, row.eye, aspect);
-		return clears(rule, camera, row) && ["occluded", "inside", "crop"].every((name) => name === rule || !clears(name, row.camera, row) || clears(name, camera, row));
+		return clears(rule, camera, row) && keeps(camera, row) && ["occluded", "inside", "crop"].every((name) => name === rule || !clears(name, row.camera, row) || clears(name, camera, row));
 	});
 	const found = (rule === "crop" ? sizeSteps(first.camera, first.subject) : moves(first.camera)).find(ok);
 	if (!found) return { kind: "reframe", shotId: shot.id, text: rule === "crop" ? `reframe ${shot.name} so no frame edge falls at a joint` : `move ${shot.name}'s camera around what is in the way, or cut to another angle` };

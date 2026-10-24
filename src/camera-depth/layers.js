@@ -13,7 +13,7 @@ const centreOf = (box) => ({ x: (box.min.x + box.max.x) / 2, y: (box.min.y + box
 const contains = (box, p) => ["x", "y", "z"].every((a) => p[a] >= box.min[a] && p[a] <= box.max[a]);
 
 /** Does any of a box show through the framing? Its projected corners overlap the frame (a box reaching behind the lens counts when its centre is ahead). */
-export function inView(framing, box, aspectRatio = 16 / 9) {
+function inView(framing, box, aspectRatio = 16 / 9) {
 	const points = boxCorners(box).map((corner) => projectPoint(framing, corner, aspectRatio)), ahead = points.filter((point) => point.depth > NEAR_M);
 	if (!ahead.length) return false;
 	if (ahead.length < points.length) return projectPoint(framing, centreOf(box), aspectRatio).depth > NEAR_M;
@@ -41,7 +41,8 @@ export function depthLayers(framing, subject, entities, aspectRatio = 16 / 9) {
 }
 
 const list = (names) => (names.length < 3 ? names.join(" and ") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`);
-const named = (row) => (row.kind === "cast" ? row.name : `the ${row.name.toLowerCase()}`);
+// "Floor lamp" reads "the floor lamp"; a name with capitals past its first letter ("Pillar E") keeps them.
+const named = (row) => (row.kind === "cast" ? row.name : `the ${/[A-Z]/.test(row.name.slice(1)) ? row.name : row.name.toLowerCase()}`);
 
 /** The layers in a brief's words ("Joon's shoulder soft in the foreground, the floor lamp behind", "Joon level with Mara"), or null when the frame holds only its subject. */
 export function depthWords(layers, subjectName = "the subject") {

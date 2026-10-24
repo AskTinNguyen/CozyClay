@@ -23,8 +23,8 @@ import { suggestFix } from "./fixes.js";
 
 export const SHOT_RULES = Object.freeze(["occluded", "inside", "crop"]);
 /** The studio camera's near clip (App.jsx), metres. */
-export const NEAR_CLIP_M = 0.1;
-export const OCCLUDED_SHARE = 0.25;
+const NEAR_CLIP_M = 0.1;
+const OCCLUDED_SHARE = 0.25;
 /** Joint heights as a share of stature, and how near (share of stature) a frame edge may fall to one. */
 export const JOINTS = Object.freeze({ ankle: 0.045, knee: 0.285, waist: 0.6, neck: 0.865 });
 const CROP_BAND = 0.02;
@@ -45,7 +45,7 @@ const distanceToBox = (p, box) => Math.hypot(...["x", "y", "z"].map((a) => Math.
 const contains = (box, p) => ["x", "y", "z"].every((a) => p[a] >= box.min[a] && p[a] <= box.max[a]);
 
 /** What hides `eye` from `pos`: prop ids (occludersOf, the agent facts' test) and other cast ids. */
-export function blockersAt(pos, eye, subject, { props, people, state, bounds }) {
+function blockersAt(pos, eye, subject, { props, people, state, bounds }) {
 	const point = { min: eye, max: eye };
 	const byProp = occludersOf({ id: subject.id }, pos, state, { bounds }, point).map((hit) => hit.byObjectId);
 	const byCast = people.filter((row) => row.id !== subject.id && figureParts(row.row).some((box) => segmentIntersectsAabb(pos, eye, box))).map((row) => row.id);
@@ -53,7 +53,7 @@ export function blockersAt(pos, eye, subject, { props, people, state, bounds }) 
 }
 
 /** Props the lens is inside of, or nearer than the near clip to (an enclosure around the subject too is the set, not a prop). */
-export function insideAt(pos, eye, props) {
+function insideAt(pos, eye, props) {
 	return props.filter((row) => !row.attachedTo && !contains(row.box, eye)).flatMap((row) => {
 		const inside = contains(row.box, pos), gap = distanceToBox(pos, row.box);
 		return inside || gap < NEAR_CLIP_M ? [{ id: row.id, name: row.name, inside, gapM: Math.round(gap * 1000) / 1000 }] : [];
@@ -61,7 +61,7 @@ export function insideAt(pos, eye, props) {
 }
 
 /** Where the top and bottom frame edges cross the subject's axis, as shares of its stature (null when that edge misses the figure), and whether the face is in frame. */
-export function frameEdges(camera, subject, aspectRatio = 16 / 9) {
+function frameEdges(camera, subject, aspectRatio = 16 / 9) {
 	const h = subject.height ?? 1.8, at = (share) => projectPoint(camera, { x: subject.x, y: share * h, z: subject.z }, aspectRatio);
 	const crossing = (edge) => {
 		let lo = 0, hi = 1;
@@ -76,7 +76,7 @@ export function frameEdges(camera, subject, aspectRatio = 16 / 9) {
 }
 
 /** The joint a frame edge (a share of stature) falls on, or null. */
-export const jointAt = (share) => (share === null ? null : Object.entries(JOINTS).find(([, height]) => Math.abs(share - height) < CROP_BAND)?.[0] ?? null);
+const jointAt = (share) => (share === null ? null : Object.entries(JOINTS).find(([, height]) => Math.abs(share - height) < CROP_BAND)?.[0] ?? null);
 /** The frame edges that fall at a joint of a subject in frame: [{ edge, joint, at }]. */
 function cropAt(camera, subject, aspect) {
 	const edges = frameEdges(camera, subject, aspect);
@@ -97,7 +97,7 @@ export function checkShot(shot, scene) {
 		const people = castBoxes(cast, shot, frame, place), props = propBoxes(objects, cast, { frame, bounds: scene.bounds });
 		const named = people.find((row) => row.id === (shot.coverage?.subjectId ?? shot.subjectIds?.[0]));
 		const subject = named?.row ?? shotSubject(shot, camera, people.map((row) => row.row), aspect);
-		return subject ? { frame, camera, people, props, subject, eye: eyePoint(subject), state: { objects, characters: cast, frame } } : null;
+		return subject ? { frame, camera, people, props, subject, eye: eyePoint(subject), named: Boolean(named), state: { objects, characters: cast, frame } } : null;
 	});
 	const found = samples.filter(Boolean);
 	if (!found.length) return { ...report, unjudged: "a follow camera, an empty shot or no visible subject has nothing to read" };
@@ -107,10 +107,12 @@ export function checkShot(shot, scene) {
 	const held = (row) => row.frame === first.frame || row.frame === last.frame;
 	const clears = (rule, camera, row) => rule === "occluded" ? !blockersAt(camera.pos, row.eye, row.subject, { ...row, bounds: scene.bounds }).length
 		: rule === "inside" ? !insideAt(camera.pos, row.eye, row.props).length : !held(row) || !cropAt(camera, row.subject, aspect).length;
+	// A shot that names no subject reads the most central person: a fix must not hand the shot to someone else.
+	const keeps = (camera, row) => row.named || shotSubject(shot, camera, row.people.map((entry) => entry.row), aspect)?.id === row.subject.id;
 	report.subjectId = subject.id;
 	report.subjectName = subject.name;
 	report.layers = depthLayers(first.camera, subject, [...first.people, ...first.props], aspect);
-	const issue = (rule, severity, message, frames, extra = {}) => report.issues.push({ rule, severity, message: message.slice(0, 200), frames, subjectId: subject.id, ...extra, fix: suggestFix(rule, shot, judged, { aspect, clears }) });
+	const issue = (rule, severity, message, frames, extra = {}) => report.issues.push({ rule, severity, message: message.slice(0, 200), frames, subjectId: subject.id, ...extra, fix: suggestFix(rule, shot, judged, { aspect, clears, keeps }) });
 
 	// Occluded: on the held frames, or on too many of the samples a move passes through.
 	const blocked = judged.map((row) => ({ frame: row.frame, by: blockersAt(row.camera.pos, row.eye, row.subject, { ...row, bounds: scene.bounds }) })).filter((row) => row.by.length);

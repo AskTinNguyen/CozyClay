@@ -218,7 +218,7 @@ const BROWSER_FILES = [
 	"test/qa-rail-lean-browser.mjs",
 	"test/qa-export-recovery-browser.mjs", "test/qa-export-workspace-browser.mjs", "test/qa-sequence-prompt-browser.mjs",
 	"test/verify-camera-mode-browser.mjs",
-	"test/verify-camera-rail-browser.mjs", "test/verify-camera-technique-picker-browser.mjs", "test/verify-camera-rig-panel-browser.mjs", "test/verify-camera-coverage-browser.mjs", "test/verify-technique-references-browser.mjs", "test/verify-camera-motivation-browser.mjs", "test/verify-group-coverage-browser.mjs", "test/verify-intensity-curve-browser.mjs",
+	"test/verify-camera-rail-browser.mjs", "test/verify-camera-technique-picker-browser.mjs", "test/verify-camera-rig-panel-browser.mjs", "test/verify-camera-coverage-browser.mjs", "test/verify-technique-references-browser.mjs", "test/verify-camera-motivation-browser.mjs", "test/verify-group-coverage-browser.mjs", "test/verify-intensity-curve-browser.mjs", "test/verify-shot-checks-browser.mjs",
 	"test/verify-cutout-browser.mjs",
 	"test/verify-mesh-browser.mjs",
 	"test/verify-first-success-guide-browser.mjs",
