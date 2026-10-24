@@ -25,6 +25,7 @@ import { eyePoint, measureComposition } from '../camera-coverage/composition.js'
 import { travelAt } from '../camera-coverage/cut-geometry.js';
 import { currentTechnique } from '../camera-techniques/storage.js';
 import { castBoxes, propBoxes, resolveNear } from '../camera-depth/scene.js';
+import { depthWords, shotLayers } from '../camera-depth/layers.js';
 
 const id = StudioSchemas.TargetGuard.properties.targetId;
 const input = (properties, required = []) => ({ type: 'object', properties, required, additionalProperties: false });
@@ -142,6 +143,9 @@ export function register(registry, ports) {
     const placed = plan.composition && keys ? shot.cameraKeys.map(key => ({ frame: key.frame, ...measureComposition(key.framing, eyePoint(subject), view.filmback?.aspectRatio) })) : null;
     const castName = castId => (rows.find(row => row.id === castId)?.name ?? castId).split(',')[0], achieved = capabilityReadback(shot, capabilityScene(view, owner().state().frameCount), castName);
     patch(shot.id, row => ({ ...row, technique }));
+    // The depth layers through the opening key (depth-staging A4): who and what stands in front of and behind the subject.
+    const layers = shot.cameraKeys[0] ? shotLayers(shot, shot.cameraKeys[0].framing, subject.id, { cast: visible, objects: view.objects, aspectRatio: view.filmback?.aspectRatio, bounds: ports.bounds }) : null;
+    const bands = layers && { ...Object.fromEntries(['foreground', 'midground', 'background'].map(band => [band, layers[band].map(row => row.name)])), words: depthWords(layers, subject.name.split(',')[0]) };
     const verified = !plan.expectedMove || still || move?.id === plan.expectedMove;
     const warnings = [
       ...plan.promptOnly.map(part => ({ code: 'PROMPT_ONLY', id: part.id, message: `${part.name} needs ${part.requires.map(need => PLANNED_CAPABILITIES[need]).join(' and ')}; prompt only.`.slice(0, 120) })),
@@ -156,7 +160,7 @@ export function register(registry, ports) {
         ...pick(checks, ['derivedSize', 'screenFraction', 'clipped', 'behindCamera', 'occluded', 'cameraSide']), ...(plan.members ? { membersInFrame: plan.members.filter(row => row.inFrame).length, members: plan.members.length } : {}),
         ...(placed ? { composition: plan.composition.label, screenX: placed[0].screenX, eyeLineY: placed[0].eyeLineY } : {}), ...(plan.foreground ? { foregroundShare: plan.foreground.measured } : {}) },
       output: { technique, subjectId: subject.id, keys: shot.cameraKeys.length, mode: shot.camera.mode, ...(parsed ? { resolved: parsed.matched, matched: routed.matched, confidence: routed.confidence } : {}),
-        ...(placed ? { composition: { ...technique.composition, target: { screenX: (plan.composition.target.x + 1) / 2, eyeLineY: (1 - plan.composition.target.y) / 2 }, keys: placed } } : {}), ...(plan.foreground ? { foreground: plan.foreground } : {}) } };
+        ...(placed ? { composition: { ...technique.composition, target: { screenX: (plan.composition.target.x + 1) / 2, eyeLineY: (1 - plan.composition.target.y) / 2 }, keys: placed } } : {}), ...(plan.foreground ? { foreground: plan.foreground } : {}), ...(bands ? { layers: bands } : {}) } };
   }
   const pick = (value, keys) => Object.fromEntries(keys.filter(key => value?.[key] !== undefined).map(key => [key, value[key]]));
   const patch = (shotId, update) => owner().write(rows => rows.map(row => (row.id === shotId ? update(row) : row)));
