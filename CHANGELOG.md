@@ -71,6 +71,14 @@ Export
 - MCP `render_prompt` takes `scope: "sequence"`, `profile`, `from_shot` and
   `to_shot`; the Studio agent's prompt names the camera library (its budget is
   now 13,400 characters).
+Tools
+
+- `tools/headless-studio.mjs` runs again: it starts the real Studio in its own
+  headless Chrome with a `.cclayproject` seeded, ready for `cclay live` and MCP.
+  Its browser helpers live in `tools/studio-browser.mjs` (they went away with
+  the ground-truth renderer), Chrome is found in the standard Windows paths too,
+  and `test/verify-headless-studio-cli.mjs` keeps a missing import from
+  shipping unnoticed.
 
 ## 3.1.2 - 2026-10-23
 

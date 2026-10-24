@@ -183,6 +183,7 @@ const NODE_FILES = [
 	"test/verify-tool-handlers.mjs",
 	"test/verify-update-check.mjs",
 	"test/verify-usd-camera.mjs",
+	"test/verify-headless-studio-cli.mjs",
 	"test/verify-zip-store.mjs",
 	"test/verify-render-passes.mjs",
 	"mcp/verify.mjs", "mcp/verify-camera-techniques.mjs", "mcp/verify-camera-capabilities.mjs", "mcp/verify-camera-coverage.mjs", "mcp/verify-render-prompt-sequence.mjs",
@@ -427,6 +428,7 @@ const categories = new Map([
 	...["mcp/verify-live-batch.mjs", "mcp/verify-live-capture.mjs", "mcp/verify-live-editor-model.mjs", "mcp/verify-live-scene-parity.mjs", "test/qa-live-reconnect-browser.mjs"].map(
 		(file) => [file, { kind: "browser", reason: "drives a real Chrome editor over the live socket" }],
 	),
+	["test/verify-headless-studio-browser.mjs", { kind: "browser", reason: "starts the Studio in its own headless Chrome (needs Chrome and free ports)" }],
 	...NODE_SQLITE_FILES.map((file) => [
 		file,
 		hasNodeSqlite
