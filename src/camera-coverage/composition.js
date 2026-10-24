@@ -87,7 +87,7 @@ function compositionTarget(composition, ahead = 0) {
  * Turn an exact framing so `eye` lands on NDC `target` (camera position and lens unchanged).
  * Solves pitch from the vertical offset, then yaw from the horizontal one (YXZ, no roll).
  */
-function aimFraming(exact, eye, target, filmback = {}) {
+export function aimFraming(exact, eye, target, filmback = {}) {
 	const fovDeg = (focalMmToFov(exact.focalMm, filmback.sensorId, filmback.aspectRatio) * 180) / Math.PI, vTan = vTanOf(fovDeg);
 	const a = target.x * vTan * (filmback.aspectRatio ?? 16 / 9), b = target.y * vTan;
 	const d = { x: eye.x - exact.position.x, y: eye.y - exact.position.y, z: eye.z - exact.position.z }, range = Math.hypot(d.x, d.y, d.z) || 1;

@@ -4,6 +4,7 @@
 // takes ({ position, lookAt, focalMm }).
 import { FRAMING_PIVOT_Y, SUBJECT_HEIGHT_M, focalMmToFov, usedSensorHeightMm } from "../shot.js";
 import { SIZE_LADDER } from "./entry.js";
+import { aimFraming, eyePoint, framingOf, projectPoint } from "../camera-coverage/composition.js";
 
 const DEG = Math.PI / 180;
 
@@ -96,16 +97,45 @@ export function groupFraming(members, state, filmback) {
 	return { position: { x: centre.x + normal.x * distance, y, z: centre.z + normal.z * distance }, lookAt: { x: centre.x, y: spec.aim * tallest, z: centre.z }, focalMm };
 }
 
-/** Past the near shoulder of `over` onto `target`'s face; the lens sets the size. */
+// A dirty over-the-shoulder: the foreground shoulder fills about this share of the frame width from its
+// edge, its top no lower than SHOULDER_LOW in NDC, and the target's eyes sit on the far third.
+const OTS_COVER = 0.3, SHOULDER_LOW = -0.75, SHOULDER = { edge: 0.23, height: 0.82 }, OTS_LENS_Y = 1.55;
+
+/**
+ * Past the near shoulder of `over` onto `target`'s face; the lens sets the size. The camera steps back
+ * from the shoulder until its top is in frame, then slides across the back until the shoulder covers
+ * OTS_COVER of the frame from the near edge, aimed so the target's eyes land on the far third.
+ * Answers the exact framing plus `shoulderCover` (the share reached) for receipts and tests.
+ */
 export function shoulderFraming(target, over, state, filmback) {
 	const sOver = scaleOf(over), toward = unit({ x: target.x - over.x, z: target.z - over.z }), right = { x: -toward.z, z: toward.x };
-	const side = state.side === "left" ? -1 : 1;
-	const position = { x: over.x - toward.x * 0.55 * sOver + right.x * 0.36 * sOver * side, y: 1.68 * sOver, z: over.z - toward.z * 0.55 * sOver + right.z * 0.36 * sOver * side };
-	const height = SUBJECT_HEIGHT_M * scaleOf(target), spec = SIZE_SPECS[state.size] ?? SIZE_SPECS["medium close-up"];
-	const distance = Math.hypot(target.x - position.x, target.z - position.z, FRAMING_PIVOT_Y * scaleOf(target) - position.y);
-	const gate = usedSensorHeightMm(filmback.sensorId, filmback.aspectRatio);
-	const focalMm = clampFocal(state.focalMm ?? (gate * spec.fraction * distance) / height, filmback);
-	return { position, lookAt: { x: target.x, y: spec.aim * height, z: target.z }, focalMm };
+	const side = state.side === "left" ? -1 : 1, aspect = filmback.aspectRatio ?? 16 / 9;
+	const height = SUBJECT_HEIGHT_M * scaleOf(target), spec = SIZE_SPECS[state.size] ?? SIZE_SPECS["medium close-up"], gate = usedSensorHeightMm(filmback.sensorId, filmback.aspectRatio);
+	// The inner edge of the foreground silhouette: its shoulder on the camera's side, at shoulder height.
+	const edge = { x: over.x + right.x * side * SHOULDER.edge * sOver, y: SHOULDER.height * SUBJECT_HEIGHT_M * sOver, z: over.z + right.z * side * SHOULDER.edge * sOver };
+	const eye = eyePoint(target), far = { x: side / 3, y: 1 / 3 };
+	const at = (behind, lateral) => {
+		const position = { x: over.x - toward.x * behind + right.x * side * lateral, y: OTS_LENS_Y * sOver, z: over.z - toward.z * behind + right.z * side * lateral };
+		const distance = Math.hypot(target.x - position.x, target.z - position.z, FRAMING_PIVOT_Y * scaleOf(target) - position.y);
+		const focalMm = clampFocal(state.focalMm ?? (gate * spec.fraction * distance) / height, filmback);
+		const exact = aimFraming({ position, lookAt: { x: target.x, y: spec.aim * height, z: target.z }, focalMm }, eye, far, filmback);
+		const ndc = projectPoint(framingOf(exact, filmback), edge, aspect);
+		return { exact, cover: ndc.depth > 0 ? (1 + side * ndc.x) / 2 : 0, low: ndc.y };
+	};
+	const across = (behind) => {
+		// The shoulder covers less of the frame the further across the back the camera slides.
+		let lo = 0.05 * sOver, hi = 1.2 * sOver;
+		if (at(behind, hi).cover >= OTS_COVER) return at(behind, hi);
+		if (at(behind, lo).cover <= OTS_COVER) return at(behind, lo);
+		for (let i = 0; i < 32; i++) { const mid = (lo + hi) / 2; if (at(behind, mid).cover > OTS_COVER) lo = mid; else hi = mid; }
+		return at(behind, (lo + hi) / 2);
+	};
+	let best = null;
+	for (let behind = 0.55 * sOver; behind <= 3 * sOver; behind += 0.05 * sOver) {
+		best = across(behind);
+		if (best.low >= SHOULDER_LOW) break;
+	}
+	return { ...best.exact, shoulderCover: Math.round(best.cover * 1000) / 1000 };
 }
 
 /** From the viewer's eyes (a head bone when the editor has one) toward the target or straight ahead. */
