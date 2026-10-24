@@ -1,7 +1,7 @@
 # Camera Coverage
 
 - Rev: 1
-- Status: active
+- Status: completed
 - Area: Camera and Shots
 - Owner: TinNguyen
 - Skill: `none`
@@ -75,6 +75,27 @@ Agents drive all of this from natural language ("cover this dialogue", "give me 
 - Exports stay readable by their consumers; new fields are additive.
 - Keep the branch merged with `origin/main` and pushed after every step (contract, Git And Merge).
 
+## Reviews
+
+Orchestrator review of the ui:shot images and the docs, branch `intent/camera-coverage` at 035d675f, 2026-10-24.
+
+| Item | Image or file | What it shows | Verdict |
+| --- | --- | --- | --- |
+| A6 | `proofs/contact-shot-reverse-shot.png` | Four frame grabs SRS 1–4 alternating OTS Mara / OTS Joon at 50mm, the floor grid running the same way in all four (one side of the line). The foreground shoulder is at most a sliver at the frame edge, so these read close to clean singles (residual). | met |
+| A6 | `proofs/contact-master-coverage.png` | Master (24mm, both figures full body), MS Mara, MS Joon (35mm), CU Mara, CU Joon (50mm), frames 192–431. | met |
+| A6 | `proofs/rule-of-thirds-lookthrough.png`, `rule-of-thirds.png` | Through the lens with the thirds guide: the subject's eyes on the upper third line, body on the left vertical third, CU 50mm. | met |
+| A6 / A4 | `proofs/dissolve-midpoint.png` | Outgoing and incoming OTS superimposed at about half opacity each. | met |
+| A6 / A3 | `proofs/timeline-flagged-cut.png` | Red 180° tags at the cuts into SRS 3 (96) and SRS 4 (144), a DISS tag at 48; the cut inspector reads "8 cuts, 2 flagged" with the crossing explained and a fix suggested. | met |
+| A7 | `proofs/coverage-controls.png` | Camera mode: the Coverage section (pattern, cast A/B, a description, the lay button, the receipt "Laid Master and Coverage over 192–431 … every cut clean"), the Cut inspector ("8 cuts, 0 flagged", transition select, clean readout). | met |
+| A9 | `mcp/README.md`, `docs/agent-cli.md`, `docs/studio-ui-ia.md`, `CHANGELOG.md` (81d1075d) | `cover_scene` / `check_cuts` rows, live verbs, the Coverage and Cut controls, an Unreleased line. | met |
+
+Gates re-run by the orchestrator in the worktree (Git Bash, no dev server): `bus/verify-camera-coverage` pass 4, `bus/verify-camera-composition` pass 3, `verify-camera-cut-rules` 6 checks, `bus/verify-camera-transitions` pass 3, `verify-camera-coverage-resolve` 5 checks, `mcp/verify-camera-coverage` `14 passed, 0 failed`, `mcp/verify.mjs` `all checks passed`, the earlier camera files pass, `verify-motion3-prompt` passes, `verify-export-recovery` exit 0; `npm run lint` exit 0 (`knip: 138 findings, 0 new`, `0 violations`, `0 regressions`); `npm run build` exit 0; no diff to `tools/*-baseline.json` or the frozen motion files.
+
+PR review (Codex, three P2 findings) fixed in ac982864 with regression checks: opening fade with no predecessor and a new `transitionOut` fade-to-black on the last shot; keyed↔rail dissolves sampled in each shot's own camera mode in MoveRig, FollowCamRig and the export frame; composition-only `camera.applyTechnique`. Re-verified: `verify-camera-transitions` pass 5, `verify-camera-composition` pass 3, `verify-camera-coverage` pass 4, export recovery and capture exit 0, lint and build exit 0. Suite (Git Bash, no dev server): one run crashed `verify-agent-routes` with 0xC0000409 (a native crash under parallel load; the file then passed three times alone); the re-run's only failure was `FAIL exit car, hips sunk: under 10 s — 12464 ms` (known exception; base ba82c0cb fails it too, `— 12277 ms`, per the worker). Threads replied to and resolved.
+
+Residual risks recorded at close: OTS framings show the foreground shoulder only as a sliver at the frame edge (a tighter dirty-OTS composition is a follow-up); `verify-agent-routes` can crash natively under suite load on this PC (seen once).
+
 ## Changelog
 
 - rev 1 (2026-10-24): created from the camera library plan (camera-techniques L-1, L-3).
+- rev 1 (2026-10-24): completed. Every Acceptance row met with orchestrator review; PR review findings fixed; PR #5 squash-merged.
