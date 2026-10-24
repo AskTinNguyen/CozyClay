@@ -7,6 +7,7 @@
 import { directorPacket } from "./packet.js";
 import { drawPacketPlan } from "./plan-draw.js";
 import { packetFiles } from "./files.js";
+import { intensityStrip } from "./intensity.js";
 import { buildContactSheet } from "../studio-contact-sheet.js";
 import { studioSequenceDocument } from "../sequence-prompt-studio.js";
 import { ko } from "../locale.js";
@@ -24,6 +25,19 @@ function planPng(packet) {
 	canvas.width = packet.plan.page.width;
 	canvas.height = packet.plan.page.height;
 	drawPacketPlan(canvas.getContext("2d"), packet.plan, { title: packet.title });
+	return canvasBytes(canvas);
+}
+
+/** The intensity strip as PNG bytes (rows top-down), or null without an intensity section. */
+function intensityPng(packet) {
+	const strip = intensityStrip(packet);
+	if (!strip) return null;
+	const canvas = document.createElement("canvas");
+	canvas.width = strip.width;
+	canvas.height = strip.height;
+	const ctx = canvas.getContext("2d"), image = ctx.createImageData(strip.width, strip.height);
+	image.data.set(strip.data);
+	ctx.putImageData(image, 0, 0);
 	return canvasBytes(canvas);
 }
 
@@ -70,7 +84,7 @@ export function directorPacketExporter(deps) {
 		if (!packet.shots.length) return null;
 		const result = await deps.exportSequencePack(shotIds, null, async (job) => {
 			job.label = ko("Director packet: plan and contact sheet", "디렉터 패킷: 플랜과 콘택트 시트");
-			return packetFiles(packet, { plan: planPng(packet), contactSheet: contactSheetPng(packet, deps.renderFrameBuffer) });
+			return packetFiles(packet, { plan: planPng(packet), contactSheet: contactSheetPng(packet, deps.renderFrameBuffer), intensity: intensityPng(packet) });
 		});
 		return result ? { ...result, packet } : null;
 	};

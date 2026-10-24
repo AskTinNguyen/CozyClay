@@ -144,7 +144,7 @@ const mc = await view();
 console.log(`  master and coverage: ${mc.summary}`);
 expect("the master and coverage range: 5 shots, one line", mc.rows.length === 5 && mc.cameras === 5 && mc.lines === 1, JSON.stringify(mc).slice(0, 300));
 expect("the push-in is flagged unmotivated in its row", mc.rows[1]?.[1] >= 1 && /motivation\/unmotivated/.test(mc.rows[1][2]), JSON.stringify(mc.rows));
-expect("the dialog names the packet's files", /packet\/index\.html, packet\/shot-list\.csv, packet\/shot-list\.md, packet\/packet\.json, packet\/plan\.png, packet\/contact-sheet\.png/.test(mc.files ?? ""), mc.files);
+expect("the dialog names the packet's files", /packet\/index\.html, packet\/shot-list\.csv, packet\/shot-list\.md, packet\/packet\.json, packet\/plan\.png, packet\/contact-sheet\.png, packet\/intensity\.png/.test(mc.files ?? ""), mc.files);
 await shoot("packet-preview-master-coverage.png");
 await savePlan("plan-master-coverage.png");
 
@@ -156,13 +156,14 @@ expect("Download director packet exports cozyclay-sequence-coverage.zip", packed
 for (let i = 0; i < 40 && !zips().length; i++) await pause(250);
 const zip = zips()[0] ? join(downloads, zips()[0]) : null;
 expect("the browser download landed", Boolean(zip), readdirSync(downloads).join(", "));
+const PACKET = ["packet/index.html", "packet/shot-list.csv", "packet/shot-list.md", "packet/packet.json", "packet/plan.png", "packet/contact-sheet.png"];
 const checkZip = (path, shots, label) => {
 	const tested = execFileSync("unzip", ["-t", path], { encoding: "utf8" }), names = execFileSync("unzip", ["-Z1", path], { encoding: "utf8" }).trim().split("\n");
 	const folder = names.filter((name) => name.startsWith("packet/"));
 	console.log(`  ${label}: ${names.length} entries; packet/: ${folder.join(", ")}`);
 	expect(`${label}: unzip -t passes`, /No errors detected in compressed data/.test(tested), tested.slice(-200));
-	expect(`${label}: packet/ holds index.html, shot-list.csv, shot-list.md, packet.json, plan.png, contact-sheet.png`,
-		JSON.stringify(folder) === JSON.stringify(["packet/index.html", "packet/shot-list.csv", "packet/shot-list.md", "packet/packet.json", "packet/plan.png", "packet/contact-sheet.png"]), JSON.stringify(folder));
+	const want = shots >= 2 ? [...PACKET, "packet/intensity.png"] : PACKET;
+	expect(`${label}: packet/ holds ${want.map((name) => name.slice(7)).join(", ")}`, JSON.stringify(folder) === JSON.stringify(want), JSON.stringify(folder));
 	expect(`${label}: the sequence pack around it`, names.includes("sequence-prompt.txt") && names.includes("references.json") && names.filter((name) => name.endsWith("/first.png")).length === shots, JSON.stringify(names));
 	const csv = execFileSync("unzip", ["-p", path, "packet/shot-list.csv"], { encoding: "utf8" }).trim().split("\r\n");
 	expect(`${label}: shot-list.csv has a row per shot`, csv.length === 1 + shots && csv[0].startsWith("number,name,start_frame"), csv.join(" / ").slice(0, 300));

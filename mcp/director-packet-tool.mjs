@@ -34,7 +34,7 @@ export function directorPacketTool(deps) {
 				"motivation and shot checks) and the packet data (cast, story beats, notes, and the plan's primitives: numbered cameras with frustums and move paths, " +
 				"every pair's line of action, the cast's marks and walks). In memory: no pictures. With an editor connected it reads the editor's shots; otherwise " +
 				"the shots cover_scene planned. The full pack (packet/index.html, plan.png, contact-sheet.png, shot-list.csv, shot-list.md inside the sequence pack) " +
-				"is written by the editor: cclay live run export.directorPacket.",
+				"is written by the editor: cclay live run export.directorPacket. With two shots or more the data also carries the intensity curve (intensity-curve) and the pack intensity.png.",
 			inputSchema: {
 				from_shot: z.number().int().min(1).optional().describe("first shot (1-based, time order)"),
 				to_shot: z.number().int().min(1).optional().describe("last shot (inclusive)"),
@@ -56,10 +56,10 @@ export function directorPacketTool(deps) {
 			const packet = directorPacket(document, { range: { from: from_shot, to: to_shot } });
 			if (!packet.shots.length) return text(`No shots in ${from_shot ?? 1}-${to_shot ?? "end"}: the sequence has ${packet.range.of}.`);
 			const data = include_plan ? packet : { ...packet, plan: { counts: packet.plan.counts } };
-			const files = packetFileNames({ plan: true, contactSheet: true });
+			const files = packetFileNames({ plan: true, contactSheet: true, intensity: Boolean(packet.intensity) });
 			const head = `Director packet: ${packet.title}, shots ${packet.range.from}-${packet.range.to} of ${packet.range.of}, ${packet.seconds}s; ` +
 				`${packet.checks.map((row) => `${row.label.toLowerCase()} ${row.summary}`).join("; ")}; plan ${Object.entries(packet.plan.counts).map(([key, value]) => `${value} ${key}`).join(", ")} ` +
-				`(${live ? "the editor's shots" : "memory: the shots cover_scene planned"}; no pictures rendered here, ${live ? `the editor's export.directorPacket writes ${files.join(", ")} inside the sequence pack` : "an editor's export.directorPacket renders plan.png and contact-sheet.png"}).`;
+				`(${live ? "the editor's shots" : "memory: the shots cover_scene planned"}; no pictures rendered here, ${live ? `the editor's export.directorPacket writes ${files.join(", ")} inside the sequence pack` : "an editor's export.directorPacket renders plan.png, contact-sheet.png and intensity.png"}).`;
 			return { content: [
 				{ type: "text", text: `${head}\n\n${format === "csv" ? shotListCsv(packet) : shotListMarkdown(packet)}` },
 				{ type: "text", text: JSON.stringify(data) },

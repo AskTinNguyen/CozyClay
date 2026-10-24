@@ -36,11 +36,11 @@ const [list, json] = await call("render_packet");
 const packet = JSON.parse(json);
 console.log(list.split("\n").slice(0, 3).join("\n"));
 check("the head names the range, the checks, the plan and that nothing was rendered",
-	/^Director packet: .+, shots 1-\d+ of \d+, [\d.]+s; cuts \d+ cuts?, \d+ flagged; coverage .+; motivation .+; plan \d+ cameras, \d+ moving, \d+ lines, \d+ marks, \d+ walks, \d+ legendRows \(memory: the shots cover_scene planned; no pictures rendered here, an editor's export\.directorPacket renders plan\.png and contact-sheet\.png\)\.$/m.test(list), list.split("\n")[0]);
+	/^Director packet: .+, shots 1-\d+ of \d+, [\d.]+s; cuts \d+ cuts?, \d+ flagged; coverage .+; motivation .+; plan \d+ cameras, \d+ moving, \d+ lines, \d+ marks, \d+ walks, \d+ legendRows \(memory: the shots cover_scene planned; no pictures rendered here, an editor's export\.directorPacket renders plan\.png, contact-sheet\.png and intensity\.png\)\.$/m.test(list), list.split("\n")[0]);
 check("the shot list is shot-list.md: a table row per shot", /^## Shots$/m.test(list) && list.split("\n").filter((line) => /^\| \d+ \| /.test(line)).length === packet.shots.length && packet.shots.length >= 2, `${packet.shots.length} shots`);
 check("the data has the cast, a row per shot with its fields and flags, the checks and the plan primitives",
 	packet.cast.length === 2 && packet.shots.every((row) => row.frames && row.timecode && row.size && row.angle && row.lensMm.length === 2 && row.measured && Array.isArray(row.capabilities) && Array.isArray(row.flags))
-	&& packet.checks.some((row) => row.id === "cuts") && packet.plan.counts.cameras === packet.shots.length && packet.plan.primitives.some((row) => row.kind === "line"), JSON.stringify(packet).slice(0, 300));
+	&& packet.checks.some((row) => row.id === "cuts") && packet.intensity?.shots.length === packet.shots.length && packet.plan.counts.cameras === packet.shots.length && packet.plan.primitives.some((row) => row.kind === "line"), JSON.stringify(packet).slice(0, 300));
 const [listAgain, jsonAgain] = await call("render_packet");
 check("the same bytes on a second call", listAgain === list && jsonAgain === json);
 const [csv] = await call("render_packet", { format: "csv" });
@@ -66,7 +66,7 @@ try {
 	check("live: the editor's five shots, the push-in flagged, as directorPacket answers them",
 		live.shots.length === 5 && JSON.stringify(live.shots.map((row) => [row.name, row.measured, row.flags.map((flag) => flag.rule)])) === JSON.stringify(expected.shots.map((row) => [row.name, row.measured, row.flags.map((flag) => flag.rule)]))
 		&& live.shots[1].flags[0]?.rule === "unmotivated" && JSON.stringify(live.plan.counts) === JSON.stringify(expected.plan.counts), JSON.stringify(live.shots.map((row) => row.flags)).slice(0, 300));
-	check("live: the head names the editor action and the pack's files", /the editor's export\.directorPacket writes packet\/index\.html, packet\/shot-list\.csv, packet\/shot-list\.md, packet\/packet\.json, packet\/plan\.png, packet\/contact-sheet\.png inside the sequence pack/.test(answer[0]), answer[0].split("\n")[0]);
+	check("live: the head names the editor action and the pack's files", /the editor's export\.directorPacket writes packet\/index\.html, packet\/shot-list\.csv, packet\/shot-list\.md, packet\/packet\.json, packet\/plan\.png, packet\/contact-sheet\.png, packet\/intensity\.png inside the sequence pack/.test(answer[0]), answer[0].split("\n")[0]);
 } finally { f.dispose(); }
 
 console.log(`\n${passes} passed, ${failures} failed`);

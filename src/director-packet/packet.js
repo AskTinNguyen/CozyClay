@@ -25,7 +25,7 @@ function rangeOf(document, range) {
 	return { shots, from: shots.length ? all.indexOf(shots[0]) + 1 : 0, to: shots.length ? all.indexOf(shots.at(-1)) + 1 : 0, of: all.length };
 }
 
-function shotRow(beat, shot, fps, flags) {
+function shotRow(beat, shot, fps, flags, intensity) {
 	const focal = beat.measure.focalMm ?? [beat.measure.start?.focalMm ?? 0, beat.measure.end?.focalMm ?? 0];
 	return {
 		number: beat.index, shotNumber: beat.shotNumber, shotId: beat.id, name: beat.title,
@@ -36,6 +36,7 @@ function shotRow(beat, shot, fps, flags) {
 		move: beat.camera, technique: beat.technique, measured: beat.measured, capabilities: beat.rig,
 		composition: beat.composition, coverage: beat.coverage, transitionIn: beat.transition,
 		...(shot.targetModel ? { targetModel: shot.targetModel } : {}),
+		...(intensity ? { intensity: intensity.shots.find((row) => row.shotId === beat.id)?.combined ?? null } : {}),
 		flags: flags.filter((row) => row.shotId === beat.id).map(({ shotId, ...rest }) => rest),
 	};
 }
@@ -43,14 +44,14 @@ function shotRow(beat, shot, fps, flags) {
 /**
  * @param {object} document  the sequence document (shot-prompt-engine/document.js), with storyBeats
  * @param {{ range?: { from?, to? } | { shotIds }, placeAt?: Function }} [options]  placeAt(row, shot, frame) places the cast (default castAt)
- * @returns the packet: { version, title, range, fps, aspect, seconds, cast, beats?, shots, checks, notes, plan }
+ * @returns the packet: { version, title, range, fps, aspect, seconds, cast, beats?, shots, checks, notes, intensity? (with 2+ shots), plan }
  */
 export function directorPacket(document, { range = null, placeAt = castAt } = {}) {
 	const fps = document.fps ?? 24, scene = engineScene(document), picked = rangeOf(document, range), shots = picked.shots;
 	// An empty range briefs nothing (an empty shotIds list would read as every shot).
 	const brief = shots.length ? buildSequencePrompt(document, { range: { shotIds: shots.map((shot) => shot.id) } }) : { beats: [], seconds: 0, aspect: null, continuity: null };
 	const checkScene = { cast: scene.cast, filmback: document.filmback ?? {}, fovDeg: document.fovDeg, placeAt };
-	const { checks, flags, notes } = runPacketChecks({ document, shots, scene: checkScene, placeAt });
+	const { checks, flags, notes, sections } = runPacketChecks({ document, shots, scene: checkScene, placeAt });
 	const aspectRatio = document.filmback?.aspectRatio ?? 16 / 9;
 	const span = shots.length ? { startFrame: shots[0].startFrame, endFrame: shots.at(-1).endFrame } : null;
 	const cast = scene.cast.map((row, i) => ({
@@ -62,13 +63,13 @@ export function directorPacket(document, { range = null, placeAt = castAt } = {}
 	const beatOf = (frame) => brief.beats.find((beat) => frame >= beat.startFrame && frame <= beat.endFrame);
 	const beats = storyBeats.map((beat) => ({ id: beat.id, frame: beat.frame, kind: beat.kind, label: beat.label, shot: beatOf(beat.frame)?.index ?? null,
 		timecode: beatOf(beat.frame) ? timecode(beatOf(beat.frame).deliveryStart + beat.frame - beatOf(beat.frame).startFrame, fps) : null }));
-	const rows = brief.beats.map((beat, i) => shotRow(beat, shots[i], fps, flags));
+	const rows = brief.beats.map((beat, i) => shotRow(beat, shots[i], fps, flags, sections.intensity));
 	const plan = planPrimitives(shots, scene, { cuts: checkCuts(shots, checkScene).cuts, placeAt, aspect: aspectRatio });
 	return {
 		version: PACKET_VERSION, title: document.title || "Untitled",
 		range: { from: picked.from, to: picked.to, of: picked.of, ...(span ?? { startFrame: null, endFrame: null }) },
 		fps, aspect: brief.aspect ?? document.aspect ?? null, seconds: r(brief.seconds), look: document.look || null, set: document.set?.environment || null,
 		cast, ...(beats.length ? { beats } : {}), shots: rows,
-		checks, notes, continuity: brief.continuity?.text ?? null, plan,
+		checks, notes, continuity: brief.continuity?.text ?? null, ...sections, plan,
 	};
 }

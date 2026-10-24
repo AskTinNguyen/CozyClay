@@ -54,8 +54,13 @@ test('A1: master and coverage: cast, shot rows and flags from the checks that ex
     assert.match(packet.shots[2].transitionIn, /12-frame dissolve/);
     assert.deepEqual(packet.shots[3].capabilities, ['a Dutch angle, the horizon tilted 12 degrees, falling to the right']);
     // Flags: the push-in has no beat (motivation); cut and coverage report clean; no shot aims at a model, so that check is left out.
-    assert.deepEqual(packet.checks.map((row) => row.id), ['cuts', 'coverage', 'motivation']);
+    assert.deepEqual(packet.checks.map((row) => row.id), ['cuts', 'coverage', 'motivation', 'structure']);
     assert.deepEqual(packet.shots.flatMap((row) => row.flags.map((flag) => [row.number, flag.check, flag.rule])), [[2, 'motivation', 'unmotivated']]);
+    // The intensity section (intensity-curve landed): the curve per shot, its words, and each row's combined value.
+    assert.match(packet.intensity.words, /^intensity /);
+    assert.deepEqual(packet.intensity.shots.map((row) => row.shotId), document.shots.map((shot) => shot.id));
+    assert.ok(packet.shots.every((row, i) => row.intensity === packet.intensity.shots[i].combined && row.intensity >= 0 && row.intensity <= 1), 'each row carries its intensity');
+    assert.equal(directorPacket(document, { range: { from: 2, to: 2 } }).intensity, undefined, 'one shot: no curve, the section is left out');
     assert.ok(packet.checks.every((row) => PACKET_CHECKS.some((check) => check.id === row.id)));
     const again = directorPacket(structuredClone(document));
     assert.equal(JSON.stringify(again), JSON.stringify(packet), 'the same document gives the same bytes');
@@ -78,7 +83,7 @@ test('A1: beats when present, a range, cut flags and the shot model check', () =
     const range = directorPacket({ ...document, shots: aimed }, { range: { from: 2, to: 4 } });
     assert.deepEqual(range.shots.map((row) => row.name), shots.slice(1, 4).map((shot) => shot.name));
     assert.deepEqual([range.range.from, range.range.to, range.shots[0].timecode.in], [2, 4, '00:00:00:00']);
-    assert.deepEqual(range.checks.map((row) => row.id), ['cuts', 'coverage', 'motivation', 'shot']);
+    assert.deepEqual(range.checks.map((row) => row.id), ['cuts', 'coverage', 'motivation', 'shot', 'structure']);
     assert.ok(range.shots[1].flags.some((flag) => flag.check === 'shot' && /Veo 3\.1/.test(flag.message)), JSON.stringify(range.shots[1].flags));
     assert.equal(range.shots[1].targetModel, 'veo-3.1');
     // Mirror shot 3's camera across the Mara-Joon line: the cut into it and out of it cross the line.

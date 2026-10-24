@@ -19,6 +19,7 @@ import { sequencePackFiles } from '../src/shot-prompt-engine/references.js';
 import { keyframePackEntries } from '../src/keyframe-pack.js';
 import { buildZip } from '../src/zip-store.js';
 import { encodePng } from '../mcp/image-file.mjs';
+import { intensityStrip } from '../src/director-packet/intensity.js';
 
 const png = (width, height, shade) => new Uint8Array(encodePng(width, height, new Uint8Array(width * height * 4).fill(shade)));
 /** A minimal CSV reader for the checks: quoted fields with doubled quotes, CRLF rows. */
@@ -40,7 +41,9 @@ test('A3: the packet folder rides in the sequence pack and every file matches th
     const packet = directorPacket(document), brief = buildSequencePrompt(document);
     const shotEntries = document.shots.flatMap((shot, i) => keyframePackEntries({ shot: { title: shot.name, index: i + 1, startFrame: shot.startFrame, endFrame: shot.endFrame }, fps: 24,
       firstFramePng: png(4, 4, 40), lastFramePng: png(4, 4, 80), clip: null, camera: { mode: 'keys' }, prompt: shot.name }));
-    const images = { plan: png(32, 23, 250), contactSheet: png(48, 18, 120) };
+    const strip = intensityStrip(packet), images = { plan: png(32, 23, 250), contactSheet: png(48, 18, 120), intensity: new Uint8Array(encodePng(strip.width, strip.height, strip.data)) };
+    assert.deepEqual([strip.width, strip.height], [960, 160], 'the intensity strip image');
+    assert.equal(intensityStrip(directorPacket(document, { range: { from: 1, to: 1 } })), null, 'one shot: no strip');
     const entries = [...shotEntries, ...sequencePackFiles(brief, document), ...packetFiles(packet, images)];
     const zip = join(dir, 'cozyclay-sequence-rooftop.zip');
     writeFileSync(zip, buildZip(entries));
@@ -48,7 +51,7 @@ test('A3: the packet folder rides in the sequence pack and every file matches th
     const tested = execFileSync('unzip', ['-t', zip], { encoding: 'utf8' });
     assert.match(tested, /No errors detected in compressed data/, tested);
     const listed = execFileSync('unzip', ['-Z1', zip], { encoding: 'utf8' }).trim().split('\n');
-    const expected = ['packet/index.html', 'packet/shot-list.csv', 'packet/shot-list.md', 'packet/packet.json', 'packet/plan.png', 'packet/contact-sheet.png'];
+    const expected = ['packet/index.html', 'packet/shot-list.csv', 'packet/shot-list.md', 'packet/packet.json', 'packet/plan.png', 'packet/contact-sheet.png', 'packet/intensity.png'];
     assert.deepEqual(packetFileNames(images), expected);
     assert.deepEqual(listed.filter((name) => name.startsWith('packet/')), expected, 'the packet folder');
     assert.ok(listed.includes('sequence-prompt.txt') && listed.includes('references.json') && listed.includes('1-master-1-master/first.png'), 'the sequence pack around it');
@@ -74,7 +77,7 @@ test('A3: the packet folder rides in the sequence pack and every file matches th
     assert.match(md, /^- Shot 2 \(motivation, high\): The push over/m);
 
     const html = read('packet/index.html');
-    for (const href of ['plan.png', 'contact-sheet.png', 'shot-list.csv', 'shot-list.md', 'packet.json']) assert.ok(html.includes(`"${href}"`), `index.html references ${href}`);
+    for (const href of ['plan.png', 'contact-sheet.png', 'intensity.png', 'shot-list.csv', 'shot-list.md', 'packet.json']) assert.ok(html.includes(`"${href}"`), `index.html references ${href}`);
     assert.match(html, /@page \{ size: A4 landscape;/);
     assert.equal((html.match(/<tr><td>\d+<\/td>/g) ?? []).length, packet.shots.length, 'the shot list on the page');
     assert.ok(packet.shots.every((row) => html.includes(`<td>${row.name.replace('&', '&amp;')}</td>`)));

@@ -8,6 +8,7 @@ import { checkCuts } from "../camera-coverage/cut-rules.js";
 import { checkCoverage } from "../camera-coverage/completeness.js";
 import { checkMotivation } from "../camera-motivation/check.js";
 import { checkShotAgainstPreset, presetById } from "../model-presets.js";
+import { checkStructure, structureWords } from "../intensity-curve/structure.js";
 
 const flag = (check, shotId, rule, severity, message, frames = null) => ({ check, shotId, rule, severity, message, ...(frames ? { frames } : {}) });
 
@@ -47,22 +48,39 @@ function shot({ document, shots }) {
 	return { summary: `${aimed.length} ${aimed.length === 1 ? "shot" : "shots"} aimed at a model, ${flags.length} flagged`, flags, notes: [] };
 }
 
+/** camera.checkStructure (intensity-curve): an issue on one shot is its flag, a flat run over several is a note; the curve rides along for intensity.png. */
+function structure({ document, shots, placeAt }) {
+	if (shots.length < 2) return null;
+	const result = checkStructure(document, { range: { shotIds: shots.map((row) => row.id) }, placeAt }), flags = [], notes = [];
+	for (const issue of result.issues) {
+		const words = `${issue.message} Try: ${issue.suggestion.text}.`;
+		if (issue.shotIds.length === 1) flags.push(flag("structure", issue.shotIds[0], issue.rule, issue.severity, words, issue.frames));
+		else notes.push({ check: "structure", rule: issue.rule, severity: issue.severity, message: words, frames: issue.frames, shotIds: issue.shotIds });
+	}
+	const curve = result.curve.shots.map((row) => ({ shotId: row.shotId, startFrame: row.startFrame, endFrame: row.endFrame, combined: row.combined, components: row.components }));
+	return { summary: structureWords(result).replace(/\.$/, ""), flags, notes,
+		section: { id: "intensity", data: { words: structureWords(result), peak: result.curve.peak, shots: curve, beats: result.beats.map(({ id, frame, kind, label }) => ({ id, frame, kind, label })),
+			issues: result.issues.map((issue) => ({ rule: issue.rule, severity: issue.severity, frames: issue.frames, shotIds: issue.shotIds })) } } };
+}
+
 /** Every check the packet reports, in the order its notes list them. A check that answers null has nothing to say for this range and is left out. */
 export const PACKET_CHECKS = Object.freeze([
 	{ id: "cuts", label: "Cuts", run: cuts },
 	{ id: "coverage", label: "Coverage", run: coverage },
 	{ id: "motivation", label: "Motivation", run: motivation },
 	{ id: "shot", label: "Shot", run: shot },
+	{ id: "structure", label: "Structure", run: structure },
 ]);
 
 /**
  * @param {{ document, shots, scene, placeAt }} context  the range's shots in time order and the check scene
- * @returns {{ checks: Array<{ id, label, summary, flagCount }>, flags: Array, notes: Array }}
+ * @returns {{ checks: Array<{ id, label, summary, flagCount }>, flags: Array, notes: Array, sections: object }}  sections: the data a check adds to the packet (intensity)
  */
 export function runPacketChecks(context, checks = PACKET_CHECKS) {
 	const ran = checks.map((check) => ({ check, result: check.run(context) })).filter((row) => row.result);
 	return {
 		checks: ran.map(({ check, result }) => ({ id: check.id, label: check.label, summary: result.summary, flagCount: result.flags.length + result.notes.length })),
 		flags: ran.flatMap((row) => row.result.flags), notes: ran.flatMap((row) => row.result.notes),
+		sections: Object.fromEntries(ran.filter((row) => row.result.section).map((row) => [row.result.section.id, row.result.section.data])),
 	};
 }

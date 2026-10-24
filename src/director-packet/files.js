@@ -12,6 +12,7 @@ const PACKET_FOLDER = "packet";
 const PACKET_PICTURES = Object.freeze([
 	{ id: "plan", file: "plan.png", title: "Plan", caption: "Top-down plan: numbered cameras with their frustums and moves, the lines of action, the cast's marks and paths." },
 	{ id: "contactSheet", file: "contact-sheet.png", title: "Contact sheet", caption: "One frame per shot at its middle, numbered as in the shot list." },
+	{ id: "intensity", file: "intensity.png", title: "Intensity", caption: "The intensity curve over the range (white: combined; orange size, blue lens, pink movement), story beats as ticks, structure issues as bands." },
 ]);
 
 /** The file names a packet folder holds, given which pictures were rendered. */
