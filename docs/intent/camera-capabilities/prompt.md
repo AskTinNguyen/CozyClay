@@ -64,7 +64,7 @@ Orchestrator review of the ui:shot images and the docs, branch `intent/camera-ca
 
 Gates re-run by the orchestrator in the worktree (Git Bash): `verify-camera-roll` 7, `-focus` 5, `-shake` 7, `-mount` 5, `-speed` 5 checks passed; `bus/verify-camera-capability-techniques` pass; the camera-techniques verify files pass (`12`, apply suite, `6`, MCP `14 passed, 0 failed`); `mcp/verify.mjs` `all checks passed`; `mcp/verify-camera-capabilities.mjs` `9 passed, 0 failed`; `npm run lint` exit 0 (`knip: 138 findings, 0 new`, `0 violations`, `eslint: 396 errors … 0 regressions`); `npm run build` exit 0; no diff to `tools/*-baseline.json` or the frozen motion files; `node tools/run-tests.mjs --jobs 4` (Git Bash, no dev server): only failure `FAIL exit car, hips sunk: under 10 s — 10829 ms` (known exception; base 6b751b6f fails it too, `— 10937 ms`, per the worker).
 
-Residual risks recorded at close: the whip-pan motion blur shows visible sample banding at high pan speed (more sub-frame samples or a velocity blur would smooth it); the snorricam mount carries no walk bob (F-2 (b)); the suite crashes `verify-agent-routes` / `verify-agent-supervisor` when a dev server is running beside it (run the suite with no dev server).
+Residual risks recorded at close: the whip-pan motion blur shows visible sample banding at high pan speed (more sub-frame samples or a velocity blur would smooth it); the snorricam mount carries no walk bob (F-2 (b)) (both addressed by `docs/intent/camera-polish/`); the suite crashes `verify-agent-routes` / `verify-agent-supervisor` when a dev server is running beside it (run the suite with no dev server).
 
 ## Changelog
 
