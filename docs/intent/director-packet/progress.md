@@ -1,9 +1,9 @@
 # Director Packet: Progress
 
 - Working under rev: 1
-- Worker: none yet (planned)
-- Current step: none
-- Next step: start when the `Waits for` line in prompt.md is met
+- Worker: cloud worker agent (director-packet)
+- Current step: 1, A1/A2 data and plan primitives (`src/director-packet/`, `test/verify-director-packet.mjs`)
+- Next step: A3 files, A4 controls, A5 agents
 - PR: none yet
 
 ## Acceptance
@@ -19,5 +19,9 @@
 | A7 | open | |
 
 ## Steps
+
+1. A1-A3 data, commit below: `src/director-packet/` (`packet.js` directorPacket, `checks.js` PACKET_CHECKS over camera.checkCuts / checkCoverage / checkMotivation and the shot model check, `plan.js` plan primitives on an A4-landscape page, `plan-draw.js` canvas painter, `shot-list.js` CSV and Markdown, `page.js` index.html, `files.js` packet/ entries), `test/verify-director-packet.mjs`, `test/verify-director-packet-zip.mjs`, `test/director-packet-fixture.mjs` (both in NODE_FILES).
+   - `node test/verify-director-packet.mjs` -> `# pass 4 # fail 0`: `PASS A1 5 rows; checks cuts: 4 cuts, 0 flagged; coverage: enough to edit: 5 shots, 2 cast; motivation: 1 move, 1 flagged`; `PASS A2 master and coverage {"cameras":5,"moving":1,"lines":1,"marks":2,"walks":0,"legendRows":4}; with a walk {...,"marks":6,"walks":1,"legendRows":5}`; `PASS A2 triangle {"cameras":13,"moving":0,"lines":3,"marks":3,"walks":0,"legendRows":3}`.
+   - `node test/verify-director-packet-zip.mjs` -> `# pass 1 # fail 0`: `PASS A3 38 entries, packet/: 6 files; unzip -t: No errors detected in compressed data of .../cozyclay-sequence-rooftop.zip.`
 
 ## Reconciliations

@@ -96,7 +96,7 @@ const NODE_FILES = [
 	"test/verify-render-passes-video.mjs",
 	"test/verify-camera-block.mjs", "test/verify-camera-direction.mjs",
 	"test/verify-camera-follow.mjs",
-	"test/verify-camera-move.mjs", "test/verify-camera-techniques.mjs", "test/verify-technique-references.mjs", "test/verify-camera-technique-prompt.mjs", "test/verify-camera-cut-rules.mjs", "test/verify-camera-coverage-resolve.mjs", "test/verify-director-evals.mjs", "test/verify-camera-coverage-check.mjs", "test/verify-camera-motivation.mjs",
+	"test/verify-camera-move.mjs", "test/verify-camera-techniques.mjs", "test/verify-technique-references.mjs", "test/verify-camera-technique-prompt.mjs", "test/verify-camera-cut-rules.mjs", "test/verify-camera-coverage-resolve.mjs", "test/verify-director-evals.mjs", "test/verify-camera-coverage-check.mjs", "test/verify-camera-motivation.mjs", "test/verify-director-packet.mjs", "test/verify-director-packet-zip.mjs",
 	"test/verify-camera-rail-schedule.mjs", "test/verify-camera-roll.mjs", "test/verify-camera-focus.mjs", "test/verify-camera-shake.mjs", "test/verify-camera-mount.mjs", "test/verify-camera-speed.mjs", "test/verify-camera-blur-sweep.mjs", "test/verify-camera-dirty-ots.mjs", "test/verify-camera-walk-bob.mjs",
 	"test/verify-camera-pointer-lock.mjs",
 	"test/verify-codex-client.mjs",
