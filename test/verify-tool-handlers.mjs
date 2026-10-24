@@ -25,7 +25,7 @@ const EXPECTED_TOOLS = [
 	"describe_scene", "live_status", "describe_shot", "capture_frame", "set_camera",
 	"frame_shot", "add_character", "place_character", "remove_character", "focus_character",
 	"place_object", "import_mesh", "sculpt_object", "compare_sculpt", "group_objects",
-	"update_object", "remove_object", "apply_batch", "render_prompt", "mark_camera_move",
+	"update_object", "remove_object", "apply_batch", "render_prompt", "render_packet", "mark_camera_move",
 	"describe_camera_move", "list_camera_techniques", "apply_camera_technique", "set_camera_capabilities", "cover_scene", "check_cuts", "check_coverage", "check_motivation", "story_beats", "check_structure", "add_scene", "switch_scene", "open_project", "save_project", "studio_commands", "studio_run",
 ];
 const ANNOTATION_KEYS = ["readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint"];

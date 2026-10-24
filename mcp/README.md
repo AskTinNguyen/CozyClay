@@ -35,7 +35,7 @@ Then point a client at it. For Claude Desktop, in `claude_desktop_config.json`:
 }
 ```
 
-Restart the client; 36 tools appear.
+Restart the client; 37 tools appear.
 
 Prefer a long-lived endpoint? `node server.mjs --http 5183` serves Streamable HTTP at
 `http://127.0.0.1:5183/mcp` (one isolated session per client), with a plain status page at `/`.
@@ -85,6 +85,7 @@ generated frame matches the blocking instead of drifting off into a generic shot
 | `check_cuts` | the editing rules at every cut: 180-degree line crossings, jump cuts, screen-direction flips, shot-reverse-shot eyelines, each with severity, frames and a fix; read only. With an editor it runs `camera.checkCuts`; in memory it checks the `cover_scene` plan |
 | `check_motivation` | why each camera move happens: every move segment is motivated by a beat (a story beat, or with an editor a motion beat of an installed take), by its subject (follow camera, mount, tracking rail, a camera keeping a travelling subject on screen), or unmotivated; a beat more than `tolerance` frames (default 6) from the move's start or rest is `starts-off-beat` / `settles-off-beat`. Each issue has a severity, frames and a fix; read only. With an editor it runs `camera.checkMotivation`; in memory it checks the `cover_scene` plan and the `mark_camera_move` move against story beats and subject travel only, and says so |
 | `story_beats` | add, move, remove or list the story beats the check reads (a line, a reveal, a decision: `frame`, `label`, `kind`), or words ("add a beat 'confession' at 120"). With an editor it runs `story.addBeat` / `story.moveBeat` / `story.removeBeat` (one undo entry each), and lists through `story.listBeats` (every beat with its id, frame, label and kind) |
+| `render_packet` | a range of shots as a director packet, in memory: the shot list (`shot-list.md`, or `format: "csv"`) and the packet data (cast, story beats, a row per shot with number, name, frames and timecode, duration, size, angle, lens mm, the move in measured words, capabilities, composition, coverage role, transition in and the flags of the cut, coverage, motivation, shot and structure checks; notes; the intensity curve; the plan primitives). `from_shot` / `to_shot` pick the range, `include_plan: false` keeps only the plan's counts. No pictures: the editor's `export.directorPacket` writes the full pack. Read only |
 | `check_structure` | the sequence's intensity curve against its story beats ("where does this sequence go flat?", "show me the intensity", "build to the reveal"): per shot size, height, lens, movement, cutting rate, roll and screen jump (each 0-1, weighted into one value), each cut's contrast, and `flat` / `peak-off-beat` / `no-build` issues with frames and a technique stack to apply (`apply_camera_technique`); without story beats only `flat` runs. `strip: true` adds the intensity strip as a PNG. Read only. With an editor it runs `camera.checkStructure`; in memory it reads the `cover_scene` plan against `story_beats` |
 | `set_camera_capabilities` | give the shot camera what placement cannot: `roll_deg` (Dutch angle), `f_stop` with `focus_on` (a character, followed per frame) or `focus_distance` (depth of field), `shake` (handheld or vehicle, seeded), `mount` (a Snorricam on a character's chest, head, hips or back), `speed` (0.5 = slow motion) and `shutter_deg` (motion blur); `at_frame` keys roll and focus (two focus keys rack focus). With an editor it runs `camera.set` / `camera.setKey`; in memory `render_prompt` states them |
 | `add_scene` / `switch_scene` | multiple scenes per project |
@@ -210,6 +211,22 @@ prime, `low-angle`) with `camera.applyTechnique` args, and shorter shots in word
 gains one `STRUCTURE:` line ("intensity builds from 0.20 at beat 1 to a peak of 0.52 at beat 4, then
 releases to 0.49 by beat 5."), and `strip: true` returns the strip as a 960 x 160 PNG
 (`src/intensity-curve/strip.js` `stripImage`).
+
+## Director packet
+
+`render_packet` answers a range of shots as a director packet
+(`src/director-packet/`, `directorPacket(document, { range })`, pure and byte-identical across
+runs): the cast, the story beats in range, one row per shot (the brief's measured camera: size,
+angle, lens mm, the move in measured words, capabilities, composition, coverage role, transition
+in) with the flags the existing checks raise on it (cuts, coverage, motivation, the shot's model
+check, structure), the notes that belong to the range, the intensity curve with two shots or more,
+and the plan's primitives on an A4-landscape page: each camera numbered with its frustum at its
+first frame and a path and arrow when it moves, every pair's line of action (authored, or the pair
+a cut is judged against), each cast member's mark at each shot's start and the walk over the range,
+and a legend. The packet adds no check of its own. In memory it reads the `cover_scene` plan; with
+an editor connected, the editor's shots. The pictures are the editor's: `export.directorPacket`
+(File › Export › Director packet…) writes `packet/index.html`, `plan.png`, `contact-sheet.png`,
+`intensity.png`, `shot-list.csv`, `shot-list.md` and `packet.json` inside the range's sequence pack.
 
 ## Camera requests in words
 

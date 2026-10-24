@@ -56,11 +56,13 @@ export function shotSequenceFiles(s, shot) {
 
 /**
  * The sequence pack export: every shot's keyframe pack (frames, clip, camera, prompt) in one zip, with the
- * range's sequence-prompt.txt, references.json, composition guides and reference pictures.
+ * range's sequence-prompt.txt, references.json, composition guides and reference pictures. `extra(job)`
+ * adds more entries inside the same export job (the director packet's packet/ folder); the export answers
+ * { name, files } once the zip is handed off, or null when it did not run.
  * @param {object} deps  App's export plumbing: readStudioState, executeExportRequest, exportRequest, buildShotKeyframePack(entry, index, onProgress, job, withSequence), saveExport, setToast, isRecording
  */
 export function sequencePackExporter(deps) {
-	return async (shotIds, profile = null) => {
+	return async (shotIds, profile = null, extra = null) => {
 		if (deps.isRecording()) return null;
 		const { document, brief } = studioSequenceBrief(deps.readStudioState(), { shotIds, profile }), name = sequencePackName(document.title);
 		return deps.executeExportRequest(deps.exportRequest("keyframe_pack", async (job) => {
@@ -71,9 +73,10 @@ export function sequencePackExporter(deps) {
 				job.label = ko(`Shot ${order + 1} of ${brief.beats.length}`, `샷 ${order + 1} / ${brief.beats.length}`);
 				entries.push(...(await deps.buildShotKeyframePack(shots[index], index, null, job, false)).entries);
 			}
-			entries.push(...sequencePackFiles(brief, document));
+			entries.push(...sequencePackFiles(brief, document), ...(extra ? await extra(job) : []));
 			await deps.saveExport(new Blob([buildZip(entries)], { type: "application/zip" }), name);
 			deps.setToast(ko(`${name} exported · ${entries.length} files`, `${name} 내보내기 완료 · 파일 ${entries.length}개`));
+			return { name, files: entries.map((entry) => entry.name) };
 		}));
 	};
 }

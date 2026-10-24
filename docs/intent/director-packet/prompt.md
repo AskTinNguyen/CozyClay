@@ -1,7 +1,7 @@
 # Director Packet
 
 - Rev: 1
-- Status: planned
+- Status: completed
 - Waits for: `group-coverage` completed (the plan draws every pair's line). Sixth in the cinematic-atlas plan. It includes the outputs of `camera-motivation`, `depth-staging` and `intensity-curve` when they have landed, and leaves those sections out otherwise.
 - Area: Export
 - Owner: TinNguyen
@@ -63,3 +63,4 @@ This intent assembles one printable director packet per range.
 ## Changelog
 
 - rev 1 (2026-10-24): written as a planned intent from the cinematic-atlas review (L-1, L-2).
+- rev 1 (2026-10-24): completed; squash-merged into `main` by the cloud orchestrator under `after-proof` (#16).
