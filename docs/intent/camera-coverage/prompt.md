@@ -93,7 +93,7 @@ Gates re-run by the orchestrator in the worktree (Git Bash, no dev server): `bus
 
 PR review (Codex, three P2 findings) fixed in ac982864 with regression checks: opening fade with no predecessor and a new `transitionOut` fade-to-black on the last shot; keyed↔rail dissolves sampled in each shot's own camera mode in MoveRig, FollowCamRig and the export frame; composition-only `camera.applyTechnique`. Re-verified: `verify-camera-transitions` pass 5, `verify-camera-composition` pass 3, `verify-camera-coverage` pass 4, export recovery and capture exit 0, lint and build exit 0. Suite (Git Bash, no dev server): one run crashed `verify-agent-routes` with 0xC0000409 (a native crash under parallel load; the file then passed three times alone); the re-run's only failure was `FAIL exit car, hips sunk: under 10 s — 12464 ms` (known exception; base ba82c0cb fails it too, `— 12277 ms`, per the worker). Threads replied to and resolved.
 
-Residual risks recorded at close: OTS framings show the foreground shoulder only as a sliver at the frame edge (a tighter dirty-OTS composition is a follow-up); `verify-agent-routes` can crash natively under suite load on this PC (seen once).
+Residual risks recorded at close: OTS framings show the foreground shoulder only as a sliver at the frame edge (a tighter dirty-OTS composition is a follow-up, done in `docs/intent/camera-polish/`); `verify-agent-routes` can crash natively under suite load on this PC (seen once).
 
 ## Changelog
 

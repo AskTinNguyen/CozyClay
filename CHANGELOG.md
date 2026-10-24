@@ -4,6 +4,12 @@
 
 Camera
 
+- Camera polish: a whip pan's motion blur is one smooth smear (the lens adds
+  sub-renders with the sweep and smears each over its slice of the shutter);
+  an over-the-shoulder is a real dirty OTS (the near shoulder fills about a
+  quarter to a third of the frame, the speaker's eyes on the far third); and a
+  Snorricam on a baked take walks with the body: its stride line, its heading
+  and the hips' rise and fall.
 - Camera technique library: 65 film techniques (shot sizes, angles, camera and
   lens moves, coverage, modifiers) with fresh descriptions, aliases and moods.
   `camera.applyTechnique` compiles a stack ("low-angle slow push-in", "a
