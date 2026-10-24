@@ -35,7 +35,7 @@ Then point a client at it. For Claude Desktop, in `claude_desktop_config.json`:
 }
 ```
 
-Restart the client; 36 tools appear.
+Restart the client; 37 tools appear.
 
 Prefer a long-lived endpoint? `node server.mjs --http 5183` serves Streamable HTTP at
 `http://127.0.0.1:5183/mcp` (one isolated session per client), with a plain status page at `/`.
@@ -86,6 +86,7 @@ generated frame matches the blocking instead of drifting off into a generic shot
 | `check_motivation` | why each camera move happens: every move segment is motivated by a beat (a story beat, or with an editor a motion beat of an installed take), by its subject (follow camera, mount, tracking rail, a camera keeping a travelling subject on screen), or unmotivated; a beat more than `tolerance` frames (default 6) from the move's start or rest is `starts-off-beat` / `settles-off-beat`. Each issue has a severity, frames and a fix; read only. With an editor it runs `camera.checkMotivation`; in memory it checks the `cover_scene` plan and the `mark_camera_move` move against story beats and subject travel only, and says so |
 | `story_beats` | add, move, remove or list the story beats the check reads (a line, a reveal, a decision: `frame`, `label`, `kind`), or words ("add a beat 'confession' at 120"). With an editor it runs `story.addBeat` / `story.moveBeat` / `story.removeBeat` (one undo entry each), and lists through `story.listBeats` (every beat with its id, frame, label and kind) |
 | `check_structure` | the sequence's intensity curve against its story beats ("where does this sequence go flat?", "show me the intensity", "build to the reveal"): per shot size, height, lens, movement, cutting rate, roll and screen jump (each 0-1, weighted into one value), each cut's contrast, and `flat` / `peak-off-beat` / `no-build` issues with frames and a technique stack to apply (`apply_camera_technique`); without story beats only `flat` runs. `strip: true` adds the intensity strip as a PNG. Read only. With an editor it runs `camera.checkStructure`; in memory it reads the `cover_scene` plan against `story_beats` |
+| `check_shots` | what each shot's camera does with the set ("is anything blocking her face?", "is the camera inside the wall?", "does the frame cut Mara at the knees?", "check my shots"), over its first and last frame and every k frames: `occluded` (the subject's eyes hidden by a prop or another person), `inside` (the lens in a prop or nearer than the 10 cm near clip), `crop` (a frame edge at the ankle, knee, waist or neck), each with severity, frames and a fix; each shot lists its depth layers. `rule` keeps one rule. Read only. With an editor it runs `camera.checkShots` (`studio_run camera.fixShot` applies a fix); in memory it reads the `cover_scene` plan against the set |
 | `set_camera_capabilities` | give the shot camera what placement cannot: `roll_deg` (Dutch angle), `f_stop` with `focus_on` (a character, followed per frame) or `focus_distance` (depth of field), `shake` (handheld or vehicle, seeded), `mount` (a Snorricam on a character's chest, head, hips or back), `speed` (0.5 = slow motion) and `shutter_deg` (motion blur); `at_frame` keys roll and focus (two focus keys rack focus). With an editor it runs `camera.set` / `camera.setKey`; in memory `render_prompt` states them |
 | `add_scene` / `switch_scene` | multiple scenes per project |
 | `open_project` / `save_project` | read and write `.cclayproject` files |
@@ -170,8 +171,10 @@ index, role, subjectId }`. `check_cuts` (`camera.checkCuts`) reads every cut bet
 shots from the cameras and cast at the cut frames: `line`, `jump`, `screen` and `eyeline` issues with
 a severity, the two frames and a suggested fix; it never changes a shot. `camera.applyTechnique` and
 `frame_shot` take `composition { place auto|left-third|centre|right-third, headroom
-tight|normal|loose, leadRoom none|facing|travel|more }` and answer `checks.screenX` / `eyeLineY`
-(frame fractions from the top-left). `camera.setTransition` stores the transition into a shot
+tight|normal|loose, leadRoom none|facing|travel|more, foreground { id, share } }` and answer `checks.screenX` / `eyeLineY`
+(frame fractions from the top-left). `foreground` holds a prop or a cast member between the lens and the subject, covering
+`share` (0.1-0.6, default 0.3) of the frame width from the near edge, solved the way the over-the-shoulder is
+(`checks.foregroundShare` is the share measured; "put the lamp in the foreground" asks for it in words). `camera.setTransition` stores the transition into a shot
 (dissolve, fades, whip, match cut, J- or L-cut); OTIO writes it as a `Transition.1` where OTIO has one
 and as clip metadata always, and the prompt gains a `TRANSITION:` line.
 
@@ -210,6 +213,22 @@ prime, `low-angle`) with `camera.applyTechnique` args, and shorter shots in word
 gains one `STRUCTURE:` line ("intensity builds from 0.20 at beat 1 to a peak of 0.52 at beat 4, then
 releases to 0.49 by beat 5."), and `strip: true` returns the strip as a 960 x 160 PNG
 (`src/intensity-curve/strip.js` `stripImage`).
+
+## Depth staging
+
+`check_shots` (`camera.checkShots`) reads every shot's camera against the set at its first and last
+frame and every k frames between (k = shot length / 8, from 1 to 12), so a move that passes behind a
+prop is caught. `occluded`: the subject's eye point is hidden from the lens by a prop's box (the
+geometry facts' own test, `occludersOf`) or by another cast member, at either end or on more than a
+quarter of the samples. `inside`: the lens is inside a prop's box or nearer to one than the 10 cm near
+clip; an enclosure around the subject is the set, not a prop. `crop`: the top or bottom frame edge falls
+at the ankle, knee, waist or neck, placed from the figure's proportions. Each issue has a severity, its
+frames and a fix: slide left or right or raise or lower by d m, or one size step, the smallest that
+clears the rule on every sample, keeps the subject, and breaks no other rule. `camera.fixShot` applies it to every camera key
+as one undo entry; props and cast never move. Each shot also lists its depth layers (the cast and props
+in its foreground, midground and background, as bands around the subject), which the sequence brief
+states as a `Depth:` line ("Joon's shoulder soft in the foreground, the window behind") and the plan
+diagram marks with an FG ring.
 
 ## Camera requests in words
 
