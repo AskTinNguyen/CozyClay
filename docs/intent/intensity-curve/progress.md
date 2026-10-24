@@ -3,7 +3,7 @@
 - Working under rev: 1
 - Worker: cloud worker agent (intensity-curve)
 - Current step: done; every acceptance row met or ready for review
-- Next step: orchestrator review of A3 shots and A7 docs; merge origin/main when group-coverage #14 lands; PR
+- Next step: orchestrator review of A7 docs; PR
 - PR: none yet
 
 ## Acceptance
@@ -12,7 +12,7 @@
 | --- | --- | --- |
 | A1 | met (gate) | `node test/verify-intensity-curve.mjs` -> `# pass 4 # fail 0`: `PASS A1 master coverage climbs: 0.204 -> 0.391 -> 0.35 -> 0.49 -> 0.495`, `PASS A1 all-medium same lens is flat: 0.33 0.33 0.33 0.33` (cuts 0, 0, 0); seven components per shot and per cut; byte-identical JSON on a second run |
 | A2 | met (gate) | same file: flat (the only rule without beats; its stack `medium-close-up {focalMm 50} + low-angle` applied through the bus breaks the run), peak-off-beat (reveal in the medium, peak in the close-ups), no-build (decision on Joon's medium under Mara's; an event asks for none unless named), each with frames and a technique-stack suggestion |
-| A3 | ready for review (ui:qa passed, ui:shot) | `test/verify-intensity-curve-browser.mjs` exit 0, 17 PASS, `intensity curve browser QA passed` (step 1); shots `proofs/strip-flat.png`, `proofs/strip-master-coverage.png` |
+| A3 | met (ui:qa passed; ui:shot accepted by the orchestrator) | `test/verify-intensity-curve-browser.mjs` exit 0, 17 PASS, `intensity curve browser QA passed` (step 1); shots `proofs/strip-flat.png`, `proofs/strip-master-coverage.png` |
 | A4 | met (gate) | `node test/bus/verify-sequence-prompt.mjs` -> `# pass 5 # fail 0` (`STRUCTURE: intensity builds from 0.20 at beat 1 to a peak of 0.52 at beat 4 on 'the letter', then releases to 0.49 by beat 5.`, byte-identical); strip image dimensions in `test/verify-intensity-curve.mjs` (`PASS A4 strip image: 960x160, 400x80`) |
 | A5 | met (gate) | `node mcp/verify-intensity-curve.mjs` -> `12 passed, 0 failed`; `node test/verify-director-evals.mjs` -> `structure: core 8/8`, `core: 99/99`; `node mcp/verify-director-evals.mjs` -> `87 passed, 0 failed`; `cclay live run camera.checkStructure` in the A3 QA run |
 | A6 | met (gate) | step 3: `npm run lint` 0 new / 0 violations / 0 regressions; `npm run build` built; `SUITE-ALL: 466 files, 464 passed, 2 failed`, only the known CPU-timing checks (exitcar, repair) |
@@ -26,6 +26,8 @@
 
 2. A7 docs, commit below: `mcp/README.md`, `docs/agent-cli.md`, `docs/studio-ui-ia.md`, `CHANGELOG.md`, the director-evals README. `node test/verify-mcp-invariants.mjs` exit 0.
 3. A6 gate on the step-2 commit, no dev server running: `env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_CA_BUNDLE node /home/claude/local-tools/suite-all.mjs --jobs 4` -> `SUITE-ALL: 466 files, 464 passed, 2 failed`: `test/motion3/verify-motion3-exitcar.mjs` (`compile + QA stay fast (< 3 s CPU)`, 4850 ms) and `test/motion3/verify-motion3-repair.mjs` (`exit car, hips sunk: under 10 s`), the base's known timing failures. `npm run lint` -> `knip: 138 findings, 0 new`, `loc: 72 files over 250 (baseline 72), 0 violations`, `eslint: ... 0 regressions`; `npm run build` built. origin/main unchanged (761cae7e).
+4. Merged origin/main 491c7dac (group-coverage #14), dbd3f254: conflicts in the manifest lines, the MCP tool lists and counts (check_coverage and check_structure both kept: 36 tools), the registry count (136), CATEGORIES / ACTIONS / EXPECTED_KEYS in director-evals-data, the route.js doc comment and CHANGELOG (both kept). Re-ran: intensity-curve `# fail 0`, sequence-prompt `# fail 0`, command registry `136 actions`, declarations, director evals `core: 109/109  stretch: 0/1 (failing: cuts-jump-the-line)`, MCP evals `97 passed, 0 failed`, `mcp/verify-intensity-curve.mjs` 12 passed, `mcp/verify.mjs` all checks passed, tool annotations, tool handlers, mcp-invariants, verify-live, camera-motivation, coverage-resolve, motion3-prompt (cap), mcp camera-coverage 21 passed, mcp camera-motivation 14 passed, group-coverage, render-prompt-sequence 18 passed: all exit 0. `npm run lint` 0 new / 0 violations / 0 regressions; `npm run build` built. Suite on dbd3f254: `SUITE-ALL: 468 files, 466 passed, 2 failed` (exitcar 3903 ms, repair: the known timing checks).
+5. Review R1 (orchestrator): A3 shots `proofs/strip-flat.png` and `proofs/strip-master-coverage.png` accepted.
 
 ## Decisions
 
