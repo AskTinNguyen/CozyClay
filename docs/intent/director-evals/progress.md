@@ -4,7 +4,7 @@
 - Worker: cloud worker agent (director-evals)
 - Current step: none (reported)
 - Next step: report
-- PR: orchestrator opens on report
+- PR: https://github.com/AskTinNguyen/CozyClay/pull/10
 
 ## Acceptance
 
@@ -16,9 +16,9 @@
 | A4 | met | Step 1: "negatives: 11/11 resolve to no camera action, 3 refused by the bus"; "receipts: 75/75 state their matched words and a confidence"; bus receipts carry `output.matched` and `output.confidence` (checked on every applied row) |
 | A5 | met | Step 1: 12 core failures fixed (list below); `core: 74/74`; existing resolver verify files pass (step 1) |
 | A6 | met | Step 2: `node mcp/verify-director-evals.mjs` exit 0, "67 passed, 0 failed": 65 core rows (all but composition rows) through `apply_camera_technique` 49, `cover_scene` 9, `check_cuts` 7, each `resolved` line equal to the runner's `routeCameraRequest` (action, ids, pattern, frame, matched words, confidence) and to the row |
-| A7 | ready for review | `test/fixtures/director-evals/README.md` (row format, `apply` measures, adding rows, when stretch moves to core) |
-| A8 | met under the known exception, with F-2 | Step 3: `npm run lint` exit 0 (0 new / 0 violations / 0 regressions), `npm run build` exit 0, suite `SUITE-ALL: 459 files, 456 passed, 3 failed` vs base `SUITE-ALL: 454 files, 451 passed, 3 failed`, the same three files on both (two timing checks, one environmental: F-2); `node tools/run-tests.mjs --jobs 4` stops at the known exitcar CPU check |
-| A9 | ready for review | `CHANGELOG.md` Unreleased (Director evals line); `mcp/README.md` "Camera requests in words" (the `resolved` line, `output.matched` / `output.confidence`, the non-camera refusal) |
+| A7 | met (review) | `test/fixtures/director-evals/README.md` (row format, `apply` measures, adding rows, when stretch moves to core) |
+| A8 | met under the known exception and F-2's container exception | Step 3: `npm run lint` exit 0 (0 new / 0 violations / 0 regressions), `npm run build` exit 0, suite `SUITE-ALL: 459 files, 456 passed, 3 failed` vs base `SUITE-ALL: 454 files, 451 passed, 3 failed`, the same three files on both (two timing checks, one environmental: F-2); `node tools/run-tests.mjs --jobs 4` stops at the known exitcar CPU check |
+| A9 | met (review) | `CHANGELOG.md` Unreleased (Director evals line); `mcp/README.md` "Camera requests in words" (the `resolved` line, `output.matched` / `output.confidence`, the non-camera refusal) |
 
 ## Steps
 
@@ -60,3 +60,7 @@
 - Not run: a browser QA (no UI change in this intent).
 
 ## Reconciliations
+
+## Reviews
+
+- R1 (cloud orchestrator, 2026-10-24, at 53914f53): A7 `test/fixtures/director-evals/README.md` covers the row format, the `apply` measures, how a later intent adds rows, and when a stretch row moves to core. A9 `CHANGELOG.md` Unreleased › Camera has the Director evals line and `mcp/README.md` has "Camera requests in words". Reran in the worktree: `core: 74/74  stretch: 0/1 (failing: cuts-jump-the-line)  total: 74/75`, `node mcp/verify-director-evals.mjs` "67 passed, 0 failed", `npm run lint` 0 new / 0 violations / 0 regressions. F-2 accepted (see findings).
