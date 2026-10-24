@@ -3,7 +3,8 @@
 // the shutter so the slices tile the whole sweep without gaps, a held camera
 // keeps the base count with no smear, and the plan is deterministic.
 import assert from "node:assert/strict";
-import { blurSweep, lensPlan } from "../src/camera-capabilities/lens-plan.js";
+import { blurSweep, lensPlan, smearUv } from "../src/camera-capabilities/lens-plan.js";
+import { projectPoint } from "../src/camera-coverage/composition.js";
 
 const DEG = Math.PI / 180;
 let passed = 0;
@@ -53,6 +54,20 @@ check("a held camera and depth of field alone carry no smear", () => {
 	const dof = lensPlan({ pos: { x: 0, y: 1.6, z: 4 }, yaw: 0, pitch: 0, fovDeg: 27, focalMm: 50, fStop: 2, focusDistance: 3 }, CAPTURE);
 	assert.equal(dof.samples.length, 24);
 	assert.ok(dof.samples.every((row) => row.smear === undefined));
+});
+
+check("the smear points the way the scene moves on screen, diagonals included", () => {
+	// A point straight ahead, then the camera turns left and tilts up by a small step: where does it land?
+	const fovDeg = 27, aspect = 16 / 9, hFovDeg = 2 * Math.atan(Math.tan((fovDeg * DEG) / 2) * aspect) / DEG;
+	const from = { pos: { x: 0, y: 1.6, z: 0 }, yaw: 0, pitch: 0, fovDeg }, ahead = { x: 0, y: 1.6, z: -10 };
+	for (const [yawDeg, pitchDeg] of [[1, 0], [0, 1], [1, 1], [-1, 1], [1, -1]]) {
+		const moved = projectPoint({ ...from, yaw: yawDeg * DEG, pitch: pitchDeg * DEG }, ahead, aspect), start = projectPoint(from, ahead, aspect);
+		// NDC spans 2 across the frame, texture space 1: the screen travel in texture units.
+		const travel = { u: (moved.x - start.x) / 2, v: (moved.y - start.y) / 2 }, uv = smearUv({ yawDeg, pitchDeg }, hFovDeg, fovDeg);
+		assert.ok(Math.sign(uv.u) === Math.sign(travel.u) && Math.sign(uv.v) === Math.sign(travel.v), `yaw ${yawDeg} pitch ${pitchDeg}: smear ${JSON.stringify(uv)} vs travel ${JSON.stringify(travel)}`);
+		assert.ok(Math.abs(uv.u - travel.u) < 0.004 && Math.abs(uv.v - travel.v) < 0.004, "and about as long");
+	}
+	assert.deepEqual(smearUv(undefined, 60, 30), { u: 0, v: 0 });
 });
 
 check("the plan is deterministic", () => {

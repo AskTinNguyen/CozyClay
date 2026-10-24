@@ -5,7 +5,7 @@
 // so the preview, a PNG and an MP4 frame share one lens. A camera without an
 // aperture or a shutter takes the plain gl.render path, untouched.
 import * as THREE from "three";
-import { lensPlan } from "./camera-capabilities/lens-plan.js";
+import { lensPlan, smearUv } from "./camera-capabilities/lens-plan.js";
 
 const LENS_PREVIEW_SAMPLES = 8;
 export const LENS_CAPTURE_SAMPLES = 24;
@@ -78,7 +78,7 @@ export function renderLens(gl, scene, camera, output = null, samples = LENS_PREV
 	else sub.clearViewOffset();
 	sub.rotation.order = "YXZ";
 	try {
-		const vFovDeg = Math.max(1e-3, camera.fov), hFovDeg = Math.max(1e-3, 2 * THREE.MathUtils.radToDeg(Math.atan(Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2) * camera.aspect)));
+		const vFovDeg = camera.fov, hFovDeg = 2 * THREE.MathUtils.radToDeg(Math.atan(Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2) * camera.aspect));
 		plan.samples.forEach(({ pose, dx, dy, weight, smear }, i) => {
 			sub.position.set(pose.pos.x, pose.pos.y, pose.pos.z);
 			sub.rotation.set(pose.pitch, pose.yaw, THREE.MathUtils.degToRad(pose.rollDeg ?? 0));
@@ -108,7 +108,8 @@ export function renderLens(gl, scene, camera, output = null, samples = LENS_PREV
 			r.quad.material = r.accumulate;
 			r.accumulate.uniforms.tSample.value = r.sample.texture;
 			r.accumulate.uniforms.weight.value = weight ?? 1 / plan.samples.length;
-			r.accumulate.uniforms.smear.value.set(smear ? smear.yawDeg / hFovDeg : 0, smear ? smear.pitchDeg / vFovDeg : 0);
+			const step = smearUv(smear, hFovDeg, vFovDeg);
+			r.accumulate.uniforms.smear.value.set(step.u, step.v);
 			gl.render(r.scene, r.ortho);
 		});
 		gl.setRenderTarget(output);
