@@ -1,7 +1,7 @@
 # Technique References
 
 - Rev: 2
-- Status: active
+- Status: completed
 - Waits for: nothing. F-1 resolved (L-4).
 - Area: Camera and Shots
 - Owner: TinNguyen
@@ -48,3 +48,4 @@ This intent gives each technique, coverage pattern and cut or shot rule a short 
 
 - rev 1 (2026-10-24): written as a planned intent from the cinematic-atlas review (L-1, L-2).
 - rev 2 (2026-10-24): F-1 resolved by the owner as option (a) (D3); status active.
+- rev 2 (2026-10-24): completed; squash-merged into `main` by the cloud orchestrator under `after-proof` (#12).

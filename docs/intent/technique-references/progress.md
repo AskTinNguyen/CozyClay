@@ -4,7 +4,7 @@
 - Worker: cloud worker agent (technique-references)
 - Current step: none (A1-A5 met; A6 and the A3 images ready for review)
 - Next step: orchestrator review of the A3 images and A6, then the PR
-- PR: none yet
+- PR: https://github.com/AskTinNguyen/CozyClay/pull/12
 
 ## Acceptance
 
@@ -12,10 +12,10 @@
 | --- | --- | --- |
 | A1 | met (gate) | `node test/verify-technique-references.mjs` -> `6 checks passed` (coverage of all 65 techniques, 6 patterns, 4 cut rules: ref or listed none, never both; fields `id,title,author,edition,year` / `book,pages` only; short strings; camera and directing books only; no path, excerpt or file name in `data.js`) |
 | A2 | met (gate) | same file: `tools/atlas-refs.mjs` run twice on `test/fixtures/atlas-refs` -> identical bytes, `atlas-refs: 4 entries with references, 71 without, 2 books`, exact expected refs, no fixture excerpt / page title / source name / section title / non-citable book in the output; refuses without `ATLAS_DIR` |
-| A3 | met (ui:qa); ui:shot ready for review | ui:qa: `node tools/qa-browser.mjs -- node test/verify-technique-references-browser.mjs` (step 7) exit 0, `technique references browser QA passed`, 19 PASS 0 FAIL: plain citations without an atlas URL; Set links every page to `http://127.0.0.1:8000/#/book/<id>/<page>`, stored for the viewer, the Coverage pattern linked too; no-page line; after a reload still linked, new tab; clearing returns plain text and forgets it. ui:shot ready for review: `proofs/further-reading-plain.png`, `proofs/further-reading-linked.png`, `proofs/further-reading-studio.png` |
+| A3 | met (ui:qa, ui:shot reviewed R1) | ui:qa: `node tools/qa-browser.mjs -- node test/verify-technique-references-browser.mjs` (step 7) exit 0, `technique references browser QA passed`, 19 PASS 0 FAIL: plain citations without an atlas URL; Set links every page to `http://127.0.0.1:8000/#/book/<id>/<page>`, stored for the viewer, the Coverage pattern linked too; no-page line; after a reload still linked, new tab; clearing returns plain text and forgets it. ui:shot ready for review: `proofs/further-reading-plain.png`, `proofs/further-reading-linked.png`, `proofs/further-reading-studio.png` |
 | A4 | met (gate) | `node mcp/verify-camera-techniques.mjs` -> `19 passed, 0 failed` (index 3,215 bytes, unchanged, no citations; `id: "close-up"` brings `references` [book, pages, cite]; a technique with none answers `[]`; `references: true` lists books, techniques, coverage patterns and cut rules in one receipt under 8 KiB; `references: true` with an id reads it in full); also `mcp/verify.mjs` `all checks passed`, `mcp/verify-tool-annotations.mjs` `PASS G005 ... (32 tools; deterministic order)`, `mcp/verify-live.mjs` exit 0 |
 | A5 | met (known exception) | `npm run lint` -> `knip: 138 findings, 0 new, 1 fixed (baseline 139)`, `loc: 72 files over 250 (baseline 72), 0 violations`, `eslint: 396 errors across 20 rules (baseline 403), 0 regressions` (no baseline touched); `npm run build` -> `BUILD_EXIT=0`; suite, no dev server, `env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_CA_BUNDLE node /home/claude/local-tools/suite-all.mjs --jobs 4` on cbd857b8 -> `SUITE-ALL: 460 files, 458 passed, 2 failed`: `verify-motion3-exitcar.mjs` (`FAIL compile + QA stay fast (< 3 s CPU) — 4290 ms CPU`) and `verify-motion3-repair.mjs` (`FAIL exit car, hips sunk: under 10 s — 29256 ms`), both CPU-timing checks that also fail on base 38111cb (`base-main-38111cb.txt`: `SUITE-ALL: 454 files, 451 passed, 3 failed`, the same two plus `verify-agent-login.mjs`, which the orchestrator traced to the container's cloud credentials) |
-| A6 | ready for review | `mcp/README.md` (`list_camera_techniques` row, Further reading paragraph), `docs/studio-ui-ia.md` (Further reading and the Atlas field in the technique popover; Coverage), `CHANGELOG.md` Unreleased > Camera; commit 09d7eca2 |
+| A6 | met (review R1) | `mcp/README.md` (`list_camera_techniques` row, Further reading paragraph), `docs/studio-ui-ia.md` (Further reading and the Atlas field in the technique popover; Coverage), `CHANGELOG.md` Unreleased > Camera; commit 09d7eca2 |
 
 ## Steps
 
@@ -37,3 +37,7 @@
 ## Reconciliations
 
 - Started under rev 2 (no rev change during the work).
+
+## Reviews
+
+- R1 (cloud orchestrator, 2026-10-24, at 23eae7f7): opened `proofs/further-reading-linked.png`: the Close-Up popover shows "Applied CU · 50mm ... (verified)", then Further reading with three citations (Katz, Shot by Shot p. 68, 69; Katz, Cinematic Motion p. 23, 27; Kenworthy, Master Shots: Advanced p. 20, 24) whose page numbers are links, and the Atlas field set to `http://127.0.0.1:8000/`. `proofs/further-reading-studio.png`: the same popover in the full studio with two rigs loaded. Neither image shows any book text. `src/camera-references/data.js` holds citations only (id, title, author, edition, year, pages) and no machine path. A6: `mcp/README.md`, `docs/studio-ui-ia.md` and `CHANGELOG.md` Unreleased describe it.
