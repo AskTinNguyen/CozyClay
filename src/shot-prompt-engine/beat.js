@@ -35,7 +35,7 @@ function angleWords(camera, view) {
 	const down = -camera.pitch * DEG;
 	const tilt = Math.abs(down) < 2 ? "level" : down > 0 ? `looking down ${r(down)}°` : `looking up ${r(-down)}°`;
 	const height = view.elevationDeg > 25 ? "high angle" : view.elevationDeg < -10 ? "low angle" : "eye level";
-	return `${height}, lens ${r(camera.pos.y, 2)} m up, ${tilt}, ${view.viewPhrase}`;
+	return `${height}, camera ${r(camera.pos.y, 2)} m high, ${tilt}, ${view.viewPhrase}`;
 }
 
 function compositionPhrase(name, placed) {

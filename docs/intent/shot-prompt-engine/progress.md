@@ -2,8 +2,8 @@
 
 - Working under rev: 1
 - Worker: `shot-prompt-engine-worker`
-- Current step: 7. A7 Sequence prompt view in Export, browser QA, cclay live check
-- Next step: 8. A8 gates, A9 docs, PR
+- Current step: 8. A8 gates (lint, build, suite)
+- Next step: 9. A9 docs, PR
 - PR: none yet
 
 ## Acceptance
@@ -15,8 +15,8 @@
 | A3 | met | `node test/bus/verify-sequence-motion-beats.mjs` -> `PASS A3 motion beats: walk-start f27, walk-end f83, turn f111, jump f155, land f166, grab f34, release f80` (known f26, f82, f110, f155, f166, f34, f80; all within 2), `PASS A3 brief actions: ...`, `pass 2 fail 0` |
 | A4 | met | `PATH=/usr/bin:$PATH node test/bus/verify-sequence-references.mjs` -> `PASS A4 sequence pack: 34 files, 17 references (first-frame, last-frame, composition-guide, character-sheet, set), unzip -t: No errors detected in compressed data of ...cozyclay-sequence-rooftop.zip.`, `PASS A4 shot pack: ...`, `pass 2 fail 0`; `node test/verify-keyframe-pack.mjs` -> `PASS keyframe-pack: entry names, README reference roles, and pack name` |
 | A5 | open | `node test/bus/verify-sequence-profiles.mjs` -> `pass 3 fail 0`; facts in F-1. Waits for the A8 suite run |
-| A6 | open | `node mcp/verify.mjs` -> `32 tools registered`, `all checks passed`; `node mcp/verify-render-prompt-sequence.mjs` -> `18 passed, 0 failed`; `node test/motion3/verify-motion3-prompt.mjs` -> `verify-motion3-prompt: all checks passed` (cap 13,400, F-2). `cclay live` check pending (step 7) |
-| A7 | open | |
+| A6 | met | `node mcp/verify.mjs` -> `32 tools registered`, `all checks passed`; `node mcp/verify-render-prompt-sequence.mjs` -> `18 passed, 0 failed`; `node test/motion3/verify-motion3-prompt.mjs` -> `verify-motion3-prompt: all checks passed` (cap 13,400, F-2). live: `cclay live tool render_prompt --args '{"scope":"sequence","profile":"veo-3.1"}'` in the A7 QA run -> `SEQUENCE: COVERAGE: 6 shots, 18s at 24 fps, 16:9.`, `PASS cclay live tool render_prompt scope sequence answers the editor's six shots for Veo 3.1` |
+| A7 | met (ui:shot awaits orchestrator review) | ui:qa: `CHROME_PATH="C:/Program Files/Google/Chrome/Application/chrome.exe" CDP_PORT=9304 COZYCLAY_LIVE_PORT=5304 QA_URL=http://127.0.0.1:5204/app/ QA_SHOT_DIR=docs/intent/shot-prompt-engine/proofs node tools/qa-browser.mjs -- node test/qa-sequence-prompt-browser.mjs` -> exit 0, 26 PASS, `sequence prompt view QA passed` (range 2-4 gives 3 beats, Veo/Kling/MiniMax change brief and warnings, copy, sequence pack `cozyclay-sequence-coverage.zip exported`). ui:shot: `proofs/sequence-prompt-all.png` (dialog over the Studio: From 1. Dialogue, To 6. MASTER+ 5 · CU Joon, Model Any model; summary `6 beats · 18s · 16:9 · 1 clip · 18 references`; green `No model limits applied.`; the brief from `SEQUENCE: COVERAGE: 6 shots` through beat 2), `proofs/sequence-prompt-veo-warnings.png` (Model Veo 3.1; `6 clips`, `limits checked 2026-10-24`; five warnings `Beat N ... runs 2s; Veo 3.1 makes 4, 6, 8 s clips. Extend to 4s.`; brief with `FOR: Veo 3.1 ...`, `CLIP 1 of 6 (8s): generate on its own`) |
 | A8 | open | |
 | A9 | open | |
 
@@ -29,6 +29,7 @@
 4. A3 motion beats: `src/shot-prompt-engine/motion-beats.js` (walk from the timeline's planted runs, reach/grab/release from its events and the spec's objects, turns from the baked take's hips heading, jump/landing from `observations.balance.air`), `src/shot-prompt-engine/document.js` (`takeYaw`, `motionEntry`, `sequenceDocument`). Frozen files only imported (`pipeline.js` compileSpec in the test), never edited. Evidence in the table.
 5. A4 reference manifest: `sequencePackFiles` in `src/shot-prompt-engine/references.js` (sequence-prompt.txt, references.json, composition.svg per beat, character sheets and the set under references/); `keyframePackEntries({ sequenceFiles })` and `sequencePackName` in `src/keyframe-pack.js`; beats carry `shotNumber` so manifest paths match pack folders. Evidence in the table.
 6. A6 agents: `render_prompt` moved to `mcp/render-prompt-tool.mjs` with `scope: shot | sequence`, `profile`, `from_shot`/`to_shot` (live: the editor's shots; memory: the shots `cover_scene` planned, which now keep their coverage role); `environment` is optional (a sequence needs none). Agent prompt camera paragraph and budget 13,400 (F-2). `node mcp/verify-camera-techniques.mjs` -> `14 passed, 0 failed`; `node mcp/verify-camera-capabilities.mjs` -> `9 passed, 0 failed`; `node mcp/verify-camera-coverage.mjs` -> `14 passed, 0 failed`; `node mcp/verify-tool-annotations.mjs` -> `PASS G005 tools/list safety contract (32 tools; deterministic order)`; `node test/verify-tool-handlers.mjs` -> `PASS tool handler registry (32 tools, importable without an MCP server)`. One `mcp/verify.mjs` run flaked on Windows (`FAIL save allows explicit overwrite`); the rerun passed.
+7. A7 UI: File > Export > `Sequence prompt…` (`src/shell/SequenceExportItems.jsx`, which also took the OTIO item so `MenuBar.jsx` does not grow), dialog `src/shell/SequencePromptDialog.jsx` + `sequence-prompt.css` (range, model picker, warnings, brief, Copy, Download sequence pack), `src/sequence-prompt-studio.js` (document from `readStudioState`, takes compiled once per take, sequence pack exporter); App: single shot packs now carry their one-beat brief and manifest. `test/verify-export-recovery.mjs` gained the two new seams (`readStudioState`, `shotSequenceFiles`) and passes (`all export recovery seam checks PASS`). QA evidence in the table. Dev server and QA Chrome stopped after the run.
 
 ## Decisions
 

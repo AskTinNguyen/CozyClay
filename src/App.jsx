@@ -206,6 +206,7 @@ import {
 import { shotCaptureMeta } from "./shot-meta.js";
 import { buildShotPrompt } from "./shot-prompt.js";
 import { buildKeyframePack, keyframePackEntries, keyframePackName, slugifyTitle } from "./keyframe-pack.js";
+import { sequencePackExporter, shotSequenceFiles } from "./sequence-prompt-studio.js";
 import { buildZip } from "./zip-store.js";
 import { composeStoryboard } from "./storyboard.js";
 import { DEPTH_RANGE_M, depthRangeFromFrames, passFileName, renderPass } from "./render-passes.js";
@@ -712,7 +713,7 @@ export default function App() {
 		return () => pane.removeEventListener("wheel", onWheel);
 	}, []);
 
-	const [preferencesOpen, setPreferencesOpen] = useState(false);
+	const [preferencesOpen, setPreferencesOpen] = useState(false), [sequencePromptOpen, setSequencePromptOpen] = useState(false);
 	const [statusText, setStatusText] = useState("");
 	const [previewRanges, setPreviewRanges] = useState([]);
 	const [flySpeed, setFlySpeed] = useState(1);
@@ -3185,13 +3186,13 @@ export default function App() {
 	// Build one shot's pack: both endpoint frames, the clip between them, the
 	// camera state and the prompt. Returns the archive bytes plus the entry
 	// names, so the download path, the embed message and QA all share it.
-	async function buildShotKeyframePack(entry, index, onProgress = null, job = null) {
+	async function buildShotKeyframePack(entry, index, onProgress = null, job = null, withSequence = true) {
 		// Embed/Workflow and the public QA API already own their lifecycle. The
 		// shared lock still covers their endpoint captures and archive stages.
 		if (!job) {
 			const snapshot = structuredClone(entry);
 			return executeExportRequest(exportRequest("keyframe_pack",
-				(ownedJob) => buildShotKeyframePack(snapshot, index, onProgress, ownedJob), { external: true, download: false }));
+				(ownedJob) => buildShotKeyframePack(snapshot, index, onProgress, ownedJob, withSequence), { external: true, download: false }));
 		}
 		updateExportStatus(job, "preparing", { stage: "frames", cancellable: true });
 		await exportBoundary(job);
@@ -3223,6 +3224,8 @@ export default function App() {
 				},
 			},
 			prompt: buildShotPrompt(meta, { target: "video" }),
+			// The shot's one-beat brief and reference manifest (shot-prompt-engine); a sequence pack writes the range's instead.
+			sequenceFiles: withSequence ? shotSequenceFiles(readStudioState(), entry) : [],
 		});
 		const bytes = buildZip(entries);
 		// ZIP construction is synchronous: cancellation takes effect after that
@@ -4580,7 +4583,8 @@ export default function App() {
 		selectTimelineShot, clearMotion,
 		spawnCharacter, exportShotVideo, stopShotRecording, retryExport, poseRefusal,
 		beginWorkspaceResize,
-		preferencesOpen, setPreferencesOpen, statusText, setStatusText, previewRanges, setPreviewRanges,
+		preferencesOpen, setPreferencesOpen, statusText, setStatusText, previewRanges, setPreviewRanges, sequencePromptOpen, setSequencePromptOpen, readStudioState,
+		exportSequencePack: sequencePackExporter({ readStudioState, executeExportRequest, exportRequest, buildShotKeyframePack, saveExport, setToast, isRecording: () => Boolean(recRef.current) }),
 		flySpeed, liveHubStatus: liveWorkspaceHandle ? "connected" : "disconnected",
 		agentOpen: !agentCollapsed,
 		toggleAgent: () => window.dispatchEvent(new CustomEvent("cozyclay:agent-panel-toggle")),

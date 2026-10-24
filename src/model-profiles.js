@@ -21,7 +21,7 @@ const PHRASING = {
 	"minimax-h3": { cameraStyle: "tags", cuts: "per-clip", cutsVerified: false, refs: "first-last", tip: "Lead each move with its bracket tag ([Push in], [Pan left], [Static]); keep to three tags a shot." },
 	"minimax-h3-selfhosted": { cameraStyle: "tags", cuts: "per-clip", cutsVerified: false, refs: "first-last", tip: "As the hosted model: bracket tags first, one clip per shot." },
 };
-const GENERIC = { id: null, name: "Any model", aspects: null, fps: 24, durationsSeconds: [], cameraStyle: "words", cuts: "in-clip", cutsVerified: false, refs: "named", tip: "No model limits applied." };
+const GENERIC = { id: null, name: "Any model", aspects: null, fps: 24, durationsSeconds: [], cameraStyle: "words", cuts: "in-clip", cutsVerified: false, refs: "named", tip: "Pick a model to check clip lengths, aspects and phrasing." };
 
 /** Every profile: the preset limits plus its phrasing. */
 export const MODEL_PROFILES = Object.freeze(VIDEO_MODEL_PRESETS.map((preset) => Object.freeze({ ...preset, ...PHRASING[preset.id] })));

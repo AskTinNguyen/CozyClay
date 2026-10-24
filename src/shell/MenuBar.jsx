@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useId, useLayoutEffect, useRef, u
 import { createPortal } from "react-dom";
 import { useStudioShell } from "./studio-shell-context.js";
 import SourceOffer from "../source-offer.jsx";
+import SequenceExportItems from "./SequenceExportItems.jsx";
 import { ko } from "../locale.js";
 
 const MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform ?? "");
@@ -479,18 +480,7 @@ export default function MenuBar({ preferences }) {
 							>
 								<span className="menubar-item-label">{ko("Storyboard (PNG)", "스토리보드 (PNG)")}</span>
 							</button>
-							{shots.length > 0 && (
-								<button
-									type="button"
-									role="menuitem"
-									className="menubar-item"
-									data-testid="export-otio"
-									title={ko("Download OTIO cut list", "OTIO 컷 목록 다운로드")}
-									onClick={item(downloadOtioCutList)}
-								>
-									<span className="menubar-item-label">{ko("OTIO cut list", "OTIO 컷 목록")}</span>
-								</button>
-							)}
+							{shots.length > 0 && <SequenceExportItems item={item} />}
 							{!shots.length && (
 								<p className="export-menu-hint">
 									{hasCameraKeys || motion

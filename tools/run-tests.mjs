@@ -216,7 +216,7 @@ const BROWSER_FILES = [
 	"test/qa-storyboard-export-browser.mjs",
 	"test/qa-proxy-figure-browser.mjs",
 	"test/qa-rail-lean-browser.mjs",
-	"test/qa-export-recovery-browser.mjs", "test/qa-export-workspace-browser.mjs",
+	"test/qa-export-recovery-browser.mjs", "test/qa-export-workspace-browser.mjs", "test/qa-sequence-prompt-browser.mjs",
 	"test/verify-camera-mode-browser.mjs",
 	"test/verify-camera-rail-browser.mjs", "test/verify-camera-technique-picker-browser.mjs", "test/verify-camera-rig-panel-browser.mjs", "test/verify-camera-coverage-browser.mjs",
 	"test/verify-cutout-browser.mjs",
@@ -255,7 +255,7 @@ const BROWSER_FILES = [
 // The inventory sweep only picks up `verify*.mjs`; a browser suite named for
 // the QA runner it needs is listed here so it still shows up in the manifest
 // (as an EXCLUDE with its reason) instead of going unmentioned.
-const EXTRA_INVENTORY = ["test/ik/translation-step.mjs", "test/qa-scenes-v5-migration-browser.mjs", "test/qa-agent-scenarios-browser.mjs", "test/qa-execution-outcomes-browser.mjs", "test/qa-export-recovery-browser.mjs", "test/qa-agent-view-toggle-browser.mjs", "test/qa-camera-pointer-lock-browser.mjs", "test/qa-first-edit-browser.mjs", "test/qa-ia-tail-browser.mjs", "test/qa-keyframe-pack-browser.mjs", "test/qa-preview-browser.mjs", "test/qa-reference-slots-browser.mjs", "test/qa-scene-playback-browser.mjs", "test/qa-scene-switcher-browser.mjs", "test/qa-send-to-ai-browser.mjs", "test/qa-view-menu-browser.mjs", "test/qa-live-reconnect-browser.mjs", "test/qa-clipboard-paste-browser.mjs", "test/qa-rail-lean-browser.mjs", "test/qa-rail-reach-browser.mjs", "test/qa-rail-ring-browser.mjs", "test/qa-speed-graph-browser.mjs", "test/qa-export-workspace-browser.mjs"];
+const EXTRA_INVENTORY = ["test/ik/translation-step.mjs", "test/qa-scenes-v5-migration-browser.mjs", "test/qa-agent-scenarios-browser.mjs", "test/qa-execution-outcomes-browser.mjs", "test/qa-export-recovery-browser.mjs", "test/qa-agent-view-toggle-browser.mjs", "test/qa-camera-pointer-lock-browser.mjs", "test/qa-first-edit-browser.mjs", "test/qa-ia-tail-browser.mjs", "test/qa-keyframe-pack-browser.mjs", "test/qa-preview-browser.mjs", "test/qa-reference-slots-browser.mjs", "test/qa-scene-playback-browser.mjs", "test/qa-scene-switcher-browser.mjs", "test/qa-send-to-ai-browser.mjs", "test/qa-view-menu-browser.mjs", "test/qa-live-reconnect-browser.mjs", "test/qa-clipboard-paste-browser.mjs", "test/qa-rail-lean-browser.mjs", "test/qa-rail-reach-browser.mjs", "test/qa-rail-ring-browser.mjs", "test/qa-speed-graph-browser.mjs", "test/qa-export-workspace-browser.mjs", "test/qa-sequence-prompt-browser.mjs"];
 
 EXTRA_INVENTORY.push("test/qa-proxy-figure-browser.mjs");
 EXTRA_INVENTORY.push("test/qa-proxy-entry-browser.mjs");
