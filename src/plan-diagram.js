@@ -7,6 +7,7 @@ import { isEffectivelyHidden } from './scene-objects.js';
 import { shotAtFrame } from './cuts.js';
 import { occludersOf, primarySubjects, shotCamera, sideOfAxis } from './studio-geometry-facts.js';
 import { entityWorldBounds } from './studio-agent-commands.js';
+import { shotLayers } from './camera-depth/layers.js';
 
 export const PLAN_DIAGRAM = Object.freeze({ marginM: 1.5, maxSpanM: 30, minSpanM: 6, characterRadiusM: 0.3, frustumM: 3, defaultFovDeg: 40 });
 const SIDE_LABEL = { left: 'L', right: 'R', 'on-axis': 'on-axis' };
@@ -66,6 +67,13 @@ export function planDiagramLayout(state, { width = 1280, height = 720, ports, cu
       halfFovRad: round(halfFov), frustum: [edge(heading - halfFov), edge(heading + halfFov)], cameraSide: null };
     primitives.push(entry);
     if (!current) return;
+    // depth-staging: what stands in the current shot's foreground, ringed where it stands.
+    const d = { x: camera.lookAt.x - camera.position.x, y: camera.lookAt.y - camera.position.y, z: camera.lookAt.z - camera.position.z };
+    const framing = { pos: camera.position, yaw: Math.atan2(-d.x, -d.z), pitch: Math.atan2(d.y, Math.hypot(d.x, d.z)), fovDeg }, subjectId = shot.coverage?.subjectId ?? shot.subjectIds?.[0];
+    for (const near of shotLayers(shot, framing, subjectId, { cast: characters, objects: state.objects, aspectRatio: aspect, bounds: ports?.bounds })?.foreground ?? []) {
+      const row = [...characters, ...objects].find(entity => entity.id === near.id);
+      if (row) primitives.push({ kind: 'foreground', shotId: shot.id, id: near.id, label: near.name, center: flat(row) });
+    }
     const pair = primarySubjects(shot.subjectIds ?? [], camera.position, state);
     if (pair.length !== 2) return;
     entry.cameraSide = SIDE_LABEL[sideOfAxis(pair[0], pair[1], camera.position)] ?? null;
@@ -164,6 +172,11 @@ export function drawPlanDiagram(ctx, state, options = {}) {
       ctx.strokeStyle = '#3c7d3a'; ctx.lineWidth = 2; ctx.setLineDash([8, 6]);
       ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke(); ctx.setLineDash([]);
       text(`${p.distanceM.toFixed(2)} m`, (ax + bx) / 2, (ay + by) / 2 - 12, '#2d5f2b', 'center');
+    } else if (p.kind === 'foreground') {
+      const [x, y] = toPixel(p.center);
+      ctx.strokeStyle = '#e08a1e'; ctx.lineWidth = 2.5; ctx.setLineDash([5, 4]);
+      ctx.beginPath(); ctx.arc(x, y, 0.55 * scale, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+      text('FG', x, y + 0.55 * scale + 10, '#b0650c', 'center');
     } else if (p.kind === 'occluder') {
       ctx.strokeStyle = '#e0241b'; ctx.lineWidth = 3;
       if (p.corners.length) { path(p.corners); ctx.stroke(); }
@@ -172,7 +185,7 @@ export function drawPlanDiagram(ctx, state, options = {}) {
     }
   }
   // Legend, top-right.
-  const rows = [['character', '#6ea8e0'], ['object', '#d8c39a'], ['camera (filled: current shot)', '#d64034'], ['action line', '#3c7d3a'], ['blocked sight line', '#e0241b']];
+  const rows = [['character', '#6ea8e0'], ['object', '#d8c39a'], ['camera (filled: current shot)', '#d64034'], ['action line', '#3c7d3a'], ['blocked sight line', '#e0241b'], ['foreground (current shot)', '#e08a1e']];
   const lx = width - 236, ly = 12;
   ctx.fillStyle = 'rgba(255, 255, 255, 0.92)'; ctx.strokeStyle = '#c9c4b8'; ctx.lineWidth = 1;
   ctx.fillRect(lx, ly, 224, rows.length * 20 + 12); ctx.strokeRect(lx, ly, 224, rows.length * 20 + 12);

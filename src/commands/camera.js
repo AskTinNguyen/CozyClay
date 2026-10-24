@@ -18,6 +18,7 @@ import { registerRig, rigDeclarations } from './camera-rig.js';
 import { capabilityReadback, capabilityScene } from '../camera-capabilities/readback.js';
 import { compositionSchema, coverageDeclarations, registerCoverage } from './camera-coverage.js';
 import { motivationDeclarations, registerMotivation } from './camera-motivation.js';
+import { depthDeclarations, registerDepth } from './camera-depth.js';
 import { routeCameraRequest } from '../camera-coverage/route.js';
 import { eyePoint, measureComposition } from '../camera-coverage/composition.js';
 import { travelAt } from '../camera-coverage/cut-geometry.js';
@@ -38,7 +39,7 @@ export const declarations = Object.freeze([
     description: 'One camera technique in full: description, aliases, moods, params with defaults and ranges, the move the classifier confirms, and any camera capability it waits for (then it applies as prompt words only). Give id, or a phrase to resolve.',
     input: input({ id: { type: 'string', maxLength: 200 } }, ['id']) },
   { id: 'camera.applyTechnique', label: 'Apply camera technique', kind: 'mutation', undoDomain: 'shot',
-    description: `Frame or move a shot's camera with a technique stack, as one undo entry. ${STACK_HELP} It compiles to shot.frame keys (moves ease in and out; a crash zoom, whip pan and 360 run at constant speed) or a shot.setCameraRail rail (tracking, follow, Steadicam, dolly, helicopter, one-er), and answers what it achieved: the move the classifier reads back from the real keys (checks.moveVerified), the derived size, framing checks, group members in frame, and what the camera capabilities it sets through camera.set do (Dutch/canted roll, rack focus, handheld shake, Snorricam mount, slow motion, whip-pan blur: checks rollDeg, focus, focusDistances, shakeAmplitude, mountBone, speed, shutterDeg). Shared params: speed slow|medium|fast, focalMm, direction, degrees. shotId defaults to the shot under the playhead (one is added when there is none); subjectId to the active character. side left|right puts the camera on that side of the subject. composition { place auto|left-third|centre|right-third, headroom tight|normal|loose, leadRoom none|facing|travel|more } turns the aim so the eyes sit on a third or the centre with room ahead (checks screenX, eyeLineY: frame fractions from the top-left). A request about coverage ("cover this conversation") runs camera.cover, about cuts ("check my cuts") camera.checkCuts. The stack is stored on the shot and states itself in the export prompt.`,
+    description: `Frame or move a shot's camera with a technique stack, as one undo entry. ${STACK_HELP} It compiles to shot.frame keys (moves ease in and out; a crash zoom, whip pan and 360 run at constant speed) or a shot.setCameraRail rail (tracking, follow, Steadicam, dolly, helicopter, one-er), and answers what it achieved: the move the classifier reads back from the real keys (checks.moveVerified), the derived size, framing checks, group members in frame, and what the camera capabilities it sets through camera.set do (Dutch/canted roll, rack focus, handheld shake, Snorricam mount, slow motion, whip-pan blur: checks rollDeg, focus, focusDistances, shakeAmplitude, mountBone, speed, shutterDeg). Shared params: speed slow|medium|fast, focalMm, direction, degrees. shotId defaults to the shot under the playhead (one is added when there is none); subjectId to the active character. side left|right puts the camera on that side of the subject. composition { place auto|left-third|centre|right-third, headroom tight|normal|loose, leadRoom none|facing|travel|more } turns the aim so the eyes sit on a third or the centre with room ahead (checks screenX, eyeLineY: frame fractions from the top-left); composition.foreground { id (a prop or cast member, by id or name), share 0.1-0.6 } frames past it so it covers that share of the width from the near edge (\"put the lamp in the foreground\"; checks foregroundShare). A request about coverage ("cover this conversation") runs camera.cover, about cuts ("check my cuts") camera.checkCuts. The stack is stored on the shot and states itself in the export prompt.`,
     input: input({ shotId: id, subjectId: id, stack: { type: 'array', items: item, minItems: 1, maxItems: 8 }, request: { type: 'string', minLength: 1, maxLength: 300 },
       speed: { type: 'string', enum: ['slow', 'medium', 'fast'] }, focalMm: { type: 'number', minimum: 8, maximum: 300 }, direction: { type: 'string', enum: ['left', 'right', 'up', 'down', 'in', 'out'] },
       degrees: { type: 'number', minimum: 5, maximum: 720 }, side: { type: 'string', enum: ['left', 'right'] }, composition: compositionSchema }) },
@@ -48,6 +49,8 @@ export const declarations = Object.freeze([
   ...coverageDeclarations,
   // story.addBeat / moveBeat / removeBeat, camera.checkMotivation and camera.alignMove (camera-motivation.js).
   ...motivationDeclarations,
+  // camera.checkShots and camera.fixShot (camera-depth.js).
+  ...depthDeclarations,
 ]);
 
 const scaled = row => SUBJECT_HEIGHT_M * (row.scale ?? 1);
@@ -76,6 +79,7 @@ export function register(registry, ports) {
   registerRig(registry, ports);
   registerCoverage(registry, ports, { castRow });
   registerMotivation(registry, ports);
+  registerDepth(registry, ports);
 
   function apply(args, context) {
     const view = ports.readView(), visible = view.characters.filter(row => !row.hidden), named = visible.map(row => ({ id: row.id, name: row.subject ?? row.name }));
