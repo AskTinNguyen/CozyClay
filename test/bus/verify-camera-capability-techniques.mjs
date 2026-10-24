@@ -54,7 +54,10 @@ test('the seven techniques apply their capability and the receipt reads it back'
     const whip = apply(f, ['whip-pan']);
     assert.equal(whip.receipt.checks.shutterDeg, 270);
     assert.equal(whip.receipt.checks.moveVerified, true, 'the whip pan still verifies as a pan');
-    assert.match(buildShotPrompt(shotCaptureMeta({ shot: whip.shot, fps: 24 })), /RIG: heavy motion blur \(270-degree shutter\)/);
+    const prompt = buildShotPrompt(shotCaptureMeta({ shot: whip.shot, fps: 24 }));
+    assert.match(prompt, /TECHNIQUE: WHIP PAN · \d+mm: a pan to the right; \d+mm lens; heavy motion blur \(270-degree shutter\)/, 'the technique states its blur');
+    assert.ok(!/RIG:/.test(prompt), 'and the RIG line does not repeat what the technique said');
+    assert.match(buildShotPrompt(shotCaptureMeta({ shot: { ...whip.shot, technique: null }, fps: 24 })), /RIG: heavy motion blur \(270-degree shutter\)/, 'without a technique the RIG line states it');
     for (const id of ['dutch-angle', 'canted-frame', 'rack-focus', 'handheld-shot', 'snorricam', 'slow-motion', 'whip-pan']) assert.ok(describeTechnique(id).sets?.length && !describeTechnique(id).promptOnly, id);
     assert.deepEqual(Object.keys(PLANNED_CAPABILITIES), ['coverage-generator']);
   } finally { f.dispose(); }
