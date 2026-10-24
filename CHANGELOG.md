@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+Export
+
+- Director packet: a range of shots as a shooting plan for a mocap team, a
+  game engine or a collaborator. File › Export › Director packet… takes a
+  range and previews the top-down plan (numbered cameras with frustums and
+  move arrows, every pair's line of action, the cast's marks and walks, a
+  legend), the shot list with the flags of the cut, coverage, motivation,
+  shot and structure checks, and the notes; Download writes `packet/` inside
+  the sequence pack: a printable `index.html`, `plan.png`,
+  `contact-sheet.png`, `intensity.png`, `shot-list.csv`, `shot-list.md` and
+  `packet.json`. Agents get the data without pictures from MCP
+  `render_packet`, and the full pack from `export.directorPacket`
+  (`cclay live run export.directorPacket`).
+
 Camera
 
 - Depth staging: `camera.checkShots` reads what each shot's camera does with

@@ -926,6 +926,24 @@ The Studio's File › Export › Sequence prompt… shows the same brief with th
 story beats from installed motion takes, and its sequence pack (and every
 keyframe pack) carries `sequence-prompt.txt` and `references.json`.
 
+## Director packet
+
+`export.directorPacket` writes a range of shots as a director packet inside its
+sequence pack (`cozyclay-sequence-<title>.zip`), the same file File › Export ›
+Director packet… downloads: every shot's keyframe pack, `sequence-prompt.txt`
+and `references.json`, plus `packet/index.html` (one printable page),
+`packet/plan.png` (the top-down plan), `packet/contact-sheet.png` (one frame per
+shot), `packet/intensity.png` (with two shots or more), `packet/shot-list.csv`,
+`packet/shot-list.md` and `packet/packet.json`. The file goes to the export
+folder or the browser download; the receipt names it and lists the packet's
+files. It renders each shot's frames and clip, so give it time. For the data
+alone, without pictures, ask `render_packet`.
+
+```sh
+cclay live run export.directorPacket --args '{"from":2,"to":4}' --timeout 300000
+cclay live tool render_packet --args '{"from_shot":2,"to_shot":4,"format":"csv"}'
+```
+
 ## Limits
 
 Motion is not a dedicated verb, but the editor's registered motion actions

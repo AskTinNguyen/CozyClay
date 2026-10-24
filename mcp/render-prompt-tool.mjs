@@ -22,18 +22,23 @@ const modelById = (id) => [...VIDEO_MODELS, ...IMAGE_MODELS].find((m) => m.id ==
 const warningLines = (warnings) => warnings.map((row) => `- ${row.message} Fix: ${row.fix}`);
 
 /**
+ * The sequence document: the editor's shots (and story beats) when one is connected, else the shots
+ * cover_scene planned and the beats story_beats keeps in memory. render_packet reads the same one.
+ */
+export function promptDocument(deps, live, { environment, style } = {}) {
+	const { state } = deps, sc = deps.scene(), st = deps.stage(), shots = live ? sc?.shotDocument?.shots ?? [] : state.coverage?.shots ?? [];
+	return sequenceDocument({ title: sc?.name ?? state.doc?.name, shots, characters: st.characters ?? [], objects: sc?.objects ?? [], fps: state.timeline.fps ?? 24, aspect: st.shotAspect ?? "16:9", filmback: deps.filmback(),
+		frameCount: Math.max(state.timeline.frameCount ?? 0, 1 + Math.max(0, ...shots.map((shot) => shot.endFrame))), activeCharacterId: deps.findCharacter(state.focus)?.id ?? null,
+		look: style, environment: environment ?? st.environment, environmentImage: st.environmentImage, storyBeats: live ? sc?.shotDocument?.storyBeats ?? sc?.storyBeats ?? [] : state.storyBeats ?? [] });
+}
+
+/**
  * @param {object} deps  the registry's helpers: tool, z, text, liveError, state, scene, stage, findCharacter, filmback, currentShot, refreshLiveDescription, isLive
  */
 export function renderPromptTool(deps) {
 	const { tool, z, text, liveError, state } = deps;
 
-	/** The sequence document: the editor's shots when one is connected, else the shots cover_scene planned in memory. */
-	function documentFor(live, environment, style) {
-		const sc = deps.scene(), st = deps.stage(), shots = live ? sc?.shotDocument?.shots ?? [] : state.coverage?.shots ?? [];
-		return sequenceDocument({ title: sc?.name ?? state.doc?.name, shots, characters: st.characters ?? [], fps: state.timeline.fps ?? 24, aspect: st.shotAspect ?? "16:9", filmback: deps.filmback(),
-			frameCount: Math.max(state.timeline.frameCount ?? 0, 1 + Math.max(0, ...shots.map((shot) => shot.endFrame))), activeCharacterId: deps.findCharacter(state.focus)?.id ?? null,
-			look: style, environment: environment ?? st.environment, environmentImage: st.environmentImage });
-	}
+	const documentFor = (live, environment, style) => promptDocument(deps, live, { environment, style });
 
 	function sequence({ environment, style, profile, from_shot, to_shot }) {
 		const live = deps.isLive(), document = documentFor(live, environment, style);

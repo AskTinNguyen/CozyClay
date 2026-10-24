@@ -28,6 +28,7 @@
 4. A4 tests through the bus (da6da07e).
 5. A6 agents (accb84f7): MCP `check_shots` (`mcp/camera-depth-tools.mjs`, 37 tools), a `depth` director-evals category (10 core rows and 1 stretch row: "are we clipping into the bookcase?" does not resolve yet), and the redirect from `apply_camera_technique`.
 6. A5 controls (cf1f5aed): `ShotCheckMarks` on the Shots lane and the Shot check readout with Apply fix in the Coverage panel. QA found that a fix could hand an unnamed shot to the other person, because the most central person changes when the camera slides. The fix search now keeps the subject (`keeps`), with a unit check that fails without it.
+7. Merged origin/main (director-packet #16, 27dd3e63), keeping both sides: 38 MCP tools, 139 registry actions. Following the packet's prompt, the "Depth" entry is now in `PACKET_CHECKS` (`src/director-packet/checks.js`). A pillar flags the shot it blocks, with the fix (`test/verify-director-packet.mjs`, `# pass 5`). The packet's expected check lists gain `depth`. MCP `render_prompt` and `render_packet` now pass the scene's objects, so the brief's Depth line and the packet's depth flags work in memory too.
 
 ## Decisions
 

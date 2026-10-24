@@ -26,6 +26,7 @@ const EXPECTED_ANNOTATIONS = Object.freeze({
 	remove_object: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
 	apply_batch: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
 	render_prompt: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+	render_packet: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
 	mark_camera_move: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
 	describe_camera_move: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
 	list_camera_techniques: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
