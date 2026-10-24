@@ -141,7 +141,7 @@ Pose Details 패널만 세면 13개다(#545의 `qa-shell-pose-browser` 지표, �
 | 테이크 바 Scene/Refine + 버전 | 테이크 바 | 유지 | 이미 aria-disabled + 이유 | R3 | — |
 
 ## 4. 메뉴 설계
-- **`Export ▾`** (상단바, Save 오른쪽; 트리거에 `data-testid="export-menu-trigger"` + id `topbar-export`): 1 Keyframe pack (zip) · Shift: 모든 샷 [기본/굵게] · 2 Video (mp4) [샷/키/모션 있을 때] · 3 Depth + normal passes · 4 Storyboard (PNG) · 5 OTIO cut list [샷 ≥1] · 항목이 빠지면 푸터 한 줄 힌트. "Send to AI"는 넣지 않는다 — Workflow의 Send to AI는 같은 팩을 다운로드하는 postMessage(CozySceneNode.jsx:51-56)라 중복(R1).
+- **`Export ▾`** (상단바, Save 오른쪽; 트리거에 `data-testid="export-menu-trigger"` + id `topbar-export`): 1 Keyframe pack (zip) · Shift: 모든 샷 [기본/굵게] · 2 Video (mp4) [샷/키/모션 있을 때] · 3 Depth + normal passes · 4 Storyboard (PNG) · 5 Sequence prompt… [샷 ≥1] · 6 OTIO cut list [샷 ≥1] · 항목이 빠지면 푸터 한 줄 힌트. "Send to AI"는 넣지 않는다 — Workflow의 Send to AI는 같은 팩을 다운로드하는 postMessage(CozySceneNode.jsx:51-56)라 중복(R1).
 - **`Settings`** (상단바 맨 오른쪽, 라벨 텍스트): Language English/한국어(현재 표시) · Anonymous analytics on/off. 문서를 바꾸는 항목은 절대 안 넣는다.
 - **`View ▾`** (뷰포트 바 오른쪽 끝, 전 모드): ☐ Reference grid · ☐ Auto Color("켜둔 동안 캡처에 포함") · Body part colours off/shaded/flat(캐릭터 선택 시). 가이드 순환은 PiP 전용이라 여기 중복하지 않음.
 
@@ -184,8 +184,13 @@ current mode's tools; the active mode shows its name and inactive modes show
 only their digit.
 
 The menu map follows G7/G8. **File** holds New, Open…, Save, Save As… and
-Export ▸ (Keyframe pack, Video, Depth + normal, Storyboard and conditional
-OTIO). **Edit** holds Undo, Redo and Preferences…. **Window** holds Agent,
+Export ▸ (Keyframe pack, Video, Depth + normal, Storyboard and, with a shot,
+Sequence prompt… and OTIO). Sequence prompt… opens a dialog: From/To shot,
+a Model picker (Any model, Seedance 2.5, Kling 3.0, Veo 3.1, MiniMax H3), the
+profile warnings with their fixes, the brief, Copy brief and Download sequence
+pack (`data-testid` `export-sequence-prompt`, `sequence-from`, `sequence-to`,
+`sequence-profile`, `sequence-warnings`, `sequence-brief`, `sequence-copy`,
+`sequence-pack`). **Edit** holds Undo, Redo and Preferences…. **Window** holds Agent,
 Content and Log. **Help** holds Tutorial, Keyboard shortcuts and About. The
 viewport **Show** pill owns Reference grid, Auto Color, Body part colours and
 Trails; Perspective owns camera selection and Clay Lit owns shading. Language,

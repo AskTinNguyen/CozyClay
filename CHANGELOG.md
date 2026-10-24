@@ -48,6 +48,30 @@ Camera
   conversation", "rule of thirds left", "check my cuts"); MCP `cover_scene`
   and `check_cuts` (32 tools).
 
+Export
+
+- Sequence prompt (File › Export › Sequence prompt…): one brief a video model
+  can follow for a range of shots: a header (shots, length, aspect, look), the
+  cast with stable descriptors, numbered beats with timecodes carrying the
+  classifier's camera words and the measured move (metres, m/s, degrees per
+  second, focal change in mm, roll, focus pull), size, angle, lens, composition,
+  coverage role, transition and the story beats the cast's motion makes (walk
+  start and end, reach, grab, turn, jump, landing), then a continuity line.
+  The same document gives the same text. A model picker shapes it for Seedance
+  2.5, Kling 3.0, Veo 3.1 or MiniMax H3 and lists what breaks the model's
+  limits with a fix (split here, trim or extend to N s, another aspect); Copy
+  and Download sequence pack.
+- Keyframe packs carry `sequence-prompt.txt` and `references.json` (every
+  reference still by role: first and last frame, composition guide, character
+  sheet, set, with the beats it serves) plus a `composition.svg` per shot; the
+  sequence pack holds every shot of the range in one zip.
+- Model presets checked against public vendor pages (2026-10-24): Kling 3.0
+  (3-15 s, replaces Kling 2.0), Veo 3.1 (4, 6 or 8 s), MiniMax H3 hosted
+  (4-15 s), Seedance 2.5 (4-30 s); older stored ids read as their successors.
+- MCP `render_prompt` takes `scope: "sequence"`, `profile`, `from_shot` and
+  `to_shot`; the Studio agent's prompt names the camera library (its budget is
+  now 13,400 characters).
+
 ## 3.1.2 - 2026-10-23
 
 The Studio agent repairs motion faster and ends with a take, exports can go to a folder you choose, and a round of fixes for the live hub, MCP, prompts and docs.

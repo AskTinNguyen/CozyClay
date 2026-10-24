@@ -806,6 +806,32 @@ repeating pattern lays and `cuts` puts the cuts on given frames. Cut issues come
 back as warnings (`CUT_LINE`, `CUT_JUMP`, `CUT_SCREEN`, `CUT_EYELINE`) and in
 `output.cuts` with the fix.
 
+## Sequence prompt
+
+`render_prompt` with `scope: "sequence"` writes the brief a video model gets for
+the editor's shots: a header, the cast, one numbered beat per shot with its
+timecodes, the camera in the classifier's words and measured (m, m/s, deg/s,
+mm), size, angle, lens, composition, coverage role and transition, then the
+continuity line. `profile` shapes it for a model and adds `WARNINGS:` with a
+fix for each limit it breaks; `from_shot` / `to_shot` pick a range.
+
+```sh
+cclay live tool render_prompt --args '{"scope":"sequence","profile":"veo-3.1"}'
+cclay live tool render_prompt --args '{"scope":"sequence","profile":"kling-3","from_shot":2,"to_shot":4}'
+```
+```text
+SEQUENCE: COVERAGE: 6 shots, 18s at 24 fps, 16:9.
+FOR: Veo 3.1 (4, 6, 8 s clips; 16:9, 9:16; checked 2026-10-24). One continuous shot per clip; …
+DELIVERY: one clip per beat (6 clips), each a single continuous shot.
+…
+WARNINGS:
+- Beat 2 (MASTER+ 1 · Master) runs 2s; Veo 3.1 makes 4, 6, 8 s clips. Fix: Extend to 4s.
+```
+
+The Studio's File › Export › Sequence prompt… shows the same brief with the
+story beats from installed motion takes, and its sequence pack (and every
+keyframe pack) carries `sequence-prompt.txt` and `references.json`.
+
 ## Limits
 
 Motion is not a dedicated verb, but the editor's registered motion actions
