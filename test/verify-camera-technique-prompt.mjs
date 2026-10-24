@@ -76,10 +76,10 @@ check("the keyframe pack's prompt.txt carries it", () => {
 	assert.ok(JSON.parse(entries.find((entry) => entry.name.endsWith("/camera.json")).data).technique.label.startsWith("ARC"));
 });
 
-check("prompt-only parts are stated too", () => {
+check("the camera capabilities a stack sets are stated in its words (roll, slow motion)", () => {
 	const { shot } = applied(["medium-shot", "dutch-angle", "slow-motion", "static-shot"]);
 	const line = buildShotPrompt(metaOf(shot), { target: "image" }).split("\n").find((row) => row.startsWith("TECHNIQUE: "));
-	assert.equal(line, `TECHNIQUE: ${shot.technique.label}: a medium shot from the waist up; a static camera; 40mm lens; a Dutch angle, the horizon tilted about 20 degrees; in slow motion`.replace("40mm", line.match(/(\d+)mm lens/)[1] + "mm"));
+	assert.equal(line, `TECHNIQUE: ${shot.technique.label}: a medium shot from the waist up; a static camera; 40mm lens; a Dutch angle, the horizon tilted 20 degrees, falling to the right; slow motion at 50% speed (shot at 48 fps)`.replace("40mm", line.match(/(\d+)mm lens/)[1] + "mm"));
 });
 
 check("a camera edited by hand drops the stack from the prompt", () => {

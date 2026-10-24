@@ -15,7 +15,7 @@ export const MOUNT_BONES = Object.freeze(["chest", "head", "hips", "back"]);
 export const MOUNT_LOOKS = Object.freeze(["face", "forward"]);
 export const F_STOPS = Object.freeze([1.4, 2, 2.8, 4, 5.6, 8, 11, 16]);
 export const SHUTTER_ANGLES = Object.freeze([90, 180, 270, 360]);
-export const CAPABILITY_FIELDS = Object.freeze(["rollDeg", "lens", "shake", "mount", "speed", "shutterDeg", "rigKeys"]);
+const CAPABILITY_FIELDS = Object.freeze(["rollDeg", "lens", "shake", "mount", "speed", "shutterDeg", "rigKeys"]);
 
 export const LIMITS = Object.freeze({
 	rollDeg: [-90, 90], fStop: [0.7, 32], focusDistance: [0.05, 1000], amplitude: [0, 1], frequency: [0.1, 12],
@@ -32,7 +32,7 @@ const plain = (value) => value && typeof value === "object" && !Array.isArray(va
 const repairRoll = (value) => (finite(value) && Math.abs(value) > 1e-6 ? round(clamp(value, LIMITS.rollDeg)) : null);
 
 /** Focus is a cast member resolved per frame, or a distance in metres. */
-export function repairFocus(value) {
+function repairFocus(value) {
 	if (!plain(value)) return null;
 	if (castId(value.targetId)) return { targetId: value.targetId };
 	return finite(value.distance) && value.distance > 0 ? { distance: round(clamp(value.distance, LIMITS.focusDistance)) } : null;

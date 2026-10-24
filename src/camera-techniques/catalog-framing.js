@@ -85,12 +85,12 @@ export const ANGLE_TECHNIQUES = [
 	technique("dutch-angle", "Dutch Angle", "angle", "DUTCH", {
 		aliases: ["dutch", "dutch tilt", "oblique angle", "tilted shot"], moods: ["uneasy", "disoriented", "unstable", "tension", "madness"],
 		description: "Rolls the horizon off level so the world feels tipped; it tells the audience that something is wrong.",
-		params: { rollDeg: { type: "number", min: 5, max: 45, default: 20, unit: "deg" } }, recipe: { roll: true }, requires: ["roll"],
-		prompt: "a Dutch angle, the horizon tilted about 20 degrees" }),
+		params: { rollDeg: { type: "number", min: 5, max: 45, default: 20, unit: "deg" }, side: side() }, recipe: { roll: true },
+		prompt: "a Dutch angle, the horizon tilted" }),
 	technique("canted-frame", "Canted Frame", "angle", "CANTED", {
 		aliases: ["canted", "canted angle", "slight tilt"], moods: ["uneasy", "nervous", "kinetic", "off-balance"],
 		description: "A gentler tilt of the frame that adds a nervous edge or kinetic energy without a full Dutch lean.",
-		params: { rollDeg: { type: "number", min: 3, max: 20, default: 8, unit: "deg" } }, recipe: { roll: true }, requires: ["roll"],
+		params: { rollDeg: { type: "number", min: 3, max: 20, default: 8, unit: "deg" }, side: side() }, recipe: { roll: true },
 		prompt: "a slightly canted frame" }),
 	technique("head-on-shot", "Head-On Shot", "angle", "HEAD-ON", {
 		aliases: ["head on", "head-on", "straight on", "frontal shot"], moods: ["confrontational", "direct", "intense", "approach"],

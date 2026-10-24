@@ -12,6 +12,7 @@ import { playbackFrame, usePlaybackSnapshot } from "./motion/playback-frame-stor
 import { placementAt } from "./root-path.js";
 import { shotAtFrame } from "./cuts.js";
 import { sampleAt } from "./sample-at.js";
+import { takeFrameAt } from "./camera-capabilities/speed.js";
 
 // Memoized: unchanged cast members skip re-rendering on every playhead tick.
 export const Character = memo(function Character(props) {
@@ -24,7 +25,8 @@ export const PlaybackCharacter = memo(function PlaybackCharacter({
 	shots,
 	...props
 }) {
-	const frame = usePlaybackSnapshot(playbackFrame);
+	// A shot with a speed (slow motion) shows the take at its retimed frame.
+	const frame = takeFrameAt(shots, usePlaybackSnapshot(playbackFrame));
 	const placement = placementAt(entry, frame, {
 		shotAt: (at) => shotAtFrame(shots, at),
 		takeRoot: clip ? sampleAt({ frameCount: clip.frames, motion: clip }, null, frame).subject : null,

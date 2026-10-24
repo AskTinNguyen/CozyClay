@@ -60,8 +60,8 @@ export const MOVE_TECHNIQUES = [
 	technique("whip-pan", "Whip Pan", "move", "WHIP PAN", {
 		aliases: ["whip pan", "whip-pan", "flash pan", "swish pan", "zip pan"], moods: ["energetic", "kinetic", "transition", "frantic", "comedic"],
 		description: "A pan so fast the image smears, used as an energetic transition or to snap from one subject to another.",
-		params: { direction: choice(["right", "left"]), degrees: degrees(90, 30, 180), frames: { type: "number", min: 3, max: 12, default: 5, unit: "frames" } },
-		recipe: { move: "whip-pan" }, requires: ["motion-blur"], prompt: "a whip pan with heavy motion blur", expect: "pan-right" }),
+		params: { direction: choice(["right", "left"]), degrees: degrees(90, 30, 180), frames: { type: "number", min: 3, max: 12, default: 5, unit: "frames" }, shutterDeg: degrees(270, 90, 360) },
+		recipe: { move: "whip-pan", shutter: true }, prompt: "a whip pan with heavy motion blur", expect: "pan-right" }),
 	technique("pedestal-shot", "Pedestal Shot", "move", "PEDESTAL", {
 		aliases: ["pedestal", "ped up", "ped down", "pedestal up", "elevator shot"], moods: ["reveal", "measured", "smooth", "rise"],
 		description: "The whole camera rises or sinks straight up and down without tilting, sliding the frame vertically past the subject.",

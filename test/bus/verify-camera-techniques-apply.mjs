@@ -8,7 +8,8 @@ import { test } from 'node:test';
 import { shotsFixture, framing } from './shots-fixture.mjs';
 import { createShot } from '../../src/cuts.js';
 import { classifyMove, cameraMoveAt } from '../../src/camera-move.js';
-import { TECHNIQUES, hasGeometry, techniqueById } from '../../src/camera-techniques/index.js';
+import { TECHNIQUES, capabilityFields, hasGeometry, techniqueById } from '../../src/camera-techniques/index.js';
+import { cameraCapabilities } from '../../src/camera-capabilities/fields.js';
 import { railTrack } from '../../src/camera-techniques/readback.js';
 import { currentTechnique } from '../../src/camera-techniques/storage.js';
 import { readShotAuthoring, serializeShotAuthoring } from '../../src/shot-authoring.js';
@@ -39,7 +40,7 @@ function readBack(f, shot) {
 }
 
 test('every applicable technique lands as one undo entry and the classifier confirms its move', () => {
-  const f = shotsFixture(), rows = [];
+  const f = shotsFixture(), rows = [], capabilityRows = [];
   try {
     for (const entry of TECHNIQUES) {
       fresh(f);
@@ -49,8 +50,13 @@ test('every applicable technique lands as one undo entry and the classifier conf
       const shot = shotOf(f), stored = currentTechnique(shot);
       assert.equal(stored?.stack[0].id, entry.id, `${entry.id}: the stack is stored and still describes the camera`);
       if (!hasGeometry(entry)) {
-        assert.deepEqual(shot.cameraKeys, before.shot.shots[0].cameraKeys, `${entry.id}: a prompt-only technique leaves the camera alone`);
-        assert.ok(receipt.warnings.some(row => row.code === 'PROMPT_ONLY' && row.id === entry.id), `${entry.id}: the receipt says prompt only`);
+        // Roll, rack focus, shake, mount and slow motion are camera capabilities now: the framing keys stay, the camera block changes.
+        assert.deepEqual(shot.cameraKeys, before.shot.shots[0].cameraKeys, `${entry.id}: a capability technique keeps the framing keys`);
+        assert.ok(capabilityFields(entry).length, `${entry.id}: sets a camera capability`);
+        assert.ok(!receipt.warnings.some(row => row.code === 'PROMPT_ONLY'), `${entry.id}: no longer prompt only`);
+        const fields = Object.keys(cameraCapabilities(shot.camera));
+        assert.ok(fields.length, `${entry.id}: the camera block carries it`);
+        capabilityRows.push(`${entry.id}=${fields.join('+')}`);
       } else {
         const move = readBack(f, shot), expected = receipt.checks.expectedMove;
         if (entry.expect) assert.equal(expected, entry.expect, `${entry.id}: default params promise ${entry.expect}`);
@@ -62,6 +68,7 @@ test('every applicable technique lands as one undo entry and the classifier conf
       assert.deepEqual(f.snapshot(), before, `${entry.id}: one undo restores the shot`);
     }
     console.log(`PASS ${rows.length} techniques: ${rows.join(' ')}`);
+    console.log(`PASS ${capabilityRows.length} capability techniques: ${capabilityRows.join(' ')}`);
   } finally { f.dispose(); }
 });
 
@@ -140,7 +147,8 @@ test('a natural-language request resolves, applies, and is stored for save and r
     assert.equal(receipt.ok, true, JSON.stringify(receipt));
     assert.deepEqual(receipt.output.technique.stack.map(row => row.id), ['low-angle', 'push-in', 'dutch-angle']);
     assert.equal(receipt.output.technique.stack[1].params.speed, 'slow');
-    assert.ok(receipt.warnings.some(row => row.code === 'PROMPT_ONLY' && row.id === 'dutch-angle'));
+    assert.ok(!receipt.warnings.some(row => row.code === 'PROMPT_ONLY'), 'the Dutch tilt is a real roll now');
+    assert.equal(receipt.checks.rollDeg, 20);
     assert.match(receipt.output.technique.phrase, /^from a low angle looking up; a (slow )?push-in \(dolly in\) from a .+ to a .+; \d+mm lens; a Dutch angle/);
     const reloaded = readShotAuthoring(serializeShotAuthoring({ shots: f.live.current.shots, frameCount: 120 })).state.shots[0];
     assert.deepEqual(reloaded.technique, shotOf(f).technique, 'the stack survives save and reload');

@@ -2,7 +2,7 @@
 // names (docs/intent/camera-techniques/prompt.md), each entry is complete,
 // and the resolver turns natural phrases into the right techniques.
 import assert from "node:assert/strict";
-import { TECHNIQUES, describeTechnique, hasGeometry, techniqueById, techniqueIndex } from "../src/camera-techniques/index.js";
+import { TECHNIQUES, capabilityFields, describeTechnique, hasGeometry, techniqueById, techniqueIndex } from "../src/camera-techniques/index.js";
 import { normalizePhrase, parseRequest, resolveTechnique, searchByMood, searchTechniques } from "../src/camera-techniques/resolve.js";
 import { PLANNED_CAPABILITIES, TECHNIQUE_KINDS, resolveParams } from "../src/camera-techniques/entry.js";
 
@@ -18,8 +18,9 @@ const NAMES = ["Aerial Shot", "Bird's Eye View", "Close-Up Shot", "Dutch Angle",
 	"Impossible Shot", "Arc Shot", "Boom Shot", "Dolly-In", "Dolly-Out", "Dolly Zoom", "Follow Shot", "Jib Shot", "Pedestal Shot", "Smooth Tracking Shot",
 	"American Shot", "Full Shot", "Head Shot", "Italian Shot", "Profile Shot", "Reverse Angle", "Shot-Reverse-Shot", "Trunk Shot", "Wide Shot"];
 // The capability each Non-Goal technique waits for (prompt.md Non-Goals).
-const NEEDS = { "Dutch Angle": "roll", "Canted Frame": "roll", "Rack Focus": "focus", "Handheld Shot": "shake", "Snorricam": "body-mount",
-	"Slow Motion": "speed", "Whip Pan": "motion-blur" };
+// The camera capabilities these techniques used to wait for exist now (camera-capabilities intent): each sets its field.
+const SETS = { "Dutch Angle": "rollDeg", "Canted Frame": "rollDeg", "Rack Focus": "lens+focus keys", "Handheld Shot": "shake", "Snorricam": "mount",
+	"Slow Motion": "speed", "Whip Pan": "shutterDeg" };
 
 check("the catalog holds exactly the 65 named techniques", () => {
 	assert.equal(NAMES.length, 65);
@@ -57,14 +58,15 @@ check("every entry has every field, well formed", () => {
 		assert.ok(entry.prompt?.length > 4, `${entry.id} prompt`);
 		assert.ok(Array.isArray(entry.requires));
 		for (const need of entry.requires) assert.ok(PLANNED_CAPABILITIES[need], `${entry.id} requires ${need}`);
-		assert.ok(hasGeometry(entry) || entry.requires.length, `${entry.id} has neither a recipe nor a capability it waits for`);
+		assert.ok(hasGeometry(entry) || capabilityFields(entry).length || entry.requires.length, `${entry.id} has neither a recipe nor a capability it sets or waits for`);
 	}
 });
 
-check("the Non-Goal techniques name the capability they need", () => {
-	for (const [name, need] of Object.entries(NEEDS)) assert.ok(TECHNIQUES.find((entry) => entry.name === name).requires.includes(need), name);
+check("the capability techniques set their camera field; only the coverage generator is still waited for", () => {
+	for (const [name, field] of Object.entries(SETS)) assert.deepEqual(capabilityFields(TECHNIQUES.find((entry) => entry.name === name)), [field], name);
 	const waiting = TECHNIQUES.filter((entry) => entry.requires.length).map((entry) => entry.name).sort();
-	assert.deepEqual(waiting, [...Object.keys(NEEDS), "Shot-Reverse-Shot"].sort());
+	assert.deepEqual(waiting, ["Shot-Reverse-Shot"]);
+	assert.deepEqual(Object.keys(PLANNED_CAPABILITIES), ["coverage-generator"]);
 });
 
 check("descriptions are written fresh: none repeats a technique's name as a dictionary gloss", () => {
@@ -83,8 +85,9 @@ check("the compact index fits one receipt and describeTechnique answers the rest
 	assert.ok(bytes < 6000, `${bytes} bytes`);
 	const vertigo = describeTechnique("vertigo-effect");
 	assert.equal(vertigo.expectedMove, "dolly-zoom");
-	assert.equal(describeTechnique("dutch-angle").promptOnly, "entirely");
-	assert.equal(describeTechnique("whip-pan").promptOnly, "partly");
+	assert.equal(describeTechnique("dutch-angle").promptOnly, undefined);
+	assert.deepEqual(describeTechnique("whip-pan").sets, ["shutterDeg"]);
+	assert.equal(describeTechnique("shot-reverse-shot").promptOnly, "partly");
 	assert.equal(techniqueIndex({ kind: "size" }).count, 13);
 	console.log(`  index ${bytes} bytes`);
 });

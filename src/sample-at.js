@@ -104,7 +104,9 @@ export function sampleAt(scene, shot, frame) {
 	const cameraAt = (at) => {
 		const atFrame = clamp(at, 0, maxFrame), atTake = retimeFrame(shot, atFrame);
 		const point = atFrame === sampledFrame ? subject : pointOnTrack(source.subjectTrack, atFrame) ?? rootAt(source.motion, atTake) ?? copyPoint(source.subject);
-		return withCapabilities(baseCamera(atFrame), { scene: source, shot: { ...shot, camera: block }, frame: atFrame, takeFrame: atTake, subjectPoint: point });
+		// A body mount makes a camera of its own when the block has no keys or track to start from.
+		const base = baseCamera(atFrame) ?? (block.mount ? sharedCamera({ pos: { x: 0, y: 0, z: 0 }, yaw: 0, pitch: 0 }, source) : null);
+		return withCapabilities(base, { scene: source, shot: { ...shot, camera: block }, frame: atFrame, takeFrame: atTake, subjectPoint: point });
 	};
 	function baseCamera(sampledFrame) {
 		let camera;

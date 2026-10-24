@@ -43,8 +43,8 @@ try {
 	const vertigo = await call("apply_camera_technique", { stack: ["vertigo-effect"] });
 	check("a vertigo stack verifies as a dolly-zoom", /Dolly-zoom \(vertigo\) \(verified/.test(vertigo), vertigo);
 	const dutch = await call("apply_camera_technique", { stack: ["medium-shot", "dutch-angle", "handheld-shot"] });
-	check("prompt-only parts are named", /prompt-only Dutch Angle: needs camera roll/.test(dutch) && /prompt-only Handheld Shot: needs procedural handheld shake/.test(dutch), dutch);
-	check("and stated in the prompt", /a Dutch angle, the horizon tilted about 20 degrees; handheld camera with natural shake/.test(dutch), dutch);
+	check("the Dutch roll and the handheld shake are camera capabilities now, not prompt-only", !/prompt-only/.test(dutch) && /camera {4}a Dutch angle, the horizon tilted 20 degrees, falling to the right; handheld camera with subtle natural shake/.test(dutch), dutch);
+	check("and stated in the prompt", /prompt {4}.*a Dutch angle, the horizon tilted 20 degrees, falling to the right; handheld camera with subtle natural shake/.test(dutch), dutch);
 	await call("add_character", { subject: "a man in a grey suit", x: 1.6, z: 1.4, facing: -130 });
 	const ots = await call("apply_camera_technique", { request: "over the shoulder close-up" });
 	check("an over-the-shoulder applies with a second character", /^Applied CU · OTS/.test(ots), ots);
