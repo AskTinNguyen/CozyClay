@@ -1,7 +1,7 @@
 # Headless Studio
 
 - Rev: 1
-- Status: active
+- Status: completed
 - Area: Platform
 - Owner: TinNguyen
 - Skill: `none`
@@ -36,6 +36,20 @@
 - Keep the owner's own studio on ports 5180 / 5184 untouched; use slot n=5.
 - Keep the branch merged with `origin/main` and pushed after every step (contract, Git And Merge).
 
+## Reviews
+
+Orchestrator review, branch `intent/headless-studio`, 2026-10-24.
+
+| Item | Image or file | What it shows | Verdict |
+| --- | --- | --- | --- |
+| A2 | `proofs/headless-capture.png` | 640x360 capture from the headless Studio through `cclay live capture --out`: the Camera Coverage set, Mara and Joon facing each other on the grid, the coloured pillars behind; `nonBlackPixels 230400`, both figures renderable. | met |
+| A4 | `CHANGELOG.md`, `docs/intent/camera-techniques/findings.md` | Unreleased › Tools line; F-2's resolution points to this intent. | met |
+
+Gates run in the worktree (Git Bash, no dev server): `test/verify-headless-studio-cli.mjs` 3 PASS (and FAIL with `ERR_MODULE_NOT_FOUND` on the old import); `test/verify-headless-studio-browser.mjs` 6 PASS, three runs; `npm run lint` exit 0; `npm run build` exit 0; suite `files 454, ok 453, failed 1` (the known `verify-motion3-repair` timing check). Codex review on PR #7: no findings.
+
+Residual risks: the tool prints `"ok"` when the canvas is up, before the editor joins the live hub and before the shot camera and figures are renderable; callers wait with `cclay live status --wait` and retry a capture (the browser suite does). On Windows the tool is stopped with a process-tree kill (`taskkill /T`); Ctrl+C in its own console runs its shutdown.
+
 ## Changelog
 
 - rev 1 (2026-10-24): created from camera-techniques F-2 at the owner's request.
+- rev 1 (2026-10-24): completed. Every Acceptance row met with review; PR #7 squash-merged.

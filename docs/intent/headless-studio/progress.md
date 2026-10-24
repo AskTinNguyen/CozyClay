@@ -2,18 +2,18 @@
 
 - Working under rev: 1
 - Worker: control session (implements directly)
-- Current step: S4 gates done
-- Next step: PR, orchestrator review, merge
-- PR: none yet
+- Current step: all met
+- Next step: merge
+- PR: https://github.com/AskTinNguyen/CozyClay/pull/7
 
 ## Acceptance
 
 | Item | Verdict | Evidence |
 | --- | --- | --- |
 | A1 | met | `node test/verify-headless-studio-cli.mjs` -> `PASS --help exits 0`, `PASS --help prints the usage`, `PASS no --project is a usage error (exit 2)`, `headless-studio cli: all checks passed`, exit 0. With the old `./gt-render/browser.mjs` import put back it fails: `FAIL --help exits 0 — exit 1` with `ERR_MODULE_NOT_FOUND`. Listed as `RUN node test/verify-headless-studio-cli.mjs` in the default suite. |
-| A2 | met | `HEADLESS_CAPTURE_OUT=docs/intent/headless-studio/proofs/headless-capture.png node test/verify-headless-studio-browser.mjs` (ports 5205/5305/9305), three runs, each exit 0: `PASS the tool starts the Studio with the project`, `PASS the Studio joins the live hub`, `PASS cclay live capture exits 0`, `PASS the capture is a PNG of real size`, `PASS the capture renders the seeded cast`, `PASS stopping the tool frees its ports`. Afterwards no process with a `cozyclay-headless-studio-` profile was left (`count: 0`). ui:shot: `proofs/headless-capture.png` (awaits review). Listed as `EXCLUDE browser test/verify-headless-studio-browser.mjs`. |
+| A2 | met | `HEADLESS_CAPTURE_OUT=docs/intent/headless-studio/proofs/headless-capture.png node test/verify-headless-studio-browser.mjs` (ports 5205/5305/9305), three runs, each exit 0: `PASS the tool starts the Studio with the project`, `PASS the Studio joins the live hub`, `PASS cclay live capture exits 0`, `PASS the capture is a PNG of real size`, `PASS the capture renders the seeded cast`, `PASS stopping the tool frees its ports`. Afterwards no process with a `cozyclay-headless-studio-` profile was left (`count: 0`). ui:shot: `proofs/headless-capture.png` (reviewed, prompt.md Reviews). Listed as `EXCLUDE browser test/verify-headless-studio-browser.mjs`. |
 | A3 | met (known exception) | `npm run lint` exit 0 (`knip: 138 findings, 0 new`, `loc: 72 files over 250 (baseline 72), 0 violations`, `eslint: ... 0 regressions`); `npm run build` exit 0; `node tools/run-tests.mjs --jobs 4` (Git Bash, no dev server) stopped at the known `FAIL exit car, hips sunk: under 10 s — 11782 ms`; every RUN file then run to the end, 4 at a time: `files 454, ok 453, failed 1`, the only failure that same check (`— 12320 ms`). |
-| A4 | open | `CHANGELOG.md` Unreleased › Tools; camera-techniques F-2 resolution points here (awaits review). |
+| A4 | met | `CHANGELOG.md` Unreleased › Tools; camera-techniques F-2 resolution points here; review in prompt.md Reviews. |
 
 ## Steps
 
