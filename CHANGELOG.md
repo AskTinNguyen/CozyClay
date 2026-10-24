@@ -33,6 +33,19 @@ Export
 
 Camera
 
+- Depth staging: `camera.checkShots` reads what each shot's camera does with
+  the set over sampled frames. It flags a face blocked by a prop or another
+  person, a lens inside a prop or within the near clip, and a frame edge at
+  the ankle, knee, waist or neck. Each issue carries its severity, frames and
+  a fix, which `camera.fixShot` applies as one undo entry.
+  `composition.foreground` holds a prop or person in the foreground at a share
+  of the frame ("put the lamp in the foreground").
+  Also added:
+  - Depth layers in the receipts, a `Depth:` line in the sequence brief, and
+    an FG ring in the plan diagram.
+  - Shots-lane flags, with a Shot check section that has Apply fix.
+  - MCP `check_shots`.
+  - 10 director-eval scenarios.
 - Intensity curve: `camera.checkStructure` reads a sequence's visual
   structure from the measured cameras (size, height, lens, movement, cutting
   rate, roll, screen jump per shot; each cut's contrast) and flags where it

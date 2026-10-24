@@ -36,7 +36,8 @@
 }
 
 .coverage-lay,
-.cut-summary button {
+.cut-summary button,
+.shot-check-fix {
 	height: 24px;
 	padding: 0 10px;
 	border: 0;
@@ -96,3 +97,7 @@
 	font-size: 12px;
 	color: var(--text-1, #e4e4e7);
 }
+
+/* Shot check (depth-staging): the readout reuses the cut rule rows; its Apply fix sits under the fix text. */
+.shot-checks { display: grid; gap: 6px; }
+.shot-check-fix { height: 20px; margin-top: 4px; font-size: 10.5px; }

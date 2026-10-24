@@ -35,7 +35,7 @@ export function motionEntry(character, take, compiled, startFrame = 0) {
 }
 
 /**
- * @param {object} state  { title, shots, characters, fps, aspect, filmback, frameCount, activeCharacterId, look, environment, environmentImage, motion, stage? }
+ * @param {object} state  { title, shots, characters, objects (the set's props, for the depth layers), fps, aspect, filmback, frameCount, activeCharacterId, look, environment, environmentImage, motion, stage? }
  * @returns the document buildSequencePrompt reads
  */
 export function sequenceDocument(state) {
@@ -44,7 +44,7 @@ export function sequenceDocument(state) {
 	const look = [state.style, state.look].map((text) => (typeof text === "string" ? text.trim() : "")).filter(Boolean).join(", ");
 	return {
 		title: state.title || "Untitled", fps: state.fps ?? 24, aspect: state.aspect ?? null, filmback: state.filmback ?? {}, frameCount: state.frameCount,
-		activeCharacterId: state.activeCharacterId ?? null, look, cast, shots: state.shots ?? [], motion: state.motion ?? [], storyBeats: state.storyBeats ?? [],
+		activeCharacterId: state.activeCharacterId ?? null, look, cast, shots: state.shots ?? [], motion: state.motion ?? [], storyBeats: state.storyBeats ?? [], objects: state.objects ?? [],
 		set: { environment: typeof state.environment === "string" ? state.environment : "", ...(typeof state.environmentImage === "string" && state.environmentImage ? { image: state.environmentImage } : {}) },
 		// The stage look the shots' own looks merge over (colour-script: the planned tone).
 		...(state.stage ? { stage: { lighting: state.stage.lighting ?? null, keyLight: state.stage.keyLight ?? null } } : {}),

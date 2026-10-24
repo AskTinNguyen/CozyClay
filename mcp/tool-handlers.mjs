@@ -70,7 +70,7 @@ import { kindRefusal } from "../src/character-kind.js";
 import { documentWithCamera, splitSavedCamera } from "./project-camera.mjs";
 import { cameraTechniqueTools } from "./camera-technique-tools.mjs";
 import { cameraCapabilityTools, cameraCoverageTools, cameraMotivationTools, COVERAGE_TOOL_ANNOTATIONS, MOTIVATION_TOOL_ANNOTATIONS } from "./camera-capability-tools.mjs";
-import { intensityCurveTools, STRUCTURE_TOOL_ANNOTATIONS } from "./intensity-curve-tools.mjs";
+import { intensityCurveTools, STRUCTURE_TOOL_ANNOTATIONS, cameraDepthTools, DEPTH_TOOL_ANNOTATIONS } from "./intensity-curve-tools.mjs";
 import { LOOK_TOOL_ANNOTATIONS, shotLookTool } from "./shot-look-tool.mjs";
 import { renderPromptTool } from "./render-prompt-tool.mjs";
 import { directorPacketTool, PACKET_TOOL_ANNOTATIONS } from "./director-packet-tool.mjs";
@@ -104,7 +104,7 @@ const noLiveEditor = (requirement) =>
 		: requirement;
 export const liveWorkspace = new AsyncLocalStorage();
 const liveWorkspaceTools = new Set([
-	"describe_scene", "describe_shot", "render_prompt", "render_packet", "mark_camera_move", "describe_camera_move", "list_camera_techniques", "apply_camera_technique", "set_camera_capabilities", "cover_scene", "check_cuts", "check_coverage", "check_motivation", "story_beats", "check_structure", "shot_look", "save_project",
+	"describe_scene", "describe_shot", "render_prompt", "render_packet", "mark_camera_move", "describe_camera_move", "list_camera_techniques", "apply_camera_technique", "set_camera_capabilities", "cover_scene", "check_cuts", "check_coverage", "check_motivation", "story_beats", "check_structure", "check_shots", "shot_look", "save_project",
 	"set_camera", "frame_shot", "add_character", "place_character", "remove_character",
 	"focus_character", "place_object", "import_mesh", "sculpt_object", "compare_sculpt", "group_objects", "update_object",
 	"remove_object", "apply_batch", "add_scene", "switch_scene", "open_project", "capture_frame",
@@ -172,7 +172,7 @@ const TOOL_ANNOTATIONS = Object.freeze({
 	describe_camera_move: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
 	list_camera_techniques: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
 	apply_camera_technique: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
-	set_camera_capabilities: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false }, ...COVERAGE_TOOL_ANNOTATIONS, ...MOTIVATION_TOOL_ANNOTATIONS, ...STRUCTURE_TOOL_ANNOTATIONS, ...LOOK_TOOL_ANNOTATIONS, ...PACKET_TOOL_ANNOTATIONS,
+	set_camera_capabilities: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false }, ...COVERAGE_TOOL_ANNOTATIONS, ...MOTIVATION_TOOL_ANNOTATIONS, ...STRUCTURE_TOOL_ANNOTATIONS, ...LOOK_TOOL_ANNOTATIONS, ...PACKET_TOOL_ANNOTATIONS, ...DEPTH_TOOL_ANNOTATIONS,
 	add_scene: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
 	switch_scene: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
 	open_project: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
@@ -1532,7 +1532,7 @@ export const createToolHandlers = ({ projectRootPromise } = {}) => {
 		...cameraTechniqueTools({ tool, z, text, liveError, state, cast, findCharacter, filmback, slateLine, currentShot, refreshLiveDescription, runStudioCommand, isLive: () => Boolean(liveHub?.connected) }),
 		...cameraCapabilityTools({ tool, z, text, liveError, state, cast, findCharacter, refreshLiveDescription, runStudioCommand, isLive: () => Boolean(liveHub?.connected) }), ...cameraCoverageTools({ tool, z, text, liveError, state, cast, findCharacter, filmback, refreshLiveDescription, runStudioCommand, isLive: () => Boolean(liveHub?.connected) }),
 		...cameraMotivationTools({ tool, z, text, liveError, state, cast, filmback, framing, refreshLiveDescription, runStudioCommand, isLive: () => Boolean(liveHub?.connected) }),
-		...intensityCurveTools({ tool, z, text, liveError, state, cast, filmback, framing, refreshLiveDescription, runStudioCommand, isLive: () => Boolean(liveHub?.connected) }),
+		...intensityCurveTools({ tool, z, text, liveError, state, cast, filmback, framing, refreshLiveDescription, runStudioCommand, isLive: () => Boolean(liveHub?.connected) }), ...cameraDepthTools({ tool, z, text, liveError, state, cast, scene, filmback, refreshLiveDescription, runStudioCommand, isLive: () => Boolean(liveHub?.connected) }),
 		...shotLookTool({ tool, z, text, liveError, state, refreshLiveDescription, runStudioCommand, isLive: () => Boolean(liveHub?.connected) }),
 
 		tool(

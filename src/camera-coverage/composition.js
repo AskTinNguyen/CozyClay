@@ -17,13 +17,24 @@ const PLACE_X = { "left-third": -1 / 3, centre: 0, "right-third": 1 / 3 };
 const MORE_LEAD = 0.45;
 const DEG = Math.PI / 180;
 
-/** Defaults filled: a placement without a side follows the lead room; lead room alone means facing. */
+/** The eye line (NDC, +1 the top edge) a headroom puts the eyes on. */
+export const eyeLineOf = (headroom) => EYE_LINE[headroom] ?? EYE_LINE.normal;
+
+/** A foreground (depth-staging): { id, share } with the share of frame width clamped to 0.1-0.6 (default 0.3), or null. */
+function normalizeForeground(value) {
+	if (!value || typeof value !== "object" || typeof value.id !== "string" || !value.id.trim()) return null;
+	const share = Number.isFinite(value.share) ? Math.max(0.1, Math.min(0.6, value.share)) : 0.3;
+	return { id: value.id.trim(), share };
+}
+
+/** Defaults filled: a placement without a side follows the lead room; lead room alone means facing. A foreground rides along when named. */
 export function normalizeComposition(value) {
 	if (!value || typeof value !== "object") return null;
 	const place = COMPOSITION_PLACES.includes(value.place) ? value.place : "auto";
 	const headroom = HEADROOMS.includes(value.headroom) ? value.headroom : "normal";
 	const leadRoom = LEAD_ROOMS.includes(value.leadRoom) ? value.leadRoom : place === "auto" ? "facing" : "none";
-	return { place, headroom, leadRoom };
+	const foreground = normalizeForeground(value.foreground);
+	return { place, headroom, leadRoom, ...(foreground ? { foreground } : {}) };
 }
 
 /** The slate words for a composition ("left third · normal headroom · lead room"). */

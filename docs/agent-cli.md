@@ -787,7 +787,10 @@ the playhead) as one undo entry; `camera.checkCuts` reads the editing rules at
 every cut; `camera.setTransition` sets the transition into a shot. A request in
 words to `camera.applyTechnique` reaches the same actions ("cover this
 conversation", "check my cuts"), and composition words ("rule of thirds left",
-"more lead room") re-place the subject in the shot's stack.
+"more lead room") re-place the subject in the shot's stack. Foreground words ("put the
+lamp in the foreground", "Joon's shoulder soft in the foreground on Mara") give the
+composition a `foreground { id, share }`: the camera moves so that prop or person
+covers that share of the frame width (`checks.foregroundShare` says what it covers).
 
 ```sh
 cclay live run camera.cover --args '{"request":"cover this conversation between Mara and Joon","shotId":"shot-dialogue"}'
@@ -869,6 +872,33 @@ Issues come back as warnings (`STRUCTURE_FLAT`, `STRUCTURE_PEAK_OFF_BEAT`,
 stack in `fixAction` / `fixArgs` (`camera.applyTechnique`), plus shorter shots
 in words. `output.shots` holds each shot's components and combined value,
 `output.cuts` each cut's contrast.
+
+## Shot checks
+
+`camera.checkShots` reads what each shot's camera does with the set over sampled
+frames (the first, the last, and every k between): `occluded` (the subject's eyes
+hidden by a prop or another person), `inside` (the lens in a prop or within the
+10 cm near clip) and `crop` (a frame edge at the ankle, knee, waist or neck). Read
+only. Words to `camera.applyTechnique` reach it too ("is anything blocking her
+face?", "is the camera inside the wall?", "check my shots"); `rule` keeps one
+rule, `shotIds` narrows it. `camera.fixShot` applies one issue's fix (a slide,
+raise, lower or size step) to every camera key of the shot as one undo entry and
+answers the shot checked again; a rail or follow shot is refused.
+
+```sh
+cclay live run camera.checkShots --args '{"request":"is anything blocking her face?"}'
+```
+```json
+{"ok":true,"summary":"2 shots checked for occluded: Dialogue: Pillar hides Mara's eyes from the lens on 17 of 17 sampled frames (0, 12, …, 191). …","checks":{"shots":2,"issues":2,"flagged":2,"matched":["blocking","her"],"confidence":"high"}, …}
+```
+```sh
+cclay live run camera.fixShot --args '{"shotId":"shot-dialogue","rule":"occluded"}'
+```
+
+Issues come back as warnings (`SHOT_OCCLUDED`, `SHOT_INSIDE`, `SHOT_CROP`) and
+in `output.shots[].issues` with `fix { kind, text, delta }`. Each shot's
+`layers` names the cast and props in its foreground, midground and background,
+with the brief's words.
 
 ## Sequence prompt
 

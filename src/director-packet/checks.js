@@ -11,6 +11,7 @@ import { checkShotAgainstPreset, presetById } from "../model-presets.js";
 import { checkStructure, structureWords } from "../intensity-curve/structure.js";
 import { colourCutWords, colourScript, colourScriptWords } from "../colour-script/script.js";
 import { looksLit } from "../stage-shot-look.js";
+import { checkShots } from "../camera-depth/shot-checks.js";
 
 const flag = (check, shotId, rule, severity, message, frames = null) => ({ check, shotId, rule, severity, message, ...(frames ? { frames } : {}) });
 
@@ -75,6 +76,13 @@ function colour({ document, shots }) {
 			cuts: script.cuts.map(({ cutFrame, from, to, luminance, warmth, kind }) => ({ cutFrame, from, to, luminance, warmth, kind })) } } };
 }
 
+/** camera.checkShots (depth-staging): what each shot's camera does with the set (occluded, inside, crop), each issue the shot's flag with its fix. */
+function depth({ document, shots, scene, placeAt }) {
+	const result = checkShots(shots, { cast: scene.cast, objects: document.objects ?? [], filmback: scene.filmback, placeAt });
+	const flags = result.shots.flatMap((row) => row.issues.map((issue) => flag("depth", row.shotId, issue.rule, issue.severity, `${issue.message} Fix: ${issue.fix.text}.`, issue.frames)));
+	return { summary: `${result.shots.length} ${result.shots.length === 1 ? "shot" : "shots"} checked against the set, ${result.flagged} flagged`, flags, notes: [] };
+}
+
 /** Every check the packet reports, in the order its notes list them. A check that answers null has nothing to say for this range and is left out. */
 export const PACKET_CHECKS = Object.freeze([
 	{ id: "cuts", label: "Cuts", run: cuts },
@@ -83,6 +91,7 @@ export const PACKET_CHECKS = Object.freeze([
 	{ id: "shot", label: "Shot", run: shot },
 	{ id: "structure", label: "Structure", run: structure },
 	{ id: "colour", label: "Colour", run: colour },
+	{ id: "depth", label: "Depth", run: depth },
 ]);
 
 /**

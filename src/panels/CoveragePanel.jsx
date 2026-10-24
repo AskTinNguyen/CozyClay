@@ -7,6 +7,7 @@ import { ALL_COVERAGE_PATTERNS, coveragePattern } from "../camera-coverage/patte
 import { TRANSITION_TYPES, repairTransition, transitionWords } from "../camera-coverage/transitions.js";
 import { useCutChecks } from "../motion/cut-flags.jsx";
 import CoverageReadout from "./CoverageReadout.jsx";
+import ShotChecksReadout from "./ShotChecksReadout.jsx";
 import FurtherReading from "./FurtherReading.jsx";
 import "./coverage.css";
 
@@ -123,6 +124,7 @@ function CutInspector({ activeShot, shots, run, seek }) {
 export default function CoveragePanel({ hidden, activeShot }) {
 	const { run } = useBus();
 	const { characters = [], shots = [], setTlFrame } = useStudioShell() ?? {};
+	const seek = (frame) => (run("timeline.seek", { frame })?.ok ? null : setTlFrame?.(frame));
 	return (<>
 		<Foldout hidden={hidden} title={ko("Coverage", "커버리지")}>
 			<CoverageAction activeShot={activeShot} characters={characters} run={run} />
@@ -131,7 +133,10 @@ export default function CoveragePanel({ hidden, activeShot }) {
 			<CoverageReadout shots={shots} />
 		</Foldout>
 		<Foldout hidden={hidden} title={ko("Cut", "컷")}>
-			<CutInspector activeShot={activeShot} shots={shots} run={run} seek={(frame) => (run("timeline.seek", { frame })?.ok ? null : setTlFrame?.(frame))} />
+			<CutInspector activeShot={activeShot} shots={shots} run={run} seek={seek} />
+		</Foldout>
+		<Foldout hidden={hidden} title={ko("Shot check", "샷 점검")}>
+			<ShotChecksReadout activeShot={activeShot} shots={shots} run={run} seek={seek} />
 		</Foldout>
 	</>);
 }

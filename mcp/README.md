@@ -35,7 +35,7 @@ Then point a client at it. For Claude Desktop, in `claude_desktop_config.json`:
 }
 ```
 
-Restart the client; 38 tools appear.
+Restart the client; 39 tools appear.
 
 Prefer a long-lived endpoint? `node server.mjs --http 5183` serves Streamable HTTP at
 `http://127.0.0.1:5183/mcp` (one isolated session per client), with a plain status page at `/`.
@@ -88,6 +88,7 @@ generated frame matches the blocking instead of drifting off into a generic shot
 | `render_packet` | a range of shots as a director packet, in memory: the shot list (`shot-list.md`, or `format: "csv"`) and the packet data (cast, story beats, a row per shot with number, name, frames and timecode, duration, size, angle, lens mm, the move in measured words, capabilities, composition, coverage role, transition in and the flags of the cut, coverage, motivation, shot and structure checks; notes; the intensity curve; the plan primitives). `from_shot` / `to_shot` pick the range, `include_plan: false` keeps only the plan's counts. No pictures: the editor's `export.directorPacket` writes the full pack. Read only |
 | `check_structure` | the sequence's intensity curve against its story beats ("where does this sequence go flat?", "show me the intensity", "build to the reveal"): per shot size, height, lens, movement, cutting rate, roll and screen jump (each 0-1, weighted into one value), each cut's contrast, and `flat` / `peak-off-beat` / `no-build` issues with frames and a technique stack to apply (`apply_camera_technique`); without story beats only `flat` runs. `strip: true` adds the intensity strip as a PNG. Read only. With an editor it runs `camera.checkStructure`; in memory it reads the `cover_scene` plan against `story_beats` |
 | `shot_look` | a shot's own look, merged over the stage look while the shot plays (preview, captures, video, keyframe packs; a dissolve or whip blends two looks): `recipe` in story words (`warm-safety`, `cold-isolation`, `danger-accent`, `open-day`, `fading-hope`, `night-menace`, `tender-memory`, `sickly-unease`), a partial `look` (preset, warmth, keyColor, keyIntensity, exposure, fill, fog, sky, skyTop; null clears a field), an intended `palette` (3-5 swatches and a word), `adjust` (`colder`, `warmer`, `darker`, `brighter`, `hazier`, `clearer`), `same_as` another shot, or `clear`; `request` reads the words ("make the confession shot colder"). With nothing to change, `read: true` or "colour script for this scene" it reads the colour script: per shot its look, intended palette and the palette measured from its middle frame, and each cut's colour change (hard / soft / matched); `image: true` adds the colour script PNG. With an editor it runs `shot.setLook` / `shot.colourScript`; in memory it works on the `cover_scene` plan with planned tones only |
+| `check_shots` | what each shot's camera does with the set ("is anything blocking her face?", "is the camera inside the wall?", "does the frame cut Mara at the knees?", "check my shots"), over its first and last frame and every k frames: `occluded` (the subject's eyes hidden by a prop or another person), `inside` (the lens in a prop or nearer than the 10 cm near clip), `crop` (a frame edge at the ankle, knee, waist or neck), each with severity, frames and a fix; each shot lists its depth layers. `rule` keeps one rule. Read only. With an editor it runs `camera.checkShots` (`studio_run camera.fixShot` applies a fix); in memory it reads the `cover_scene` plan against the set |
 | `set_camera_capabilities` | give the shot camera what placement cannot: `roll_deg` (Dutch angle), `f_stop` with `focus_on` (a character, followed per frame) or `focus_distance` (depth of field), `shake` (handheld or vehicle, seeded), `mount` (a Snorricam on a character's chest, head, hips or back), `speed` (0.5 = slow motion) and `shutter_deg` (motion blur); `at_frame` keys roll and focus (two focus keys rack focus). With an editor it runs `camera.set` / `camera.setKey`; in memory `render_prompt` states them |
 | `add_scene` / `switch_scene` | multiple scenes per project |
 | `open_project` / `save_project` | read and write `.cclayproject` files |
@@ -172,8 +173,10 @@ index, role, subjectId }`. `check_cuts` (`camera.checkCuts`) reads every cut bet
 shots from the cameras and cast at the cut frames: `line`, `jump`, `screen` and `eyeline` issues with
 a severity, the two frames and a suggested fix; it never changes a shot. `camera.applyTechnique` and
 `frame_shot` take `composition { place auto|left-third|centre|right-third, headroom
-tight|normal|loose, leadRoom none|facing|travel|more }` and answer `checks.screenX` / `eyeLineY`
-(frame fractions from the top-left). `camera.setTransition` stores the transition into a shot
+tight|normal|loose, leadRoom none|facing|travel|more, foreground { id, share } }` and answer `checks.screenX` / `eyeLineY`
+(frame fractions from the top-left). `foreground` holds a prop or a cast member between the lens and the subject, covering
+`share` (0.1-0.6, default 0.3) of the frame width from the near edge, solved the way the over-the-shoulder is
+(`checks.foregroundShare` is the share measured; "put the lamp in the foreground" asks for it in words). `camera.setTransition` stores the transition into a shot
 (dissolve, fades, whip, match cut, J- or L-cut); OTIO writes it as a `Transition.1` where OTIO has one
 and as clip metadata always, and the prompt gains a `TRANSITION:` line.
 
@@ -229,6 +232,22 @@ beats dashed. With looks set, the sequence brief gains a `Look:` line per beat, 
 a tone component, and the director packet a `colour` check (a hard colour cut is a low flag) and
 `packet/colour-script.png`.
 
+## Depth staging
+
+`check_shots` (`camera.checkShots`) reads every shot's camera against the set at its first and last
+frame and every k frames between (k = shot length / 8, from 1 to 12), so a move that passes behind a
+prop is caught. `occluded`: the subject's eye point is hidden from the lens by a prop's box (the
+geometry facts' own test, `occludersOf`) or by another cast member, at either end or on more than a
+quarter of the samples. `inside`: the lens is inside a prop's box or nearer to one than the 10 cm near
+clip; an enclosure around the subject is the set, not a prop. `crop`: the top or bottom frame edge falls
+at the ankle, knee, waist or neck, placed from the figure's proportions. Each issue has a severity, its
+frames and a fix: slide left or right or raise or lower by d m, or one size step, the smallest that
+clears the rule on every sample, keeps the subject, and breaks no other rule. `camera.fixShot` applies it to every camera key
+as one undo entry; props and cast never move. Each shot also lists its depth layers (the cast and props
+in its foreground, midground and background, as bands around the subject), which the sequence brief
+states as a `Depth:` line ("Joon's shoulder soft in the foreground, the window behind") and the plan
+diagram marks with an FG ring.
+
 ## Director packet
 
 `render_packet` answers a range of shots as a director packet
@@ -236,7 +255,7 @@ a tone component, and the director packet a `colour` check (a hard colour cut is
 runs): the cast, the story beats in range, one row per shot (the brief's measured camera: size,
 angle, lens mm, the move in measured words, capabilities, composition, coverage role, transition
 in) with the flags the existing checks raise on it (cuts, coverage, motivation, the shot's model
-check, structure), the notes that belong to the range, the intensity curve with two shots or more,
+check, structure, depth), the notes that belong to the range, the intensity curve with two shots or more,
 and the plan's primitives on an A4-landscape page: each camera numbered with its frustum at its
 first frame and a path and arrow when it moves, every pair's line of action (authored, or the pair
 a cut is judged against), each cast member's mark at each shot's start and the walk over the range,

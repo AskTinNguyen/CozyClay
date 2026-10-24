@@ -16,6 +16,8 @@ import { INTENSITY_COMPONENTS } from "../src/intensity-curve/weights.js";
 import { stripImage } from "../src/intensity-curve/strip.js";
 import { resolvedLine } from "./camera-technique-tools.mjs";
 import { encodePng } from "./image-file.mjs";
+// The depth tool (check_shots, depth-staging) rides the registry after this one.
+export { cameraDepthTools, DEPTH_TOOL_ANNOTATIONS } from "./camera-depth-tools.mjs";
 
 /** MCP annotations (tool-handlers.mjs TOOL_ANNOTATIONS). */
 export const STRUCTURE_TOOL_ANNOTATIONS = Object.freeze({
