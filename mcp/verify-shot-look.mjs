@@ -51,6 +51,12 @@ check("copying a shot with no look is refused", /^Refused \(TARGET_NOT_READY\)/.
 const picture = await answer("shot_look", { read: true, image: true });
 const png = picture.content[1]?.type === "image" ? decodePng(Buffer.from(picture.content[1].data, "base64")) : null;
 check("image: true adds the colour script as a 960 x 200 PNG", png?.width === 960 && png?.height === 200, JSON.stringify(picture.content.map((row) => row.type)));
+// The other in-memory readers of the planned shots see the looks: the sequence brief and the director packet.
+const brief = await call("render_prompt", { scope: "sequence" });
+check("render_prompt (sequence) states the planned shots' looks", /^ {3}Look: warm safety: interior preset/m.test(brief) && /^ {3}Look: night menace: night preset/m.test(brief), brief);
+const packet = await answer("render_packet", {}).then((out) => out.content.map((row) => row.text ?? "").join("\n"), (error) => String(error));
+const packetText = typeof packet === "string" ? packet : JSON.stringify(packet);
+check("render_packet carries the colour check over the looks", /colour/i.test(packetText) && /hard colour cut/.test(packetText), packetText.slice(0, 600));
 
 // With an editor: the tool over a bus fixture standing in for the connected editor (the schema builder is a chain stub).
 const z = new Proxy(function chain() {}, { get: () => z, apply: () => z });

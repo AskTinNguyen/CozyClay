@@ -91,12 +91,6 @@ export function StageAtmosphere({ lighting: stageLighting = null, keyLight: stag
 	// A shot's own look while the playhead is in it (stage-shot-look.js); an export frame relights through the hook below.
 	const shown = useShotLook(stageLighting, stageKey, shots), { lighting, keyLight } = shown;
 	const look = stageLook({ lighting, keyLight, theme, grid });
-	useLayoutEffect(() => {
-		const { scene } = get();
-		scene.userData.shotLook = { at: (frame, list) => shotLookAt({ lighting: stageLighting, keyLight: stageKey }, list ?? shots, frame), frameRef, shown: lookSignature(shown), theme, grid,
-			keyColor: (key) => key.color ?? keyLightColor(key.warmth), sky: gradientSky, draw: () => applyShotLookForDraw(scene) };
-		return () => { delete scene.userData.shotLook; };
-	}, [get, stageLighting, stageKey, shots, frameRef, shown, theme, grid]);
 	const { sky, skyTop, exposure } = look, { near, far } = look.fog;
 	const hazeNear = look.captureFog?.near ?? null, hazeFar = look.captureFog?.far ?? null;
 	const envKey = look.env ? JSON.stringify(look.env) : null, { envIntensity, ao } = look;
@@ -143,6 +137,23 @@ export function StageAtmosphere({ lighting: stageLighting = null, keyLight: stag
 			invalidate();
 		};
 	}, [get, invalidate, hdrTexture, envSource]);
+	// An export frame lit as another shot's look gets that look's environment map: prefiltered once per look, kept for the next frames.
+	const envMaps = useRef(new Map());
+	useEffect(() => () => { for (const target of envMaps.current.values()) target.dispose(); envMaps.current.clear(); }, []);
+	useLayoutEffect(() => {
+		const { scene } = get(), cache = envMaps.current;
+		const envMap = (spec) => {
+			const key = JSON.stringify(spec);
+			if (!cache.has(key)) {
+				if (cache.size >= 6) { const [oldest, target] = cache.entries().next().value; target.dispose(); cache.delete(oldest); }
+				cache.set(key, environmentMap(get().gl, spec));
+			}
+			return cache.get(key).texture;
+		};
+		scene.userData.shotLook = { at: (frame, list) => shotLookAt({ lighting: stageLighting, keyLight: stageKey }, list ?? shots, frame), frameRef, shown: lookSignature(shown), shownEnv: envSource, envMap, theme, grid,
+			keyColor: (key) => key.color ?? keyLightColor(key.warmth), sky: gradientSky, draw: () => applyShotLookForDraw(scene) };
+		return () => { delete scene.userData.shotLook; };
+	}, [get, stageLighting, stageKey, shots, frameRef, shown, envSource, theme, grid]);
 	useLayoutEffect(() => {
 		const { scene } = get();
 		scene.environmentIntensity = hdrLight ?? envIntensity;

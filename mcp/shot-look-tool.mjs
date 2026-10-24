@@ -7,7 +7,8 @@
  * true), reads the colour script: each shot's look, intended palette, palette
  * measured from its middle frame, and the colour change across each cut. With
  * an editor connected it runs shot.setLook / shot.colourScript; in memory it
- * works on the shots cover_scene planned (planned tones only: nothing renders).
+ * works on the shots cover_scene planned (the look is stored on them, so render_prompt and
+ * render_packet read it; planned tones only: nothing renders).
  * image: true adds the colour script as a PNG.
  */
 import { resolveLookRequest } from "../src/colour-script/resolve.js";
@@ -35,7 +36,9 @@ const columnLine = (row) => `${row.index}. ${row.shotName}  f${row.startFrame}-$
  */
 export function shotLookTool(deps) {
 	const { tool, z, text, liveError, state } = deps;
-	const memoryShots = () => (state.coverage?.shots ?? []).map((shot) => ({ ...shot, ...(state.shotLooks?.[shot.id] ? { look: state.shotLooks[shot.id] } : {}) }));
+	// In memory a look lives on the planned shot itself (state.coverage.shots), which render_prompt and render_packet read too.
+	const memoryShots = () => state.coverage?.shots ?? [];
+	const withLook = (shot, look) => { const { look: _old, ...rest } = shot; return look ? { ...rest, look } : rest; };
 	const find = (shots, ref) => (typeof ref === "number" ? shots[ref - 1] : shots.find((row) => row.id === ref || String(row.name ?? "").toLowerCase().includes(String(ref).toLowerCase()))) ?? null;
 	const swatch = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 	return [
@@ -90,8 +93,7 @@ export function shotLookTool(deps) {
 					const target = want.shotId || want.shot !== undefined ? find(shots, want.shotId ?? want.shot) : shots[0];
 					if (!target) return text(`Refused (STALE_TARGET): no planned shot is "${want.shotId ?? want.shot}".${said}`);
 					const next = editShotLook(target.look ?? null, want, { source: want.sameAs !== undefined ? find(shots, want.sameAs) : null });
-					state.shotLooks = { ...(state.shotLooks ?? {}), [target.id]: next };
-					if (!next) delete state.shotLooks[target.id];
+					state.coverage = { ...state.coverage, shots: shots.map((shot) => (shot.id === target.id ? withLook(shot, next) : shot)) };
 					return text(`Look on ${target.name ?? target.id} (in memory): ${lookText(next)}.${said}`);
 				} catch (error) {
 					return error.code ? text(`Refused (${error.code}): ${error.message}${said}`) : liveError(error);

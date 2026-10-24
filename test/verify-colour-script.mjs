@@ -17,6 +17,7 @@ import { sequenceIntensity } from '../src/intensity-curve/curve.js';
 import { INTENSITY_COMPONENT_IDS } from '../src/intensity-curve/weights.js';
 import { directorPacket } from '../src/director-packet/packet.js';
 import { packetFileNames, packetFiles } from '../src/director-packet/files.js';
+import { editShotLook, paletteWithSwatch } from '../src/colour-script/edit.js';
 
 const measured = (luminance, warmth, hex) => ({ swatches: [{ hex, share: 1 }], dominant: hex, meanLuminance: luminance, warmth, saturation: 0.4 });
 const row = (index, extra) => ({ index, shotId: `s${index}`, startFrame: (index - 1) * 48, endFrame: index * 48 - 1, planned: { luminance: 0.5, warmth: 0 }, measured: null, ...extra });
@@ -94,4 +95,12 @@ test('A6 the tone component in the intensity curve', () => {
     assert.deepEqual(measuredTones.shots.map((row) => row.components.tone), [0.14, 0.56, 0.14, 0.56, 0.14], 'measured tones turn it on too');
     console.log(`PASS A6 tone: ${toned.shots.map((row) => row.components.tone).join(' ')}; cut contrast ${toned.cuts.map((cut) => cut.contrast.tone).join(' ')}`);
   } finally { f.dispose(); }
+});
+
+test('A7 a swatch edited on a shot with no palette keeps the edit (dense, 3-5 swatches)', () => {
+  const fourth = paletteWithSwatch(null, 3, '#123456');
+  assert.deepEqual(fourth, { swatches: ['#808080', '#808080', '#808080', '#123456'], word: '' }, 'no holes: a sparse array would map to undefined entries');
+  assert.deepEqual(paletteWithSwatch({ swatches: ['#111111', '#222222', '#333333'], word: 'ash' }, 4, '#555555').swatches, ['#111111', '#222222', '#333333', '#808080', '#555555']);
+  assert.deepEqual(paletteWithSwatch(null, 0, '#abcdef').swatches, ['#abcdef', '#808080', '#808080']);
+  assert.deepEqual(editShotLook(null, { palette: fourth }).palette.swatches, fourth.swatches, 'the look stores it');
 });

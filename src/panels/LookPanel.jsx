@@ -4,7 +4,7 @@ import { ko } from "../locale.js";
 import { useBus } from "../app-context.js";
 import { LIGHTING_PRESETS } from "../stage-lighting.js";
 import { LOOK_RECIPES } from "../colour-script/recipes.js";
-import { lookText } from "../colour-script/edit.js";
+import { lookText, paletteWithSwatch } from "../colour-script/edit.js";
 import "./coverage.css";
 import "./look.css";
 
@@ -65,7 +65,7 @@ export default function LookPanel({ hidden, activeShot }) {
 					<span>{ko("Intended", "의도")}{look?.palette?.word ? ` · ${look.palette.word}` : ""}</span>
 					{[0, 1, 2, 3, 4].map((i) => (
 						<input key={i} type="color" aria-label={ko(`Intended swatch ${i + 1}`, `의도 견본 ${i + 1}`)} data-look-swatch={i} value={swatches[i] ?? "#808080"}
-							onChange={(event) => { const next = [...swatches]; next[i] = event.target.value; const filled = next.map((hex) => hex ?? "#808080"); set({ palette: { swatches: filled.length >= 3 ? filled.slice(0, 5) : [...filled, "#808080", "#808080"].slice(0, 3), word: look?.palette?.word ?? "" } }); }} />
+							onChange={(event) => set({ palette: paletteWithSwatch(look?.palette, i, event.target.value) })} />
 					))}
 				</div>
 				<div className="look-swatches measured" data-look-measured={measured ? measured.swatches.length : 0} data-look-warmth={measured?.warmth ?? ""} data-look-luminance={measured?.meanLuminance ?? ""}>

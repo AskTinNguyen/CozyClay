@@ -5,8 +5,8 @@
 // (applyShotLookForDraw, which stage-capture.jsx calls around each render as the hook's draw()): the
 // lights StageLights tagged (userData.stageLight), the background, the fog
 // colour and the capture's exposure and haze are set from that frame's look for
-// the draw and put back after. The environment map and the occlusion pass stay
-// those of the look on screen; their strength follows the frame's look.
+// the draw and put back after, and so is the frame's environment map (an HDR
+// environment stays the stage's). The occlusion pass stays the one on screen.
 import { useMemo } from "react";
 import * as THREE from "three";
 import { createKeyLight, stageLook } from "./stage-lighting.js";
@@ -25,7 +25,7 @@ export const lookSignature = ({ lighting, keyLight }) => JSON.stringify([lightin
 
 /**
  * Light the scene as the export frame's shot look for one draw.
- * scene.userData.shotLook: { at(frame, shots?) -> shotLookAt's answer, draw() -> this function on its scene, frameRef, shown (lookSignature of the look on screen), theme, grid, keyColor(keyLight), sky(bottom, top) }
+ * scene.userData.shotLook: { at(frame, shots?) -> shotLookAt's answer, draw() -> this function on its scene, frameRef, shown (lookSignature of the look on screen), shownEnv (the key of the environment map on screen), envMap(spec) -> a prefiltered texture, theme, grid, keyColor(keyLight), sky(bottom, top) }
  * @returns {() => void} puts every value back
  */
 export function applyShotLookForDraw(scene) {
@@ -62,6 +62,12 @@ export function applyShotLookForDraw(scene) {
 	if (scene.fog) { keepColor(scene.fog.color); scene.fog.color.set(look.fog.color); }
 	keep(scene.userData, "stageCapture");
 	scene.userData.stageCapture = { ...scene.userData.stageCapture, exposure: look.exposure, fog: look.captureFog };
-	if (!look.hdr) { keep(scene, "environmentIntensity"); scene.environmentIntensity = look.envIntensity; }
+	if (!look.hdr) {
+		keep(scene, "environmentIntensity");
+		scene.environmentIntensity = look.envIntensity;
+		// The frame's own environment map when it is not the one on screen (an interior or overcast shot captured while a studio shot is shown).
+		const envKey = look.env ? JSON.stringify(look.env) : null;
+		if (envKey !== hook.shownEnv && hook.envMap) { keep(scene, "environment"); scene.environment = look.env ? hook.envMap(look.env) : null; }
+	}
 	return () => { for (const step of undo.reverse()) step(); };
 }

@@ -29,7 +29,7 @@ export function promptDocument(deps, live, { environment, style } = {}) {
 	const { state } = deps, sc = deps.scene(), st = deps.stage(), shots = live ? sc?.shotDocument?.shots ?? [] : state.coverage?.shots ?? [];
 	return sequenceDocument({ title: sc?.name ?? state.doc?.name, shots, characters: st.characters ?? [], objects: sc?.objects ?? [], fps: state.timeline.fps ?? 24, aspect: st.shotAspect ?? "16:9", filmback: deps.filmback(),
 		frameCount: Math.max(state.timeline.frameCount ?? 0, 1 + Math.max(0, ...shots.map((shot) => shot.endFrame))), activeCharacterId: deps.findCharacter(state.focus)?.id ?? null,
-		look: style, environment: environment ?? st.environment, environmentImage: st.environmentImage, storyBeats: live ? sc?.shotDocument?.storyBeats ?? sc?.storyBeats ?? [] : state.storyBeats ?? [] });
+		look: style, environment: environment ?? st.environment, environmentImage: st.environmentImage, stage: st, storyBeats: live ? sc?.shotDocument?.storyBeats ?? sc?.storyBeats ?? [] : state.storyBeats ?? [] });
 }
 
 /**

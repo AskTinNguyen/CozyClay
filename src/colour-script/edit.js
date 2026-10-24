@@ -37,3 +37,14 @@ export function editShotLook(current, want, { stage = {}, source = null } = {}) 
 
 /** A look in words, its recipe named by its label ("cold isolation: overcast preset, ..."), or "the stage look". */
 export const lookText = (look) => (look ? shotLookWords(look, { label: look.recipe ? lookRecipe(look.recipe)?.label ?? null : null }) : "the stage look");
+
+/**
+ * The intended palette with swatch `index` set to `hex` (the Look panel's swatch inputs): dense, at
+ * least three swatches and at most five, the unset ones grey, so editing the fourth swatch of a shot
+ * with no palette yet keeps the edit.
+ */
+export function paletteWithSwatch(palette, index, hex, fill = "#808080") {
+	const swatches = palette?.swatches ?? [], dense = Array.from({ length: Math.min(5, Math.max(3, swatches.length, index + 1)) }, (_, k) => swatches[k] ?? fill);
+	dense[index] = hex;
+	return { swatches: dense, word: palette?.word ?? "" };
+}
