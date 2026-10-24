@@ -70,7 +70,7 @@ const readBlock = (id) => evaluate(`(() => { const block = document.querySelecto
 			plain: [...li.querySelectorAll('span[data-reference-page]')].map((span) => Number(span.dataset.referencePage)) })) }; })()`);
 
 const ATLAS = "http://127.0.0.1:8000/";
-// The popover re-renders while the studio settles (the rig loads); type until the field holds the value, then Set.
+// Type into the Atlas field and press Set; retried while the studio settles (the rig loads and re-renders the popover).
 async function setAtlasUrl(value) {
 	const stored = JSON.stringify(value ? `${value.replace(/\/$/, "")}/` : null);
 	for (let attempt = 0; attempt < 5; attempt++) {
@@ -91,7 +91,8 @@ await evaluate(`(() => {
 		cameraKeys: [{ id: "key-0", frame: 0, framing: { pos: { x: 1.5, y: 1.6, z: 4.5 }, yaw: 0.32, pitch: -0.05, fovDeg: 40 } }], camera: { mode: "keys" } };
 	const scene = { version: 4, activeSceneId: "scene-references-qa", scenes: [{ id: "scene-references-qa", name: "REFERENCES QA", objects: [],
 		shotDocument: { version: 5, frameCount: 120, shots: [shot], waypoints: [] },
-		stage: { characters: [], hasCharSheet: false, shotAspect: "16:9" } }] };
+		stage: { characters: [{ id: "char-a", model: "y-bot-tpose", x: 0, z: 0, rot: 0, hidden: false, pose: null, subject: "a woman in a red coat" },
+			{ id: "char-b", model: "x-bot-tpose", x: 1.6, z: 1.5, rot: -135, hidden: false, pose: null, subject: "a man in a grey suit" }], hasCharSheet: false, shotAspect: "16:9" } }] };
 	localStorage.clear();
 	localStorage.setItem("cozyclay.locale", "en");
 	localStorage.setItem("cozyclay.project-session.v1", JSON.stringify({ name: "References QA", updatedAt: Date.now() }));
@@ -100,6 +101,8 @@ await evaluate(`(() => {
 await send("Page.navigate", { url: studioUrl });
 expect("studio renders", await waitFor("!!document.querySelector('canvas')"));
 expect("the shot block renders", await waitFor("!!document.querySelector('.tl-shot-block')"));
+// A pick applies the technique to the shot, which needs the character rig: wait for it.
+expect("the character rig loads", await waitFor("Boolean(window.__cozyclay?.rigA?.parent)", 60000));
 await click(".tl-shot-block");
 expect("Camera mode shows the Techniques picker", await waitFor("!!document.querySelector('[data-technique-picker]')"));
 await click("[data-technique-id='close-up']");
@@ -120,6 +123,9 @@ block = await readBlock("close-up");
 expect("each page links to the atlas reader's book page", block?.books.every((row, i) => row.plain.length === 0
 	&& JSON.stringify(row.links) === JSON.stringify(expected[i].pages.map((page) => `${ATLAS}#/book/${expected[i].book}/${page}`))), JSON.stringify(block));
 expect("the setting is remembered for this viewer", await evaluate("localStorage.getItem('cozyclay.atlasUrl')") === ATLAS);
+await evaluate("document.querySelector('[data-technique-detail]')?.scrollIntoView({ block: 'end' })");
+await shot("further-reading-studio.png");
+await clipShot("further-reading-linked.png", "[data-technique-detail]");
 expect("the Coverage pattern's reading links too", await waitFor("document.querySelector('[data-further-reading=\"shot-reverse-shot\"]')?.dataset.atlasLinked === 'yes' && !!document.querySelector('[data-further-reading=\"shot-reverse-shot\"] a[href^=\"http://127.0.0.1:8000/#/book/\"]')"));
 
 // A technique the atlas has no page for says so.
@@ -127,8 +133,7 @@ await click("[data-technique-id='trunk-shot']");
 block = await waitFor("!!document.querySelector('[data-further-reading=\"trunk-shot\"] [data-reference-none]')");
 expect("a technique without a page says the atlas has none", block);
 
-// A viewer who set the URL earlier: a fresh load reads it from storage and links every page, the Coverage pattern's too.
-await evaluate(`localStorage.setItem("cozyclay.atlasUrl", ${JSON.stringify(ATLAS)})`);
+// The setting outlives a reload: a fresh load reads it from storage and links every page, the Coverage pattern's too.
 await send("Page.reload");
 expect("studio renders again", await waitFor("!!document.querySelector('.tl-shot-block')"));
 await click(".tl-shot-block");
@@ -140,9 +145,6 @@ expect("after a reload each page links to <atlas URL>#/book/<id>/<page>", block?
 	&& JSON.stringify(row.links) === JSON.stringify(expected[i].pages.map((page) => `${ATLAS}#/book/${expected[i].book}/${page}`))), JSON.stringify(block));
 expect("links open in a new tab", await evaluate("(() => { const links = [...document.querySelectorAll('[data-further-reading] a[data-reference-page]')]; return links.length > 0 && links.every((a) => a.target === '_blank' && a.rel === 'noreferrer'); })()"));
 expect("the Coverage pattern's reading is linked on load", await waitFor("!!document.querySelector('[data-further-reading=\"shot-reverse-shot\"] a[href^=\"http://127.0.0.1:8000/#/book/\"]')"));
-await evaluate("document.querySelector('[data-technique-detail]')?.scrollIntoView({ block: 'end' })");
-await shot("further-reading-studio.png");
-await clipShot("further-reading-linked.png", "[data-technique-detail]");
 await setAtlasUrl("");
 expect("clearing the URL turns links back into plain text", await waitFor("document.querySelector('[data-further-reading=\"close-up\"]')?.dataset.atlasLinked === 'no' && !document.querySelector('[data-further-reading] a[data-reference-page]')"));
 expect("and forgets it", await evaluate("localStorage.getItem('cozyclay.atlasUrl')") === null);
