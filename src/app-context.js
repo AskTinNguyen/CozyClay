@@ -23,8 +23,11 @@ export function createAppContext({
   let currentPorts = {};
   const storeDomain = domain => storeDomains.get(domain);
   const registeredDomains = () => [...storeDomains.values()];
-  // Actions measure attached and path-driven props through the editor's evaluated bounds (camera.checkShots).
-  const ports = { storeDomain, storeDomains: registeredDomains }, actionPorts = { storeDomain, storeDomains: registeredDomains, bounds: query => currentPorts.bounds(query) };
+  // Actions measure attached and path-driven props through the editor's evaluated bounds (camera.checkShots), and
+  // place the cast where it plays at a frame (sampleStateAt: a subject walking on its take root), both from the
+  // current binding's ports. An editor without a sampler answers undefined, so the checks read the stored row.
+  const ports = { storeDomain, storeDomains: registeredDomains }, actionPorts = { storeDomain, storeDomains: registeredDomains,
+    bounds: query => currentPorts.bounds(query), sampleStateAt: (...args) => currentPorts.sampleStateAt?.(...args) };
   const fail = (code, message) => { throw new StudioProtocolError(code, message); };
   const memberRetained = row => storeDomain(row.name) === row.handle && row.store.isRetained(row.id);
   const retained = entry => entry.members.every(memberRetained);

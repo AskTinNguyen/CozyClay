@@ -22,3 +22,4 @@ Discoveries that may change the intent. The worker adds entries; the orchestrato
   1. Forward `sampleStateAt` through `actionPorts` the way `bounds` now is. That is one line, but it changes what five checks report for walking subjects, so their verifies need a look.
   2. Leave it and document that the checks read stored positions.
 - Recommendation: 1, as its own small change with its own verifies (it touches coverage, motivation, structure and the packet, not only depth-staging).
+- Resolution (2026-10-24): option 1, in `fix(app): commands sample the cast at each frame through the action ports` (branch `fix/action-ports-sample-state`): `actionPorts.sampleStateAt` forwards lazily to the current binding ports; `test/bus/verify-camera-shot-checks.mjs` covers a walking subject.
