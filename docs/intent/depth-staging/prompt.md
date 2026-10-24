@@ -1,7 +1,7 @@
 # Depth Staging
 
 - Rev: 1
-- Status: planned
+- Status: active
 - Waits for: `group-coverage` completed (both edit `src/camera-coverage/composition.js` and the shot checks) and `camera-polish` completed (it solves the dirty OTS that A3 builds on). Fourth in the cinematic-atlas plan.
 - Area: Camera and Shots
 - Owner: TinNguyen
