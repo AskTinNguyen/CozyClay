@@ -144,7 +144,7 @@ export function register(registry, ports) {
     const castName = castId => (rows.find(row => row.id === castId)?.name ?? castId).split(',')[0], achieved = capabilityReadback(shot, capabilityScene(view, owner().state().frameCount), castName);
     patch(shot.id, row => ({ ...row, technique }));
     // The depth layers through the opening key (depth-staging A4): who and what stands in front of and behind the subject.
-    const layers = shot.cameraKeys[0] ? shotLayers(shot, shot.cameraKeys[0].framing, subject.id, { cast: visible, objects: view.objects, aspectRatio: view.filmback?.aspectRatio, bounds: ports.bounds }) : null;
+    const layers = shot.cameraKeys[0] ? shotLayers(shot, shot.cameraKeys[0].framing, subject.id, { cast: visible, objects: view.objects, aspectRatio: view.filmback?.aspectRatio, frameCount: owner().state().frameCount, bounds: ports.bounds }) : null;
     const bands = layers && { ...Object.fromEntries(['foreground', 'midground', 'background'].map(band => [band, layers[band].map(row => row.name)])), words: depthWords(layers, subject.name.split(',')[0]) };
     const verified = !plan.expectedMove || still || move?.id === plan.expectedMove;
     const warnings = [

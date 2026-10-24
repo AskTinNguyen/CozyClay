@@ -86,7 +86,7 @@ function cropAt(camera, subject, aspect) {
 /**
  * Check one shot.
  * @param {object} shot
- * @param {object} scene { cast: visible character rows, objects: scene object rows, filmback, placeAt?(row, shot, frame), bounds?: the editor's bounds port }
+ * @param {object} scene { cast: visible character rows, objects: scene object rows, filmback, frameCount?: the timeline's length (a prop's path is timed over it), placeAt?(row, shot, frame), bounds?: the editor's bounds port } (scene.js checkScene)
  */
 export function checkShot(shot, scene) {
 	const aspect = scene.filmback?.aspectRatio ?? 16 / 9, place = scene.placeAt ?? castAt, frames = sampleFrames(shot), cast = scene.cast ?? [], objects = scene.objects ?? [];
@@ -94,10 +94,10 @@ export function checkShot(shot, scene) {
 	const samples = frames.map((frame) => {
 		const camera = shotCameraAt(shot, frame, { cast, filmback: scene.filmback });
 		if (!camera) return null;
-		const people = castBoxes(cast, shot, frame, place), props = propBoxes(objects, cast, { frame, bounds: scene.bounds });
+		const people = castBoxes(cast, shot, frame, place), props = propBoxes(objects, cast, { frame, frameCount: scene.frameCount, bounds: scene.bounds });
 		const named = people.find((row) => row.id === (shot.coverage?.subjectId ?? shot.subjectIds?.[0]));
 		const subject = named?.row ?? shotSubject(shot, camera, people.map((row) => row.row), aspect);
-		return subject ? { frame, camera, people, props, subject, eye: eyePoint(subject), named: Boolean(named), state: { objects, characters: cast, frame } } : null;
+		return subject ? { frame, camera, people, props, subject, eye: eyePoint(subject), named: Boolean(named), state: { objects, characters: cast, frame, ...(scene.frameCount ? { frameCount: scene.frameCount } : {}) } } : null;
 	});
 	const found = samples.filter(Boolean);
 	if (!found.length) return { ...report, unjudged: "a follow camera, an empty shot or no visible subject has nothing to read" };

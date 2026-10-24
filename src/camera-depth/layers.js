@@ -55,10 +55,10 @@ export function depthWords(layers, subjectName = "the subject") {
 
 /**
  * A shot's layers at a frame through a stored camera: the cast where they stand then and the visible props.
- * @param {{ cast: object[], objects?: object[], aspectRatio?: number, bounds?: Function, placeAt?: Function }} scene
+ * @param {{ cast: object[], objects?: object[], aspectRatio?: number, frameCount?: number, bounds?: Function, placeAt?: Function }} scene
  */
-export function shotLayers(shot, camera, subjectId, { cast, objects = [], aspectRatio = 16 / 9, bounds, placeAt } = {}) {
+export function shotLayers(shot, camera, subjectId, { cast, objects = [], aspectRatio = 16 / 9, frameCount, bounds, placeAt } = {}) {
 	if (!camera || !subjectId) return null;
 	const frame = shot.startFrame, people = castBoxes(cast, shot, frame, placeAt), subject = people.find((row) => row.id === subjectId)?.row;
-	return subject ? depthLayers(camera, subject, [...people, ...propBoxes(objects, cast, { frame, bounds })], aspectRatio) : null;
+	return subject ? depthLayers(camera, subject, [...people, ...propBoxes(objects, cast, { frame, frameCount, bounds })], aspectRatio) : null;
 }

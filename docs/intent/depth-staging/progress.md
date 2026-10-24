@@ -29,6 +29,13 @@
 5. A6 agents (accb84f7): MCP `check_shots` (`mcp/camera-depth-tools.mjs`, 37 tools), a `depth` director-evals category (10 core rows and 1 stretch row: "are we clipping into the bookcase?" does not resolve yet), and the redirect from `apply_camera_technique`.
 6. A5 controls (cf1f5aed): `ShotCheckMarks` on the Shots lane and the Shot check readout with Apply fix in the Coverage panel. QA found that a fix could hand an unnamed shot to the other person, because the most central person changes when the camera slides. The fix search now keeps the subject (`keeps`), with a unit check that fails without it.
 7. Merged origin/main (director-packet #16, 27dd3e63), keeping both sides: 38 MCP tools, 139 registry actions. Following the packet's prompt, the "Depth" entry is now in `PACKET_CHECKS` (`src/director-packet/checks.js`). A pillar flags the shot it blocks, with the fix (`test/verify-director-packet.mjs`, `# pass 5`). The packet's expected check lists gain `depth`. MCP `render_prompt` and `render_packet` now pass the scene's objects, so the brief's Depth line and the packet's depth flags work in memory too.
+8. PR #17 review (Codex, two P2 findings).
+   - P2-1: a prop on an authored path was clamped to frame 0. The bounds state and the sample state that `blockersAt` uses had no `frameCount`, and `studioBounds` times the path over it. `propBoxes` and `checkShot` now carry the timeline length, from `scene.frameCount`. `shotLayers`, the brief, the plan diagram and `camera.applyTechnique` pass it too.
+   - P2-2: the timeline flags built their scene without the bounds port, so attached and path-driven props had no box. `checkScene` (`src/camera-depth/scene.js`) now builds the scene for both the command and `useShotChecks`. The hook passes the editor's `ports.bounds` and the shot document's `frameCount`.
+   - P2-2 had a second cause, found by the browser QA: commands receive `actionPorts`, which had no `bounds`. So in the live editor `camera.checkShots` never measured an attached or path-driven prop either. `actionPorts.bounds` now forwards to the editor's evaluated bounds (`src/app-context.js`).
+   - Unit checks that fail on the old code: `test/verify-camera-shot-checks-ports.mjs` (3 checks). With `frameCount` left out of the bounds state, the path check fails ("at frame 95 the cart is on the line"). With it left out of the sample state only, the issue list is empty. `checkScene` did not exist before.
+   - Bus check: `test/bus/verify-camera-shot-checks.mjs` gains a cart on a path, measured through the real `studioBounds`. It fails ("# fail 1") without `actionPorts.bounds`, and again without `frameCount` in the sample state.
+   - Browser QA adds a cart that rolls onto Mara's sight line. The Shots lane and `cclay live run camera.checkShots` both flag frames 96-191 and name the same issue.
 
 ## Decisions
 
@@ -36,7 +43,7 @@
 - A share that cannot be reached is reported, not forced. Example: a prop 1.5 m from the subject in a wide shot. The setup that comes nearest is kept, with a TECHNIQUE_NOTE that names the share it covers.
 - Receipt checks gain `foregroundShare` and `flagged` in the protocol checks schema. They are added on the existing line, so `studio-agent-protocol.js` does not grow.
 
-- The timeline and readout compute the check in the page from the shell's cast, props and filmback (as the cut flags do). The bus action adds the bounds port and the sampled cast state, so an imported mesh or a keyed walk can read slightly differently there. The bus answer is the authority for agents.
+- The timeline and readout compute the check in the page with the command's scene (`checkScene`): the shell's cast, props and filmback, the editor's bounds port and the timeline length. The command also has a `placeAt` from `ports.sampleStateAt`. Neither placement uses that port in the live editor today, so both put the cast at its stored position (see F-2).
 - `camera.fixShot` moves only the camera keys. A rail or follow shot is refused and pointed at its rail.
 
 ## Reconciliations

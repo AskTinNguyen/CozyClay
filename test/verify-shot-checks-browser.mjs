@@ -4,7 +4,9 @@
 // run object.add) flags the shot BLOCKED on the Shots lane; camera.checkShots
 // over the hub reads occluded with the same frames; the Shot check readout
 // explains the flag and its fix; Apply fix runs camera.fixShot (one undo
-// entry) and the flag goes, the hub re-check agrees. Then a floor lamp held in
+// entry) and the flag goes, the hub re-check agrees. A cart on an authored path
+// that rolls onto the sight line mid-shot is flagged too (measured through the
+// editor's bounds port, timed over the timeline). Then a floor lamp held in
 // the foreground (camera.applyTechnique composition.foreground), captured
 // through the lens. Runs in tools/qa-browser.mjs with COZYCLAY_LIVE_PORT on the
 // dev server's hub; QA_SHOT_DIR keeps the shots.
@@ -127,7 +129,18 @@ const after = live("run", "camera.checkShots", "--args", JSON.stringify({ shotId
 console.log(`  $ cclay live run camera.checkShots: ${after.summary}`);
 expect("the hub re-check finds the Dialogue shot clean", after.ok && after.checks.issues === 0, JSON.stringify(after.output ?? after).slice(0, 300));
 
-// 3. A floor lamp held in the foreground of Mara's medium shot, through the lens.
+// 3. A cart on an authored path that rolls onto Mara's sight line mid-shot: the timeline measures it through the editor's bounds port, timed over the timeline.
+await open();
+const cart = live("run", "object.add", "--args", JSON.stringify({ kind: "cube", placement: { x: -6, z: 3 }, name: "Cart" })).affectedIds?.[0];
+live("run", "object.set", "--args", JSON.stringify({ id: cart, set: { scale: { x: 1.4, y: 3, z: 0.4 }, path: { points: [{ x: -6, y: 0, z: 3 }, { x: -0.6, y: 0, z: 3 }], speed: 1.35 } } }));
+expect("the Shots lane flags the Dialogue shot for the cart on its path", await waitFor("document.querySelector('[data-shot-check=\"shot-dialogue\"]')?.dataset.shotCheckRule === 'occluded'", 20000), await flags());
+const cartTitle = await evaluate("document.querySelector('[data-shot-check=\"shot-dialogue\"]')?.title ?? ''");
+console.log(`  flag: ${cartTitle}`);
+const rolled = live("run", "camera.checkShots", "--args", JSON.stringify({ shotIds: ["shot-dialogue"], rule: "occluded" }));
+const rolledIssue = rolled.output?.shots?.[0]?.issues?.[0];
+expect("the hub and the timeline name the same frames for the cart", rolledIssue?.by?.includes(cart) && !rolledIssue.frames.includes(0) && cartTitle.includes(rolledIssue.message), JSON.stringify(rolled.output ?? rolled).slice(0, 400));
+
+// 4. A floor lamp held in the foreground of Mara's medium shot, through the lens.
 await open();
 const lamp = live("run", "object.add", "--args", JSON.stringify({ kind: "cylinder", placement: { x: -0.4, z: 2.2 }, name: "Floor lamp" })).affectedIds?.[0];
 live("run", "object.set", "--args", JSON.stringify({ id: lamp, set: { scale: { x: 0.35, y: 1.6, z: 0.35 } } }));

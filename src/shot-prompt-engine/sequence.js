@@ -81,7 +81,7 @@ export function buildSequencePrompt(document, { range = null, profile: profileId
 	const beats = shots.map((shot, i) => {
 		const beat = { ...describeBeat(document, shot, { scene, index: i + 1, first: shot === all[0] }), shotNumber: all.indexOf(shot) + 1, deliveryStart: delivered };
 		// What stands in front of and behind the subject (depth-staging): the cast and the set's props, through the opening camera.
-		beat.depth = depthWords(shotLayers(shot, beat.measure.start, beat.subjectId, { cast: scene.cast, objects: document.objects ?? [], aspectRatio: document.filmback?.aspectRatio }), beat.subjectName);
+		beat.depth = depthWords(shotLayers(shot, beat.measure.start, beat.subjectId, { cast: scene.cast, objects: document.objects ?? [], aspectRatio: document.filmback?.aspectRatio, frameCount: document.frameCount }), beat.subjectName);
 		delivered += beat.frames;
 		return beat;
 	});

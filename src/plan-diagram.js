@@ -70,7 +70,7 @@ export function planDiagramLayout(state, { width = 1280, height = 720, ports, cu
     // depth-staging: what stands in the current shot's foreground, ringed where it stands.
     const d = { x: camera.lookAt.x - camera.position.x, y: camera.lookAt.y - camera.position.y, z: camera.lookAt.z - camera.position.z };
     const framing = { pos: camera.position, yaw: Math.atan2(-d.x, -d.z), pitch: Math.atan2(d.y, Math.hypot(d.x, d.z)), fovDeg }, subjectId = shot.coverage?.subjectId ?? shot.subjectIds?.[0];
-    for (const near of shotLayers(shot, framing, subjectId, { cast: characters, objects: state.objects, aspectRatio: aspect, bounds: ports?.bounds })?.foreground ?? []) {
+    for (const near of shotLayers(shot, framing, subjectId, { cast: characters, objects: state.objects, aspectRatio: aspect, frameCount: state.frameCount, bounds: ports?.bounds })?.foreground ?? []) {
       const row = [...characters, ...objects].find(entity => entity.id === near.id);
       if (row) primitives.push({ kind: 'foreground', shotId: shot.id, id: near.id, label: near.name, center: flat(row) });
     }

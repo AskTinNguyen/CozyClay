@@ -23,7 +23,8 @@ export function createAppContext({
   let currentPorts = {};
   const storeDomain = domain => storeDomains.get(domain);
   const registeredDomains = () => [...storeDomains.values()];
-  const ports = { storeDomain, storeDomains: registeredDomains }, actionPorts = { storeDomain, storeDomains: registeredDomains };
+  // Actions measure attached and path-driven props through the editor's evaluated bounds (camera.checkShots).
+  const ports = { storeDomain, storeDomains: registeredDomains }, actionPorts = { storeDomain, storeDomains: registeredDomains, bounds: query => currentPorts.bounds(query) };
   const fail = (code, message) => { throw new StudioProtocolError(code, message); };
   const memberRetained = row => storeDomain(row.name) === row.handle && row.store.isRetained(row.id);
   const retained = entry => entry.members.every(memberRetained);

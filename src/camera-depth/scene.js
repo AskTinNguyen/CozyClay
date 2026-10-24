@@ -17,14 +17,25 @@ const propName = (row) => String(row.name || row.kind || row.renderer || row.id)
 /**
  * Visible props as { id, name, kind: "prop", box, attachedTo } at a frame.
  * @param {object[]} objects  scene object rows   @param {object[]} characters  character rows
- * @param {{ frame?: number, bounds?: Function }} [options]  bounds: the editor's bounds port ({ entity, frame, state }) for attached or routed props
+ * @param {{ frame?: number, frameCount?: number, bounds?: Function }} [options]  bounds: the editor's bounds port ({ entity, frame, state }) for attached or routed props;
+ *   frameCount: the timeline's length, which a prop's authored path is timed over (without it the port clamps the prop to frame 0)
  */
-export function propBoxes(objects = [], characters = [], { frame = 0, bounds } = {}) {
-	const state = { objects, characters, frame };
+export function propBoxes(objects = [], characters = [], { frame = 0, frameCount, bounds } = {}) {
+	const state = { objects, characters, frame, ...(frameCount ? { frameCount } : {}) };
 	return objects.filter((row) => !isEmptyObject(row) && !isEffectivelyHidden(row, objects, characters)).flatMap((row) => {
 		const box = entityWorldBounds(row, state, { bounds });
 		return box ? [{ id: row.id, name: propName(row), kind: "prop", box, attachedTo: row.attach?.characterId ?? null }] : [];
 	});
+}
+
+/**
+ * The scene camera.checkShots reads, built the same way by the command and the Studio's timeline flags:
+ * the visible cast, the props, the filmback, the timeline's length and the editor's bounds port (attached
+ * and path-driven props are measured through it; without it they have no box and are left out).
+ * @param {{ characters?, objects?, filmback?, frameCount? }} view  @param {{ bounds?: Function, placeAt?: Function }} [ports]
+ */
+export function checkScene({ characters = [], objects = [], filmback = null, frameCount } = {}, { bounds, placeAt } = {}) {
+	return { cast: characters.filter((row) => !row.hidden), objects, filmback, ...(frameCount ? { frameCount } : {}), ...(bounds ? { bounds } : {}), ...(placeAt ? { placeAt } : {}) };
 }
 
 /** Visible cast as { id, name, kind: "cast", box, row } where each stands at a frame of a shot (placeAt defaults to cut-geometry castAt). */

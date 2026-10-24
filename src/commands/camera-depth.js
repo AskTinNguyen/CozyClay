@@ -8,6 +8,7 @@ import { checkShots, SHOT_RULES } from '../camera-depth/shot-checks.js';
 import { movedCamera } from '../camera-depth/fixes.js';
 import { depthWords } from '../camera-depth/layers.js';
 import { castAt } from '../camera-coverage/cut-geometry.js';
+import { checkScene } from '../camera-depth/scene.js';
 import { eyePoint } from '../camera-coverage/composition.js';
 import { routeCameraRequest } from '../camera-coverage/route.js';
 import { shotAtFrame } from '../cuts.js';
@@ -41,7 +42,7 @@ export function registerDepth(registry, ports) {
   const mounted = () => Boolean(ports.storeDomain?.('shot')) || 'The shots document owner is not mounted.';
   const visible = () => ports.readView().characters.filter(row => !row.hidden);
   const placeAt = (row, shot, at) => castAt(ports.sampleStateAt?.(at)?.characters?.find(entry => entry.id === row.id) ?? row, shot, at);
-  const scene = () => { const view = ports.readView(); return { cast: visible(), objects: view.objects ?? [], filmback: view.filmback, placeAt, bounds: ports.bounds }; };
+  const scene = () => checkScene({ ...ports.readView(), frameCount: owner().state().frameCount }, { bounds: ports.bounds, placeAt });
   const ready = state => (mounted() === true ? state.shots.length > 0 || 'There are no shots yet; shots are checked against the set.' : mounted());
   registry.register({ ...depthDeclarations[0], available: ready, run(args) { return check(args); } });
   registry.register({ ...depthDeclarations[1], target: args => args.shotId, available: ready, run(args) { return fix(args); } });

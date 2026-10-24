@@ -76,3 +76,18 @@ test('the coverage patterns laid by camera.cover check clean in the empty set; t
     assert.deepEqual(applied.output.layers.foreground, ['Joon'], 'camera.applyTechnique lists the layers too');
   } finally { f.dispose(); }
 });
+
+test('a cart on an authored path rolls onto the sight line mid-shot: camera.checkShots measures it through the editor bounds, timed over the timeline (PR #17 review)', () => {
+  const f = shotsFixture({ characters });
+  try {
+    fresh(f);
+    assert.equal(f.run('object.add', { kind: 'cube', placement: { x: -5, z: 2.5 }, name: 'Cart' }, 'agent').ok, true);
+    const cart = f.actual.readStudioState().objects.find(row => row.name === 'Cart').id;
+    const set = f.run('object.set', { id: cart, set: { scale: { x: 0.6, y: 3, z: 0.6 }, path: { points: [{ x: -5, y: 0, z: 2.5 }, { x: 0, y: 0, z: 2.5 }], speed: 2.5 } } }, 'agent');
+    assert.equal(set.ok, true, JSON.stringify(set).slice(0, 300));
+    const report = f.run('camera.checkShots', { shotIds: ['shot-a'] }, 'agent'), [issue] = report.output.shots[0].issues;
+    assert.equal(issue?.rule, 'occluded', JSON.stringify(report.output.shots[0]));
+    assert.deepEqual(issue.by, [cart]);
+    assert.ok(issue.frames.includes(95) && !issue.frames.includes(0), `blocked once it arrives, clear at the start: ${issue.frames}`);
+  } finally { f.dispose(); }
+});

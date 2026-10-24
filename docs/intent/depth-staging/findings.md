@@ -13,3 +13,12 @@ Discoveries that may change the intent. The worker adds entries; the orchestrato
   3. Make the planner offset the leading single laterally when the partner is on the walking line.
 - Recommendation: 1 now (the check is correct and the fix is one click). Take 2 as a small follow-up in camera-coverage, because the pattern's premise (walking side by side) is what is violated. 3 changes the pattern's framing for every blocking, so it needs its own review.
 - Resolution (cloud orchestrator, 2026-10-24): option 1. The 4 flags are measured blocks, not false positives. A2's "zero issues" holds for every pattern laid as its premise intends; walk-and-talk over a face-to-face pair breaks the premise. Option 2 stays a candidate follow-up in camera-coverage.
+
+## F-2: action ports carry no `sampleStateAt`, so the camera checks place a walking subject at its stored position
+
+- Found in: the PR #17 review fix (P2-2). The commands get `appContext.actionPorts`. `bounds` is now forwarded there, but `sampleStateAt` is still only on the binding's `ports`.
+- What: `camera.checkCuts`, `checkMotivation`, `checkStructure`, `checkShots` and `export.directorPacket` each build `placeAt` from `ports.sampleStateAt?.(at)`. In the live editor that is undefined, so they fall back to the stored row and read the stored position, not the sampled one. A subject walking on its take root is read where it was placed, not where it is at the cut.
+- Options:
+  1. Forward `sampleStateAt` through `actionPorts` the way `bounds` now is. That is one line, but it changes what five checks report for walking subjects, so their verifies need a look.
+  2. Leave it and document that the checks read stored positions.
+- Recommendation: 1, as its own small change with its own verifies (it touches coverage, motivation, structure and the packet, not only depth-staging).
