@@ -1,7 +1,7 @@
 # Camera Motivation
 
 - Rev: 2
-- Status: active
+- Status: completed
 - Waits for: nothing (`director-evals` completed in #10). Runs beside `group-coverage`, so it does not edit `src/commands/camera-coverage.js` or `src/camera-coverage/cut-rules.js`.
 - Area: Camera and Shots
 - Owner: TinNguyen
@@ -61,3 +61,4 @@ CozyClay already measures every move (`measureShotCamera` in `src/shot-prompt-en
 
 - rev 1 (2026-10-24): written as a planned intent from the cinematic-atlas review (L-1, L-2).
 - rev 2 (2026-10-24): F-1 resolved as option (a) under the away rule (D3); active beside `group-coverage`.
+- rev 2 (2026-10-24): completed; squash-merged into `main` by the cloud orchestrator under `after-proof` (#13).

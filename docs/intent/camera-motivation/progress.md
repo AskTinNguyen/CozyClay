@@ -4,7 +4,7 @@
 - Worker: cloud worker agent (camera-motivation)
 - Current step: done; every acceptance row met or ready for review
 - Next step: orchestrator review of A5 shots and A9 docs; PR
-- PR: none yet
+- PR: https://github.com/AskTinNguyen/CozyClay/pull/13
 
 ## Acceptance
 
@@ -14,11 +14,11 @@
 | A2 | met (gate) | `node test/verify-camera-motivation.mjs` -> `# pass 3 # fail 0` (unmotivated high; starts-off-beat medium at 20 frames, low at 10; clean within tolerance; motion-beat take-off and landing, settles-off-beat with "settle on the landing at f166"; fixes carry camera.alignMove args) |
 | A3 | met (gate) | same file: every camera.cover pattern 0 issues, follow cam of a walking subject 0, keyed tracking and pan-with 0; `PASS A3 flag: The push over f38-76 has no story beat, motion beat or travelling subject to answer to.` |
 | A4 | met (gate) | `node test/bus/verify-camera-align-move.mjs` -> `# pass 3 # fail 0` (100-140 -> 120-160 one undo, re-check clean; request form; settle squeezed at the shot edge; rig keys; technique kept; refusals) |
-| A5 | met (ui:qa); ui:shot ready for review | `test/verify-camera-motivation-browser.mjs` exit 0, `camera motivation browser QA passed` (step 4); shots `proofs/timeline-flagged-move.png`, `proofs/timeline-fixed-move.png` |
+| A5 | met (ui:qa, ui:shot reviewed R1) | `test/verify-camera-motivation-browser.mjs` exit 0, `camera motivation browser QA passed` (step 4); shots `proofs/timeline-flagged-move.png`, `proofs/timeline-fixed-move.png` |
 | A6 | met (gate) | `node mcp/verify-camera-motivation.mjs` -> `12 passed, 0 failed`; `node test/verify-director-evals.mjs` -> `core: 91/91` (motivation core 15/15; stretch miss `cuts-jump-the-line` pre-existing); `node mcp/verify-director-evals.mjs` -> `79 passed, 0 failed`; `cclay live run camera.checkMotivation` in the A5 QA run |
 | A7 | met (gate) | `node test/bus/verify-sequence-prompt.mjs` -> `# pass 4 # fail 0` (`Motive: the camera pushes in as Mara makes her admission.`; walk-and-talk `tracks with Mara`; byte-identical across runs) |
 | A8 | met (gate) | step 7: `npm run lint` 0 new / 0 violations / 0 regressions; `npm run build` built; `SUITE-ALL: 464 files, 461 passed, 3 failed` with only CPU-timing failures (exitcar, repair as in the base; motion3-life "critic is cheap" 255 ms vs 250 ms, passes alone) |
-| A9 | ready for review | `mcp/README.md` (34 tools, `check_motivation` / `story_beats` rows, Camera motivation section), `docs/agent-cli.md` (Camera motivation), `docs/studio-ui-ia.md` (Motivation section, Shots lane marks), `CHANGELOG.md` Unreleased > Camera; 3f3669d5 |
+| A9 | met (review R1) | `mcp/README.md` (34 tools, `check_motivation` / `story_beats` rows, Camera motivation section), `docs/agent-cli.md` (Camera motivation), `docs/studio-ui-ia.md` (Motivation section, Shots lane marks), `CHANGELOG.md` Unreleased > Camera; 3f3669d5 |
 
 ## Steps
 
@@ -40,3 +40,7 @@
 - The timeline and panel compute the check in the page (same `checkMotivation` over `studioSequenceDocument`, takes cached), placing the cast from its authored layer; the bus action samples the evaluated state per frame. Both agreed in the A5 run.
 
 ## Reconciliations
+
+## Reviews
+
+- R1 (cloud orchestrator, 2026-10-24, at 30751aee): opened `proofs/timeline-flagged-move.png`. The Dialogue shot (0-191, MS, PUSH-IN) carries an orange OFF BEAT bar on the timeline, with the beat tick "Mara makes her admis..." at f60. The Motivation section lists the beat, shows "1 moves, 1 flagged", and the medium issue "Starts off the beat" reads "Fix: start the push at f60 on 'Mara makes her admission'" with Apply fix. `proofs/timeline-fixed-move.png` is after the fix: no bar, "1 moves, 0 flagged", the move is now f60-191, and the receipt reads "re-check clean". The suite's third failure (motion3-life "critic is cheap", 255 ms vs 250 ms under load) passes run alone (`motion3 life: all checks passed`), so it is accepted as a CPU-timing check. A9: `mcp/README.md`, `docs/agent-cli.md`, `docs/studio-ui-ia.md` and `CHANGELOG.md` are updated.
