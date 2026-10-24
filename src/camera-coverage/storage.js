@@ -4,7 +4,7 @@
 // absent unless set, so older bodies stay byte-identical. Dependency-light on
 // purpose: the shot document repair imports it.
 import { repairShotTechnique } from "../camera-techniques/storage.js";
-import { repairTransition } from "./transitions.js";
+import { repairTransition, repairTransitionOut } from "./transitions.js";
 
 const text = (value, max) => (typeof value === "string" ? Array.from(value.trim()).slice(0, max).join("") : "");
 
@@ -21,6 +21,6 @@ function repairCoverage(value) {
 
 /** The technique, coverage and transition fields of one stored shot, each only when present. */
 export function repairShotExtras(entry) {
-	const technique = repairShotTechnique(entry?.technique), coverage = repairCoverage(entry?.coverage), transition = repairTransition(entry?.transition);
-	return { ...(technique ? { technique } : {}), ...(coverage ? { coverage } : {}), ...(transition ? { transition } : {}) };
+	const technique = repairShotTechnique(entry?.technique), coverage = repairCoverage(entry?.coverage), transition = repairTransition(entry?.transition), transitionOut = repairTransitionOut(entry?.transitionOut);
+	return { ...(technique ? { technique } : {}), ...(coverage ? { coverage } : {}), ...(transition ? { transition } : {}), ...(transitionOut ? { transitionOut } : {}) };
 }

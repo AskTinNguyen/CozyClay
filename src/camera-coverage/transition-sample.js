@@ -4,6 +4,7 @@
 // draws the two cameras weighted (a dissolve or whip) or the one camera fading
 // to black (a fade). Pure: the shot camera preview and the export frame share it.
 import { transitionAt } from "./transitions.js";
+import { sampleAt } from "../sample-at.js";
 
 const pose = (camera) => ({ pos: { ...camera.pos }, yaw: camera.yaw, pitch: camera.pitch, rollDeg: camera.rollDeg ?? 0, fovDeg: camera.fovDeg });
 
@@ -18,4 +19,14 @@ export function withTransition(camera, context) {
 	if (!window) return camera;
 	const other = window.other ? context.sampleShot(window.other.shot, window.other.frame) : null;
 	return { ...camera, transition: { type: window.type, selfWeight: window.selfWeight, otherWeight: other ? window.otherWeight : 0, ...(other ? { other: pose(other) } : {}) } };
+}
+
+/**
+ * The same, for a sampled playback scene: the far shot is sampled through
+ * sampleAt in its own camera mode (keys, or the rail's track in
+ * scene.cameraTrack), so a dissolve between a keyed shot and a rail shot blends
+ * two cameras in the preview rigs (MoveRig, FollowCamRig) and the export frame alike.
+ */
+export function withShotTransition(camera, scene, shots, frame) {
+	return withTransition(camera, shots ? { shots, frame, sampleShot: (other, at) => sampleAt(scene, other, at).camera } : null);
 }

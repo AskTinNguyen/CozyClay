@@ -79,6 +79,16 @@ test('lead room leaves the space ahead of the facing direction; more lead room p
       assert.ok(Math.abs(further.x - (facesRight ? 0.275 : 0.725)) < TOL, `more lead room: x ${further.x.toFixed(3)}`);
       assert.deepEqual(currentTechnique(shotOf(f)).composition, { place: 'auto', headroom: 'normal', leadRoom: 'more' }, 'the composition is stored with the stack');
     }
+    // Review #5: composition alone (no stack, no request) reuses the shot's stack, or a medium shot on a shot without one.
+    const alone = f.run('camera.applyTechnique', { shotId: 'shot-a', composition: { place: 'right-third' } }, 'agent');
+    assert.equal(alone.ok, true, JSON.stringify(alone).slice(0, 400));
+    assert.deepEqual(currentTechnique(shotOf(f)).stack.map(row => row.id), ['medium-close-up'], 'composition alone keeps the stack');
+    assert.ok(Math.abs(alone.checks.screenX - 2 / 3) < TOL, `and places the eyes: ${alone.checks.screenX}`);
+    fresh(f);
+    const bare = f.run('camera.applyTechnique', { shotId: 'shot-a', subjectId: 'actor-a', composition: { place: 'left-third' } }, 'agent');
+    assert.equal(bare.ok, true, JSON.stringify(bare).slice(0, 400));
+    assert.deepEqual(currentTechnique(shotOf(f)).stack.map(row => row.id), ['medium-shot'], 'a shot with no stack falls back to a medium shot');
+    assert.ok(Math.abs(bare.checks.screenX - 1 / 3) < TOL);
     const thirds = f.run('camera.applyTechnique', { shotId: 'shot-a', request: 'medium shot, rule of thirds left' }, 'agent');
     assert.equal(thirds.ok, true, JSON.stringify(thirds).slice(0, 400));
     assert.ok(Math.abs(thirds.checks.screenX - 1 / 3) < TOL);

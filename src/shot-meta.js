@@ -13,7 +13,7 @@
  */
 
 import { currentTechnique } from "./camera-techniques/storage.js";
-import { transitionWords } from "./camera-coverage/transitions.js";
+import { transitionOutWords, transitionWords } from "./camera-coverage/transitions.js";
 import { cameraCapabilities } from "./camera-capabilities/fields.js";
 import { capabilityWords } from "./camera-capabilities/words.js";
 
@@ -79,7 +79,7 @@ export function shotCaptureMeta({ shot = null, stage = null, cast = [], fps = nu
 		// the camera (an edited camera drops it): words for the prompt.
 		...(currentTechnique(shot) ? { technique: { label: currentTechnique(shot).label, phrase: currentTechnique(shot).phrase } } : {}),
 		// The transition into the shot, in words (camera-coverage).
-		...(transitionWords(shot?.transition, finite(fps) ?? 24) ? { transition: transitionWords(shot.transition, finite(fps) ?? 24) } : {}),
+		...([transitionWords(shot?.transition, finite(fps) ?? 24), transitionOutWords(shot?.transitionOut)].some(Boolean) ? { transition: [transitionWords(shot.transition, finite(fps) ?? 24), transitionOutWords(shot.transitionOut)].filter(Boolean).join("; ") } : {}),
 		// The shot camera's capabilities (roll, lens, shake, mount, speed, shutter, rig keys) and their words.
 		...capabilityMeta(camera, cast, fps),
 	};

@@ -7,7 +7,7 @@ import { TIMELINE_FRAME_FPS } from "./scenes.js";
 import { usedSensorHeightMm } from "./shot.js";
 import { shotHold } from "./shot-authoring.js";
 import { cameraCapabilities } from "./camera-capabilities/fields.js";
-import { otioTransition, repairTransition } from "./camera-coverage/transitions.js";
+import { otioTransition, repairTransition, repairTransitionOut } from "./camera-coverage/transitions.js";
 
 const OTIO_TIMELINE_FPS = TIMELINE_FRAME_FPS;
 const OTIO_START_TIMECODE = "00:00:00:00";
@@ -155,6 +155,7 @@ function clip(scene, shot) {
 	if (still) Object.assign(metadata, { kind: "still", hold: shotHold(shot), caption: typeof shot.caption === "string" ? shot.caption : "" });
 	// The transition into this shot (camera-coverage): always in the metadata, and as a Transition.1 item where OTIO has one.
 	if (repairTransition(shot.transition)) metadata.transitionIn = repairTransition(shot.transition);
+	if (repairTransitionOut(shot.transitionOut)) metadata.transitionOut = repairTransitionOut(shot.transitionOut);
 	return {
 		OTIO_SCHEMA: "Clip.1",
 		effects: [],

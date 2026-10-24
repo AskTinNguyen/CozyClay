@@ -13,7 +13,7 @@ import { planCoverage } from '../camera-coverage/plan.js';
 import { COVERAGE_PATTERN_IDS, coveragePattern } from '../camera-coverage/patterns.js';
 import { resolveCameraRequest } from '../camera-coverage/resolve.js';
 import { COMPOSITION_PLACES, HEADROOMS, LEAD_ROOMS } from '../camera-coverage/composition.js';
-import { repairTransition, TRANSITION_FRAMES_MAX, TRANSITION_TYPES, transitionWords } from '../camera-coverage/transitions.js';
+import { repairTransition, repairTransitionOut, TRANSITION_FRAMES_MAX, TRANSITION_TYPES, transitionOutWords, transitionWords } from '../camera-coverage/transitions.js';
 import { StudioSchemas } from '../studio-agent-protocol.js';
 import { fail, shotLabel } from './shared.js';
 
@@ -33,9 +33,9 @@ export const coverageDeclarations = [
     description: `The editing rules at every cut between consecutive shots, measured from the cameras and the cast at the cut frames: ${CUT_RULES.join(', ')} (180-degree line crossings, jump cuts under 30 degrees and one size step, screen-direction flips of a moving subject, shot-reverse-shot eyelines). Each issue has a severity, the frames and a suggested fix; nothing changes. frame names one cut (the nearest), shotIds the cuts touching those shots, request a question ("is the cut at 96 crossing the line?").`,
     input: input({ frame, shotIds: { type: 'array', items: id, minItems: 1, maxItems: 32 }, request: { type: 'string', maxLength: 300 } }) },
   { id: 'camera.setTransition', label: 'Set cut transition', kind: 'mutation', undoDomain: 'shot',
-    description: `The transition on the cut into a shot (shotId, or the shot that starts at cutFrame; default the shot under the playhead): type ${TRANSITION_TYPES.join(' | ')}; frames for a dissolve, fade or whip (the preview blends over them), offsetFrames for a J- or L-cut (an audio note), note. cut clears it. It is written to OTIO as a transition (dissolve, fades, whip) or clip metadata, and stated in the prompt.`,
+    description: `The transition on the cut into a shot (shotId, or the shot that starts at cutFrame; default the shot under the playhead): type ${TRANSITION_TYPES.join(' | ')}; frames for a dissolve, fade or whip (the preview blends over them), offsetFrames for a J- or L-cut (an audio note), note. cut clears it. edge "out" with fade-to-black ends the sequence on black after the shot (the last shot, or one before a gap). It is written to OTIO as a transition (dissolve, fades, whip) or clip metadata, and stated in the prompt.`,
     input: input({ shotId: id, cutFrame: frame, type: { type: 'string', enum: TRANSITION_TYPES }, frames: { type: 'integer', minimum: 2, maximum: TRANSITION_FRAMES_MAX },
-      offsetFrames: { type: 'integer', minimum: 1, maximum: TRANSITION_FRAMES_MAX }, note: { type: 'string', maxLength: 120 } }, ['type']) },
+      offsetFrames: { type: 'integer', minimum: 1, maximum: TRANSITION_FRAMES_MAX }, note: { type: 'string', maxLength: 120 }, edge: { type: 'string', enum: ['in', 'out'] } }, ['type']) },
 ];
 
 export function registerCoverage(registry, ports, { castRow }) {
@@ -141,11 +141,12 @@ export function registerCoverage(registry, ports, { castRow }) {
       checks: { cuts: cuts.length, issues }, output: { cuts: cuts.map(compactCut), rules: CUT_RULES } };
   }
 
-  function setTransition({ shotId, cutFrame, type, frames, offsetFrames, note }) {
+  function setTransition({ shotId, cutFrame, type, frames, offsetFrames, note, edge = 'in' }) {
     const rows = owner().read(), view = ports.readView();
     const shot = shotId ? rows.find(row => row.id === shotId) ?? fail('STALE_TARGET', `Shot ${shotId} is not in this scene.`)
       : Number.isInteger(cutFrame) ? rows.find(row => row.startFrame === cutFrame) ?? fail('STALE_TARGET', `No shot starts at frame ${cutFrame}; a cut sits on a shot's first frame.`)
         : shotAtFrame(rows, view.view?.frame ?? ports.state().frame) ?? fail('AMBIGUOUS_TARGET', 'No shot owns the playhead; name one with shotId or cutFrame.');
+    if (edge === 'out') return setEnding(shot, rows, type, frames);
     const transition = repairTransition({ type, frames, offsetFrames, note });
     patch(shot.id, row => { const next = { ...row }; delete next.transition; return transition ? { ...next, transition } : next; });
     const previous = rows.filter(row => row.kind !== 'still' && row.endFrame < shot.startFrame).sort((a, b) => b.endFrame - a.endFrame)[0];
@@ -153,6 +154,15 @@ export function registerCoverage(registry, ports, { castRow }) {
       ...(previous && previous.endFrame + 1 !== shot.startFrame && transition ? [{ code: 'GAP_BEFORE_CUT', id: shot.id, message: `${shot.startFrame - previous.endFrame - 1} free frames sit before ${shot.name}; the preview blends only adjacent shots.` }] : [])];
     return { affectedIds: [shot.id], summary: `Transition into ${shotLabel(shot)} at frame ${shot.startFrame}: ${transition ? transitionWords(transition) : 'a straight cut'}.`.slice(0, 240), warnings,
       output: { shotId: shot.id, cutFrame: shot.startFrame, transition } };
+  }
+  // The end of a sequence: a fade to black after a shot nothing cuts out of (shot.transitionOut).
+  function setEnding(shot, rows, type, frames) {
+    if (type !== 'fade-to-black' && type !== 'cut') fail('INVALID_ARGUMENT', 'edge "out" takes fade-to-black (or cut to clear it).');
+    const next = rows.find(row => row.kind !== 'still' && row.startFrame === shot.endFrame + 1);
+    if (next && type !== 'cut') fail('INVALID_ARGUMENT', `${next.name} follows ${shot.name}; fade to black on the cut into it instead (camera.setTransition { shotId: "${next.id}", type: "fade-to-black" }).`);
+    const transitionOut = type === 'cut' ? null : repairTransitionOut({ type, frames });
+    patch(shot.id, row => { const copy = { ...row }; delete copy.transitionOut; return transitionOut ? { ...copy, transitionOut } : copy; });
+    return { affectedIds: [shot.id], summary: `End of ${shotLabel(shot)}: ${transitionOut ? transitionOutWords(transitionOut) : 'a straight cut out'}.`.slice(0, 240), output: { shotId: shot.id, transitionOut } };
   }
 }
 

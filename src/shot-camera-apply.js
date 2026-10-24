@@ -31,4 +31,4 @@ export function applyShotCamera(cam, look, sample) {
 }
 
 // A dissolve or fade around a cut rides the sample too (camera-coverage/transition-sample.js).
-export { withTransition } from "./camera-coverage/transition-sample.js";
+export { withShotTransition, withTransition } from "./camera-coverage/transition-sample.js";

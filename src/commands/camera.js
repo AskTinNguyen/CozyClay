@@ -84,7 +84,8 @@ export function register(registry, ports) {
     if (!shot && !owner().read().length) { context.run('shot.create'); shot = owner().read()[0]; }
     if (!shot) fail('AMBIGUOUS_TARGET', 'No shot owns the playhead; name one with shotId.');
     // Composition words alone re-place the subject in the shot's current stack.
-    const reuse = !args.stack && !parsed.stack.length && composition ? currentTechnique(shot) : null, stack = args.stack ?? (reuse || composition && !parsed.stack.length ? reuse?.stack ?? [{ id: 'medium-shot' }] : parsed.stack);
+    // A call with neither stack nor request (composition alone) reads as an empty request.
+    const asked = parsed?.stack ?? [], reuse = !args.stack && !asked.length && composition ? currentTechnique(shot) : null, stack = args.stack ?? (reuse || composition && !asked.length ? reuse?.stack ?? [{ id: 'medium-shot' }] : asked);
     if (!stack.length) fail('INVALID_ARGUMENT', `No camera technique in "${args.request}"; name one (push-in, low angle, OTS) or a mood (uneasy, epic). Read camera.techniques.`);
     const subjectId = args.subjectId ?? parsed?.subjectId ?? routed?.args.subjectId ?? shot.coverage?.subjectId ?? (visible.some(row => row.id === view.activeCharacterId) ? view.activeCharacterId : visible[0]?.id);
     const rows = visible.map(row => castRow(row, shot, view.targets?.get?.(row.id)?.rig)), found = rows.find(row => row.id === subjectId) ?? fail('STALE_TARGET', `${subjectId} is not a visible character in this scene.`);

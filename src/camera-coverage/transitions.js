@@ -21,6 +21,15 @@ export function repairTransition(value) {
 	return out;
 }
 
+/** The way a sequence ends after a shot (shot.transitionOut): only a fade to black, on a shot nothing cuts out of. */
+export function repairTransitionOut(value) {
+	if (!value || typeof value !== "object" || value.type !== "fade-to-black") return null;
+	return { type: "fade-to-black", frames: Number.isFinite(value.frames) ? Math.max(2, Math.min(TRANSITION_FRAMES_MAX, Math.round(value.frames))) : DEFAULT_FRAMES["fade-to-black"] };
+}
+
+/** Prompt words for a shot that ends the sequence on black. */
+export const transitionOutWords = (value) => (repairTransitionOut(value) ? `this shot fades to black over its last ${repairTransitionOut(value).frames} frames` : null);
+
 const seconds = (frames, fps) => `${Number((frames / (fps || 24)).toFixed(2))}s`;
 
 /** The prompt words for a transition into a shot ("a 12-frame dissolve from the previous shot (0.5s)"). */
@@ -53,6 +62,12 @@ export const transitionTag = (transition) => ({ dissolve: "DISS", "fade-to-black
  */
 export function transitionAt(shots, frame) {
 	const ordered = (shots ?? []).filter((shot) => shot.kind !== "still").sort((a, b) => a.startFrame - b.startFrame);
+	// Fades that need no neighbour: a shot opening from black (the first shot, or one after a gap) and a shot ending on black.
+	for (const [i, shot] of ordered.entries()) {
+		const into = repairTransition(shot.transition), out = repairTransitionOut(shot.transitionOut), opens = i === 0 || ordered[i - 1].endFrame + 1 !== shot.startFrame;
+		if (into?.type === "fade-from-black" && opens && frame >= shot.startFrame && frame < shot.startFrame + into.frames) return { selfWeight: (frame - shot.startFrame + 0.5) / into.frames, otherWeight: 0, type: into.type };
+		if (out && frame <= shot.endFrame && frame > shot.endFrame - out.frames) return { selfWeight: 1 - (frame - (shot.endFrame - out.frames + 1) + 0.5) / out.frames, otherWeight: 0, type: "fade-to-black" };
+	}
 	for (let i = 1; i < ordered.length; i++) {
 		const into = ordered[i], from = ordered[i - 1], t = repairTransition(into.transition);
 		if (!t || !BLENDED.has(t.type) || from.endFrame + 1 !== into.startFrame) continue;

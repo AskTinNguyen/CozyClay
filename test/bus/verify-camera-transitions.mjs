@@ -15,9 +15,10 @@ import { shotCaptureMeta } from '../../src/shot-meta.js';
 import { buildShotPrompt } from '../../src/shot-prompt.js';
 import { keyframePackEntries } from '../../src/keyframe-pack.js';
 import { transitionAt } from '../../src/camera-coverage/transitions.js';
-import { withTransition } from '../../src/shot-camera-apply.js';
+import { withShotTransition, withTransition } from '../../src/shot-camera-apply.js';
 import { lensPlan } from '../../src/camera-capabilities/lens-plan.js';
 import { cameraMoveAt } from '../../src/camera-move.js';
+import { sampleAt } from '../../src/sample-at.js';
 
 const other = { pos: { x: 3, y: 1.6, z: 4 }, yaw: 0.6, pitch: 0, fovDeg: 30 };
 const seed = () => [{ ...createShot('One', 0, 47, [{ id: 'key-a', frame: 0, framing }]), id: 'shot-a' }, { ...createShot('Two', 48, 95, [{ id: 'key-b', frame: 48, framing: other }]), id: 'shot-b' }];
@@ -100,4 +101,55 @@ test('the preview blends the two cameras across a dissolve and falls to black ac
   assert.deepEqual(fadePlan.samples.map(row => row.weight), [1 - 6.5 / 8], 'one camera, the rest black');
   const blurred = lensPlan({ ...camera, blur: [framing, framing] }, { samples: 4 });
   assert.ok(Math.abs(blurred.samples.reduce((sum, row) => sum + row.weight, 0) - 1) < 1e-9 && blurred.samples.length === 5, 'with motion blur the own samples share the incoming weight');
+});
+
+test('review #5: a fade from black opens the first shot; a fade to black ends the last one', () => {
+  const single = [{ ...createShot('Only', 0, 47, [{ id: 'key-a', frame: 0, framing }]), id: 'shot-a', transition: { type: 'fade-from-black', frames: 8 } }];
+  assert.ok(Math.abs(transitionAt(single, 0).selfWeight - 0.5 / 8) < 1e-9, 'the opening shot of a one-shot timeline fades in from black');
+  assert.equal(transitionAt(single, 8), null, 'and is at full brightness after its frames');
+  const sample = shot => ({ ...cameraMoveAt(shot.cameraKeys, { x: 0, z: 0 }, 0), focalMm: 35 });
+  assert.deepEqual(lensPlan(withTransition(sample(single[0]), { shots: single, frame: 3, sampleShot: sample })).samples.map(row => row.weight), [3.5 / 8], 'the preview draws it as one camera over black');
+  const gapped = [seed()[0], { ...seed()[1], startFrame: 60, endFrame: 95, cameraKeys: [{ id: 'key-b', frame: 60, framing: other }], transition: { type: 'fade-from-black', frames: 6 } }];
+  assert.ok(transitionAt(gapped, 60)?.selfWeight < 0.1, 'a shot after a gap opens from black too');
+  const ending = seed().map(row => (row.id === 'shot-b' ? { ...row, transitionOut: { type: 'fade-to-black', frames: 12 } } : row));
+  assert.ok(Math.abs(transitionAt(ending, 95).selfWeight - 0.5 / 12) < 1e-9, 'the last shot ends on black');
+  assert.equal(transitionAt(ending, 83), null);
+  const f = shotsFixture();
+  try {
+    load(f);
+    const set = f.run('camera.setTransition', { shotId: 'shot-b', type: 'fade-to-black', edge: 'out', frames: 12 }, 'agent');
+    assert.equal(set.ok, true, JSON.stringify(set).slice(0, 300));
+    assert.deepEqual(shotOf(f, 'shot-b').transitionOut, { type: 'fade-to-black', frames: 12 });
+    assert.match(set.summary, /fades to black over its last 12 frames/);
+    const refused = f.run('camera.setTransition', { shotId: 'shot-a', type: 'fade-to-black', edge: 'out' }, 'agent');
+    assert.equal(refused.code, 'INVALID_ARGUMENT', 'a shot another cuts out of fades on that cut instead');
+    const reloaded = readShotAuthoring(serializeShotAuthoring({ shots: f.live.current.shots, frameCount: 120 })).state.shots;
+    assert.deepEqual(reloaded.find(row => row.id === 'shot-b').transitionOut, { type: 'fade-to-black', frames: 12 }, 'survives save and reload');
+    const scene = { frameCount: 120, filmback: { sensorId: 'fullFrame', aspectRatio: 16 / 9 }, characters: [] };
+    assert.deepEqual(shotsToOtio(scene, f.live.current.shots).tracks.children[0].children.at(-1).metadata.cozyclay.transitionOut, { type: 'fade-to-black', frames: 12 });
+    assert.match(buildShotPrompt(shotCaptureMeta({ shot: shotOf(f, 'shot-b'), fps: 24 })), /TRANSITION: this shot fades to black over its last 12 frames/);
+    assert.equal(f.run('camera.setTransition', { shotId: 'shot-b', type: 'cut', edge: 'out' }, 'agent').ok, true);
+    assert.equal(shotOf(f, 'shot-b').transitionOut, undefined, 'cut clears it');
+  } finally { f.dispose(); }
+});
+
+test('review #5: a dissolve between a keyed shot and a rail shot blends two cameras both ways', () => {
+  const railPose = { pos: { x: -3, y: 1.5, z: 2 }, yaw: -0.9, pitch: 0, fovDeg: 30 };
+  const rail = { ...createShot('Rail', 48, 95), id: 'shot-b', camera: { mode: 'rail', cameraRail: [{ x: -3, z: 2 }, { x: -3, z: -2 }], railFollow: { mode: 'range', startFrame: 0, endFrame: 47 }, craneHeight: { points: [{ t: 0, height: 1.5 }, { t: 1, height: 1.5 }] } }, cameraKeys: [] };
+  const keyed = { ...createShot('Keys', 0, 47, [{ id: 'key-a', frame: 0, framing }]), id: 'shot-a' };
+  // The playback scene carries the rail's camera track (useShotCameraTracks), timeline-indexed.
+  const scene = { frameCount: 120, subject: { x: 0, z: 0 }, cameraTrack: Array.from({ length: 120 }, () => ({ ...railPose, pos: { ...railPose.pos } })), filmback: { sensorId: 'fullFrame', aspectRatio: 16 / 9 } };
+  for (const [label, shots] of [['keyed into rail', [keyed, { ...rail, transition: { type: 'dissolve', frames: 12 } }]],
+    ['rail into keyed', [{ ...rail, startFrame: 0, endFrame: 47 }, { ...keyed, startFrame: 48, endFrame: 95, cameraKeys: [{ id: 'key-a', frame: 48, framing }], transition: { type: 'dissolve', frames: 12 } }]]]) {
+    for (const frame of [45, 50]) {
+      const own = sampleAt(scene, shots.find(row => frame >= row.startFrame && frame <= row.endFrame), frame).camera;
+      assert.ok(own, `${label} @${frame}: the shot's own camera samples`);
+      const blended = withShotTransition(own, scene, shots, frame);
+      assert.ok(blended.transition?.other?.pos, `${label} @${frame}: the far camera samples too (not null): ${JSON.stringify(blended.transition)}`);
+      assert.ok(Math.abs(blended.transition.selfWeight + blended.transition.otherWeight - 1) < 1e-9, `${label} @${frame}: full exposure, not a fade toward black`);
+      const poses = lensPlan(blended).samples.map(row => row.pose.pos.x);
+      assert.equal(poses.length, 2, `${label} @${frame}: two sub-renders`);
+      assert.ok(poses.includes(railPose.pos.x) && poses.includes(framing.pos.x), `${label} @${frame}: one from the rail, one from the keys`);
+    }
+  }
 });
