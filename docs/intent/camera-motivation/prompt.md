@@ -1,8 +1,8 @@
 # Camera Motivation
 
-- Rev: 1
-- Status: planned
-- Waits for: `director-evals` completed (its eval set takes this intent's scenarios). Second in the cinematic-atlas plan.
+- Rev: 2
+- Status: active
+- Waits for: nothing (`director-evals` completed in #10). Runs beside `group-coverage`, so it does not edit `src/commands/camera-coverage.js` or `src/camera-coverage/cut-rules.js`.
 - Area: Camera and Shots
 - Owner: TinNguyen
 - Skill: `none`
@@ -33,7 +33,7 @@ CozyClay already measures every move (`measureShotCamera` in `src/shot-prompt-en
   - the camera's travel follows the subject's travel (follow cam, tracking, mount) within tolerance.
 
   Holds and static framings are never flagged. Source: orchestrator.
-- D3 (rev 1): authored story beats are new document data. That is a product call, so F-1 puts it to the owner; the acceptance below assumes the recommended option.
+- D3 (rev 2): authored story beats are new document data (F-1 option (a)). Decided by the orchestrator under the contract's away rule (L-3); the owner can reverse it. Source: orchestrator.
 
 ## Acceptance
 
@@ -60,3 +60,4 @@ CozyClay already measures every move (`measureShotCamera` in `src/shot-prompt-en
 ## Changelog
 
 - rev 1 (2026-10-24): written as a planned intent from the cinematic-atlas review (L-1, L-2).
+- rev 2 (2026-10-24): F-1 resolved as option (a) under the away rule (D3); active beside `group-coverage`.
