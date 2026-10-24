@@ -2,7 +2,7 @@
 
 - Working under rev: 1
 - Worker: cloud worker agent (director-evals)
-- Current step: 3. repository gates (A8)
+- Current step: none (reported)
 - Next step: report
 - PR: orchestrator opens on report
 
@@ -17,7 +17,7 @@
 | A5 | met | Step 1: 12 core failures fixed (list below); `core: 74/74`; existing resolver verify files pass (step 1) |
 | A6 | met | Step 2: `node mcp/verify-director-evals.mjs` exit 0, "67 passed, 0 failed": 65 core rows (all but composition rows) through `apply_camera_technique` 49, `cover_scene` 9, `check_cuts` 7, each `resolved` line equal to the runner's `routeCameraRequest` (action, ids, pattern, frame, matched words, confidence) and to the row |
 | A7 | ready for review | `test/fixtures/director-evals/README.md` (row format, `apply` measures, adding rows, when stretch moves to core) |
-| A8 | open | |
+| A8 | met under the known exception, with F-2 | Step 3: `npm run lint` exit 0 (0 new / 0 violations / 0 regressions), `npm run build` exit 0, suite `SUITE-ALL: 459 files, 456 passed, 3 failed` vs base `SUITE-ALL: 454 files, 451 passed, 3 failed`, the same three files on both (two timing checks, one environmental: F-2); `node tools/run-tests.mjs --jobs 4` stops at the known exitcar CPU check |
 | A9 | ready for review | `CHANGELOG.md` Unreleased (Director evals line); `mcp/README.md` "Camera requests in words" (the `resolved` line, `output.matched` / `output.confidence`, the non-camera refusal) |
 
 ## Steps
@@ -49,5 +49,14 @@
 - `mcp/verify-director-evals.mjs` (new, registered in `tools/run-tests.mjs`): the eval cast in memory, then every core row except composition rows (in memory there is no shot to compose) through its tool.
 - Docs: `test/fixtures/director-evals/README.md` (A7), `CHANGELOG.md` Unreleased and `mcp/README.md` "Camera requests in words" (A9).
 - Evidence (worktree): `node mcp/verify-director-evals.mjs` exit 0 "67 passed, 0 failed" ("at least 10 scenarios ran through the MCP tools (apply_camera_technique 49, cover_scene 9, check_cuts 7)"); `mcp/verify.mjs` exit 0 "all checks passed"; `mcp/verify-tool-annotations.mjs` exit 0 "PASS G005 tools/list safety contract (32 tools; deterministic order)"; `mcp/verify-camera-techniques.mjs` "14 passed, 0 failed"; `mcp/verify-camera-coverage.mjs` "14 passed, 0 failed"; `mcp/verify-render-prompt-sequence.mjs` "18 passed, 0 failed".
+
+### Step 3: repository gates (A8)
+
+- `npm run lint`: exit 0; "knip: 138 findings, 0 new, 1 fixed (baseline 139)", "loc: 72 files over 250 (baseline 72), 0 violations", "eslint: 396 errors across 20 rules (baseline 403), 0 regressions". No baseline touched.
+- `npm run build`: exit 0, "built in 3.89s".
+- `node /home/claude/local-tools/suite-all.mjs --jobs 4` (branch at ba86f382, no dev server): `SUITE-ALL: 459 files, 456 passed, 3 failed`: `test/motion3/verify-motion3-exitcar.mjs` ("compile + QA stay fast (< 3 s CPU) — 5251 ms CPU"), `test/motion3/verify-motion3-repair.mjs` ("exit car, hips sunk: under 10 s — 32843 ms"), `test/verify-agent-login.mjs` ("a connected provider is listed first", environmental, F-2).
+- Base main 38111cb (`/home/claude/local-tools/base-main-38111cb.txt`): `SUITE-ALL: 454 files, 451 passed, 3 failed`, the same three files and checks. The five extra files on the branch are main's camera-polish tests and this intent's two verify files, all passing.
+- `node tools/run-tests.mjs --jobs 4`: exit 1, "Error: test/motion3/verify-motion3-exitcar.mjs failed with exit code 1" (stops at the first failure; the known CPU-budget check). Both director-evals files passed in that run ("67 passed, 0 failed" for the MCP one).
+- Not run: a browser QA (no UI change in this intent).
 
 ## Reconciliations
