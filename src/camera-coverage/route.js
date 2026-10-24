@@ -36,7 +36,7 @@ const techniqueConfidence = (matched) => (matched.some((row) => row.via === "moo
 
 /**
  * A request -> { action, args, via, matched, confidence, resolved?, dropped?, reason? }.
- * action is camera.applyTechnique, camera.cover, camera.checkCuts, or "none" (no camera action; reason says why).
+ * action is camera.applyTechnique, camera.cover, camera.checkCuts, camera.checkCoverage, camera.setLine, or "none" (no camera action; reason says why).
  * @param {string} text
  * @param {{cast?: Array<{id:string,name?:string}>}} [options]
  */

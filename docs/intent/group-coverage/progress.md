@@ -1,9 +1,9 @@
 # Group Coverage: Progress
 
 - Working under rev: 1
-- Worker: none yet (planned)
-- Current step: none
-- Next step: start when the `Waits for` line in prompt.md is met
+- Worker: cloud worker agent (group-coverage)
+- Current step: A1 explicit line (`camera.setLine`, D1 pair choice in the cut rules)
+- Next step: A2 group patterns
 - PR: none yet
 
 ## Acceptance
