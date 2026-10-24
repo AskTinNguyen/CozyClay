@@ -3,8 +3,8 @@
 - Working under rev: 1
 - Worker: cloud worker agent (intensity-curve)
 - Current step: done; every acceptance row met or ready for review
-- Next step: orchestrator review of A7 docs; PR
-- PR: none yet
+- Next step: none; squash-merge after Codex review
+- PR: #15
 
 ## Acceptance
 
@@ -16,7 +16,7 @@
 | A4 | met (gate) | `node test/bus/verify-sequence-prompt.mjs` -> `# pass 5 # fail 0` (`STRUCTURE: intensity builds from 0.20 at beat 1 to a peak of 0.52 at beat 4 on 'the letter', then releases to 0.49 by beat 5.`, byte-identical); strip image dimensions in `test/verify-intensity-curve.mjs` (`PASS A4 strip image: 960x160, 400x80`) |
 | A5 | met (gate) | `node mcp/verify-intensity-curve.mjs` -> `12 passed, 0 failed`; `node test/verify-director-evals.mjs` -> `structure: core 8/8`, `core: 99/99`; `node mcp/verify-director-evals.mjs` -> `87 passed, 0 failed`; `cclay live run camera.checkStructure` in the A3 QA run |
 | A6 | met (gate) | step 3: `npm run lint` 0 new / 0 violations / 0 regressions; `npm run build` built; `SUITE-ALL: 466 files, 464 passed, 2 failed`, only the known CPU-timing checks (exitcar, repair) |
-| A7 | ready for review | `mcp/README.md` (35 tools, `check_structure` row, Intensity curve section), `docs/agent-cli.md` (Intensity curve), `docs/studio-ui-ia.md` (Structure section, Intensity strip), `CHANGELOG.md` Unreleased > Camera, `test/fixtures/director-evals/README.md` (structure.json, camera.checkStructure); step 2 |
+| A7 | met (review R1) | `mcp/README.md` (36 tools after the group-coverage merge, `check_structure` row, Intensity curve section), `docs/agent-cli.md` (Intensity curve), `docs/studio-ui-ia.md` (Structure section, Intensity strip), `CHANGELOG.md` Unreleased > Camera, `test/fixtures/director-evals/README.md` (structure.json, camera.checkStructure); step 2 |
 
 ## Steps
 
@@ -38,3 +38,7 @@
 - The strip draws with 2+ shots; the Shots track grows by 40 px only while it is drawn (CSS `:has`), so the timeline is unchanged for a single shot. The component toggles are page-wide (one strip).
 
 ## Reconciliations
+
+## Reviews
+
+- R1 (cloud orchestrator, 2026-10-24, at 0f1f34c6): opened `proofs/strip-flat.png`. It shows four SRS OTS shots with the Intensity strip shaded and tagged FLAT across them, a level combined step, and the component toggles (size on). `proofs/strip-master-coverage.png` shows five MASTER shots with the curve stepping up into the shot holding "the letter" beat (a dashed tick), with the size and cutting toggles on. A7: `mcp/README.md`, `docs/agent-cli.md`, `docs/studio-ui-ia.md`, `CHANGELOG.md` and the director-evals README describe `camera.checkStructure`, `check_structure`, the Structure section and the strip, matching the code. After merging main 491c7dac, the worker reran the gates: director evals core 109/109, SUITE-ALL 468 files, 466 passed, 2 failed (the two known CPU-timing checks).
