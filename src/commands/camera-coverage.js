@@ -1,12 +1,14 @@
 // Camera coverage as Studio actions (camera-coverage): camera.cover lays a
 // coverage pattern over a frame range as one undo entry (the range becomes one
-// shot through shot.create / shot.setRange / shot.split, each shot is named
-// and framed through camera.applyTechnique), camera.checkCuts reports the
+// shot, cut at each pattern cut with cuts.js cutAtFrame, the function
+// shot.split runs, because shot.split cuts at the live playhead, which a
+// command cannot move synchronously in the studio; each shot is named and
+// framed through shot.rename and camera.applyTechnique), camera.checkCuts reports the
 // editing rules at every cut (read only), and camera.setTransition stores the
 // transition into a shot. Registered by commands/camera.js.
-import { shotAtFrame } from '../cuts.js';
+import { createShot, cutAtFrame, shotAtFrame } from '../cuts.js';
 import { checkCuts, CUT_RULES } from '../camera-coverage/cut-rules.js';
-import { castAt } from '../camera-coverage/cut-geometry.js';
+import { castAt, lineSide, shotCameraAt } from '../camera-coverage/cut-geometry.js';
 import { planCoverage } from '../camera-coverage/plan.js';
 import { COVERAGE_PATTERN_IDS, coveragePattern } from '../camera-coverage/patterns.js';
 import { resolveCameraRequest } from '../camera-coverage/resolve.js';
@@ -44,7 +46,8 @@ export function registerCoverage(registry, ports, { castRow }) {
   const placeAt = (row, shot, at) => castAt(ports.sampleStateAt?.(at)?.characters?.find(entry => entry.id === row.id) ?? row, shot, at);
   const scene = () => ({ cast: visible(), filmback: ports.readView().filmback, placeAt });
   const patch = (shotId, update) => owner().write(rows => rows.map(row => (row.id === shotId ? update(row) : row)));
-  const seek = (target) => { const { selection, view } = ports.readView(); ports.publishView({ selection, view: { ...view, frame: target } }); };
+  // A cut at a frame of the shot that holds it (cuts.js cutAtFrame keeps the upstream id); the keys are replaced when the shot is framed.
+  const cutAt = (frame) => { const host = shotAtFrame(owner().read(), frame); if (host && host.startFrame < frame) owner().write(rows => cutAtFrame(rows, host.id, frame, host.cameraKeys[0]?.framing ?? { pos: { x: 0, y: 1.6, z: 5 }, yaw: 0, pitch: 0, fovDeg: 40 })); };
   const issueWarnings = cuts => cuts.flatMap(cut => cut.issues.map(issue => ({ code: RULE_CODES[issue.rule], id: cut.to, message: `Cut at ${cut.cutFrame}: ${issue.message}`.slice(0, 120) }))).slice(0, 10);
 
   registry.register({ ...coverageDeclarations[0], target: args => args.shotId,
@@ -66,23 +69,30 @@ export function registerCoverage(registry, ports, { castRow }) {
     return fail('AMBIGUOUS_TARGET', 'No shot owns the playhead; give range { startFrame, endFrameExclusive } or shotId.');
   }
 
+  /** Which side of the A-B line the shot just before the range keeps (+1 / -1), or 0 when there is none to match. */
+  function neighbourSide(range, people, aId, bId) {
+    const before = owner().read().find(row => row.endFrame === range.startFrame - 1 && row.kind !== 'still'), a = people.find(row => row.id === aId);
+    const b = people.find(row => row.id === bId) ?? people.filter(row => row.id !== aId).sort((p, q) => Math.hypot(p.x - a.x, p.z - a.z) - Math.hypot(q.x - a.x, q.z - a.z))[0];
+    const camera = before && a && b && shotCameraAt(before, before.endFrame, scene());
+    if (!camera) return 0;
+    const side = lineSide(camera.pos, castAt(a, before, before.endFrame), { x: b.x - a.x, z: b.z - a.z });
+    return Math.abs(side) > 0.2 ? Math.sign(side) : 0;
+  }
+
   /** Make [start, end] exactly one clip shot through the shot commands, and answer its id. */
   function oneShot(range, context) {
     const { startFrame, endFrame } = range, inside = () => owner().read().filter(row => row.startFrame <= endFrame && row.endFrame >= startFrame);
     const overlapping = inside(), container = overlapping.length === 1 && overlapping[0].startFrame <= startFrame && overlapping[0].endFrame >= endFrame ? overlapping[0] : null;
     if (container) {
-      if (container.startFrame < startFrame) { seek(startFrame); context.run('shot.split', { shotId: container.id }); }
-      const piece = shotAtFrame(owner().read(), startFrame);
-      if (piece.endFrame > endFrame) { seek(endFrame + 1); context.run('shot.split', { shotId: piece.id }); }
+      cutAt(startFrame);
+      cutAt(endFrame + 1);
       return shotAtFrame(owner().read(), startFrame).id;
     }
     const across = overlapping.find(row => row.startFrame < startFrame || row.endFrame > endFrame);
     if (across) fail('INVALID_RANGE', `The range ${startFrame}-${endFrame} cuts across ${shotLabel(across)}; cover inside one shot or over whole shots.`);
     for (const row of overlapping) context.run('shot.remove', { shotId: row.id });
-    seek(startFrame);
-    context.run('shot.create');
-    const created = shotAtFrame(owner().read(), startFrame) ?? fail('TARGET_NOT_READY', `No shot could be laid at frame ${startFrame}.`);
-    context.run('shot.setRange', { shotId: created.id, range: { startFrame, endFrameExclusive: endFrame + 1 } });
+    const created = createShot(`Shot ${owner().read().length + 1}`, startFrame, endFrame);
+    owner().write(rows => [...rows, created].sort((a, b) => a.startFrame - b.startFrame));
     return created.id;
   }
 
@@ -97,11 +107,11 @@ export function registerCoverage(registry, ports, { castRow }) {
     if (range.endFrame >= frameCount || range.endFrame < range.startFrame) fail('INVALID_RANGE', `The range ${range.startFrame}-${range.endFrame} is outside the ${frameCount}-frame timeline.`);
     const container = shotAtFrame(owner().read(), range.startFrame), rows = people.map(row => castRow(row, container, view.targets?.get?.(row.id)?.rig));
     let plan;
-    try { plan = planCoverage(pattern, { cast: rows, subjects: [first, castIds[1]], range, filmback: view.filmback, count: args.shots, cuts: args.cuts, beat: args.beat, side: args.side, composition: args.composition }); }
+    const lineSign = args.side ? 0 : neighbourSide(range, people, first, castIds[1]);
+    try { plan = planCoverage(pattern, { cast: rows, subjects: [first, castIds[1]], range, lineSign, filmback: view.filmback, count: args.shots, cuts: args.cuts, beat: args.beat, side: args.side, composition: args.composition }); }
     catch (error) { fail(error.code ?? 'INVALID_ARGUMENT', error.message); }
-    const playhead = view.view?.frame ?? ports.state().frame;
     const laidId = oneShot(range, context);
-    for (const shot of plan.shots.slice(1)) { seek(shot.startFrame); context.run('shot.split', { shotId: shotAtFrame(owner().read(), shot.startFrame).id }); }
+    for (const shot of plan.shots.slice(1)) cutAt(shot.startFrame);
     const laid = [], warnings = [];
     for (const shot of plan.shots) {
       const target = shotAtFrame(owner().read(), shot.startFrame);
@@ -111,7 +121,6 @@ export function registerCoverage(registry, ports, { castRow }) {
       for (const warning of applied.warnings ?? []) if (warning.code !== 'TECHNIQUE_NOTE') warnings.push({ ...warning, id: target.id });
       laid.push({ id: target.id, name: shot.name, startFrame: shot.startFrame, endFrame: shot.endFrame, subjectId: shot.subjectId, technique: applied.checks?.technique, move: applied.checks?.move });
     }
-    seek(playhead);
     const ids = new Set(laid.map(row => row.id)), cuts = checkCuts(owner().read(), scene()).cuts.filter(cut => ids.has(cut.from) || ids.has(cut.to));
     const issues = cuts.reduce((sum, cut) => sum + cut.issues.length, 0), name = coveragePattern(plan.pattern).name;
     return { affectedIds: [laidId, ...ids].filter((value, i, all) => all.indexOf(value) === i),

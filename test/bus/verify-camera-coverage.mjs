@@ -106,6 +106,11 @@ test('ranges: inside a shot the edges split off; an empty timeline gets a shot; 
     load(f, [seed(0, 100), { ...createShot('Next', 101, 191), id: 'shot-b' }]);
     const across = f.run('camera.cover', { pattern: 'dialogue-singles', range: { startFrame: 50, endFrameExclusive: 150 } }, 'agent');
     assert.equal(across.code, 'INVALID_RANGE', 'a range that cuts across two shots is refused');
+    load(f, [seed(0, 95), { ...createShot('Next', 96, 335), id: 'shot-b' }], 400);
+    assert.equal(f.run('camera.cover', { pattern: 'shot-reverse-shot', cast: ['actor-a', 'actor-b'], shotId: 'shot-a', side: 'left' }, 'agent').ok, true);
+    const next = f.run('camera.cover', { pattern: 'master-coverage', cast: ['actor-a', 'actor-b'], shotId: 'shot-b' }, 'agent');
+    assert.equal(next.ok, true, JSON.stringify(next).slice(0, 300));
+    assert.equal(checkCuts(shotsOf(f), sceneOf(f)).issueCount, 0, 'a pattern laid after another keeps its side of the line, so the seam between them cuts clean');
   } finally { f.dispose(); }
 });
 

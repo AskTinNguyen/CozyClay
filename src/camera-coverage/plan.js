@@ -36,7 +36,7 @@ function cameraEnds(plan) {
 /**
  * @param {string} patternId
  * @param {object} ctx { cast: visible rows { id, name, x, z, rot, height, eye? }, subjects: [aId, bId?], range: { startFrame, endFrame },
- *   filmback, count?, cuts?, beat?: "insert"|"close-up", side?: "left"|"right" (first shot), composition? }
+ *   filmback, count?, cuts?, beat?: "insert"|"close-up", side?: "left"|"right" (first shot), lineSign?: +1|-1 (keep that side of the A-B line), composition? }
  */
 export function planCoverage(patternId, ctx) {
 	const pattern = coveragePattern(patternId) ?? fail("INVALID_ARGUMENT", `Unknown coverage pattern "${patternId}".`);
@@ -56,13 +56,14 @@ export function planCoverage(patternId, ctx) {
 	const compile = (row, range, side) => compileStack(row.stack, { subject: row.who === 1 ? b : a, cast: ctx.cast, shot: range, filmback: ctx.filmback,
 		...(ctx.composition && !row.stack.some((item) => ["two-shot", "master-shot"].includes(item.id)) ? { composition: ctx.composition } : {}) }, { side });
 	const sides = (plan) => cameraEnds(plan).map((point) => lineSide(point, line.from, line.direction));
-	let wanted = 0;
+	// lineSign: the side of the A-B line the neighbouring shot already holds (+1 / -1), so a pattern laid next to it keeps that side.
+	let wanted = ctx.lineSign ? Math.sign(ctx.lineSign) : 0;
 	const shots = rows.map((row, i) => {
 		const range = ranges[i], subject = row.who === 1 ? b : a, first = i === 0 ? ctx.side ?? "right" : "right";
-		const stacks = [row.stack, ...(i === 0 ? [] : row.alternates ?? [])];
+		const stacks = [row.stack, ...(i === 0 && !wanted ? [] : row.alternates ?? [])];
 		const tries = stacks.flatMap((stack) => [first, first === "right" ? "left" : "right"].map((side) => ({ side, stack, plan: compile({ ...row, stack }, range, side) })));
 		let pick = tries[0];
-		if (i === 0) wanted = Math.sign(sides(pick.plan).reduce((sum, value) => sum + value, 0)) || 1;
+		if (i === 0 && !wanted) wanted = Math.sign(sides(pick.plan).reduce((sum, value) => sum + value, 0)) || 1;
 		else {
 			const fits = (entry) => sides(entry.plan).every((value) => Math.sign(value) === wanted || Math.abs(value) <= 0.2);
 			pick = tries.find(fits) ?? tries.sort((p, q) => sides(q.plan).reduce((s, v) => s + v * wanted, 0) - sides(p.plan).reduce((s, v) => s + v * wanted, 0))[0];
