@@ -1,7 +1,7 @@
 # Director Packet
 
 - Rev: 1
-- Status: planned
+- Status: active
 - Waits for: `group-coverage` completed (the plan draws every pair's line). Sixth in the cinematic-atlas plan. It includes the outputs of `camera-motivation`, `depth-staging` and `intensity-curve` when they have landed, and leaves those sections out otherwise.
 - Area: Export
 - Owner: TinNguyen
