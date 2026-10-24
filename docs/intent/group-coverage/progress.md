@@ -4,7 +4,7 @@
 - Worker: cloud worker agent (group-coverage)
 - Current step: done; every item met or ready for review (A7 suite line below)
 - Next step: orchestrator review (A4 ui:shot, A8 docs), PR
-- PR: none yet
+- PR: https://github.com/AskTinNguyen/CozyClay/pull/14
 
 ## Acceptance
 
@@ -13,11 +13,11 @@
 | A1 | met (gate) | `node test/verify-camera-cut-rules.mjs` -> `10 checks passed`, incl. "three people: the line is the pair the shots are about...", "...when the pair cannot be told the report says so...; two authored pairs are a line change", "three people, D2: a line change through a neutral shot or through an in-shot move is legal; the same cut straight across is flagged", "zero false flags: the group patterns over five blockings and two ranges cut clean". `camera.setLine` in `test/bus/verify-group-coverage.mjs` ok 5. Commit 3f0c61a5 |
 | A2 | met (gate) | `node test/bus/verify-group-coverage.mjs` -> ok 1-5 (triangle 13 shots, group-singles 3 and 6, branching 3 branches, refusals, setLine + undo); shot counts, ranges, stacks, sides per pair, one undo entry, 0 cut flags. Commit 3f0c61a5 |
 | A3 | met (gate) | `node test/verify-camera-coverage-check.mjs` -> `6 checks passed` (complete: triangle, group-singles, branching x2 and x3, master-coverage; gapped: no master, one size, line change without bridge, pair from both sides, branch missing/moved setup; every gap a technique stack; bus `camera.checkCoverage` read only). Commit 3f0c61a5 |
-| A4 | met (ui:qa); ui:shot ready for review | `QA_CHROME_FLAGS='--no-sandbox --proxy-server=http://127.0.0.1:8444 --ignore-certificate-errors' COZYCLAY_LIVE_PORT=5309 CDP_PORT=9309 QA_URL=http://127.0.0.1:5209/app/ CHROME_PATH=/opt/pw-browsers/chromium QA_SHOT_DIR=docs/intent/group-coverage/proofs node tools/qa-browser.mjs -- node test/verify-group-coverage-browser.mjs` exit 0, "group coverage browser QA passed" (after the main merge too). Proofs: `docs/intent/group-coverage/proofs/coverage-group-controls.png`, `docs/intent/group-coverage/proofs/contact-triangle-dialogue.png`. Commits 15a15b5c, df04d8b5 |
+| A4 | met (ui:qa, ui:shot reviewed R1) | `QA_CHROME_FLAGS='--no-sandbox --proxy-server=http://127.0.0.1:8444 --ignore-certificate-errors' COZYCLAY_LIVE_PORT=5309 CDP_PORT=9309 QA_URL=http://127.0.0.1:5209/app/ CHROME_PATH=/opt/pw-browsers/chromium QA_SHOT_DIR=docs/intent/group-coverage/proofs node tools/qa-browser.mjs -- node test/verify-group-coverage-browser.mjs` exit 0, "group coverage browser QA passed" (after the main merge too). Proofs: `docs/intent/group-coverage/proofs/coverage-group-controls.png`, `docs/intent/group-coverage/proofs/contact-triangle-dialogue.png`. Commits 15a15b5c, df04d8b5 |
 | A5 | met (gate) | `node mcp/verify-camera-coverage.mjs` -> `21 passed, 0 failed`; `node test/verify-director-evals.mjs` -> core 86/86 (10 new core rows: 7 coverage, 3 cuts); `node mcp/verify-director-evals.mjs` -> `79 passed, 0 failed`; `node test/verify-camera-coverage-resolve.mjs` -> `5 checks passed`; MCP 33 tools (`mcp/verify.mjs`, tool-annotations, tool-handlers). Commit 9554e8b0 |
 | A6 | met (gate) | `node test/bus/verify-sequence-prompt.mjs` -> ok 4 "with three cast the continuity line names each pair's line, byte-identical across runs". Commit 9554e8b0 |
 | A7 | met (gate, known exception) | lint exit 0 (0 new / 0 violations / 0 regressions), build exit 0, `SUITE-ALL: 462 files, 459 passed, 3 failed`: the two timing checks plus a spawn timeout in verify-final-suite-compatibility that passes alone (Steps 6) |
-| A8 | ready for review | `mcp/README.md` (33 tools, cover_scene group cast/branches, check_coverage row, line paragraph), `docs/agent-cli.md` (examples, group paragraph), `docs/studio-ui-ia.md` (cast checkboxes, Branches, Coverage check), `CHANGELOG.md` Unreleased > Camera. Commit e3e34a1e |
+| A8 | met (review R1) | `mcp/README.md` (33 tools, cover_scene group cast/branches, check_coverage row, line paragraph), `docs/agent-cli.md` (examples, group paragraph), `docs/studio-ui-ia.md` (cast checkboxes, Branches, Coverage check), `CHANGELOG.md` Unreleased > Camera. Commit e3e34a1e |
 
 ## Steps
 
@@ -40,3 +40,7 @@
 - Merge risks for camera-motivation: `test/bus/verify-command-registry.mjs` count, director-evals CAST (adds sela) and apply harness, `src/studio-agent-protocol.js` checks fields, `tools/run-tests.mjs` lists.
 
 ## Reconciliations
+
+## Reviews
+
+- R1 (cloud orchestrator, 2026-10-24, at d66e585d): opened `proofs/contact-triangle-dialogue.png`. It shows 13 frames: TRI 1 master, then OTS and singles for the Mara-Joon pair (camera left), the Joon-Sela pair (camera right) and the Sela-Mara pair (camera left). Each pair's cameras stay on one side of that pair's line, and the over-the-shoulder frames show the near shoulder. `proofs/coverage-group-controls.png` shows the Coverage section with Triangle Dialogue and Cast (3-3) Mara, Joon and Sela checked. Its receipt reads "Laid Triangle Dialogue over 0-191 ... every cut clean", the Coverage check reads "Enough to edit: 14 shots, 3 cast", Cut shows "13 cuts, 0 flagged", and the timeline has the 13 TRI shot blocks. The suite's third failure (`verify-final-suite-compatibility`, spawnSync ETIMEDOUT under load) passes run alone (`# fail 0`, rerun by the orchestrator). A8: `mcp/README.md`, `docs/agent-cli.md`, `docs/studio-ui-ia.md` and `CHANGELOG.md` are updated. F-1 is resolved (see findings).

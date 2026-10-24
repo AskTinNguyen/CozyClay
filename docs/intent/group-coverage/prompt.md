@@ -1,7 +1,7 @@
 # Group Coverage
 
 - Rev: 1
-- Status: active
+- Status: completed
 - Waits for: `director-evals` completed. Third in the cinematic-atlas plan. It may run beside `camera-motivation` only if neither edits `src/commands/camera-coverage.js` or `src/camera-coverage/cut-rules.js`; otherwise it runs after it.
 - Area: Camera and Shots
 - Owner: TinNguyen
@@ -65,3 +65,4 @@ The cut checks also guess their line: `principals()` in `src/camera-coverage/cut
 ## Changelog
 
 - rev 1 (2026-10-24): written as a planned intent from the cinematic-atlas review (L-1, L-2).
+- rev 1 (2026-10-24): completed; squash-merged into `main` by the cloud orchestrator under `after-proof` (#14).
