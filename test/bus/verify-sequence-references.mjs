@@ -58,7 +58,7 @@ test('the sequence pack holds the brief, the manifest and every file it lists', 
     }
     const roles = (role) => manifest.entries.filter((entry) => entry.role === role);
     assert.equal(roles('first-frame').length, 5); assert.equal(roles('last-frame').length, 5); assert.equal(roles('composition-guide').length, 5);
-    assert.deepEqual(roles('character-sheet').map((entry) => [entry.subject, entry.file, entry.beats]), [['Mara', 'references/cast-mara.png', [1, 2, 4]]]);
+    assert.deepEqual(roles('character-sheet').map((entry) => [entry.subject, entry.file, entry.beats]), [['Mara', 'references/cast-actor-a-mara.png', [1, 2, 4]]]);
     assert.deepEqual(roles('set').map((entry) => [entry.file, entry.beats]), [['references/set.jpg', [1, 2, 3, 4, 5]]]);
     assert.deepEqual(manifest.missing, [{ role: 'character-sheet', subject: 'Joon', fix: 'add a character sheet for Joon in the cast inspector' }], 'Joon has no sheet: listed as missing, with how to add one');
     assert.match(await zip.read(roles('composition-guide')[0].file), /^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg" viewBox="0 0 640 360"[^]*Mara at 0\.\d+ across/, 'the guide draws the measured eye point');
@@ -81,5 +81,19 @@ test('a single shot pack carries its one-beat brief and a manifest of its own fi
     assert.deepEqual(manifest.missing.map((row) => row.subject ?? row.role), ['Mara', 'Joon', 'set']);
     assert.match(await zip.read('sequence-prompt.txt'), /^SEQUENCE: Rooftop: 1 shot, 1\.58s at 24 fps, 16:9\.$/m);
     console.log(`PASS A4 shot pack: ${zip.listed.join(', ')}`);
+  } finally { f.dispose(); await rm(dir, { recursive: true, force: true }); }
+});
+
+test('review: two cast names that slug alike (non-Latin) each get their own sheet path and manifest entry', async () => {
+  const { f, document } = coveredSequence(), dir = await mkdtemp(join(tmpdir(), 'cozyclay-seq-names-'));
+  try {
+    const doc = { ...document, cast: document.cast.map((row, i) => ({ ...row, subject: i === 0 ? '민수, 빨간 코트' : '지연', identityImage: PNG_URL })) };
+    const brief = buildSequencePrompt(doc), zip = await openZip(dir, 'names.zip', packEntries(doc, brief));
+    const sheets = brief.references.entries.filter((entry) => entry.role === 'character-sheet');
+    assert.deepEqual(sheets.map((entry) => [entry.subject, entry.file]), [['민수', 'references/cast-actor-a.png'], ['지연', 'references/cast-actor-b.png']]);
+    assert.equal(new Set(zip.listed).size, zip.listed.length, 'no two zip entries share a path');
+    for (const entry of sheets) assert.ok(zip.listed.includes(entry.file), entry.file);
+    assert.match(zip.tested, /No errors detected/);
+    console.log(`PASS A4 review: non-Latin sheets ${sheets.map((entry) => `${entry.subject} -> ${entry.file}`).join(', ')}`);
   } finally { f.dispose(); await rm(dir, { recursive: true, force: true }); }
 });

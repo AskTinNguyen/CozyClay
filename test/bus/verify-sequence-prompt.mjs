@@ -9,6 +9,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { coveredSequence } from './sequence-fixture.mjs';
+import { createShot } from '../../src/cuts.js';
 import { buildSequencePrompt, shotsInRange, timecode } from '../../src/shot-prompt-engine/sequence.js';
 import { classifyKeys } from '../../src/camera-techniques/readback.js';
 import { currentTechnique } from '../../src/camera-techniques/storage.js';
@@ -76,5 +77,20 @@ test('a range picks its shots and renumbers its beats from 1', () => {
     assert.match(byId.text, /^SEQUENCE: Rooftop: 1 shot, /);
     assert.equal(buildSequencePrompt({ ...document, shots: [] }).text, 'SEQUENCE: no shots in this range.');
     console.log('PASS A1 ranges: from/to and shotIds');
+  } finally { f.dispose(); }
+});
+
+test('review: timecodes are delivery time, so a gap between shots does not show up in them', () => {
+  const { f, document } = coveredSequence();
+  try {
+    const framing = { pos: { x: 2, y: 1.6, z: 5 }, yaw: 0, pitch: 0, fovDeg: 40 };
+    const shots = [{ ...createShot('A', 0, 23, [{ id: 'a', frame: 0, framing }]), id: 'g1' }, { ...createShot('B', 120, 143, [{ id: 'b', frame: 120, framing }]), id: 'g2' }];
+    const out = buildSequencePrompt({ ...document, shots }, { profile: 'kling-3' });
+    assert.match(out.text, /^SEQUENCE: Rooftop: 2 shots, 2s at 24 fps, 16:9\.$/m, 'the header sums the shots');
+    assert.match(out.text, /^Shot 1, 1s 00:00:00:00-00:00:00:23 \(0s-1s, 24 frames\) A$/m);
+    assert.match(out.text, /^Shot 2, 1s 00:00:01:00-00:00:01:23 \(1s-2s, 24 frames\) B$/m, 'the second shot follows the first in the delivered video');
+    assert.equal(out.seconds, 2); assert.equal(out.clips.length, 1, 'one 2 s clip');
+    assert.deepEqual(out.warnings.map((row) => row.message), ['Clip of beats 1-2 runs 2s, under the 3s Kling 3.0 minimum.'], 'the limits read the same 2 s');
+    console.log(`PASS A1 review delivery timecodes: ${out.text.split('\n').filter((line) => line.startsWith('Shot ')).join(' | ')}`);
   } finally { f.dispose(); }
 });

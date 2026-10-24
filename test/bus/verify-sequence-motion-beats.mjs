@@ -78,3 +78,19 @@ test('the brief names each motion beat with its frame inside the shot that holds
   assert.equal(buildSequencePrompt(document).text, text, 'the same take gives the same bytes');
   console.log(`PASS A3 brief actions: ${text.split('\n').filter((line) => line.startsWith('   Action ')).map((line) => line.trim()).join(' | ')}`);
 });
+
+test('review: a shot with a speed plays the beats of its take at the retimed timeline frame (0.5 and 2)', () => {
+  const joon = take({ id: 'actor-b', subject: 'Joon' }, cupSpec, SCENE_OBJECTS);
+  const framing = { pos: { x: 0.2, y: 1.4, z: 3 }, yaw: 0, pitch: 0, fovDeg: 40 };
+  const briefAt = (speed, end) => buildSequencePrompt(sequenceDocument({ title: 'Cup', fps: 24, aspect: '16:9', filmback: { sensorId: 'fullFrame', aspectRatio: 16 / 9 }, frameCount: 200,
+    characters: [{ id: 'actor-b', subject: 'Joon', model: 'y-bot-tpose', x: 0, z: 0, rot: 0 }], motion: [joon],
+    shots: [{ ...createShot('Slow', 0, end, [{ id: 'k', frame: 0, framing }], { mode: 'keys', speed }), id: 's1' }] })).text;
+  const slow = briefAt(0.5, 99), fast = briefAt(2, 49);
+  // At half speed frames 0-99 show take frames 0-49: the grab (take f34) plays at f68, the release (take f80) is never shown.
+  assert.match(slow, /^ {3}Action 00:00:02:20 \(f68, take f34\): Joon grabs empty-2\.$/m, slow.split('\n').filter((line) => line.includes('Action')).join(' | '));
+  assert.ok(!/lets go of empty-2/.test(slow), 'the release past the slowed window is left out');
+  // At double speed frames 0-49 show take frames 0-99: grab at f17, release (take f80) at f40, both played.
+  assert.match(fast, /^ {3}Action 00:00:00:17 \(f17, take f34\): Joon grabs empty-2\.$/m);
+  assert.match(fast, /^ {3}Action 00:00:01:16 \(f40, take f80\): Joon lets go of empty-2\.$/m, fast.split('\n').filter((line) => line.includes('Action')).join(' | '));
+  console.log(`PASS A3 review speed: ${[slow, fast].map((text) => text.split('\n').filter((line) => line.includes('Action')).map((line) => line.trim()).join(' ; ')).join(' | ')}`);
+});

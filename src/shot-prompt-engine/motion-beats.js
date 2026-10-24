@@ -7,7 +7,10 @@
 //   turn      a run of frames where the body's heading turns 30 degrees or more
 //             (the hips' yaw, per frame)
 //   jump      the observations' air runs: take-off and landing
-// Frames are timeline frames (the take's frame + where it starts). Pure.
+// Frames are take frames placed on the timeline (the take's frame + where it starts); beatsIn maps
+// them through a shot's speed to the frame the shot plays them at. Pure.
+
+import { retimeFrame, timelineFrame } from "../camera-capabilities/speed.js";
 
 const TURN_RATE = 1.2, TURN_MIN = 30, AIR_MIN = 2;
 const WALKS = new Set(["walkTo", "walk"]);
@@ -68,7 +71,13 @@ export function motionBeats(take) {
 	return beats.sort((a, b) => a.frame - b.frame || a.kind.localeCompare(b.kind));
 }
 
-/** The beats inside one shot's frames (inclusive), as "f<frame> <words>" with the shot's local timecode. */
+/**
+ * The beats a shot plays, at the timeline frame it plays each one: a shot with a speed shows take frames
+ * retimeFrame(start) up to retimeFrame(end + 1) (slow motion fewer, a fast shot more), so a beat's take
+ * frame maps back through timelineFrame. Answers copies with `frame` (timeline) and `takeFrame`.
+ */
 export function beatsIn(beats, shot) {
-	return beats.filter((beat) => beat.frame >= shot.startFrame && beat.frame <= shot.endFrame);
+	const from = retimeFrame(shot, shot.startFrame), until = retimeFrame(shot, shot.endFrame + 1);
+	return beats.filter((beat) => beat.frame >= from && beat.frame < until)
+		.map((beat) => ({ ...beat, takeFrame: beat.frame, frame: Math.min(shot.endFrame, Math.round(timelineFrame(shot, beat.frame))) }));
 }

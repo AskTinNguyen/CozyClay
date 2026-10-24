@@ -39,8 +39,9 @@ function castLines(document, scene, beats) {
 	});
 }
 
-function beatLines(beat, { fps, start, profile, actions, clipLabel }) {
-	const from = beat.startFrame - start, to = beat.endFrame - start, seconds = beat.frames / fps;
+// Timecodes are delivery time: the selected shots back to back, as the delivered video plays them (no gaps).
+function beatLines(beat, { fps, profile, actions, clipLabel }) {
+	const from = beat.deliveryStart, to = from + beat.frames - 1, seconds = beat.frames / fps;
 	const head = profile.id === "kling-3" ? `Shot ${beat.index}, ${sec(seconds)}` : `${beat.index}.`;
 	const tag = profile.cameraStyle === "tags" ? `${moveTag(beat.moveId)} ` : "";
 	return [
@@ -52,7 +53,7 @@ function beatLines(beat, { fps, start, profile, actions, clipLabel }) {
 		`   Frame: ${beat.size}; ${beat.angle}; lens ${beat.lens}${beat.composition ? `; ${beat.composition}` : ""}.`,
 		...(beat.rig.length ? [`   Rig: ${beat.rig.join("; ")}.`] : []),
 		...(beat.coverage ? [`   Coverage: ${beat.coverage}.`] : []),
-		...actions.map((action) => `   Action ${timecode(action.frame - start, fps)} (f${action.frame}): ${action.words}.`),
+		...actions.map((action) => `   Action ${timecode(from + action.frame - beat.startFrame, fps)} (f${action.frame}${action.takeFrame !== action.frame ? `, take f${action.takeFrame}` : ""}): ${action.words}.`),
 	];
 }
 
@@ -68,11 +69,17 @@ export function buildSequencePrompt(document, { range = null, profile: profileId
 	if (!shots.length) return { text: "SEQUENCE: no shots in this range.", beats: [], warnings: [], profile, aspect: document.aspect ?? null, seconds: 0, clips: [], references: referenceManifest([], document), continuity: null, actions: [] };
 	// shotNumber: the shot's place in the whole sequence, which names its keyframe pack folder.
 	const all = shotsInRange(document);
-	const beats = shots.map((shot, i) => ({ ...describeBeat(document, shot, { scene, index: i + 1, first: shot === all[0] }), shotNumber: all.indexOf(shot) + 1 }));
+	let delivered = 0;
+	const beats = shots.map((shot, i) => {
+		const beat = { ...describeBeat(document, shot, { scene, index: i + 1, first: shot === all[0] }), shotNumber: all.indexOf(shot) + 1, deliveryStart: delivered };
+		delivered += beat.frames;
+		return beat;
+	});
 	const aspects = [...new Set(shots.map((shot) => shot.aspect ?? document.aspect).filter(Boolean))], aspect = aspects[0] ?? null;
-	const start = shots[0].startFrame, seconds = beats.reduce((sum, beat) => sum + beat.frames / fps, 0);
+	const seconds = delivered / fps;
 	const actions = (document.motion ?? []).flatMap((take) => motionBeats(take)).sort((a, b) => a.frame - b.frame || a.name.localeCompare(b.name));
-	const warnings = profileWarnings(beats, profile, { fps, aspect, timecode: (frames) => timecode(frames, fps) });
+	// The limits read delivery time too: each beat where it starts in the delivered video.
+	const warnings = profileWarnings(beats.map((beat) => ({ ...beat, startFrame: beat.deliveryStart, endFrame: beat.deliveryStart + beat.frames - 1 })), profile, { fps, aspect, timecode: (frames) => timecode(frames, fps) });
 	if (aspects.length > 1) warnings.push({ code: "MIXED_ASPECT", message: `These shots mix aspects (${aspects.join(", ")}).`, fix: `Deliver every beat at ${aspect}, or brief the ${aspects.slice(1).join(", ")} beats on their own.` });
 	const clips = clipsFor(beats, profile, fps), continuity = continuityLine(beats, shots, scene), references = referenceManifest(beats, document);
 	const limits = profile.id ? `${profile.durationsSeconds?.length ? `${profile.durationsSeconds.join(", ")} s clips` : `${profile.minSeconds ?? 1}-${profile.maxSeconds} s clips`}${profile.maxShotsPerClip ? `, up to ${profile.maxShotsPerClip} shots` : ""}; ${profile.aspects.join(", ")}; checked ${profile.checkedAt}` : "no model limits applied";
@@ -87,7 +94,7 @@ export function buildSequencePrompt(document, { range = null, profile: profileId
 		`REFERENCES: references.json lists ${references.entries.length} stills by role (first and last frames, composition guides, character sheets, the set)${references.missing.length ? `; missing: ${references.missing.map((row) => row.subject ? `${row.role} for ${row.subject}` : row.role).join(", ")}` : ""}.`,
 		"BEATS:",
 	];
-	clips.forEach((clip, c) => clip.forEach((beat, k) => lines.push(...beatLines(beat, { fps, start, profile, actions: beatsIn(actions, shots[beat.index - 1]),
+	clips.forEach((clip, c) => clip.forEach((beat, k) => lines.push(...beatLines(beat, { fps, profile, actions: beatsIn(actions, shots[beat.index - 1]),
 		clipLabel: clips.length > 1 && k === 0 ? `CLIP ${c + 1} of ${clips.length} (${sec(clip.reduce((sum, row) => sum + row.frames / fps, 0))})${profile.cuts === "per-clip" ? ": generate on its own" : ""}` : null }))));
 	lines.push(`CONTINUITY: ${continuity.text}`, `KEEP OUT: the previs itself (${PREVIS_WORDS.slice(0, 4).join(", ")}): render real people in a real place in the look above.`);
 	if (warnings.length) lines.push("WARNINGS:", ...warnings.map((warning) => `- ${warning.message} Fix: ${warning.fix}`));

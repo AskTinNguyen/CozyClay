@@ -27,10 +27,16 @@ const nameOf = (row) => String(row.subject ?? row.name ?? row.id).split(",")[0].
  * @param {object} document  { cast: [{ id, subject, identityImage? , hidden? }], set: { image? } }
  */
 function referenceImages(document) {
-	const out = [];
+	const out = [], used = new Set();
 	for (const row of (document.cast ?? []).filter((entry) => !entry.hidden)) {
 		const ext = imageExtension(row.identityImage);
-		if (ext) out.push({ role: "character-sheet", characterId: row.id, name: `references/cast-${slugifyTitle(nameOf(row))}.${ext}`, dataUrl: row.identityImage });
+		if (!ext) continue;
+		// The stable character id keeps every sheet its own path: two names can slug alike (non-Latin names slug to nothing).
+		const readable = /[a-z0-9]/i.test(nameOf(row).normalize("NFKD")) ? `-${slugifyTitle(nameOf(row))}` : "";
+		let base = `references/cast-${slugifyTitle(row.id)}${readable}`;
+		for (let n = 2; used.has(base); n++) base = `references/cast-${slugifyTitle(row.id)}${readable}-${n}`;
+		used.add(base);
+		out.push({ role: "character-sheet", characterId: row.id, name: `${base}.${ext}`, dataUrl: row.identityImage });
 	}
 	const setExt = imageExtension(document.set?.image);
 	if (setExt) out.push({ role: "set", name: `references/set.${setExt}`, dataUrl: document.set.image });

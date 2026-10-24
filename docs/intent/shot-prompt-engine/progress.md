@@ -2,7 +2,7 @@
 
 - Working under rev: 1
 - Worker: `shot-prompt-engine-worker`
-- Current step: done; PR open for review
+- Current step: 10. review fixes (Codex P2 on 84ec6393) done; PR open for review
 - Next step: orchestrator review of the ui:shot images (A7) and A9 docs, then merge
 - PR: https://github.com/AskTinNguyen/CozyClay/pull/6
 
@@ -32,6 +32,11 @@
 7. A7 UI: File > Export > `Sequence prompt…` (`src/shell/SequenceExportItems.jsx`, which also took the OTIO item so `MenuBar.jsx` does not grow), dialog `src/shell/SequencePromptDialog.jsx` + `sequence-prompt.css` (range, model picker, warnings, brief, Copy, Download sequence pack), `src/sequence-prompt-studio.js` (document from `readStudioState`, takes compiled once per take, sequence pack exporter); App: single shot packs now carry their one-beat brief and manifest. `test/verify-export-recovery.mjs` gained the two new seams (`readStudioState`, `shotSequenceFiles`) and passes (`all export recovery seam checks PASS`). QA evidence in the table. Dev server and QA Chrome stopped after the run.
 8. A8 gates: evidence in the table.
 9. A9 docs: evidence in the table; awaits review.
+10. Review fixes (Codex P2 x3 on 84ec6393, from the orchestrator):
+   - Character-sheet paths carry the stable character id (`references/cast-<id>[-<name>].<ext>`, deduplicated), so names that slug alike (non-Latin) no longer collide. `node test/bus/verify-sequence-references.mjs` -> `PASS A4 review: non-Latin sheets 민수 -> references/cast-actor-a.png, 지연 -> references/cast-actor-b.png`, `pass 3 fail 0`.
+   - Motion beats map through each shot's speed: `timelineFrame` (the inverse of `retimeFrame`, beside it in `src/camera-capabilities/speed.js`) and `beatsIn` keeps the take frames a shot plays (`retimeFrame(start)` up to `retimeFrame(end + 1)`). `node test/bus/verify-sequence-motion-beats.mjs` -> `PASS A3 review speed: Action 00:00:02:20 (f68, take f34): Joon grabs empty-2. | Action 00:00:00:17 (f17, take f34) ...; Action 00:00:01:16 (f40, take f80) ...`, `pass 3 fail 0`.
+   - Beat timecodes, action timecodes and profile limit cuts use delivery time (selected shots back to back). `node test/bus/verify-sequence-prompt.mjs` -> `PASS A1 review delivery timecodes: Shot 1, 1s 00:00:00:00-00:00:00:23 ... | Shot 2, 1s 00:00:01:00-00:00:01:23 (1s-2s, 24 frames) B`, `pass 3 fail 0`.
+   - Also passing: `verify-sequence-profiles` (3/0), `verify-sequence-measure` (2/0), `mcp/verify-render-prompt-sequence` (`18 passed, 0 failed`), `test/verify-camera-speed.mjs` and `test/verify-export-recovery.mjs` (exit 0). `npm run lint` -> `knip: 138 findings, 0 new`, `loc: ... 0 violations`, `eslint: ... 0 regressions`; `npm run build` -> exit 0.
 
 ## Decisions
 
