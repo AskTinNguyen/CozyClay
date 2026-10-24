@@ -7,6 +7,7 @@ import { TIMELINE_FRAME_FPS } from "./scenes.js";
 import { usedSensorHeightMm } from "./shot.js";
 import { shotHold } from "./shot-authoring.js";
 import { cameraCapabilities } from "./camera-capabilities/fields.js";
+import { otioTransition, repairTransition } from "./camera-coverage/transitions.js";
 
 const OTIO_TIMELINE_FPS = TIMELINE_FRAME_FPS;
 const OTIO_START_TIMECODE = "00:00:00:00";
@@ -152,6 +153,8 @@ function clip(scene, shot) {
 	// runs exactly that many frames and says so.
 	const still = shot.kind === "still";
 	if (still) Object.assign(metadata, { kind: "still", hold: shotHold(shot), caption: typeof shot.caption === "string" ? shot.caption : "" });
+	// The transition into this shot (camera-coverage): always in the metadata, and as a Transition.1 item where OTIO has one.
+	if (repairTransition(shot.transition)) metadata.transitionIn = repairTransition(shot.transition);
 	return {
 		OTIO_SCHEMA: "Clip.1",
 		effects: [],
@@ -181,6 +184,7 @@ export function shotsToOtio(scene, shots, { name } = {}) {
 	for (const shot of ordered) {
 		if (shot.startFrame < cursor) throw new RangeError(`Shot ${shot.name || shot.id || "?"} overlaps an earlier shot`);
 		if (shot.startFrame > cursor) children.push(gap(cursor, shot.startFrame - cursor));
+		if (children.length && otioTransition(shot, OTIO_TIMELINE_FPS)) children.push(otioTransition(shot, OTIO_TIMELINE_FPS));
 		children.push(clip(source, shot));
 		cursor = shot.endFrame + 1;
 	}

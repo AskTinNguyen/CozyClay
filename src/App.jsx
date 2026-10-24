@@ -192,7 +192,7 @@ import {
 } from "./shot.js";
 import { captureFraming, classifyMove, moveSequenceSlate, moveSequencePhrase } from "./camera-move.js";
 import { sampleAt } from "./sample-at.js";
-import { applyShotCamera } from "./shot-camera-apply.js";
+import { applyShotCamera, withTransition } from "./shot-camera-apply.js";
 import { takeFrameAt } from "./camera-capabilities/speed.js";
 import { framingRecord } from "./camera-capabilities/words.js";
 import { exportOffscreenVideo } from "./offscreen-export.js";
@@ -2889,7 +2889,7 @@ export default function App() {
 		syncCarriers();
 		propSyncRef.current?.();
 		const sampled = sampleAt(context?.playbackScene ?? playbackScene, shotAtFrame(context?.shots ?? shots, frame), frame);
-		const framing = sampled.camera ?? context?.framing;
+		const framing = withTransition(sampled.camera, { shots: context?.shots ?? shots, frame, sampleShot: (other, at) => sampleAt(context?.playbackScene ?? playbackScene, other, at).camera }) ?? context?.framing;
 		const cam = shotCamRef.current;
 		// Roll, mount, shake, focus and shutter ride the sample; the capture's lens renderer reads them.
 		if (cam && framing) applyShotCamera(cam, look, framing);

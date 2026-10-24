@@ -5,7 +5,7 @@ import { aimAt } from "./controls.jsx";
 import { SUBJECT_HEIGHT_M } from "./shot.js";
 import { shotAtFrame } from "./cuts.js";
 import { sampleAt } from "./sample-at.js";
-import { applyShotCamera } from "./shot-camera-apply.js";
+import { applyShotCamera, withTransition } from "./shot-camera-apply.js";
 import { playbackProbe, probeVisibility } from "./motion/playback-probe.js";
 import { RENDER_ACTIVITY_EVENT } from "./use-render-activity.js";
 import { PRESETS, editorFrameForSubject } from "./stage-startup-defaults.js";
@@ -166,7 +166,7 @@ export function MoveRig({ playing, following, followFrame, frameRef, fps, keys, 
 			const sampledShot = timelineShot
 				? { ...timelineShot, camera: { ...timelineShot.camera, mode: "keys" } }
 				: following ? null : { camera: { mode: "keys" }, cameraKeys: keys };
-			const f = sampleAt(scene, sampledShot, frame).camera;
+			const f = withTransition(sampleAt(scene, sampledShot, frame).camera, timelineShot ? { shots, frame, sampleShot: (other, at) => sampleAt(scene, { ...other, camera: { ...other.camera, mode: "keys" } }, at).camera } : null);
 			// Roll, mount, shake, focus and shutter ride the sample (camera-capabilities).
 			if (f) applyShotCamera(cam, look, f);
 			return f;

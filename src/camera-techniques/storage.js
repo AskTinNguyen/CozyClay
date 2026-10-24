@@ -2,6 +2,7 @@
 // and the signature that says whether it still describes the shot's camera.
 // Imports only the dependency-free capability fields, because the shot document repair imports it.
 import { cameraCapabilities } from "../camera-capabilities/fields.js";
+import { normalizeComposition } from "../camera-coverage/composition.js";
 
 // A short, stable fingerprint of the camera a stack was applied to: when the
 // keys or the rail change by hand, the stored stack no longer describes them.
@@ -22,7 +23,7 @@ export const currentTechnique = (shot) => (shot?.technique && shot.technique.sig
 const text = (value, max) => (typeof value === "string" ? Array.from(value.trim()).slice(0, max).join("") : "");
 const primitive = (value) => ["string", "number", "boolean"].includes(typeof value) && (typeof value !== "number" || Number.isFinite(value));
 
-/** Persisted shape (shot-authoring.js): bounded strings, primitive params, at most 8 techniques. */
+/** Persisted shape (shot-authoring.js): bounded strings, primitive params, at most 8 techniques, and the composition it placed the subject with. */
 export function repairShotTechnique(value) {
 	if (!value || typeof value !== "object" || Array.isArray(value) || !Array.isArray(value.stack)) return null;
 	const stack = value.stack.filter((row) => row && typeof row.id === "string" && /^[a-z0-9-]{1,40}$/.test(row.id)).slice(0, 8)
@@ -31,5 +32,6 @@ export function repairShotTechnique(value) {
 	// capabilities: the camera fields this stack set (camera.set), so a re-applied stack can clear the ones it no longer sets.
 	const capabilities = (Array.isArray(value.capabilities) ? value.capabilities : []).filter((field) => typeof field === "string" && /^[a-zA-Z]{1,16}$/.test(field)).slice(0, 8);
 	return { stack, label: text(value.label, 80), phrase: text(value.phrase, 600), move: text(value.move, 24), promptOnly: (Array.isArray(value.promptOnly) ? value.promptOnly : []).filter((id) => typeof id === "string").slice(0, 8),
-		signature: text(value.signature, 16), ...(capabilities.length ? { capabilities } : {}) };
+		signature: text(value.signature, 16), ...(capabilities.length ? { capabilities } : {}), ...(normalizeComposition(value.composition) ? { composition: normalizeComposition(value.composition) } : {}),
+		...(value.side === "left" || value.side === "right" ? { side: value.side } : {}) };
 }

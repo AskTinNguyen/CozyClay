@@ -13,7 +13,7 @@ const rollOf = (sample) => (Number.isFinite(sample?.rollDeg) ? sample.rollDeg * 
 /**
  * @param {import("three").PerspectiveCamera} cam  the shot camera
  * @param {{current:{yaw:number,pitch:number,roll?:number}}} look
- * @param {object} sample  { pos, yaw, pitch, fovDeg, rollDeg?, fStop?, focusDistance?, focalMm?, blur? }
+ * @param {object} sample  { pos, yaw, pitch, fovDeg, rollDeg?, fStop?, focusDistance?, focalMm?, blur?, transition? }
  */
 export function applyShotCamera(cam, look, sample) {
 	const roll = rollOf(sample);
@@ -25,7 +25,10 @@ export function applyShotCamera(cam, look, sample) {
 	cam.rotation.set(sample.pitch, sample.yaw, roll);
 	if (Number.isFinite(sample.fovDeg) && Math.abs(cam.fov - sample.fovDeg) > 1e-6) cam.fov = sample.fovDeg;
 	cam.updateProjectionMatrix();
-	if (sample.fStop || sample.blur) {
-		cam.userData.lens = { pos: { ...sample.pos }, focalMm: sample.focalMm, fStop: sample.fStop ?? null, focusDistance: sample.focusDistance ?? null, blur: sample.blur ?? null };
+	if (sample.fStop || sample.blur || sample.transition) {
+		cam.userData.lens = { pos: { ...sample.pos }, focalMm: sample.focalMm, fStop: sample.fStop ?? null, focusDistance: sample.focusDistance ?? null, blur: sample.blur ?? null, transition: sample.transition ?? null };
 	} else delete cam.userData.lens;
 }
+
+// A dissolve or fade around a cut rides the sample too (camera-coverage/transition-sample.js).
+export { withTransition } from "./camera-coverage/transition-sample.js";

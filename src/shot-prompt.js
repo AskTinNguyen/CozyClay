@@ -82,7 +82,7 @@ function rigLine(meta) {
 }
 
 // meta = { focalMm, fovDeg, aspect, size, cameraMove, keyLight, cast,
-//          frameRange, fps, shotTitle, intent, technique? { label, phrase } }
+//          frameRange, fps, shotTitle, intent, technique? { label, phrase }, transition? (words) }
 // options = { target: "image" | "video", referenceOwnsCamera: boolean (default true) }
 export function buildShotPrompt(meta, options = {}) {
 	const target = options.target === "video" ? "video" : "image";
@@ -100,6 +100,8 @@ export function buildShotPrompt(meta, options = {}) {
 		...(meta.technique?.phrase ? [`TECHNIQUE: ${meta.technique.label ? `${meta.technique.label}: ` : ""}${meta.technique.phrase}`] : []),
 		// What the shot camera itself does beyond its framing: roll, focus, shake, mount, speed, shutter.
 		...rigLine(meta),
+		// How the edit enters this shot (camera-coverage transitions).
+		...(meta.transition ? [`TRANSITION: ${meta.transition}`] : []),
 		`LIGHT: ${lightWords(meta.keyLight)}`,
 		`CAST: ${(meta.cast || []).map((member) => member.name).join(", ") || "none"}`,
 		`LOOK: ${intent || NEUTRAL_LOOK}`,
