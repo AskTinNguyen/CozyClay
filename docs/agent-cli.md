@@ -806,6 +806,32 @@ repeating pattern lays and `cuts` puts the cuts on given frames. Cut issues come
 back as warnings (`CUT_LINE`, `CUT_JUMP`, `CUT_SCREEN`, `CUT_EYELINE`) and in
 `output.cuts` with the fix.
 
+## Camera motivation
+
+`story.addBeat`, `story.moveBeat` and `story.removeBeat` author the story
+beats (a line, a reveal, a decision) each as one undo entry, and
+`story.listBeats` reads them back (id, frame, label, kind);
+`camera.checkMotivation` says why each camera move happens (a story beat, a
+motion beat of an installed take, its subject, or nothing) and flags moves
+that are unmotivated or start or settle off their beat; `camera.alignMove`
+retimes a move onto its beat as one undo entry. Words to
+`camera.applyTechnique` reach them too ("is this move motivated?", "start the
+push on the reveal", "add a beat 'confession' at 120").
+
+```sh
+cclay live run story.addBeat --args '{"frame":60,"label":"Mara makes her admission","kind":"disclosure"}'
+cclay live run camera.checkMotivation --args '{}'
+cclay live run camera.alignMove --args '{"shotId":"shot-dialogue","beat":"Mara makes her admission"}'
+```
+```json
+{"ok":true,"summary":"Started the move in Dialogue [0, 192) on 'Mara makes her admission' at f60: f0-191 -> f60-191; re-check clean.","checks":{"issues":0}, …}
+```
+
+Issues come back as warnings (`MOVE_UNMOTIVATED`, `MOVE_STARTS_OFF_BEAT`,
+`MOVE_SETTLES_OFF_BEAT`) and in `output.shots[].moves[].issues` with the fix
+(`camera.alignMove` args, or "hold"). A rail or follow camera is refused by
+`camera.alignMove`: it travels with its subject.
+
 ## Sequence prompt
 
 `render_prompt` with `scope: "sequence"` writes the brief a video model gets for

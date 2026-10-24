@@ -13,13 +13,13 @@ const characters = [
 ];
 
 /** The studio state as a sequence document. */
-function documentOf(f, extra = {}) {
+export function documentOf(f, extra = {}) {
   const view = f.actual.readStudioState();
   return { title: 'Rooftop', fps: 24, aspect: '16:9', look: 'night rain, sodium light, 35mm film', filmback: view.filmback, frameCount: 240,
-    activeCharacterId: 'actor-a', cast: view.characters, shots: [...f.live.current.shots].sort((a, b) => a.startFrame - b.startFrame), ...extra };
+    activeCharacterId: 'actor-a', cast: view.characters, shots: [...f.live.current.shots].sort((a, b) => a.startFrame - b.startFrame), storyBeats: f.shots.state().storyBeats ?? [], ...extra };
 }
 
-/** A fixture with the covered sequence laid; returns { f, receipt, document }. */
+/** A fixture with the covered sequence laid; returns { f, receipt, document } (documentOf re-reads it after more edits). */
 export function coveredSequence({ pattern = 'master-coverage', end = 191, roll = true, dissolve = true, push = true } = {}) {
   const f = shotsFixture({ characters });
   f.shots.load({ shots: [{ ...createShot('Scene', 0, end, [{ id: 'key-a', frame: 0, framing }]), id: 'shot-a' }], frameCount: 240, camera: f.actual.readStudioState().camera });

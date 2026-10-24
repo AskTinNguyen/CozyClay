@@ -8,6 +8,7 @@ import { usedSensorHeightMm } from "./shot.js";
 import { shotHold } from "./shot-authoring.js";
 import { cameraCapabilities } from "./camera-capabilities/fields.js";
 import { otioTransition, repairTransition, repairTransitionOut } from "./camera-coverage/transitions.js";
+import { repairStoryBeats } from "./camera-motivation/story-beats.js";
 
 const OTIO_TIMELINE_FPS = TIMELINE_FRAME_FPS;
 const OTIO_START_TIMECODE = "00:00:00:00";
@@ -173,7 +174,14 @@ function clip(scene, shot) {
 	};
 }
 
-/** Convert Shot cards into a single-video-track OTIO Timeline. */
+// A story beat (camera-motivation) as a zero-length marker on the Shots track, at its timeline frame.
+const BEAT_COLORS = { disclosure: "PURPLE", reveal: "YELLOW", threat: "RED", decision: "ORANGE", input: "CYAN", event: "GREEN" };
+function storyMarker(beat) {
+	return { OTIO_SCHEMA: "Marker.2", metadata: { cozyclay: { storyBeat: { id: beat.id, kind: beat.kind, frame: beat.frame } } }, name: beat.label,
+		color: BEAT_COLORS[beat.kind], marked_range: timeRange(beat.frame, 0), comment: `${beat.kind}: ${beat.label}` };
+}
+
+/** Convert Shot cards into a single-video-track OTIO Timeline (story beats, scene.storyBeats, as its track markers). */
 export function shotsToOtio(scene, shots, { name } = {}) {
 	const source = scene && typeof scene === "object" ? scene : {};
 	const ordered = (Array.isArray(shots) ? shots : [])
@@ -211,7 +219,7 @@ export function shotsToOtio(scene, shots, { name } = {}) {
 				children,
 				effects: [],
 				kind: "Video",
-				markers: [],
+				markers: repairStoryBeats(source.storyBeats).map(storyMarker),
 				enabled: true,
 				metadata: {},
 				name: "Shots",

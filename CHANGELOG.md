@@ -4,6 +4,13 @@
 
 Camera
 
+- Camera motivation: story beats (a line, a reveal, a decision) on the
+  timeline, in OTIO markers and in the sequence brief; `camera.checkMotivation`
+  says why each camera move happens (a story beat, a motion beat, its subject)
+  and flags moves with no reason or off their beat, and `camera.alignMove`
+  retimes a move onto its beat as one undo entry. A Motivation section in
+  Camera mode, flags on the Shots lane, MCP `check_motivation` and
+  `story_beats`, and 15 director-eval scenarios.
 - Technique references: each technique, coverage pattern and cut rule lists
   book citations (author, title, edition, year, pages) from the owner's
   cinematic-atlas as Further reading in the technique popover and the Coverage

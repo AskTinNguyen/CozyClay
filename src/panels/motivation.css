@@ -1,0 +1,8 @@
+/* Motivation panel (MotivationPanel.jsx): story beats and each move's reason. Theme tokens only, matching the Coverage and Cut panels. */
+.motivation-panel { display: grid; gap: 6px; padding: 0 var(--sp-2, 12px) var(--sp-1, 8px); font-family: var(--sans, system-ui); font-size: 12px; color: var(--text-1, #e4e4e7); }
+.motivation-beats, .motivation-moves { display: grid; gap: 5px; }
+.motivation-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; color: var(--text-2, #a1a1aa); }
+.motivation-list li { display: flex; justify-content: space-between; gap: 6px; }
+.motivation-list button { border: 0; background: transparent; color: var(--text-2, #a1a1aa); cursor: pointer; }
+.motivation-list button:hover { color: var(--danger, #d65f55); }
+.motivation-fix { margin-top: 4px; display: block; height: 22px; padding: 0 8px; border: 0; border-radius: 4px; background: var(--camera, #a78bfa); color: #1d1d1f; font-weight: 600; cursor: pointer; }

@@ -262,6 +262,14 @@ jump, screen direction, eyeline) with each fix; flagged cuts are listed as jump
 buttons. On the timeline Shots lane a cut that breaks a rule carries a red or
 amber tag ("180°", "JUMP"), and a cut with a transition its tag ("DISS").
 
+Below Cut, a **Motivation** section adds a story beat at the playhead (label
+and kind, `story.addBeat`), lists the beats with a remove each, and reads out
+why each move of the selected shot happens ("The camera pushes in as Mara makes
+her admission"); a flagged move shows its rule, severity and fix, and **Apply
+fix** runs `camera.alignMove`. On the Shots lane each story beat is a labelled
+green tick, and a flagged move carries a red or amber bar ("NO MOTIVE", "OFF
+BEAT") across its frames.
+
 G10 leaves exactly two visible add routes: viewport **+ Add** (the object
 catalogue plus Character and Camera) and **Content › Basic Shapes** (drag or
 double-click a primitive). The Outliner right-click **Create ▸** accelerator

@@ -7,6 +7,7 @@
 // (test/verify-director-evals.mjs) all route through here. Pure.
 import { normalizePhrase, parseRequest } from "../camera-techniques/resolve.js";
 import { resolveCameraRequest } from "./resolve.js";
+import { resolveMotivationRequest } from "../camera-motivation/resolve.js";
 
 // Everyday senses of "shot", in CozyClay's own grouping (after the cinematic-atlas generator's false-positive idea).
 const DRINKS = "whiskey|whisky|tequila|vodka|rum|gin|bourbon|espresso|jello|jelly|sake|soju|schnapps|absinthe";
@@ -44,11 +45,13 @@ const techniqueConfidence = (matched) => (matched.some((row) => row.via === "moo
 
 /**
  * A request -> { action, args, via, matched, confidence, resolved?, dropped?, reason? }.
- * action is camera.applyTechnique, camera.cover, camera.checkCuts, or "none" (no camera action; reason says why).
+ * action is camera.applyTechnique, camera.cover, camera.checkCuts, a motivation action (camera-motivation/resolve.js), or "none" (no camera action; reason says why).
  * @param {string} text
  * @param {{cast?: Array<{id:string,name?:string}>}} [options]
  */
 export function routeCameraRequest(text, { cast = [] } = {}) {
+	const motivated = resolveMotivationRequest(text);
+	if (motivated) return motivated;
 	const phrase = normalizePhrase(text), everyday = notCameraShot(phrase);
 	const rest = everyday ? phrase.replace(everyday.phrase, " ") : phrase;
 	const routed = resolveCameraRequest(rest, { cast });

@@ -65,7 +65,7 @@ export function createStudioAppBinding(ports) {
 		const authoredCharacters = raw.characters.map(({ sessionMotion, ik, rig, ...character }) => character);
 		// The stage is authored state too: a key-light or environment edit from any
 		// surface bumps the scene revision exactly like a cast or object edit.
-		const authored = JSON.stringify([raw.objects, authoredCharacters, raw.shots, raw.frameCount, raw.stage, document]);
+		const authored = JSON.stringify([raw.objects, authoredCharacters, raw.shots, raw.frameCount, raw.stage, document, ...(raw.storyBeats?.length ? [raw.storyBeats] : [])]);
 		if (authoredKey !== undefined && authoredKey !== authored && observedSceneRevision === ports.revision.current) ports.revision.current++;
 		authoredKey = authored; observedSceneRevision = ports.revision.current;
 		const liveIds = new Set([...raw.objects, ...raw.characters, ...raw.shots].map(row => row.id));
@@ -98,7 +98,7 @@ export function createStudioAppBinding(ports) {
 		const nextViewKey = JSON.stringify([raw.selection, raw.activeCharacterId, raw.selectedShotId, raw.view, raw.camera]);
 		if (viewKey !== undefined && viewKey !== nextViewKey) viewRevision++;
 		viewKey = nextViewKey;
-		for (const [domain, value] of Object.entries({ objects: raw.objects, shot: raw.shots, stage: raw.stage, cast: authoredCharacters, motion: characters, ...document })) {
+		for (const [domain, value] of Object.entries({ objects: raw.objects, shot: raw.storyBeats?.length ? [raw.shots, raw.storyBeats] : raw.shots, stage: raw.stage, cast: authoredCharacters, motion: characters, ...document })) {
 			const key = JSON.stringify(value);
 			if (domainKeys.get(domain) !== key) domainRevisions[domain] = (domainRevisions[domain] ?? 0) + 1;
 			domainKeys.set(domain, key);

@@ -4,7 +4,7 @@ Scenarios in a director's words, each with the camera action CozyClay should ans
 
 ## Files
 
-One file per category: `size.json`, `angle.json`, `move.json`, `lens.json`, `coverage.json`, `composition.json`, `cuts.json`, `negative.json`. Each is `{ "category", "label", "scenarios": [ ... ] }`, one row per line. The runner reads every `*.json` here, so a new category is a new file plus its name in `CATEGORIES` (`test/director-evals-data.mjs`).
+One file per category: `size.json`, `angle.json`, `move.json`, `lens.json`, `coverage.json`, `composition.json`, `cuts.json`, `motivation.json`, `negative.json`. Each is `{ "category", "label", "scenarios": [ ... ] }`, one row per line. The runner reads every `*.json` here, so a new category is a new file plus its name in `CATEGORIES` (`test/director-evals-data.mjs`).
 
 ## A row
 
@@ -24,6 +24,7 @@ One file per category: `size.json`, `angle.json`, `move.json`, `lens.json`, `cov
 - `camera.applyTechnique` with `stack` (technique ids in order), optional `params` (`{ "push-in": { "speed": "slow" } }`, only the keys named are compared), `subject` (a cast id) and `composition` (`{ place, headroom, leadRoom }`, compared whole). A row without `stack` wants none.
 - `camera.cover` with `pattern` and optional `cast` (cast ids in the order the words name them).
 - `camera.checkCuts` with optional `frame`.
+- `camera.checkMotivation` (a question about why the camera moves), `camera.alignMove` with `beat` (a beat id, a label word, or a frame) and `edge` (`start` or `settle`), and `story.addBeat` / `story.moveBeat` / `story.removeBeat` with `frame`, `label`, `kind` and `beat`, only the keys named are compared.
 - `none`: no camera action (a drink, a gunshot, a sports shot, a turn of phrase, or no camera words).
 
 Any of them may add `confidence` (`high`, `medium`, `low`) to pin it. Every resolution must state its matched words and a confidence; the runner checks that for every row.

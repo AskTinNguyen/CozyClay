@@ -3104,7 +3104,7 @@ export default function App() {
 					...entry,
 					sessionMotion: entry.id === activeChar.id ? motion : entry.sessionMotion,
 				})),
-				objects: sceneObjects,
+				objects: sceneObjects, storyBeats: appContext.storeDomain("shot")?.state().storyBeats ?? [],
 			};
 			const serialized = serializeOtio(exportScene, shots);
 			const blob = new Blob([serialized], { type: "application/json" });
@@ -4212,7 +4212,7 @@ export default function App() {
 		return { host: { workspaceId: liveWorkspaceIdRef.current, documentEpoch: studioDocumentEpochRef.current,
 				sceneId: activeSceneIdRef.current, sceneEpoch: studioSceneEpochRef.current }, workspaceHandle: liveWorkspaceHandleRef.current,
 			sceneName: live.scenes.find(s => s.id === activeSceneIdRef.current)?.name ?? "Untitled Scene", previsMode: scenesDomain.previsMode, aspect: live.stage.shotAspect, stage: live.stage,
-			objects: storeRef.current.objects, characters: list, targets, shots: live.shots, frameCount: live.timeline.frameCount,
+			objects: storeRef.current.objects, characters: list, targets, shots: live.shots, storyBeats: appContext.storeDomain("shot")?.state().storyBeats ?? [], frameCount: live.timeline.frameCount,
 			selection: live.studioSelection, activeCharacterId: live.activeCharacterId, selectedShotId: live.studioShotId,
 			view: live.studioView, camera: live.studioCamera ?? readStudioCamera(), filmback: live.filmback, manual: manualCameraOverrideRef.current,
 			bridgeReady: false, busy: storeRef.current.present() !== storeRef.current.objects || Boolean(studioGestureRef.current ||

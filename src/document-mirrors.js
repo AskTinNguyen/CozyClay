@@ -23,7 +23,7 @@ export function createDocumentMirrors(appContext) {
 	const shotDocumentRef = {
 		get current() {
 			const shots = appContext.storeDomain("shot");
-			return createShotAuthoringDocument({ shots: shots?.read() ?? [], waypoints: activeWaypoints(cast()), frameCount: shots?.state().frameCount ?? null });
+			return createShotAuthoringDocument({ shots: shots?.read() ?? [], waypoints: activeWaypoints(cast()), frameCount: shots?.state().frameCount ?? null, storyBeats: shots?.state().storyBeats });
 		},
 	};
 	let envelope = null;

@@ -26,7 +26,7 @@ function normalizeState(value) {
     if (follow?.mode !== 'range') return shot;
     return { ...shot, camera: updateCameraBlock(shot.camera, { railFollow: { mode: 'range', ...clampRailRange(follow, shot.endFrame - shot.startFrame + 1) } }) };
   });
-  return { ...value, shots, frameCount: document.frameCount ?? DEFAULT_DURATION_S * TIMELINE_FPS };
+  return { ...value, shots, frameCount: document.frameCount ?? DEFAULT_DURATION_S * TIMELINE_FPS, storyBeats: document.storyBeats ?? [] };
 }
 
 // The stable handle survives scene loads. Camera pose belongs to the same

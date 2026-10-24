@@ -1,0 +1,53 @@
+/* Camera motivation on the Shots lane: story beats as a labelled tick, and a bar under each move the check flags. */
+.v2-sequencer .tl-story-beat {
+	position: absolute;
+	top: 2px;
+	left: clamp(0px, calc(var(--tl-f) * 100%), calc(100% - 4px));
+	max-width: 120px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	padding: 0 4px 0 5px;
+	border-left: 2px solid var(--story, #5ec4a8);
+	font-size: 9px;
+	font-weight: 600;
+	line-height: 13px;
+	white-space: nowrap;
+	color: var(--story, #5ec4a8);
+	background: color-mix(in srgb, var(--surface-2, #2a2a30) 85%, transparent);
+	pointer-events: auto;
+	cursor: help;
+	z-index: 8;
+}
+.v2-sequencer .tl-story-beat::after {
+	content: "";
+	position: absolute;
+	left: -2px;
+	top: 100%;
+	width: 2px;
+	height: 26px;
+	background: var(--story, #5ec4a8);
+	opacity: .45;
+}
+.v2-sequencer .tl-motive-flag {
+	position: absolute;
+	bottom: 1px;
+	left: calc(var(--tl-f) * 100%);
+	width: max(28px, calc((var(--tl-f2) - var(--tl-f)) * 100%));
+	min-height: 11px;
+	border-radius: 3px;
+	padding: 0 4px;
+	font-size: 8px;
+	font-weight: 700;
+	letter-spacing: .04em;
+	line-height: 11px;
+	white-space: nowrap;
+	overflow: hidden;
+	color: #1d1d1f;
+	background: var(--warn, #f5b453);
+	box-shadow: 0 0 0 1px rgba(0, 0, 0, .35);
+	pointer-events: auto;
+	cursor: help;
+	z-index: 9;
+}
+.v2-sequencer .tl-motive-flag.high { background: var(--danger, #d65f55); color: #fff; }
+.v2-sequencer .tl-motive-flag.low { background: color-mix(in srgb, var(--warn, #f5b453) 55%, var(--surface-2, #2a2a30)); color: var(--text-1, #e4e4e7); }
