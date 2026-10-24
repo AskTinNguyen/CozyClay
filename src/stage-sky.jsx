@@ -3,7 +3,7 @@ import { useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { stageLook } from "./stage-lighting.js";
 import { shotLookAt } from "./stage-shot-look.js";
-import { useShotLook } from "./stage-shot-look-draw.js";
+import { lookSignature, useShotLook } from "./stage-shot-look-draw.js";
 import { keyLightColor } from "./stage-key-color.js";
 import { ENV_HEIGHT, ENV_WIDTH, environmentPixels } from "./stage-environment.js";
 import { installOcclusion } from "./stage-occlusion.js";
@@ -93,10 +93,10 @@ export function StageAtmosphere({ lighting: stageLighting = null, keyLight: stag
 	const look = stageLook({ lighting, keyLight, theme, grid });
 	useLayoutEffect(() => {
 		const { scene } = get();
-		scene.userData.shotLook = { at: (frame) => shotLookAt({ lighting: stageLighting, keyLight: stageKey }, shots, frame), frameRef, shown: shown.key, theme, grid,
+		scene.userData.shotLook = { at: (frame, list) => shotLookAt({ lighting: stageLighting, keyLight: stageKey }, list ?? shots, frame), frameRef, shown: lookSignature(shown), theme, grid,
 			keyColor: (key) => key.color ?? keyLightColor(key.warmth), sky: gradientSky };
 		return () => { delete scene.userData.shotLook; };
-	}, [get, stageLighting, stageKey, shots, frameRef, shown.key, theme, grid]);
+	}, [get, stageLighting, stageKey, shots, frameRef, shown, theme, grid]);
 	const { sky, skyTop, exposure } = look, { near, far } = look.fog;
 	const hazeNear = look.captureFog?.near ?? null, hazeFar = look.captureFog?.far ?? null;
 	const envKey = look.env ? JSON.stringify(look.env) : null, { envIntensity, ao } = look;

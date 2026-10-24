@@ -143,3 +143,15 @@ export function shotLookWords(look, { label = null } = {}) {
 	const palette = look.palette ? `intended palette${look.palette.word ? ` '${look.palette.word}'` : ""} ${look.palette.swatches.join(", ")}` : "";
 	return [lit, palette].filter(Boolean).join("; ");
 }
+
+// The shots an export draw lights from while a command renders (shot.colourScript):
+// the document's, which lead the scene's props by a render of the 3D tree.
+let drawShots = null;
+/** Run fn with the export draw lit from these shots' looks (applyShotLookForDraw). */
+export function withDrawShots(shots, fn) {
+	const prior = drawShots;
+	drawShots = shots;
+	try { return fn(); } finally { drawShots = prior; }
+}
+/** The shots withDrawShots set, or null. */
+export const currentDrawShots = () => drawShots;

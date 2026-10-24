@@ -7,7 +7,7 @@
 // and the colour change across each cut. Registered by commands/shot.js.
 import { StudioSchemas } from '../studio-agent-protocol.js';
 import { shotAtFrame } from '../cuts.js';
-import { SHOT_LOOK_FIELDS } from '../stage-shot-look.js';
+import { SHOT_LOOK_FIELDS, withDrawShots } from '../stage-shot-look.js';
 import { editShotLook, LOOK_EDIT_KEYS, lookText } from '../colour-script/edit.js';
 import { LIGHTING_PRESETS } from '../stage-lighting.js';
 import { LOOK_ADJUSTMENTS, LOOK_RECIPE_IDS, LOOK_RECIPES } from '../colour-script/recipes.js';
@@ -81,7 +81,8 @@ export function registerShotLook(registry, ports) {
       const document = { shots: owner().read(), stage: stage(), storyBeats: owner().state().storyBeats ?? [] };
       const planned = colourScript(document, { range }), render = args.measure !== false && typeof ports.renderFrameBuffer === 'function' ? ports.renderFrameBuffer : null;
       const measured = {};
-      if (render) for (const row of planned.shots) { const image = render(row.middleFrame); measured[row.shotId] = measurePalette(image.data, image.width, image.height); }
+      // Lit from the document's looks: the scene's own props can still be a render behind an edit just made.
+      if (render) withDrawShots(document.shots, () => { for (const row of planned.shots) { const image = render(row.middleFrame); measured[row.shotId] = measurePalette(image.data, image.width, image.height); } });
       const script = render ? colourScript(document, { range, measured }) : planned, line = colourScriptWords(script);
       return { affectedIds: [], summary: `Colour script: ${line}`.slice(0, 240), checks: { shots: script.shots.length, issues: script.hardCuts },
         output: { words: line, version: script.version, measured: Boolean(render),

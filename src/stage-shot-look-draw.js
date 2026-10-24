@@ -10,7 +10,7 @@
 import { useMemo } from "react";
 import * as THREE from "three";
 import { createKeyLight, stageLook } from "./stage-lighting.js";
-import { shotLookAt, shotLookKey } from "./stage-shot-look.js";
+import { currentDrawShots, shotLookAt, shotLookKey } from "./stage-shot-look.js";
 import { playbackFrame, usePlaybackSnapshot } from "./motion/playback-frame-store.js";
 
 /** The stage { lighting, keyLight, key } at the playhead: re-read only when the look in play changes. */
@@ -20,17 +20,20 @@ export function useShotLook(lighting, keyLight, shots) {
 }
 
 const noop = () => {};
+/** What a look lights with, as one comparable string. */
+export const lookSignature = ({ lighting, keyLight }) => JSON.stringify([lighting ?? null, keyLight ?? null]);
 
 /**
  * Light the scene as the export frame's shot look for one draw.
- * scene.userData.shotLook: { at(frame) -> shotLookAt's answer, frameRef, shown (the key on screen), theme, grid, keyColor(keyLight), sky(bottom, top) }
+ * scene.userData.shotLook: { at(frame, shots?) -> shotLookAt's answer, frameRef, shown (lookSignature of the look on screen), theme, grid, keyColor(keyLight), sky(bottom, top) }
  * @returns {() => void} puts every value back
  */
 export function applyShotLookForDraw(scene) {
 	const hook = scene?.userData?.shotLook;
 	if (!hook?.frameRef) return noop;
-	const target = hook.at(hook.frameRef.current);
-	if (target.key === hook.shown) return noop;
+	// The look on screen can lag the document (the 3D tree renders after the DOM), so the look is compared, not its shot.
+	const target = hook.at(hook.frameRef.current, currentDrawShots());
+	if (lookSignature(target) === hook.shown) return noop;
 	const look = stageLook({ lighting: target.lighting, keyLight: target.keyLight, theme: hook.theme, grid: hook.grid }), key = createKeyLight(target.keyLight);
 	const undo = [];
 	const keep = (object, field) => { const value = object[field]; undo.push(() => { object[field] = value; }); };
