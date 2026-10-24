@@ -1,0 +1,17 @@
+{
+	"category": "negative",
+	"label": "negatives",
+	"scenarios": [
+		{"id": "neg-whiskey", "tier": "core", "category": "negative", "request": "pour Joon a shot of whiskey", "cast": ["mara", "joon"], "expected": {"action": "none"}, "apply": {"refused": "INVALID_ARGUMENT"}, "why": "A drink, not a camera shot."},
+		{"id": "neg-gunshot-panic", "tier": "core", "category": "negative", "request": "the gunshot makes Mara panic", "cast": ["mara", "joon"], "expected": {"action": "none"}, "apply": {"refused": "INVALID_ARGUMENT"}, "why": "A gunshot; the panic is a story beat, not a request for a vertigo shot."},
+		{"id": "neg-basketball", "tier": "core", "category": "negative", "request": "Joon lines up a basketball shot and misses", "cast": ["mara", "joon"], "expected": {"action": "none"}, "why": "A basketball shot is sport."},
+		{"id": "neg-flu-weak", "tier": "core", "category": "negative", "request": "Mara gets her flu shot and feels weak", "cast": ["mara", "joon"], "expected": {"action": "none"}, "apply": {"refused": "INVALID_ARGUMENT"}, "why": "A flu shot is medicine; \"weak\" does not ask for a high angle here."},
+		{"id": "neg-tequila", "tier": "core", "category": "negative", "request": "take a shot of tequila with the bride", "cast": ["mara", "joon"], "expected": {"action": "none"}, "why": "Another drink."},
+		{"id": "neg-golf", "tier": "core", "category": "negative", "request": "a golf shot onto the green", "cast": ["mara", "joon"], "expected": {"action": "none"}, "why": "A golf shot is sport."},
+		{"id": "neg-was-shot", "tier": "core", "category": "negative", "request": "Joon was shot in the arm and is in shock", "cast": ["mara", "joon"], "expected": {"action": "none"}, "why": "Being shot is a wound, and the shock is his, not a crash zoom."},
+		{"id": "neg-best-shot", "tier": "core", "category": "negative", "request": "give it your best shot, Mara", "cast": ["mara", "joon"], "expected": {"action": "none"}, "why": "An attempt, not a bust shot with a slip."},
+		{"id": "neg-mugshot", "tier": "core", "category": "negative", "request": "a mugshot for the police file", "cast": ["mara", "joon"], "expected": {"action": "none"}, "why": "A police photo, not a camera direction."},
+		{"id": "neg-band-shots", "tier": "core", "category": "negative", "request": "the band does shots at the bar after the gig", "cast": ["mara", "joon"], "expected": {"action": "none"}, "why": "Doing shots is drinking."},
+		{"id": "neg-coffee", "tier": "core", "category": "negative", "request": "hand me the coffee", "cast": ["mara", "joon"], "expected": {"action": "none"}, "why": "No camera words at all."}
+	]
+}

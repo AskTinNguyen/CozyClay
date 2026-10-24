@@ -1,0 +1,14 @@
+{
+	"category": "cuts",
+	"label": "cut checks",
+	"scenarios": [
+		{"id": "cuts-check-mine", "tier": "core", "category": "cuts", "request": "check my cuts", "cast": ["mara", "joon"], "expected": {"action": "camera.checkCuts"}, "apply": {"setup": "srs", "flags": []}, "why": "A plain request to read every cut."},
+		{"id": "cuts-cross-96", "tier": "core", "category": "cuts", "request": "is the cut at 96 crossing the line?", "cast": ["mara", "joon"], "expected": {"action": "camera.checkCuts", "frame": 96}, "apply": {"setup": "srs-crossed", "flags": ["line"]}, "why": "One cut, by frame, for the 180-degree rule."},
+		{"id": "cuts-any-jumps", "tier": "core", "category": "cuts", "request": "any jump cuts in this scene?", "cast": ["mara", "joon"], "expected": {"action": "camera.checkCuts"}, "apply": {"setup": "jump", "flags": ["jump"]}, "why": "A jump cut is the same subject from nearly the same place."},
+		{"id": "cuts-eyelines-reverse", "tier": "core", "category": "cuts", "request": "are the eyelines matching across the reverse?", "cast": ["mara", "joon"], "expected": {"action": "camera.checkCuts"}, "apply": {"setup": "srs", "flags": []}, "why": "A question about eyelines is a cut check even when it says \"reverse\"."},
+		{"id": "cuts-break-180", "tier": "core", "category": "cuts", "request": "did we break the 180 line?", "cast": ["mara", "joon"], "expected": {"action": "camera.checkCuts"}, "apply": {"setup": "srs-crossed", "flags": ["line"]}, "why": "Breaking the line is the classic continuity question."},
+		{"id": "cuts-screen-chase", "tier": "core", "category": "cuts", "request": "check screen direction on the chase", "cast": ["mara", "joon"], "expected": {"action": "camera.checkCuts"}, "why": "Screen direction is a cut rule; \"chase\" here is not the chase coverage."},
+		{"id": "cuts-edit-144", "tier": "core", "category": "cuts", "request": "is the edit at frame 144 ok?", "cast": ["mara", "joon"], "expected": {"action": "camera.checkCuts", "frame": 144}, "why": "An edit is a cut; the frame names which one."},
+		{"id": "cuts-jump-the-line", "tier": "stretch", "category": "cuts", "request": "does the cut from Mara to Joon jump the line", "cast": ["mara", "joon"], "expected": {"action": "camera.checkCuts"}, "why": "\"Jump the line\" is said for crossing it."}
+	]
+}

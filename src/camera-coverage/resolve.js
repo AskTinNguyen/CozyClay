@@ -23,7 +23,7 @@ export function parseComposition(text) {
 	else if (/\b(loose|more|lots of|plenty of|extra) head ?room\b/.test(phrase)) out.headroom = "loose";
 	else if (/\bnormal head ?room\b/.test(phrase)) out.headroom = "normal";
 	if (/\b(lead|looking|nose|leading) ?room\b|\bleadroom\b/.test(phrase)) {
-		out.leadRoom = /\b(more|extra|lots of|plenty of|bigger)\b/.test(phrase) ? "more" : /\b(travel|travelling|traveling|walking|moving|motion)\b/.test(phrase) ? "travel" : "facing";
+		out.leadRoom = /\b(more|extra|lots of|plenty of|bigger)\b/.test(phrase) ? "more" : /\b(travel|travels|travelling|traveling|walk|walks|walking|run|runs|running|moving|moves|motion|drives|driving)\b/.test(phrase) ? "travel" : "facing";
 		out.place ??= "auto";
 	}
 	return Object.keys(out).length ? out : null;
@@ -39,30 +39,37 @@ function namedCast(text, cast = []) {
 const ALIASES = COVERAGE_PATTERNS.flatMap((pattern) => [pattern.name, pattern.id, ...pattern.aliases].map((alias) => ({ id: pattern.id, key: normalizePhrase(alias) })))
 	.sort((a, b) => b.key.length - a.key.length);
 
-/** The coverage pattern a phrase asks for, or null. */
+/** The coverage pattern a phrase asks for and the words that named it, or null. */
 function resolveCoveragePattern(text) {
 	const phrase = normalizePhrase(text);
-	return ALIASES.find((row) => has(phrase, row.key))?.id ?? null;
+	return ALIASES.find((row) => has(phrase, row.key)) ?? null;
 }
+/** The words of a phrase a pattern matched, in order. */
+const wordsOf = (phrase, pattern) => [...phrase.matchAll(new RegExp(pattern.source, "g"))].map((match) => match[0]);
+
+const CROSS = /\b(cross|crosses|crossing|crossed|break|breaks|breaking|broke)\b/, LINE = /\b(line|180|axis)\b/;
+const CUT = /\b(jump cuts?|cuts?|edit|eyelines?|screen direction|continuity)\b/, ASK = /\b(check|checks|ok|okay|clean|flag|flags|any|problem|problems|is|are|crossing)\b/;
+const COMPOSE = /\b(rule of thirds|thirds?|centre|center|centred|centered|central|symmetrical|symmetric|(?:(?:tight|less|little|no|loose|more|lots of|plenty of|extra|normal|bigger) )?(?:head ?room|lead ?room|leadroom|looking ?room|nose ?room|leading ?room)|left|right)\b/;
 
 /**
- * One request -> the action that answers it: { action, args, via } or null.
+ * One request -> the action that answers it: { action, args, via, matched, confidence } or null.
+ * matched lists the words that decided it; confidence is high (named outright) or medium (a cut word without a question).
  * @param {{cast?: Array<{id:string,name?:string}>}} [options]
  */
 export function resolveCameraRequest(text, { cast = [] } = {}) {
 	const phrase = normalizePhrase(text), named = namedCast(text, cast);
-	const crossing = /\b(cross|crosses|crossing|crossed|break|breaks|breaking|broke)\b/.test(phrase) && /\b(line|180|axis)\b/.test(phrase);
-	const cutWords = /\b(cut|cuts|edit|jump cut|jump cuts|eyeline|eyelines|screen direction|continuity)\b/.test(phrase);
-	if ((crossing || (cutWords && /\b(check|checks|ok|okay|clean|flag|flags|any|problem|problems|is|are|crossing)\b/.test(phrase))) && !/\b(cover|coverage|lay|give me)\b/.test(phrase)) {
+	const crossing = CROSS.test(phrase) && LINE.test(phrase), cutWords = CUT.test(phrase), asked = ASK.test(phrase);
+	if ((crossing || (cutWords && asked)) && !/\b(cover|coverage|lay|give me)\b/.test(phrase)) {
 		const frame = phrase.match(/\b(?:at|frame|on)\s+(\d{1,5})\b/)?.[1];
-		return { action: "camera.checkCuts", args: frame ? { frame: Number(frame) } : {}, via: "cut words" };
+		const matched = crossing ? [...wordsOf(phrase, CROSS), ...wordsOf(phrase, LINE)] : wordsOf(phrase, CUT);
+		return { action: "camera.checkCuts", args: frame ? { frame: Number(frame) } : {}, via: "cut words", matched, confidence: crossing || /\bcheck/.test(phrase) ? "high" : "medium" };
 	}
 	const pattern = resolveCoveragePattern(phrase);
 	if (pattern) {
 		// "reverse on Joon": the reverse pattern, with Joon's side first.
-		return { action: "camera.cover", args: { pattern, ...(named.length ? { cast: named.slice(0, 2) } : {}) }, via: "coverage words" };
+		return { action: "camera.cover", args: { pattern: pattern.id, ...(named.length ? { cast: named.slice(0, 2) } : {}) }, via: "coverage words", matched: [pattern.key], confidence: "high" };
 	}
 	const composition = parseComposition(phrase);
-	if (composition) return { action: "camera.applyTechnique", args: { composition, ...(named.length ? { subjectId: named[0] } : {}) }, via: "composition words" };
+	if (composition) return { action: "camera.applyTechnique", args: { composition, ...(named.length ? { subjectId: named[0] } : {}) }, via: "composition words", matched: wordsOf(phrase, COMPOSE), confidence: "high" };
 	return null;
 }

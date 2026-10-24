@@ -17,7 +17,7 @@ import { fail, shotLabel } from './shared.js';
 import { registerRig, rigDeclarations } from './camera-rig.js';
 import { capabilityReadback, capabilityScene } from '../camera-capabilities/readback.js';
 import { compositionSchema, coverageDeclarations, registerCoverage } from './camera-coverage.js';
-import { resolveCameraRequest } from '../camera-coverage/resolve.js';
+import { routeCameraRequest } from '../camera-coverage/route.js';
 import { eyePoint, measureComposition } from '../camera-coverage/composition.js';
 import { travelAt } from '../camera-coverage/cut-geometry.js';
 import { currentTechnique } from '../camera-techniques/storage.js';
@@ -75,10 +75,12 @@ export function register(registry, ports) {
   function apply(args, context) {
     const view = ports.readView(), visible = view.characters.filter(row => !row.hidden), named = visible.map(row => ({ id: row.id, name: row.subject ?? row.name }));
     // Coverage and cut questions go to their own actions; composition words ride on this one.
-    const routed = args.request && !args.stack ? resolveCameraRequest(args.request, { cast: named }) : null;
-    if (routed && routed.action !== 'camera.applyTechnique') return context.run(routed.action, { ...routed.args, ...(args.shotId && routed.action === 'camera.cover' ? { shotId: args.shotId } : {}), ...(routed.action === 'camera.cover' ? {} : { request: args.request }) });
-    const parsed = args.request ? parseRequest(args.request, { cast: named }) : null, composition = args.composition ?? routed?.args.composition;
-    if (parsed && routed && parsed.matched.every(row => row.via === 'mood')) parsed.stack = [];
+    // One router (camera-coverage/route.js) for every request: a non-camera "shot" names no action.
+    const routed = args.request ? routeCameraRequest(args.request, { cast: named }) : null;
+    if (routed?.action === 'none' && !args.stack && !args.composition) fail('INVALID_ARGUMENT', `No camera action in "${args.request}": ${routed.reason} (confidence ${routed.confidence}); name a technique (push-in, low angle, OTS), a coverage or a mood. Read camera.techniques.`);
+    if (routed && !args.stack && routed.action !== 'camera.applyTechnique' && routed.action !== 'none') return context.run(routed.action, { ...routed.args, ...(args.shotId && routed.action === 'camera.cover' ? { shotId: args.shotId } : {}), request: args.request });
+    const parsed = routed?.action === 'camera.applyTechnique' ? { stack: routed.args.stack ?? [], subjectId: routed.args.subjectId, dropped: routed.dropped, matched: routed.resolved } : null;
+    const composition = args.composition ?? routed?.args.composition;
     let shot = args.shotId ? owner().read().find(row => row.id === args.shotId) ?? fail('STALE_TARGET', `Shot ${args.shotId} is not in this scene.`)
       : shotAtFrame(owner().read(), view.view?.frame ?? ports.state().frame) ?? owner().read().find(row => row.id === view.selectedShotId);
     if (!shot && !owner().read().length) { context.run('shot.create'); shot = owner().read()[0]; }
@@ -136,7 +138,7 @@ export function register(registry, ports) {
       checks: { technique: plan.label, ...achieved.checks, ...(plan.expectedMove ? { expectedMove: plan.expectedMove } : {}), ...(move ? { move: move.id, moveVerified: verified, fromSize: move.from.sizeLabel, toSize: move.to.sizeLabel } : {}),
         ...pick(checks, ['derivedSize', 'screenFraction', 'clipped', 'behindCamera', 'occluded', 'cameraSide']), ...(plan.members ? { membersInFrame: plan.members.filter(row => row.inFrame).length, members: plan.members.length } : {}),
         ...(placed ? { composition: plan.composition.label, screenX: placed[0].screenX, eyeLineY: placed[0].eyeLineY } : {}) },
-      output: { technique, subjectId: subject.id, keys: shot.cameraKeys.length, mode: shot.camera.mode, ...(parsed ? { resolved: parsed.matched } : {}),
+      output: { technique, subjectId: subject.id, keys: shot.cameraKeys.length, mode: shot.camera.mode, ...(parsed ? { resolved: parsed.matched, matched: routed.matched, confidence: routed.confidence } : {}),
         ...(placed ? { composition: { ...technique.composition, target: { screenX: (plan.composition.target.x + 1) / 2, eyeLineY: (1 - plan.composition.target.y) / 2 }, keys: placed } } : {}) } };
   }
   const pick = (value, keys) => Object.fromEntries(keys.filter(key => value?.[key] !== undefined).map(key => [key, value[key]]));

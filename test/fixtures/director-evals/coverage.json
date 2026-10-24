@@ -1,0 +1,15 @@
+{
+	"category": "coverage",
+	"label": "coverage patterns",
+	"scenarios": [
+		{"id": "cover-conversation", "tier": "core", "category": "coverage", "request": "cover this conversation between Mara and Joon", "cast": ["mara", "joon"], "expected": {"action": "camera.cover", "pattern": "shot-reverse-shot", "cast": ["mara", "joon"]}, "apply": {"shots": 4, "oneSide": true, "issues": 0}, "why": "A two-person talk is covered over the shoulders, both cameras on one side."},
+		{"id": "cover-master-dinner", "tier": "core", "category": "coverage", "request": "give me master and coverage for the dinner scene", "cast": ["mara", "joon"], "expected": {"action": "camera.cover", "pattern": "master-coverage"}, "apply": {"shots": 5, "oneSide": true, "issues": 0}, "why": "The safety net: a wide master, then mediums and close-ups."},
+		{"id": "cover-reverse-joon", "tier": "core", "category": "coverage", "request": "reverse on Joon", "cast": ["mara", "joon"], "expected": {"action": "camera.cover", "pattern": "shot-reverse-shot", "cast": ["joon"]}, "why": "A reverse on him starts the exchange from his side."},
+		{"id": "cover-walk-corridor", "tier": "core", "category": "coverage", "request": "walk and talk down the corridor", "cast": ["mara", "joon"], "expected": {"action": "camera.cover", "pattern": "walk-and-talk"}, "apply": {"shots": 2, "issues": 0}, "why": "The talk moves, so the coverage travels with it."},
+		{"id": "cover-singles-argument", "tier": "core", "category": "coverage", "request": "clean singles for the argument, no shoulders", "cast": ["mara", "joon"], "expected": {"action": "camera.cover", "pattern": "dialogue-singles"}, "apply": {"shots": 2, "oneSide": true, "issues": 0}, "why": "Clean singles keep each speaker alone in the frame: colder, more divided."},
+		{"id": "cover-fight", "tier": "core", "category": "coverage", "request": "cover the fight", "cast": ["mara", "joon"], "expected": {"action": "camera.cover", "pattern": "action-coverage"}, "apply": {"shots": 4, "issues": 0}, "why": "A fight is action coverage: establish, track, punch in, react; \"fight\" is not a slip for \"tight\"."},
+		{"id": "cover-funnel-city", "tier": "core", "category": "coverage", "request": "start on the city and funnel in to Mara", "cast": ["mara", "joon"], "expected": {"action": "camera.cover", "pattern": "establish-detail", "cast": ["mara"]}, "apply": {"shots": 4, "issues": 0}, "why": "From the place to the person, one step closer each shot."},
+		{"id": "cover-branching-full", "tier": "core", "category": "coverage", "request": "a branching argument: give me full coverage so the editor can pick", "cast": ["mara", "joon"], "expected": {"action": "camera.cover", "pattern": "master-coverage"}, "why": "A scene that may be cut many ways needs edit-safe full coverage."},
+		{"id": "cover-chase-alley", "tier": "core", "category": "coverage", "request": "chase coverage for the alley run", "cast": ["mara", "joon"], "expected": {"action": "camera.cover", "pattern": "action-coverage"}, "why": "A chase is covered like action: space first, then pace, then the beat."}
+	]
+}

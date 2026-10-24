@@ -99,7 +99,7 @@ export function registerCoverage(registry, ports, { castRow }) {
   function cover(args, context) {
     if (ports.storeDomain?.('scenes')?.metadata?.().previsMode === 'storyboard') fail('TARGET_NOT_READY', 'Coverage lays clip shots; switch the scene out of storyboard mode first.');
     const view = ports.readView(), people = visible(), named = people.map(row => ({ id: row.id, name: row.subject ?? row.name }));
-    const routed = args.request && !args.pattern ? resolveCameraRequest(args.request, { cast: named }) : null;
+    const routed = args.request ? resolveCameraRequest(args.request, { cast: named }) : null;
     if (args.request && !args.pattern && routed?.action !== 'camera.cover') fail('INVALID_ARGUMENT', `No coverage pattern in "${args.request}"; name one of ${COVERAGE_PATTERN_IDS.join(', ')}.`);
     const pattern = args.pattern ?? routed.args.pattern, castIds = args.cast ?? routed?.args.cast ?? [];
     const first = castIds[0] ?? (people.some(row => row.id === view.activeCharacterId) ? view.activeCharacterId : people[0]?.id);
@@ -127,7 +127,7 @@ export function registerCoverage(registry, ports, { castRow }) {
       summary: `Laid ${name} over ${range.startFrame}-${range.endFrame}: ${laid.map(row => row.name.replace(/^\S+ \d+ · /, '')).join(', ')}; ${issues ? `${issues} cut issue${issues === 1 ? '' : 's'}` : 'every cut clean'}.`.slice(0, 240),
       warnings: [...issueWarnings(cuts), ...warnings, ...plan.notes.map(message => ({ code: 'COVERAGE_NOTE', message: message.slice(0, 120) }))].slice(0, 12),
       checks: { pattern: plan.pattern, shots: laid.length, cuts: cuts.length, issues, lineSide: plan.lineSide },
-      output: { pattern: plan.pattern, subjects: plan.subjects, lineSide: plan.lineSide, shots: laid, cuts: cuts.map(compactCut), ...(routed ? { resolved: routed.via } : {}) } };
+      output: { pattern: plan.pattern, subjects: plan.subjects, lineSide: plan.lineSide, shots: laid, cuts: cuts.map(compactCut), ...(routed?.action === 'camera.cover' ? { resolved: routed.via, matched: routed.matched, confidence: routed.confidence } : {}) } };
   }
 
   function check(args) {
@@ -138,7 +138,7 @@ export function registerCoverage(registry, ports, { castRow }) {
     const issues = cuts.reduce((sum, cut) => sum + cut.issues.length, 0), flagged = cuts.filter(cut => cut.issues.length);
     const said = flagged.slice(0, 2).map(cut => `cut at ${cut.cutFrame}: ${cut.issues.map(issue => issue.message).join(' ')}`).join(' ');
     return { affectedIds: [], summary: `${cuts.length} cut${cuts.length === 1 ? '' : 's'} checked: ${issues ? said : 'no rule broken'}`.slice(0, 240), warnings: issueWarnings(cuts),
-      checks: { cuts: cuts.length, issues }, output: { cuts: cuts.map(compactCut), rules: CUT_RULES } };
+      checks: { cuts: cuts.length, issues }, output: { cuts: cuts.map(compactCut), rules: CUT_RULES, ...(routed?.action === 'camera.checkCuts' ? { matched: routed.matched, confidence: routed.confidence } : {}) } };
   }
 
   function setTransition({ shotId, cutFrame, type, frames, offsetFrames, note, edge = 'in' }) {

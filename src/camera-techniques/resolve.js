@@ -17,12 +17,18 @@ export function slotOf(entry) {
 	return "modifier";
 }
 
+// A name without its "shot" that is an everyday word names nothing on its own:
+// "the floor starts spinning" is not a floor shot, "a full 360" not a full shot (director-evals).
+const EVERYDAY = new Set(["head", "eyes", "bust", "mid", "waist", "knee", "full", "high", "low", "god", "top", "ceiling", "floor", "side", "boot", "still",
+	"fixed", "circle", "truck", "travelling", "following", "tail", "two", "2", "three", "3", "rising", "descending", "cover", "location", "hands", "detail", "est",
+	"subjective", "point of", "elevator", "tilted", "frontal"]);
 const KEYS = new Map();
 for (const pass of ["name", "alias", "short"]) {
 	for (const entry of TECHNIQUES) {
 		const words = pass === "name" ? [entry.name, entry.id] : pass === "alias" ? entry.aliases : [entry.name, ...entry.aliases].map((key) => normalizePhrase(key).replace(/ (shot|view)$/, ""));
 		for (const word of words) {
 			const key = normalizePhrase(word);
+			if (pass === "short" && EVERYDAY.has(key)) continue;
 			if (key && !KEYS.has(key)) KEYS.set(key, { id: entry.id, via: pass === "short" ? "name" : pass });
 		}
 	}
@@ -43,9 +49,10 @@ function distance(a, b) {
 }
 const tolerance = (length) => (length < 5 ? 0 : length <= 8 ? 1 : 2);
 // Word by word, so a slip stays inside one word: "handheld slow" is not "handheld shot".
+// A slip keeps a word's first letter: "right" and "fight" are not "tight", "room in" is not "zoom in" (director-evals).
 const wordsClose = (phrase, key) => {
 	const a = phrase.split(" "), b = key.split(" ");
-	return a.length === b.length && a.every((word, i) => distance(word, b[i]) <= (b[i].length < 4 ? 0 : b[i].length <= 8 ? 1 : 2));
+	return a.length === b.length && a.every((word, i) => word[0] === b[i][0] && distance(word, b[i]) <= (b[i].length < 4 ? 0 : b[i].length <= 8 ? 1 : 2));
 };
 
 function fuzzy(phrase) {
@@ -106,7 +113,7 @@ export function searchTechniques(text, { kind = null, mood = null } = {}) {
 	return rows.map((entry) => ({ entry, s: score(entry) })).filter((row) => row.s > 0).sort((a, b) => b.s - a.s).map((row) => row.entry);
 }
 
-const SPEED_WORDS = { slow: "slow", slowly: "slow", gentle: "slow", gently: "slow", creeping: "slow", subtle: "slow", leisurely: "slow",
+const SPEED_WORDS = { slow: "slow", slowly: "slow", slower: "slow", faster: "fast", gentle: "slow", gently: "slow", creeping: "slow", subtle: "slow", leisurely: "slow",
 	medium: "medium", moderate: "medium", steady: "medium", fast: "fast", quick: "fast", quickly: "fast", rapid: "fast", snappy: "fast", sudden: "fast" };
 const DIRECTIONS = new Set(["left", "right", "up", "down", "in", "out"]);
 
