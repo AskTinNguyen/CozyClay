@@ -35,7 +35,7 @@ Then point a client at it. For Claude Desktop, in `claude_desktop_config.json`:
 }
 ```
 
-Restart the client; 34 tools appear.
+Restart the client; 35 tools appear.
 
 Prefer a long-lived endpoint? `node server.mjs --http 5183` serves Streamable HTTP at
 `http://127.0.0.1:5183/mcp` (one isolated session per client), with a plain status page at `/`.
@@ -84,6 +84,7 @@ generated frame matches the blocking instead of drifting off into a generic shot
 | `check_cuts` | the editing rules at every cut: 180-degree line crossings, jump cuts, screen-direction flips, shot-reverse-shot eyelines, each with severity, frames and a fix; read only. With an editor it runs `camera.checkCuts`; in memory it checks the `cover_scene` plan |
 | `check_motivation` | why each camera move happens: every move segment is motivated by a beat (a story beat, or with an editor a motion beat of an installed take), by its subject (follow camera, mount, tracking rail, a camera keeping a travelling subject on screen), or unmotivated; a beat more than `tolerance` frames (default 6) from the move's start or rest is `starts-off-beat` / `settles-off-beat`. Each issue has a severity, frames and a fix; read only. With an editor it runs `camera.checkMotivation`; in memory it checks the `cover_scene` plan and the `mark_camera_move` move against story beats and subject travel only, and says so |
 | `story_beats` | add, move, remove or list the story beats the check reads (a line, a reveal, a decision: `frame`, `label`, `kind`), or words ("add a beat 'confession' at 120"). With an editor it runs `story.addBeat` / `story.moveBeat` / `story.removeBeat` (one undo entry each), and lists through `story.listBeats` (every beat with its id, frame, label and kind) |
+| `check_structure` | the sequence's intensity curve against its story beats ("where does this sequence go flat?", "show me the intensity", "build to the reveal"): per shot size, height, lens, movement, cutting rate, roll and screen jump (each 0-1, weighted into one value), each cut's contrast, and `flat` / `peak-off-beat` / `no-build` issues with frames and a technique stack to apply (`apply_camera_technique`); without story beats only `flat` runs. `strip: true` adds the intensity strip as a PNG. Read only. With an editor it runs `camera.checkStructure`; in memory it reads the `cover_scene` plan against `story_beats` |
 | `set_camera_capabilities` | give the shot camera what placement cannot: `roll_deg` (Dutch angle), `f_stop` with `focus_on` (a character, followed per frame) or `focus_distance` (depth of field), `shake` (handheld or vehicle, seeded), `mount` (a Snorricam on a character's chest, head, hips or back), `speed` (0.5 = slow motion) and `shutter_deg` (motion blur); `at_frame` keys roll and focus (two focus keys rack focus). With an editor it runs `camera.set` / `camera.setKey`; in memory `render_prompt` states them |
 | `add_scene` / `switch_scene` | multiple scenes per project |
 | `open_project` / `save_project` | read and write `.cclayproject` files |
@@ -182,6 +183,22 @@ sequence brief names them (`Story 00:00:05:10 (f130): disclosure, Mara makes her
 camera into moves and judges each one; `camera.alignMove { shotId, beat, edge }` (through
 `studio_run`) retimes a move's camera keys or rig keys so it starts or comes to rest on the beat, as
 one undo entry, and answers the re-check. Holds and follow cameras are never flagged.
+
+## Intensity curve
+
+`check_structure` (`camera.checkStructure`) reads a sequence's visual structure from the measured
+cameras: per shot the size step, the camera's height against the subject's eyes, the focal length,
+the camera's speed, the shot length as cutting rate, the roll, and the subject's screen jump at the
+cut, each normalised to 0-1 and weighted into one combined value, and each cut's contrast (the jump
+in every component across it). The formulas, weights and limits live in one data module
+(`src/intensity-curve/weights.js`). Rules: `flat` (3 or more shots with every cut under 0.08 total
+contrast), `peak-off-beat` (the highest shot neither holds nor follows the strongest story beat) and
+`no-build` (no rise into a reveal, threat or decision beat, or the beat `beat` names); with no story
+beats only `flat` runs. Each issue's suggestion is a technique stack (one size tighter on a longer
+prime, `low-angle`) with `camera.applyTechnique` args, and shorter shots in words. The sequence brief
+gains one `STRUCTURE:` line ("intensity builds from 0.20 at beat 1 to a peak of 0.52 at beat 4, then
+releases to 0.49 by beat 5."), and `strip: true` returns the strip as a 960 x 160 PNG
+(`src/intensity-curve/strip.js` `stripImage`).
 
 ## Camera requests in words
 

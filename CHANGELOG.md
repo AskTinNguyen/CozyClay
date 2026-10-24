@@ -4,6 +4,15 @@
 
 Camera
 
+- Intensity curve: `camera.checkStructure` reads a sequence's visual
+  structure from the measured cameras (size, height, lens, movement, cutting
+  rate, roll, screen jump per shot; each cut's contrast) and flags where it
+  goes flat, peaks off its strongest story beat, or does not build into a
+  reveal, threat or decision, each with a technique stack to apply. An
+  Intensity strip under the timeline's shot blocks with a toggle per
+  component, a Structure section in Camera mode, a `STRUCTURE:` line in the
+  sequence brief, the strip as an image, MCP `check_structure`, and 8
+  director-eval scenarios.
 - Camera motivation: story beats (a line, a reveal, a decision) on the
   timeline, in OTIO markers and in the sequence brief; `camera.checkMotivation`
   says why each camera move happens (a story beat, a motion beat, its subject)
