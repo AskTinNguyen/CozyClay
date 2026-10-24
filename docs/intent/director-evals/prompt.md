@@ -1,7 +1,7 @@
 # Director Evals
 
 - Rev: 1
-- Status: planned
+- Status: active
 - Waits for: the owner's go-ahead. First of the cinematic-atlas plan; every later intent in it adds scenarios here.
 - Area: Camera and Shots
 - Owner: TinNguyen
