@@ -793,6 +793,10 @@ conversation", "check my cuts"), and composition words ("rule of thirds left",
 cclay live run camera.cover --args '{"request":"cover this conversation between Mara and Joon","shotId":"shot-dialogue"}'
 cclay live run camera.cover --args '{"pattern":"master-coverage","cast":["char-mara","char-joon"],"range":{"startFrame":192,"endFrameExclusive":432}}'
 cclay live run camera.checkCuts --args '{"request":"is the cut at 96 crossing the line?"}'
+cclay live run camera.cover --args '{"pattern":"triangle-dialogue","cast":["char-mara","char-joon","char-sela"],"shotId":"shot-dialogue"}'
+cclay live run camera.cover --args '{"request":"branching dialogue, three branches","cast":["char-mara","char-joon"]}'
+cclay live run camera.setLine --args '{"between":["char-joon","char-sela"],"shotId":"shot-cu"}'
+cclay live run camera.checkCoverage --args '{"request":"is my coverage enough to edit?"}'
 cclay live run camera.applyTechnique --args '{"shotId":"shot-cu","request":"rule of thirds left, more headroom"}'
 cclay live run camera.setTransition --args '{"cutFrame":48,"type":"dissolve","frames":16}'
 ```
@@ -805,6 +809,16 @@ Patterns: `shot-reverse-shot`, `master-coverage`, `dialogue-singles`,
 repeating pattern lays and `cuts` puts the cuts on given frames. Cut issues come
 back as warnings (`CUT_LINE`, `CUT_JUMP`, `CUT_SCREEN`, `CUT_EYELINE`) and in
 `output.cuts` with the fix.
+
+Group patterns take three to six cast: `triangle-dialogue`, `group-singles`
+and `branching-dialogue` (`branches`: a count, 2-8, or frame ranges; each
+branch repeats the same setups). Every pair's cameras keep one side of that
+pair's line, outside the group. `camera.setLine` names the pair a shot's line
+runs between (`between`, on `shotId`, `shotIds` or `all`); the cut rules judge
+each cut against the pair the two shots are about, and a cut between two pairs
+is a line change. `camera.checkCoverage` is read only: `checks.complete`, and
+each gap (`COVERAGE_MASTER`, `COVERAGE_SIZES`, `COVERAGE_LINE_CHANGE`,
+`COVERAGE_BRANCH`) with a suggested technique stack in `output.gaps`.
 
 ## Camera motivation
 

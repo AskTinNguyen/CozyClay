@@ -104,7 +104,7 @@ try {
 	};
 	const first = run("a.js"), second = run("b.js");
 	check("the generator rewrites the data deterministically from a fixture atlas", () => {
-		assert.match(first.log, /^atlas-refs: 4 entries with references, 71 without, 2 books -> /);
+		assert.match(first.log, /^atlas-refs: 4 entries with references, 74 without, 2 books -> /);
 		assert.equal(first.text, second.text);
 	});
 	const generated = await import(pathToFileURL(first.out).href);

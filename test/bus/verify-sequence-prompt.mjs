@@ -95,6 +95,39 @@ test('review: timecodes are delivery time, so a gap between shots does not show 
   } finally { f.dispose(); }
 });
 
+test('group-coverage A6: with three cast the continuity line names each pair\'s line, byte-identical across runs', async () => {
+  const { shotsFixture, framing } = await import('./shots-fixture.mjs');
+  const { createCharacterEntry } = await import('../../src/scenes.js');
+  const characters = [createCharacterEntry({ id: 'actor-a', model: 'y-bot-tpose', x: 0, z: 0, rot: 90, subject: 'Mara, a woman in a red raincoat' }),
+    createCharacterEntry({ id: 'actor-b', model: 'y-bot-tpose', x: 4, z: 0, rot: -90, subject: 'Joon, a tall man in a grey suit' }),
+    createCharacterEntry({ id: 'actor-c', model: 'y-bot-tpose', x: 2, z: 3.4, rot: 180, subject: 'Sela, a girl in a yellow coat' })];
+  const f = shotsFixture({ characters });
+  f.live.current.rigs['actor-c'] = f.live.current.rigs['actor-a'];
+  try {
+    f.shots.load({ shots: [{ ...createShot('Scene', 0, 311, [{ id: 'key-a', frame: 0, framing }]), id: 'shot-a' }], frameCount: 320, camera: f.actual.readStudioState().camera });
+    const receipt = f.run('camera.cover', { pattern: 'triangle-dialogue', cast: ['actor-a', 'actor-b', 'actor-c'], shotId: 'shot-a' }, 'agent');
+    assert.equal(receipt.ok, true, JSON.stringify(receipt).slice(0, 400));
+    const view = f.actual.readStudioState(), shots = [...f.live.current.shots].sort((a, b) => a.startFrame - b.startFrame);
+    const document = { title: 'Rooftop', fps: 24, aspect: '16:9', look: 'night rain', filmback: view.filmback, frameCount: 320, activeCharacterId: 'actor-a', cast: view.characters, shots };
+    const out = buildSequencePrompt(document), continuity = out.text.split('\n').find((line) => line.startsWith('CONTINUITY: '));
+    const lines = [...continuity.matchAll(/the (\w+)-(\w+) line \(beats? [\d, -]+\): every camera on its (left|right) \(seen from \w+\)/g)];
+    assert.equal(lines.length, 3, `three pair lines: ${continuity}`);
+    assert.deepEqual(new Set(lines.map((hit) => [hit[1], hit[2]].sort().join('-'))), new Set(['Joon-Mara', 'Joon-Sela', 'Mara-Sela']), 'each pair named once');
+    assert.match(continuity, /^CONTINUITY: Each pair keeps its own line of action: /);
+    assert.ok(!/crossing at beat/.test(continuity), 'no pair crosses its own line');
+    // Each pair's beats are exactly the shots that keep its authored line.
+    for (const hit of continuity.matchAll(/the (\w+)-(\w+) line \(beats? ([\d, -]+)\)/g)) {
+      const ids = [hit[1], hit[2]].map((name) => view.characters.find((row) => row.subject.startsWith(name)).id).sort().join('|');
+      const want = shots.map((shot, i) => ([...(shot.line?.between ?? [])].sort().join('|') === ids ? i + 1 : null)).filter(Boolean);
+      const said = hit[3].includes('-') ? (([a, b]) => Array.from({ length: b - a + 1 }, (_, k) => a + k))(hit[3].split('-').map(Number)) : hit[3].split(', ').map(Number);
+      assert.deepEqual(said, want, `${hit[1]}-${hit[2]} beats`);
+    }
+    const again = buildSequencePrompt(structuredClone(document));
+    assert.equal(Buffer.from(again.text).equals(Buffer.from(out.text)), true, 'byte-identical on a second run');
+    console.log(`PASS A6 group continuity: ${continuity}`);
+  } finally { f.dispose(); }
+});
+
 // camera-motivation A7: a motivated move states its reason; an unmotivated one states none.
 test('camera-motivation: the brief states why a move happens', () => {
   const { f, document } = coveredSequence({ roll: false, dissolve: false });

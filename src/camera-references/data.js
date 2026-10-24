@@ -62,6 +62,8 @@ export const REFERENCES = {
 		"walk-and-talk": [{ book: "master-shots-vol2", pages: [105, 106] }],
 		"action-coverage": [{ book: "film-directing-shot-by-shot", pages: [308, 310] }, { book: "master-shots-advanced", pages: [13, 14] }, { book: "shooting-the-scene", pages: [239, 240] }],
 		"establish-detail": [{ book: "film-directing-shot-by-shot", pages: [221, 409] }, { book: "film-directing-cinematic-motion", pages: [52, 284] }, { book: "master-shots-vol2", pages: [39, 58] }],
+		"triangle-dialogue": [{ book: "master-shots-vol2", pages: [58, 59] }, { book: "film-directing-cinematic-motion", pages: [226, 227] }],
+		"group-singles": [{ book: "master-shots-vol2", pages: [58, 71] }, { book: "master-shots-vol3", pages: [127, 128] }],
 	},
 	cuts: {
 		"line": [{ book: "master-shots-vol2", pages: [22, 23] }, { book: "master-shots-vol3", pages: [93, 94] }, { book: "film-directing-shot-by-shot", pages: [189, 190] }],
@@ -73,6 +75,6 @@ export const REFERENCES = {
 /** Entries the atlas has no page for: listed so the coverage check can tell a gap from an omission. */
 export const NO_REFERENCES = {
 	techniques: ["choker", "head-shot", "italian-shot", "cowboy-shot", "american-shot", "full-shot", "extreme-long-shot", "overhead-shot", "worms-eye-view", "dutch-angle", "canted-frame", "trunk-shot", "crash-zoom", "dolly-zoom", "vertigo-effect", "whip-pan", "pedestal-shot", "jib-shot", "impossible-shot", "aerial-shot", "helicopter-shot", "oner", "handheld-shot", "snorricam", "slow-motion"],
-	patterns: [],
+	patterns: ["branching-dialogue"],
 	cuts: ["jump"],
 };

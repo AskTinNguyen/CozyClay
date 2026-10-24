@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createShot } from '../src/cuts.js';
 import { checkMotivation, motivationReason } from '../src/camera-motivation/check.js';
-import { COVERAGE_PATTERN_IDS } from '../src/camera-coverage/patterns.js';
+import { COVERAGE_PATTERNS } from '../src/camera-coverage/patterns.js';
 import { coveredSequence } from './bus/sequence-fixture.mjs';
 
 const at = (z, extra = {}) => ({ pos: { x: 0, y: 1.6, z }, yaw: 0, pitch: 0, fovDeg: 40, ...extra });
@@ -68,7 +68,8 @@ test('A2: a motion beat motivates a move, and a move that rests off its landing 
 });
 
 test('A3: no issue on any coverage pattern, a held shot, or a camera that follows a walking subject; a push-in in a beatless window is flagged', () => {
-	for (const pattern of COVERAGE_PATTERN_IDS) {
+	// The two-person patterns: the sequence fixture stages two people (the group patterns need three, group-coverage).
+	for (const pattern of COVERAGE_PATTERNS.map((row) => row.id)) {
 		const { f, document } = coveredSequence({ pattern, push: false, roll: false, dissolve: false });
 		try {
 			const out = checkMotivation(document);

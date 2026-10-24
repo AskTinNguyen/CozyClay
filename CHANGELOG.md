@@ -4,6 +4,14 @@
 
 Camera
 
+- Group coverage: three to six people. Triangle Dialogue, Group Singles and
+  Branching Dialogue lay a scene's coverage with every pair's cameras on one
+  side of that pair's own line; the cut rules judge each cut against the pair
+  the two shots are about (an authored `camera.setLine`, the subjects, or a
+  gaze) and say when they cannot tell; `camera.checkCoverage` (MCP
+  `check_coverage`, and a Coverage check readout in the Camera panel) answers
+  whether there is enough to edit, each gap with a suggested shot; the
+  sequence prompt names every pair's line.
 - Camera motivation: story beats (a line, a reveal, a decision) on the
   timeline, in OTIO markers and in the sequence brief; `camera.checkMotivation`
   says why each camera move happens (a story beat, a motion beat, its subject)

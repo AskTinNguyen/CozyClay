@@ -1,10 +1,12 @@
 // The closing continuity line of a sequence brief: which side of the line of
 // action every camera keeps (the line between the two principals, or a lone
 // subject's facing), where each principal holds on screen, and the screen
-// direction of anyone who travels. Measured from the same sampled cameras the
+// direction of anyone who travels. With three or more people in the beats it
+// names each pair's line instead (continuity-group.js). Measured from the same sampled cameras the
 // beats state, with the cut rules' geometry (camera-coverage). Pure.
 import { castAt, lineSide, travelAt } from "../camera-coverage/cut-geometry.js";
 import { eyePoint, projectPoint, screenDirection } from "../camera-coverage/composition.js";
+import { groupContinuityLine, sequencePeople } from "./continuity-group.js";
 
 const NEUTRAL_M = 0.2, SCREEN_MIN = 0.25, DEG = Math.PI / 180;
 const nameOf = (row) => String(row.subject ?? row.name ?? row.id).split(",")[0].trim();
@@ -24,6 +26,8 @@ function principals(beats, cast) {
  */
 export function continuityLine(beats, shots, scene) {
 	const cast = scene.cast ?? [], aspect = scene.filmback?.aspectRatio ?? 16 / 9, parts = [], crossings = [];
+	// Three or more people in the beats: each pair's own line (continuity-group.js).
+	if (sequencePeople(beats, shots).filter((id) => cast.some((row) => row.id === id)).length >= 3) return groupContinuityLine(beats, shots, scene);
 	const [a, b] = principals(beats, cast);
 	if (!a) return { text: "No cast in these shots: keep the set's geography from beat to beat.", side: null, crossings };
 	const first = shots[0], pa = castAt(a, first, first.startFrame), pb = b ? castAt(b, first, first.startFrame) : null;
