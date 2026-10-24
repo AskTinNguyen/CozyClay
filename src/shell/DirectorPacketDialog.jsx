@@ -51,7 +51,7 @@ function DirectorPacketBody({ onClose, readStudioState, shots, recording }) {
 	}, [onClose]);
 	const flags = packet.shots.reduce((sum, row) => sum + row.flags.length, 0);
 	const shotOption = (shot, i) => <option key={shot.id} value={i + 1}>{`${i + 1}. ${shot.name || ko("Shot", "샷")}`}</option>;
-	const download = () => { void bus.run("export.directorPacket", { shotIds: packet.shots.map((row) => row.shotId) }, { origin: "ui" }); onClose(); };
+	const download = () => { void bus.run("export.directorPacket", { from: lo, to: hi }, { origin: "ui" }); onClose(); };
 	return createPortal(
 		<div className="menubar-dialog-backdrop" onPointerDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
 			<div className="menubar-dialog sequence-prompt director-packet" role="dialog" aria-modal="true" aria-labelledby={titleId} data-dialog="director-packet" data-testid="director-packet-dialog">
