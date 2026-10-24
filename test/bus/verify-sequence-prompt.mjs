@@ -144,3 +144,20 @@ test('camera-motivation: the brief states why a move happens', () => {
     console.log(`PASS A7 motive: ${out.text.split('\n').find((line) => line.startsWith('   Motive: ')).trim()}`);
   } finally { f.dispose(); }
 });
+
+// intensity-curve A4: one structure line says where the sequence builds and peaks, before the continuity line.
+test('intensity-curve: the brief states where the sequence builds and peaks', () => {
+  const { f, document } = coveredSequence();
+  try {
+    const out = buildSequencePrompt(document), lines = out.text.split('\n'), at = lines.findIndex((line) => line.startsWith('STRUCTURE: '));
+    assert.equal(lines.filter((line) => line.startsWith('STRUCTURE: ')).length, 1, 'one structure line');
+    assert.equal(lines[at], 'STRUCTURE: intensity builds from 0.20 at beat 1 to a peak of 0.52 at beat 4, then releases to 0.49 by beat 5.');
+    assert.ok(lines[at + 1].startsWith('CONTINUITY: '), 'just before the continuity line');
+    assert.equal(buildSequencePrompt(document, { range: { from: 2, to: 3 } }).text.split('\n').find((line) => line.startsWith('STRUCTURE: ')), 'STRUCTURE: intensity opens at its peak (0.44) and releases to 0.35 by beat 2.', 'a range reads its own shots');
+    assert.equal(f.run('story.addBeat', { frame: out.beats[3].startFrame + 4, label: 'the letter', kind: 'reveal' }, 'agent').ok, true);
+    const marked = buildSequencePrompt(documentOf(f));
+    assert.match(marked.text, /^STRUCTURE: intensity builds from 0\.20 at beat 1 to a peak of 0\.52 at beat 4 on 'the letter', then releases to 0\.49 by beat 5\.$/m, 'the peak names the story beat it holds');
+    assert.equal(buildSequencePrompt(structuredClone(documentOf(f))).text, marked.text, 'byte-identical on a second run');
+    console.log(`PASS A4 structure: ${marked.text.split('\n').find((line) => line.startsWith('STRUCTURE: '))}`);
+  } finally { f.dispose(); }
+});

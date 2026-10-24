@@ -10,17 +10,19 @@ import { techniqueById } from "../src/camera-techniques/index.js";
 import { coveragePattern } from "../src/camera-coverage/patterns.js";
 
 const DIR = new URL("./fixtures/director-evals/", import.meta.url);
-export const CATEGORIES = Object.freeze(["size", "angle", "move", "lens", "coverage", "composition", "cuts", "negative", "motivation"]);
+export const CATEGORIES = Object.freeze(["size", "angle", "move", "lens", "coverage", "composition", "cuts", "negative", "motivation", "structure"]);
 // The motivation actions (camera-motivation): the check, the retime, and the story beats.
 const MOTIVATION_KEYS = { "camera.checkMotivation": ["confidence"], "camera.alignMove": ["beat", "edge", "confidence"], "story.addBeat": ["frame", "label", "kind", "confidence"], "story.moveBeat": ["beat", "frame", "confidence"], "story.removeBeat": ["beat", "confidence"] };
-const ACTIONS = ["camera.applyTechnique", "camera.cover", "camera.checkCuts", "camera.checkCoverage", "camera.setLine", "none", ...Object.keys(MOTIVATION_KEYS)];
+// The structure check (intensity-curve): a question about the intensity curve, or a beat it must build into.
+const STRUCTURE_KEYS = { "camera.checkStructure": ["beat", "confidence"] };
+const ACTIONS = ["camera.applyTechnique", "camera.cover", "camera.checkCuts", "camera.checkCoverage", "camera.setLine", "none", ...Object.keys(MOTIVATION_KEYS), ...Object.keys(STRUCTURE_KEYS)];
 const CONFIDENCE = ["high", "medium", "low"];
 // The fixture cast every scenario names its people from (ids are what `cast` and `expected.subject` hold).
 // Sela (group-coverage) watches the two from 3.4 m off their line; a row brings her in by naming her in its cast.
 export const CAST = Object.freeze([{ id: "mara", name: "Mara", x: 0, z: 0, rot: 90 }, { id: "joon", name: "Joon", x: 4, z: 0, rot: -90 }, { id: "sela", name: "Sela", x: 2, z: 3.4, rot: 180 }]);
 const FIELDS = ["id", "tier", "category", "request", "cast", "expected", "why"];
 const EXPECTED_KEYS = { "camera.applyTechnique": ["stack", "params", "subject", "composition", "confidence"], "camera.cover": ["pattern", "cast", "branches", "confidence"],
-	"camera.checkCuts": ["frame", "confidence"], "camera.checkCoverage": ["cast", "confidence"], "camera.setLine": ["between", "confidence"], none: ["confidence"], ...MOTIVATION_KEYS };
+	"camera.checkCuts": ["frame", "confidence"], "camera.checkCoverage": ["cast", "confidence"], "camera.setLine": ["between", "confidence"], none: ["confidence"], ...MOTIVATION_KEYS, ...STRUCTURE_KEYS };
 const APPLY_KEYS = ["move", "size", "sizes", "height", "screenX", "eyeLineY", "shots", "oneSide", "issues", "setup", "flags", "refused", "complete", "line"];
 
 /** Every scenario row, in file then row order, each with the file it came from. */
