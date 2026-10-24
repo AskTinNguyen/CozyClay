@@ -221,6 +221,18 @@ technique each. The timeline Shot block shows the applied stack after its frame
 range ("0–119 · 5.0s · LOW · PUSH-IN · 35mm") while it still describes the
 camera. The picker adds no always-visible control outside Camera Details.
 
+Below Techniques, a **Camera rig** section edits the selected shot camera's
+capabilities, each one `camera.set`: Roll (degrees), Aperture (Off or an
+f-stop; depth of field in the Shot Camera preview and captures), Focus (the
+subject, a cast member, or a distance), Shake (Off, Handheld, Vehicle, with an
+Amount), Mount (Off or a cast member, with a Bone), Speed (0.25x to 2x; below 1
+is slow motion) and Shutter (Off or an angle; motion blur). **Key roll** and
+**Key focus** key the current roll and focus target at the playhead
+(`camera.setKey`); the keys are listed with a remove button and drawn on the
+timeline camera lane as round dots beside the framing-key diamonds. A shot with
+a speed shows it on its Shot block after the frame range ("· 0.5×"). The
+section adds no always-visible control outside Camera Details.
+
 G10 leaves exactly two visible add routes: viewport **+ Add** (the object
 catalogue plus Character and Camera) and **Content › Basic Shapes** (drag or
 double-click a primitive). The Outliner right-click **Create ▸** accelerator

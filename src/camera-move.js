@@ -6,6 +6,7 @@
 // the camera actually pushes in.
 
 import { FRAMING_PIVOT_Y, SUBJECT_HEIGHT_M, deriveShot, focalMmToFov, fovToFocalMm, usedSensorHeightMm } from "./shot.js";
+import { withRoll } from "./camera-capabilities/roll.js";
 
 export const CAMERA_PRESETS = Object.freeze({
 	"mocapLocomotion": Object.freeze({ id: "mocapLocomotion", label: "Mocap: locomotion", azimuthDeg: 45, height: 2.4, focalMm: 80, subjectFraction: 0.55 }),
@@ -75,7 +76,7 @@ export function easeInOut(t) {
 }
 // A key's `ease` shapes the segment that starts at it: absent eases in and out;
 // "linear" runs at constant speed (a crash zoom, a whip pan, a 360 orbit).
-const KEY_EASES = { linear: (t) => t, in: (t) => t * t * t, out: (t) => 1 - (1 - t) ** 3 };
+export const KEY_EASES = { linear: (t) => t, in: (t) => t * t * t, out: (t) => 1 - (1 - t) ** 3 };
 
 /**
  * Decompose a framing into subject-centred move coordinates: horizontal
@@ -156,8 +157,7 @@ const DEG = 180 / Math.PI;
 // Below these deltas the camera is, cinematically speaking, not doing that.
 const STILL_POS_M = 0.12;
 const STILL_ANGLE_DEG = 6;
-const DOLLY_M = 0.3;
-const CRANE_M = 0.4;
+const DOLLY_M = 0.3, CRANE_M = 0.4;
 const ORBIT_DEG = 20;
 const ZOOM_MM = 10;
 const VERTIGO_MM = 8;
@@ -266,7 +266,8 @@ export function classifyMove(a, b, subject, {
 		phrase = `a ${tempo}tracking move`;
 	}
 
-	return {
+	// A roll (framings with rollDeg, camera-capabilities) is named on top of the move.
+	return withRoll({
 		id,
 		label,
 		phrase,
@@ -274,7 +275,7 @@ export function classifyMove(a, b, subject, {
 		from: shotA,
 		to: shotB,
 		deltas: { dr, dAzDeg, dh, dFocal, dFocal24mm, dYawDeg, dPitchDeg, posDelta, sizeDrift },
-	};
+	}, a, b);
 }
 
 /** the burned-in move slate, e.g. "MEDIUM SHOT 35MM → CLOSE-UP 85MM · PUSH-IN (DOLLY IN)" */

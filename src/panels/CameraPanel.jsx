@@ -4,6 +4,7 @@ import { Field } from "../ui.jsx";
 import { VIDEO_MODEL_PRESETS } from "../model-presets.js";
 import { useBus } from "../app-context.js";
 import TechniquePicker from "./TechniquePicker.jsx";
+import CameraRigPanel from "./CameraRigPanel.jsx";
 
 export default function CameraPanel({ isCameraSelection, shot, moveSequence, cameraKeys, activeShot }) {
 	const { run } = useBus();
@@ -59,5 +60,7 @@ export default function CameraPanel({ isCameraSelection, shot, moveSequence, cam
 					</Foldout>
 					{/* The camera technique library: pick, stack and tune film techniques for the selected shot. */}
 					<TechniquePicker hidden={!isCameraSelection} activeShot={activeShot} />
+					{/* Roll, focus, shake, mount, speed and shutter on the selected shot's camera, with its rig keys. */}
+					<CameraRigPanel hidden={!isCameraSelection} activeShot={activeShot} />
 	</>);
 }

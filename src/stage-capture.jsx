@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { GIZMO_LAYER } from "./dualview.jsx";
+import { LENS_CAPTURE_SAMPLES, renderLens } from "./lens-render.js";
 
 export const CAPTURE_W = 1920;
 export const CAPTURE_H = 1080;
@@ -78,7 +79,8 @@ export function CaptureRig({ apiRef, camRef, width = CAPTURE_W, height = CAPTURE
 					}
 					try {
 						gl.setRenderTarget(target);
-						gl.render(scene, cam);
+						// Depth of field and motion blur (camera-capabilities) accumulate through the lens; a plain camera renders once.
+						if (!renderLens(gl, scene, cam, target, LENS_CAPTURE_SAMPLES)) gl.render(scene, cam);
 						gl.readRenderTargetPixels(target, 0, 0, width, height, buffer);
 					} finally {
 						gl.setRenderTarget(previous);
@@ -102,6 +104,8 @@ export function CaptureRig({ apiRef, camRef, width = CAPTURE_W, height = CAPTURE
 				const source = camRef.current;
 				if (!source) return null;
 				const cam = source.clone();
+				// A verification view is a measuring camera: no lens blur.
+				delete cam.userData.lens;
 				cam.clearViewOffset();
 				cam.position.set(...eye);
 				cam.quaternion.set(...quaternion);

@@ -14,9 +14,19 @@ Camera
   shot, and the timeline Shot block shows the stack ("LOW · PUSH-IN · 35mm").
 - Camera keys can run at constant speed (crash zoom, whip pan, 360 orbit).
 - The export prompt, the keyframe pack's prompt.txt and MCP `render_prompt`
-  state the applied technique; techniques that need roll, focus, shake, slow
-  motion or blur are stated as prompt words only.
-- MCP: `list_camera_techniques` and `apply_camera_technique` (29 tools).
+  state the applied technique.
+- Camera capabilities on the shot camera: roll, aperture and focus (depth of
+  field, rack focus on focus keys), seeded handheld or vehicle shake, a body
+  mount (Snorricam), shot speed (slow motion retimes the take) and a shutter
+  (motion blur), in the viewport, the Shot Camera preview, captures and every
+  export (camera.json, USD fStop/focusDistance/shutter, OTIO, the prompt).
+  `camera.set` and `camera.setKey`; a Camera rig section in Camera mode; roll
+  and focus keys on the timeline camera lane.
+- Dutch Angle, Canted Frame, Rack Focus, Handheld Shot, Snorricam, Slow Motion
+  and Whip Pan (with blur) apply their capability and the receipt reads it
+  back; only Shot-Reverse-Shot stays prompt words.
+- MCP: `list_camera_techniques`, `apply_camera_technique` and
+  `set_camera_capabilities` (30 tools).
 
 ## 3.1.2 - 2026-10-23
 

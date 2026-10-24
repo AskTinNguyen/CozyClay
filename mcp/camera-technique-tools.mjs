@@ -59,6 +59,8 @@ export function cameraTechniqueTools(deps) {
 			Object.assign(state.camera, { x: end.x, y: end.y, z: end.z, focalMm: Math.round(fovToFocalMm((fovDeg(end.focalMm) * Math.PI) / 180, gate.sensorId, gate.aspectRatio) * 100) / 100 });
 		}
 		state.focus = subject.id;
+		// The camera capabilities the stack sets (roll, focus, shake, mount, speed, shutter) live on the in-memory camera.
+		state.cameraCapabilities = plan.capabilities;
 		state.technique = { label: plan.label, phrase: techniquePhrase(plan, move), stack: plan.stack.map((row) => row.id), camera: cameraKey(state.camera) };
 		const verified = !plan.expectedMove || move?.id === plan.expectedMove;
 		return text([
@@ -66,6 +68,7 @@ export function cameraTechniqueTools(deps) {
 			move ? `move      ${move.label}${plan.expectedMove ? (verified ? " (verified by the move classifier)" : ` (expected ${plan.expectedMove})`) : ""}` : "move      none (prompt words only)",
 			ends ? `camera    ${deps.slateLine(deps.currentShot())}` : null,
 			`prompt    ${state.technique.phrase}`,
+			...(plan.capabilityWords.length ? [`camera    ${plan.capabilityWords.join("; ")} (set_camera_capabilities tunes it)`] : []),
 			...plan.promptOnly.map((part) => `prompt-only ${part.name}: needs ${part.requires.map((need) => PLANNED_CAPABILITIES[need]).join(" and ")}`),
 			...plan.notes.map((note) => `note      ${note}`),
 			...(plan.members ? [`group     ${plan.members.filter((row) => row.inFrame).length} of ${plan.members.length} in frame`] : []),

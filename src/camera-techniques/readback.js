@@ -40,9 +40,9 @@ export function classifyRail(rail, subject, frames, { fps = 24, height, filmback
 	return classifyMove(at(track[0]), at(track.at(-1)), subject, { durationS: frames / fps, height, sensorId: filmback.sensorId, aspectRatio: filmback.aspectRatio });
 }
 
-/** One prompt sentence for an applied stack: the proven move, the framing words, the lens, then the words only a prompt can carry. */
+/** One prompt sentence for an applied stack: the proven move, the framing words, the lens, what the camera's capabilities do, then the words only a prompt can carry. */
 export function techniquePhrase(plan, move) {
 	const parts = [...plan.words, move && move.id !== "static" ? move.phrase : plan.moveWords];
 	const lens = plan.label.match(/(\d+(?:→\d+)?)mm$/)?.[1];
-	return [...parts, ...(lens ? [`${lens.replace("→", " to ")}mm lens`] : []), ...plan.promptOnly.map((part) => part.words)].filter(Boolean).join("; ");
+	return [...parts, ...(lens ? [`${lens.replace("→", " to ")}mm lens`] : []), ...(plan.capabilityWords ?? []), ...plan.promptOnly.map((part) => part.words)].filter(Boolean).join("; ");
 }

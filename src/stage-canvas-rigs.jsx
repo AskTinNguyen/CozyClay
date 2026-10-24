@@ -5,6 +5,7 @@ import { aimAt } from "./controls.jsx";
 import { SUBJECT_HEIGHT_M } from "./shot.js";
 import { shotAtFrame } from "./cuts.js";
 import { sampleAt } from "./sample-at.js";
+import { applyShotCamera } from "./shot-camera-apply.js";
 import { playbackProbe, probeVisibility } from "./motion/playback-probe.js";
 import { RENDER_ACTIVITY_EVENT } from "./use-render-activity.js";
 import { PRESETS, editorFrameForSubject } from "./stage-startup-defaults.js";
@@ -30,7 +31,7 @@ export function ShotRig({ preset, nonce, fovDeg, charA, charB, showB, probe: pla
 			const last = lastPosRef.current;
 			cam.position.set(last.x, last.y, last.z);
 			cam.rotation.order = "YXZ";
-			cam.rotation.set(look.current.pitch, look.current.yaw, 0);
+			cam.rotation.set(look.current.pitch, look.current.yaw, look.current.roll ?? 0);
 			return;
 		}
 		if (appliedPresetRef) appliedPresetRef.current = stamp;
@@ -163,17 +164,11 @@ export function MoveRig({ playing, following, followFrame, frameRef, fps, keys, 
 			// invent a second cut to an arbitrary "free camera" preset.
 			const timelineShot = following ? shotAtFrame(shots, frame) : null;
 			const sampledShot = timelineShot
-				? { ...timelineShot, camera: { mode: "keys" } }
+				? { ...timelineShot, camera: { ...timelineShot.camera, mode: "keys" } }
 				: following ? null : { camera: { mode: "keys" }, cameraKeys: keys };
 			const f = sampleAt(scene, sampledShot, frame).camera;
-			if (!f) return null;
-			cam.position.set(f.pos.x, f.pos.y, f.pos.z);
-			look.current.yaw = f.yaw;
-			look.current.pitch = f.pitch;
-			if (Math.abs(cam.fov - f.fovDeg) > 1e-3) {
-				cam.fov = f.fovDeg;
-				cam.updateProjectionMatrix();
-			}
+			// Roll, mount, shake, focus and shutter ride the sample (camera-capabilities).
+			if (f) applyShotCamera(cam, look, f);
 			return f;
 		};
 		if (playing) {
@@ -221,11 +216,8 @@ export function FollowCamRig({ enabled, frame, frameRef, scene, shot, camRef, lo
 		const sample = sampleAt(scene, shot, playhead).camera;
 		if (!sample || applied.current === playhead) return;
 		applied.current = playhead;
-		cam.position.set(sample.pos.x, sample.pos.y, sample.pos.z);
-		look.current.yaw = sample.yaw;
-		look.current.pitch = sample.pitch;
 		// A rail with a lens of its own carries it; otherwise this is the scene lens.
-		if (Math.abs(cam.fov - sample.fovDeg) > 1e-3) { cam.fov = sample.fovDeg; cam.updateProjectionMatrix(); }
+		applyShotCamera(cam, look, sample);
 		invalidate();
 	});
 	return null;
@@ -244,8 +236,8 @@ export function ShotLookApplier({ camRef, look }) {
 		const cam = camRef.current;
 		if (!cam) return;
 		if (cam.rotation.order !== "YXZ") cam.rotation.order = "YXZ";
-		if (cam.rotation.x !== look.current.pitch || cam.rotation.y !== look.current.yaw || cam.rotation.z !== 0) {
-			cam.rotation.set(look.current.pitch, look.current.yaw, 0);
+		if (cam.rotation.x !== look.current.pitch || cam.rotation.y !== look.current.yaw || cam.rotation.z !== (look.current.roll ?? 0)) {
+			cam.rotation.set(look.current.pitch, look.current.yaw, look.current.roll ?? 0);
 		}
 	});
 	return null;

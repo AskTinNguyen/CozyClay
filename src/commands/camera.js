@@ -14,6 +14,8 @@ import { techniqueSignature } from '../camera-techniques/storage.js';
 import { PLANNED_CAPABILITIES, TECHNIQUE_KINDS } from '../camera-techniques/entry.js';
 import { StudioSchemas } from '../studio-agent-protocol.js';
 import { fail, shotLabel } from './shared.js';
+import { registerRig, rigDeclarations } from './camera-rig.js';
+import { capabilityReadback, capabilityScene } from '../camera-capabilities/readback.js';
 
 const id = StudioSchemas.TargetGuard.properties.targetId;
 const input = (properties, required = []) => ({ type: 'object', properties, required, additionalProperties: false });
@@ -29,10 +31,12 @@ export const declarations = Object.freeze([
     description: 'One camera technique in full: description, aliases, moods, params with defaults and ranges, the move the classifier confirms, and any camera capability it waits for (then it applies as prompt words only). Give id, or a phrase to resolve.',
     input: input({ id: { type: 'string', maxLength: 200 } }, ['id']) },
   { id: 'camera.applyTechnique', label: 'Apply camera technique', kind: 'mutation', undoDomain: 'shot',
-    description: `Frame or move a shot's camera with a technique stack, as one undo entry. ${STACK_HELP} It compiles to shot.frame keys (moves ease in and out; a crash zoom, whip pan and 360 run at constant speed) or a shot.setCameraRail rail (tracking, follow, Steadicam, dolly, helicopter, one-er), and answers what it achieved: the move the classifier reads back from the real keys (checks.moveVerified), the derived size, framing checks, group members in frame, and the parts that are prompt words only (roll, focus, shake, body mount, slow motion, blur). Shared params: speed slow|medium|fast, focalMm, direction, degrees. shotId defaults to the shot under the playhead (one is added when there is none); subjectId to the active character. The stack is stored on the shot and states itself in the export prompt.`,
+    description: `Frame or move a shot's camera with a technique stack, as one undo entry. ${STACK_HELP} It compiles to shot.frame keys (moves ease in and out; a crash zoom, whip pan and 360 run at constant speed) or a shot.setCameraRail rail (tracking, follow, Steadicam, dolly, helicopter, one-er), and answers what it achieved: the move the classifier reads back from the real keys (checks.moveVerified), the derived size, framing checks, group members in frame, and what the camera capabilities it sets through camera.set do (Dutch/canted roll, rack focus, handheld shake, Snorricam mount, slow motion, whip-pan blur: checks rollDeg, focus, focusDistances, shakeAmplitude, mountBone, speed, shutterDeg). Shared params: speed slow|medium|fast, focalMm, direction, degrees. shotId defaults to the shot under the playhead (one is added when there is none); subjectId to the active character. The stack is stored on the shot and states itself in the export prompt.`,
     input: input({ shotId: id, subjectId: id, stack: { type: 'array', items: item, minItems: 1, maxItems: 8 }, request: { type: 'string', minLength: 1, maxLength: 300 },
       speed: { type: 'string', enum: ['slow', 'medium', 'fast'] }, focalMm: { type: 'number', minimum: 8, maximum: 300 }, direction: { type: 'string', enum: ['left', 'right', 'up', 'down', 'in', 'out'] },
       degrees: { type: 'number', minimum: 5, maximum: 720 } }) },
+  // camera.set and camera.setKey: roll, lens, shake, mount, speed, shutter and rig keys (camera-rig.js).
+  ...rigDeclarations,
 ]);
 
 const scaled = row => SUBJECT_HEIGHT_M * (row.scale ?? 1);
@@ -58,6 +62,7 @@ export function register(registry, ports) {
   } });
   registry.register({ ...declarations[2], available: state => mounted() === true ? (state.characters?.some(row => !row.hidden) || 'Add a character first; a technique frames a character.') : mounted(),
     target: args => args.shotId, run(args, context) { return apply(args, context); } });
+  registerRig(registry, ports);
 
   function apply(args, context) {
     const view = ports.readView(), visible = view.characters.filter(row => !row.hidden);
@@ -88,11 +93,16 @@ export function register(registry, ports) {
       context.run('shot.setCameraRail', { shotId: shot.id, points, height, aim: [subject.id], aimHeight, focalMm });
       if (response) patch(shot.id, row => ({ ...row, camera: { ...row.camera, followCam: { ...row.camera.followCam, response } } }));
     }
+    // The capabilities this stack sets, and the ones the shot's previous stack set that this one no longer does (cleared).
+    const capabilityPatch = { ...plan.capabilities };
+    for (const field of shot.technique?.capabilities ?? []) if (!(field in capabilityPatch)) capabilityPatch[field] = null;
+    if (Object.keys(capabilityPatch).length) context.run('camera.set', { shotId: shot.id, ...capabilityPatch });
     shot = owner().read().find(row => row.id === shot.id);
     const length = shot.endFrame - shot.startFrame + 1, readOpts = { fps: TIMELINE_FPS, height: subject.height, filmback: view.filmback };
     const move = plan.rail ? classifyRail(plan.rail, subject, length, readOpts) : shot.cameraKeys.length && keys ? classifyKeys(shot.cameraKeys, subject, readOpts) : null;
     const technique = { stack: plan.stack.map(row => ({ id: row.id, params: row.params })), label: plan.label, phrase: techniquePhrase(plan, still ? null : move),
-      move: move?.id ?? '', promptOnly: plan.promptOnly.map(part => part.id), signature: techniqueSignature(shot) };
+      move: move?.id ?? '', promptOnly: plan.promptOnly.map(part => part.id), signature: techniqueSignature(shot), ...(Object.keys(plan.capabilities).length ? { capabilities: Object.keys(plan.capabilities) } : {}) };
+    const castName = castId => (rows.find(row => row.id === castId)?.name ?? castId).split(',')[0], achieved = capabilityReadback(shot, capabilityScene(view, owner().state().frameCount), castName);
     patch(shot.id, row => ({ ...row, technique }));
     const verified = !plan.expectedMove || still || move?.id === plan.expectedMove;
     const warnings = [
@@ -102,9 +112,9 @@ export function register(registry, ports) {
       ...(plan.members ?? []).filter(row => !row.inFrame).map(row => ({ code: 'OUT_OF_FRAME', id: row.id, message: `${row.id} is outside the group framing.` })),
       ...(parsed?.dropped ?? []).map(row => ({ code: 'TECHNIQUE_DROPPED', id: row.id, message: `"${row.phrase}" was left out: ${row.reason}.`.slice(0, 120) })),
     ];
-    const said = move ? `${move.label}${plan.expectedMove ? (verified ? ' (verified)' : ` (expected ${plan.expectedMove})`) : ''}` : 'prompt only';
+    const said = [move ? `${move.label}${plan.expectedMove ? (verified ? ' (verified)' : ` (expected ${plan.expectedMove})`) : ''}` : null, ...achieved.words].filter(Boolean).join('; ') || 'prompt only';
     return { affectedIds: [shot.id], summary: `Applied ${plan.label} to ${shotLabel(shot)}: ${said}.`.slice(0, 240), warnings,
-      checks: { technique: plan.label, ...(plan.expectedMove ? { expectedMove: plan.expectedMove } : {}), ...(move ? { move: move.id, moveVerified: verified, fromSize: move.from.sizeLabel, toSize: move.to.sizeLabel } : {}),
+      checks: { technique: plan.label, ...achieved.checks, ...(plan.expectedMove ? { expectedMove: plan.expectedMove } : {}), ...(move ? { move: move.id, moveVerified: verified, fromSize: move.from.sizeLabel, toSize: move.to.sizeLabel } : {}),
         ...pick(checks, ['derivedSize', 'screenFraction', 'clipped', 'behindCamera', 'occluded', 'cameraSide']), ...(plan.members ? { membersInFrame: plan.members.filter(row => row.inFrame).length, members: plan.members.length } : {}) },
       output: { technique, subjectId: subject.id, keys: shot.cameraKeys.length, mode: shot.camera.mode, ...(parsed ? { resolved: parsed.matched } : {}) } };
   }

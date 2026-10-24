@@ -6,21 +6,17 @@
 // parameters a director turns, and a recipe the compiler (compile.js) turns
 // into the camera primitives the studio already has. `requires` names a
 // camera capability this build does not have yet; such a technique applies
-// as words in the prompt only, and every receipt says so.
+// as words in the prompt only, and every receipt says so. Roll, focus, shake,
+// body mount, shot speed and motion blur are camera capabilities now
+// (src/camera-capabilities/); their techniques compile to camera.set fields.
 
 export const TECHNIQUE_KINDS = Object.freeze(["size", "angle", "move", "lens", "coverage", "modifier"]);
 
 /** Shot sizes a move can start or end on, tight to wide (compile.js SIZE_SPECS). */
 export const SIZE_LADDER = Object.freeze(["extreme close-up", "close-up", "medium close-up", "medium shot", "medium-wide shot", "wide shot", "extreme wide shot"]);
 
-/** Capabilities planned for the `camera-capabilities` intent. */
+/** Capabilities still planned: a technique that needs one applies as prompt words only. */
 export const PLANNED_CAPABILITIES = Object.freeze({
-	roll: "camera roll (a tilted horizon)",
-	focus: "focus distance and depth of field",
-	shake: "procedural handheld shake",
-	"body-mount": "a camera mounted on a character's body",
-	speed: "shot speed (slow motion)",
-	"motion-blur": "motion blur",
 	"coverage-generator": "a coverage generator that lays several shots (camera-coverage intent)",
 });
 

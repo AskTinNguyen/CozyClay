@@ -192,6 +192,9 @@ import {
 } from "./shot.js";
 import { captureFraming, classifyMove, moveSequenceSlate, moveSequencePhrase } from "./camera-move.js";
 import { sampleAt } from "./sample-at.js";
+import { applyShotCamera } from "./shot-camera-apply.js";
+import { takeFrameAt } from "./camera-capabilities/speed.js";
+import { framingRecord } from "./camera-capabilities/words.js";
 import { exportOffscreenVideo } from "./offscreen-export.js";
 import { parseRigNodeId } from "./hierarchy-model.js";
 import { timelineContentExtent } from "./timeline-extent.js";
@@ -2875,9 +2878,9 @@ export default function App() {
 				: (entry.id === activeChar.id ? ikStateRef.current : ikStatesRef.current.get(entry.id));
 			const placement = placementAt(entry, frame, {
 				shotAt: at => shotAtFrame(context?.shots ?? shots, at),
-				takeRoot: clip ? sampleAt({ frameCount: clip.frames, motion: clip }, null, frame).subject : null,
+				takeRoot: clip ? sampleAt({ frameCount: clip.frames, motion: clip }, null, takeFrameAt(context?.shots ?? shots, frame)).subject : null,
 			});
-			poseMemberAtFrame(rigs[entry.id], clip, state, frame, IK_CORRECTION_BLEND_FRAMES, placement.pose ?? null);
+			poseMemberAtFrame(rigs[entry.id], clip, state, takeFrameAt(context?.shots ?? shots, frame), IK_CORRECTION_BLEND_FRAMES, placement.pose ?? null);
 		}
 		// The bones for this frame are now written, so a carried prop can take
 		// its place on them. gl.render() never runs the r3f frame loop, so this
@@ -2888,15 +2891,8 @@ export default function App() {
 		const sampled = sampleAt(context?.playbackScene ?? playbackScene, shotAtFrame(context?.shots ?? shots, frame), frame);
 		const framing = sampled.camera ?? context?.framing;
 		const cam = shotCamRef.current;
-		if (cam && framing) {
-			cam.position.set(framing.pos.x, framing.pos.y, framing.pos.z);
-			cam.rotation.order = "YXZ";
-			cam.rotation.set(framing.pitch, framing.yaw, 0);
-			look.current.yaw = framing.yaw;
-			look.current.pitch = framing.pitch;
-			cam.fov = framing.fovDeg;
-			cam.updateProjectionMatrix();
-		}
+		// Roll, mount, shake, focus and shutter ride the sample; the capture's lens renderer reads them.
+		if (cam && framing) applyShotCamera(cam, look, framing);
 		return (recRef.current?.capture ?? captureRef.current)?.render() ?? null;
 	}
 
@@ -2921,7 +2917,7 @@ export default function App() {
 		const cam = shotCamRef.current;
 		if (!cam) throw Object.assign(new Error("The shot renderer is not ready"), { exportFailureCode: "render_failed" });
 		const cameraSnapshot = { position: cam.position.clone(), quaternion: cam.quaternion.clone(),
-			rotationOrder: cam.rotation.order, fov: cam.fov, yaw: look.current.yaw, pitch: look.current.pitch };
+			rotationOrder: cam.rotation.order, fov: cam.fov, yaw: look.current.yaw, pitch: look.current.pitch, roll: look.current.roll, lens: cam.userData.lens };
 		const rigSnapshots = Object.values(rigs).filter(Boolean).map(snapshotExportRig);
 		const proxySnapshots = [];
 		const context = recRef.current?.request.context;
@@ -2941,9 +2937,9 @@ export default function App() {
 			for (const snapshot of recRef.current?.request.context?.rigStates ?? []) restoreExportRig(snapshot);
 			for (const { node, entry } of proxySnapshots) {
 				const clip = entry.id === (context?.activeId ?? activeChar.id) ? (context ? context.motion : motion) : entry.sessionMotion;
-				const placement = placementAt(entry, frame, {
+				const placement = placementAt(entry, takeFrameAt(context?.shots ?? shots, frame), {
 					shotAt: at => shotAtFrame(context?.shots ?? shots, at),
-					takeRoot: clip ? sampleAt({ frameCount: clip.frames, motion: clip }, null, frame).subject : null,
+					takeRoot: clip ? sampleAt({ frameCount: clip.frames, motion: clip }, null, takeFrameAt(context?.shots ?? shots, frame)).subject : null,
 				});
 				node.position.set(placement.x, entry.y ?? 0, placement.z);
 				node.rotation.y = proxyYaw(placement.rot, placement.posture);
@@ -2966,7 +2962,7 @@ export default function App() {
 			cam.fov = cameraSnapshot.fov;
 			cam.updateProjectionMatrix();
 			look.current.yaw = cameraSnapshot.yaw;
-			look.current.pitch = cameraSnapshot.pitch;
+			look.current.pitch = cameraSnapshot.pitch; if (cameraSnapshot.roll === undefined) delete look.current.roll; else look.current.roll = cameraSnapshot.roll; if (cameraSnapshot.lens) cam.userData.lens = cameraSnapshot.lens; else delete cam.userData.lens;
 			propFrameRef.current = propFrame;
 			syncCarriers();
 			propSyncRef.current?.();
@@ -3166,9 +3162,8 @@ export default function App() {
 	// camera keys use — camera.json carries it so a tool can rebuild the pull.
 	function shotFramingAtFrame(entry, frame) {
 		const context = recRef.current?.request.context;
-		const sampled = sampleAt(context?.playbackScene ?? playbackScene, entry, frame).camera ?? context?.framing;
-		if (!sampled) return null;
-		return { pos: { x: sampled.pos.x, y: sampled.pos.y, z: sampled.pos.z }, yaw: sampled.yaw, pitch: sampled.pitch, fovDeg: sampled.fovDeg };
+		// The key shape plus the capabilities that frame carries (rollDeg, fStop, focusDistance, shutterDeg).
+		return framingRecord(sampleAt(context?.playbackScene ?? playbackScene, entry, frame).camera ?? context?.framing);
 	}
 
 	function packMetaForShot(entry, shotIndex) {
@@ -3582,10 +3577,11 @@ export default function App() {
 	useEffect(() => {
 		// The ACTIVE member's clip only: its own corrections are applied by the
 		// evaluate effect below, after its editing state settles.
-		if (activeCapabilities.rig) poseMemberAtFrame(rigs[activeChar.id], motion, null, tlFrame);
-		poseOtherCastMembers(tlFrame);
+		// A shot with a speed (slow motion) samples the take at its retimed frame.
+		if (activeCapabilities.rig) poseMemberAtFrame(rigs[activeChar.id], motion, null, takeFrameAt(shots, tlFrame));
+		poseOtherCastMembers(takeFrameAt(shots, tlFrame));
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [characters, activeChar.id, motion, rigs, tlFrame, ikTick]);
+	}, [characters, activeChar.id, motion, rigs, tlFrame, ikTick, shots]);
 
 	// The shared timeline spans the longest CURRENT content on the production
 	// clock. Recomputing both directions matters: deleting Subject 2 or
@@ -3628,12 +3624,12 @@ export default function App() {
 		if (!ikChains || !activeRig || posing) return;
 		// Preview changes may re-run this effect without a playhead change.
 		// Always re-establish the motion base before adding a correction.
-		if (motion) poseMemberAtFrame(activeRig, motion, null, tlFrame);
+		if (motion) poseMemberAtFrame(activeRig, motion, null, takeFrameAt(shots, tlFrame));
 		const layer = pendingIkEdit?.characterId === activeChar.id ? pendingIkEdit.candidate : ikStateRef.current;
 		if (ikMode || layer.keys.size > 0) {
-			ikEvaluate(ikChains, layer, tlFrame, ikFkJoints, motion ? IK_CORRECTION_BLEND_FRAMES : 0);
+			ikEvaluate(ikChains, layer, takeFrameAt(shots, tlFrame), ikFkJoints, motion ? IK_CORRECTION_BLEND_FRAMES : 0);
 		}
-	}, [ikMode, ikChains, activeRig, motion, posing, tlFrame, ikTick, ikFkJoints, pendingIkEdit, activeChar.id]);
+	}, [ikMode, ikChains, activeRig, motion, posing, tlFrame, ikTick, ikFkJoints, pendingIkEdit, activeChar.id, shots]);
 
 	// Re-seat the handles on the keyed pose when the FRAME changes with IK
 	// on — scrubbing to frame 39 shows that frame's interpolated pose AND
@@ -3820,8 +3816,8 @@ export default function App() {
 		motion,
 		cameraAnchor: charA,
 		fovDeg,
-		filmback,
-	}), [tlFrameCount, tlFps, charA, motion, fovDeg, filmback]);
+		filmback, cast: characters, // focus targets and body mounts resolve per frame (camera-capabilities)
+	}), [tlFrameCount, tlFps, charA, motion, fovDeg, filmback, characters]);
 	// The camera's subject grouped under a routed object (#655) stands where
 	// that object carries it: its played root through the object's carry,
 	// frame by frame — the same carry the renderer gives the body. Null when it
@@ -3845,7 +3841,7 @@ export default function App() {
 		if (!shots.some((shot) => shot.camera?.mode === "follow" || shot.camera?.mode === "rail")) return null;
 		const frames = Math.max(tlFrameCount, 1);
 		return Array.from({ length: frames }, (_, frame) => {
-			const subject = sampleAt(playbackSceneBase, null, frame).subject;
+			const subject = sampleAt(playbackSceneBase, null, takeFrameAt(shots, frame)).subject;
 			return subjectCarry ? subjectCarry(subject, frame) : subject;
 		});
 	}, [shots, playbackSceneBase, tlFrameCount, subjectCarry]);
@@ -3957,7 +3953,7 @@ export default function App() {
 		const prev = { x: cam.position.x, y: cam.position.y, z: cam.position.z, yaw: look.current.yaw, pitch: look.current.pitch, fov: cam.fov };
 		cam.position.set(framing.pos.x, framing.pos.y, framing.pos.z);
 		cam.rotation.order = "YXZ";
-		cam.rotation.set(framing.pitch, framing.yaw, 0);
+		cam.rotation.set(framing.pitch, framing.yaw, Number.isFinite(framing.rollDeg) ? (framing.rollDeg * Math.PI) / 180 : look.current.roll ?? 0);
 		cam.fov = framing.fovDeg;
 		const prevAspect = cam.aspect;
 		const offset = framing.viewOffset;
@@ -3976,7 +3972,7 @@ export default function App() {
 		} finally {
 			if (needsOwnTarget) capture.dispose?.();
 			cam.position.set(prev.x, prev.y, prev.z);
-			cam.rotation.set(prev.pitch, prev.yaw, 0);
+			cam.rotation.set(prev.pitch, prev.yaw, look.current.roll ?? 0);
 			look.current.yaw = prev.yaw;
 			look.current.pitch = prev.pitch;
 			cam.fov = prev.fov;

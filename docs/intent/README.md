@@ -81,7 +81,8 @@ Besides credentials, `.env` files, full chat transcripts, pushing to `main`, for
 - Ports per worktree, so parallel workers and the owner's studio (5180, live hub 5184) never collide: dev server `npm run dev -- --port <5200+n>`, live hub `COZYCLAY_LIVE_PORT=<5300+n>` on both the dev server and any `cclay live` client, CDP `CDP_PORT=<9300+n>`. The intent's `prompt.md` names its `n`.
 - `main`: GitHub Actions are not enabled on the fork, so a push to `main` triggers nothing today. If they are enabled, `ci.yml` runs on pull requests and `pages.yml` builds, tests and deploys GitHub Pages on `main` pushes; `public/CNAME` names upstream's `cozyclay.org` and must change before Pages is turned on.
 - Merge authority: `after-proof`. The owner granted it on 2026-10-24: "Yes they may." The orchestrator squash-merges an intent PR into the fork's `main` when every Acceptance row is met from tool output; never `--admin` over a failed check.
-- After merge, confirm: the merge commit is on `origin/main` (`git log origin/main -1`), and CI is green on it once Actions are enabled.
+- After merge, confirm: the merge commit is on `origin/main` (`git log origin/main -1`), and CI is green on it once Actions are enabled. Then fast-forward the local `main` checkout (`git pull --ff-only`).
+- Keep in sync while working (owner, 2026-10-24: "keep merging main and pushing to remote"): an intent branch merges `origin/main` whenever `main` moves, and is pushed after every step.
 
 ## On Close
 

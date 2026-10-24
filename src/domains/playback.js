@@ -1,15 +1,18 @@
 import { advancePlaybackFrame, registerPlaybackFrameApplier } from "../motion/playback-frame-store.js";
+import { takeFrameAt } from "../camera-capabilities/speed.js";
 
 function createPlaybackApplier(appContext, motion, poseOtherCastMembers, ikEvaluate, blendFrames) {
 	return (frame) => {
 		appContext.shared.tlFrameRef.current = frame;
 		appContext.shared.propFrameRef.current = frame;
 		appContext.patchTimeline({ currentFrame: frame });
-		if (appContext.shared.activeRig) appContext.shared.poseMemberAtFrame(appContext.shared.activeRig, motion, null, frame);
-		poseOtherCastMembers(frame);
+		// The cast plays the take at the frame the shot under the playhead samples (its speed, camera-capabilities).
+		const take = takeFrameAt(appContext.shared.shots, frame);
+		if (appContext.shared.activeRig) appContext.shared.poseMemberAtFrame(appContext.shared.activeRig, motion, null, take);
+		poseOtherCastMembers(take);
 		const state = appContext.shared.ikStateRef.current;
 		if (!appContext.shared.posing && state?.chains && (appContext.shared.ikMode || state.keys.size > 0)) {
-			ikEvaluate(state.chains, state, frame, state.fkJoints, motion ? blendFrames : 0);
+			ikEvaluate(state.chains, state, take, state.fkJoints, motion ? blendFrames : 0);
 		}
 	};
 }

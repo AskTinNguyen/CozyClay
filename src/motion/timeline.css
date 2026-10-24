@@ -948,6 +948,18 @@
 /* A key on a Shot's first or last frame steps just inside the box instead of straddling its edge. */
 .v2-sequencer .tl-marker.cam[data-edge="start"] { margin-left: 7px; }
 .v2-sequencer .tl-marker.cam[data-edge="end"] { margin-left: -7px; }
+/* A roll or focus rig key (camera-capabilities): a round dot on the same strip, so it reads as the lens, not the framing. */
+.v2-sequencer .tl-marker.rig {
+	top: auto;
+	bottom: calc(var(--tl-clip-inset, 7px) + var(--tl-key-strip-height, 12px) / 2);
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--text-1, #e4e4e7);
+	box-shadow: 0 0 0 1.5px var(--camera, #a78bfa);
+	transform: translate(-50%, 50%);
+	z-index: 8;
+}
 
 .v2-sequencer .tl-marker.wp {
 	background: var(--ok, #4fbf7a);

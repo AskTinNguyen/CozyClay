@@ -1,4 +1,5 @@
 import { createTiming, timingIsFlat } from "./speed-envelope.js";
+import { cameraCapabilities } from "./camera-capabilities/fields.js";
 
 // Pure Camera Block model. A shot owns one complete camera instruction, like
 // the camera card clipped to a single strip of film.
@@ -103,6 +104,8 @@ export function createCameraBlock(input = {}) {
 		craneHeight,
 		dollyTiming: timingIsFlat(dollyTiming) ? null : dollyTiming,
 		...railShotFields(value, cameraRail),
+		// Roll, lens, shake, mount, speed, shutter and rig keys: absent unless set.
+		...cameraCapabilities(value),
 	};
 }
 

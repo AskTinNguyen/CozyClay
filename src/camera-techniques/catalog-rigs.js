@@ -84,17 +84,17 @@ export const MODIFIER_TECHNIQUES = [
 	technique("handheld-shot", "Handheld Shot", "modifier", "HANDHELD", {
 		aliases: ["handheld", "hand-held", "shaky cam", "shoulder cam", "documentary style"], moods: ["chaotic", "urgent", "raw", "documentary", "anxious"],
 		description: "Operated on the shoulder with natural breathing and jolts, for urgency, chaos or documentary closeness.",
-		params: { intensity: choice(["subtle", "strong"]) }, requires: ["shake"], prompt: "handheld camera with natural shake" }),
+		params: { intensity: choice(["subtle", "strong"]) }, recipe: { shake: true }, prompt: "handheld camera with natural shake" }),
 	technique("snorricam", "Snorricam", "modifier", "SNORRICAM", {
 		aliases: ["snorri cam", "body mount", "body cam", "chest rig"], moods: ["disoriented", "drunk", "panic", "frantic", "uneasy"],
 		description: "A rig strapped to the actor's body keeps their face locked in frame while the world lurches around them.",
-		params: { mount: choice(["chest", "back"]) }, requires: ["body-mount"], prompt: "a Snorricam body-mounted camera locked on the face" }),
+		params: { mount: choice(["chest", "back"]) }, recipe: { mount: true }, prompt: "a Snorricam body-mounted camera locked on the face" }),
 	technique("slow-motion", "Slow Motion", "modifier", "SLO-MO", {
 		aliases: ["slow motion", "slow-mo", "slomo", "slo mo", "high frame rate"], moods: ["dramatic", "dreamy", "epic", "emotional", "impact"],
 		description: "Plays the action slower than life to stretch a moment of beauty, impact or emotion.",
-		params: { rate: choice(["half", "quarter"]) }, requires: ["speed"], prompt: "in slow motion" }),
+		params: { rate: choice(["half", "quarter"]) }, recipe: { speed: true }, prompt: "in slow motion" }),
 	technique("rack-focus", "Rack Focus", "lens", "RACK", {
 		aliases: ["rack focus", "focus pull", "pull focus", "focus shift"], moods: ["reveal", "attention", "suspense", "subtle"],
 		description: "Shifts focus from one plane to another within the shot, steering attention without a cut.",
-		params: { from: cast(), to: cast() }, requires: ["focus"], prompt: "a rack focus between foreground and background" }),
+		params: { from: cast(), to: cast(), fStop: { type: "number", min: 1.4, max: 8, default: 1.4, unit: "f-stop" } }, recipe: { rack: true }, prompt: "a rack focus between foreground and background" }),
 ];

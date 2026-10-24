@@ -35,11 +35,12 @@ const gl = {
 };
 let cleanup;
 const browser = {};
-const CaptureRig = new Function("THREE", "useThree", "useEffect", "window", "GIZMO_LAYER",
+// The lens renderer (depth of field, motion blur) only draws for a camera with lens state; this one has none.
+const CaptureRig = new Function("THREE", "useThree", "useEffect", "window", "GIZMO_LAYER", "renderLens", "LENS_CAPTURE_SAMPLES",
 	"CAPTURE_W", "CAPTURE_H", "MCP_CAPTURE_W", "MCP_CAPTURE_H", "CAPTURE_FOG_NEAR", "CAPTURE_FOG_FAR",
 	`${component.replace("export function", "function")}; return CaptureRig;`)(
 	{ ...THREE, WebGLRenderTarget: RenderTarget }, () => ({ gl, scene }), (effect) => { cleanup = effect(); },
-	browser, 5, 1920, 1080, 640, 360, 55, 95,
+	browser, 5, () => false, 24, 1920, 1080, 640, 360, 55, 95,
 );
 const camera = new THREE.PerspectiveCamera(45, 16 / 9, 0.1, 100);
 camera.position.set(1, 2, 3);

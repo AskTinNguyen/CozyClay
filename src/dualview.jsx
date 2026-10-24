@@ -3,6 +3,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { fitAspect } from "./shot-frame.js";
 import { updateVisibleViewOffsets } from "./viewport-visible-rect.js";
+import { renderLens } from "./lens-render.js";
 
 /**
  * Two live viewports out of one scene.
@@ -184,8 +185,7 @@ export function DualRender({ stageRef, mainRef, insetRef, shotPreviewRef, shotCa
 	}, []);
 
 	useEffect(() => () => {
-		edgePass.target.dispose();
-		edgePass.normalMaterial.dispose();
+		edgePass.target.dispose(); edgePass.normalMaterial.dispose();
 		edgePass.material.dispose();
 		edgePass.passScene.children[0].geometry.dispose();
 	}, [edgePass]);
@@ -361,8 +361,8 @@ export function DualRender({ stageRef, mainRef, insetRef, shotPreviewRef, shotCa
 			// draws, so scissoring to the pane here would repaint the bars white.
 			gl.setScissor(img.x, imgY, img.w, img.h);
 			gl.setViewport(img.x, imgY, img.w, img.h);
-			gl.render(scene, camera);
-			if (ink) {
+			const lensDrawn = renderLens(gl, scene, camera); if (!lensDrawn) gl.render(scene, camera);
+			if (ink && !lensDrawn) {
 				const uniforms = edgePass.material.uniforms;
 				uniforms.cameraNear.value = camera.near;
 				uniforms.cameraFar.value = camera.far;
