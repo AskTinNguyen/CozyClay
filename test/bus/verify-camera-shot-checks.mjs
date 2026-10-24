@@ -91,3 +91,28 @@ test('a cart on an authored path rolls onto the sight line mid-shot: camera.chec
     assert.ok(issue.frames.includes(95) && !issue.frames.includes(0), `blocked once it arrives, clear at the start: ${issue.frames}`);
   } finally { f.dispose(); }
 });
+
+test('Mara walks on her take root behind a pillar: camera.checkShots places her where she plays at each frame, through the action ports (F-2)', () => {
+  const f = shotsFixture({ characters });
+  try {
+    fresh(f);
+    // The pillar stands off the line to Mara's placed spot (x 0) and on the line to where her walk ends (x 1.5).
+    assert.equal(f.run('object.add', { kind: 'cylinder', placement: { x: 0.75, z: 2.5 }, name: 'Pillar' }, 'agent').ok, true);
+    const pillar = f.actual.readStudioState().objects.find(row => row.name === 'Pillar').id;
+    assert.equal(f.run('object.set', { id: pillar, set: { scale: { x: 0.4, y: 3, z: 0.4 } } }, 'agent').ok, true);
+    assert.equal(f.run('camera.checkShots', { shotIds: ['shot-a'], rule: 'occluded' }, 'agent').checks.issues, 0, 'placed where she stands, she is clear');
+    // The editor's sampler, as App binds it: the walking subject at the frame asked, the stored rows otherwise.
+    const sampled = [];
+    const sampleStateAt = (frame, current = f.actual.readStudioState()) => {
+      sampled.push(frame);
+      return { ...current, frame, characters: current.characters.map(row => row.id === 'actor-a' ? { ...row, x: 1.5 * Math.min(frame, 95) / 95 } : row) };
+    };
+    f.scope.appContext.updatePorts({ revision: f.ports.revision, read: f.actual.readStudioState, bounds: f.actual.studioBounds, poses: () => [],
+      recordAction: f.actual.recordStudioAction, beginAction: f.actual.beginStudioAction, sampleStateAt });
+    const report = f.run('camera.checkShots', { shotIds: ['shot-a'], rule: 'occluded' }, 'agent'), [issue] = report.output.shots[0].issues;
+    assert.ok(sampled.length > 0, 'the check reached the editor sampler through the action ports');
+    assert.equal(issue?.rule, 'occluded', JSON.stringify(report.output.shots[0]));
+    assert.deepEqual(issue.by, [pillar]);
+    assert.ok(issue.frames.includes(95) && !issue.frames.includes(0), `hidden once she walks behind it, clear where she starts: ${issue.frames}`);
+  } finally { f.dispose(); }
+});
