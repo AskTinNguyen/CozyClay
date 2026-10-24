@@ -2,7 +2,7 @@
 // the look at the playhead (useShotLook: the stage's own values while no shot
 // has a look, so a stage saved earlier renders as before); StageAtmosphere
 // leaves a hook on the scene so an export frame can be lit as ITS shot looks
-// (applyShotLookForDraw, called by stage-capture.jsx around each render): the
+// (applyShotLookForDraw, which stage-capture.jsx calls around each render as the hook's draw()): the
 // lights StageLights tagged (userData.stageLight), the background, the fog
 // colour and the capture's exposure and haze are set from that frame's look for
 // the draw and put back after. The environment map and the occlusion pass stay
@@ -25,7 +25,7 @@ export const lookSignature = ({ lighting, keyLight }) => JSON.stringify([lightin
 
 /**
  * Light the scene as the export frame's shot look for one draw.
- * scene.userData.shotLook: { at(frame, shots?) -> shotLookAt's answer, frameRef, shown (lookSignature of the look on screen), theme, grid, keyColor(keyLight), sky(bottom, top) }
+ * scene.userData.shotLook: { at(frame, shots?) -> shotLookAt's answer, draw() -> this function on its scene, frameRef, shown (lookSignature of the look on screen), theme, grid, keyColor(keyLight), sky(bottom, top) }
  * @returns {() => void} puts every value back
  */
 export function applyShotLookForDraw(scene) {

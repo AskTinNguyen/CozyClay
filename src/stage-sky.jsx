@@ -3,7 +3,7 @@ import { useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { stageLook } from "./stage-lighting.js";
 import { shotLookAt } from "./stage-shot-look.js";
-import { lookSignature, useShotLook } from "./stage-shot-look-draw.js";
+import { applyShotLookForDraw, lookSignature, useShotLook } from "./stage-shot-look-draw.js";
 import { keyLightColor } from "./stage-key-color.js";
 import { ENV_HEIGHT, ENV_WIDTH, environmentPixels } from "./stage-environment.js";
 import { installOcclusion } from "./stage-occlusion.js";
@@ -94,7 +94,7 @@ export function StageAtmosphere({ lighting: stageLighting = null, keyLight: stag
 	useLayoutEffect(() => {
 		const { scene } = get();
 		scene.userData.shotLook = { at: (frame, list) => shotLookAt({ lighting: stageLighting, keyLight: stageKey }, list ?? shots, frame), frameRef, shown: lookSignature(shown), theme, grid,
-			keyColor: (key) => key.color ?? keyLightColor(key.warmth), sky: gradientSky };
+			keyColor: (key) => key.color ?? keyLightColor(key.warmth), sky: gradientSky, draw: () => applyShotLookForDraw(scene) };
 		return () => { delete scene.userData.shotLook; };
 	}, [get, stageLighting, stageKey, shots, frameRef, shown, theme, grid]);
 	const { sky, skyTop, exposure } = look, { near, far } = look.fog;

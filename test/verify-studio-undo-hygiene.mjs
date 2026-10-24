@@ -151,7 +151,7 @@ const COMMAND_INPUTS = {
 	"shot.setRange": { shotId: "shot-1", range: { startFrame: 1, endFrameExclusive: 15 } }, "shot.reorder": { shotId: "shot-1", startFrame: 2 },
 	"shot.setCameraRail": { shotId: "shot-1", points: [{ x: -2, z: 4 }, { x: 3, z: 4 }] }, "shot.clearCameraRail": { shotId: "shot-1" },
 	"shot.createStill": { caption: "Panel" }, "shot.setCaption": { shotId: "shot-1", caption: "Panel" },
-	"shot.setCastOverride": { shotId: "shot-1", characterId: "actor", override: { x: 1, z: 2, rot: 0 } }, "shot.setHold": { shotId: "shot-1", hold: 24 },
+	"shot.setCastOverride": { shotId: "shot-1", characterId: "actor", override: { x: 1, z: 2, rot: 0 } }, "shot.setHold": { shotId: "shot-1", hold: 24 }, "shot.setLook": { shotId: "shot-1", recipe: "warm-safety" },
 	"shot.set": { id: "shot-1", set: { targetModel: "seedance-2.5" } }, "shot.rename": { shotId: "shot-1", name: "Renamed" },
 	"shot.setCamera": { shotId: "shot-1", patch: { mode: "follow" } }, "shot.setCameraMode": { shotId: "shot-1", mode: "follow" }, "shot.addKey": { shotId: "shot-1", frame: 8 },
 	"shot.moveKey": { shotId: "shot-1", keyId: "key-1", frame: 8 }, "shot.removeKey": { shotId: "shot-1", keyId: "key-1" },
@@ -326,7 +326,7 @@ const cases = {
 	},
 	async "every command mutation writes inside one entry of its undo domain"() {
 		const mutations = Object.values(COMMAND_MODULES).flatMap(module => module.declarations).filter(entry => entry.kind === "mutation");
-		assert.equal(mutations.length, 78);
+		assert.equal(mutations.length, 79);
 		for (const declaration of mutations) {
 			// A new shot needs free room at the playhead; the others act inside shot-1.
 			const f = commandFixture({ frame: declaration.id === "shot.create" ? 24 : 8, still: ["shot.setHold", "shot.createStill"].includes(declaration.id) }), [name] = Object.entries(COMMAND_MODULES).find(([, module]) => module.declarations.includes(declaration));

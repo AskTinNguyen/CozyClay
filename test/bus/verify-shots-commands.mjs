@@ -17,7 +17,7 @@ const inputs = {
   'shot.clearCameraRail': { shotId: 'shot-a' },
   'shot.rename': { shotId: 'shot-a', name: 'Wide' }, 'shot.setCameraMode': { shotId: 'shot-a', mode: 'follow' },
   'shot.createStill': { caption: 'Panel' }, 'shot.setCaption': { shotId: 'shot-a', caption: 'Panel' },
-  'shot.setCastOverride': { shotId: 'shot-a', characterId: 'actor-a', override: { x: 1, z: 2, rot: 0 } }, 'shot.setHold': { shotId: 'shot-a', hold: 12 },
+  'shot.setCastOverride': { shotId: 'shot-a', characterId: 'actor-a', override: { x: 1, z: 2, rot: 0 } }, 'shot.setHold': { shotId: 'shot-a', hold: 12 }, 'shot.setLook': { shotId: 'shot-a', recipe: 'warm-safety' },
   'shot.set': { id: 'shot-a', set: { targetModel: 'seedance-2.5' } },
   'shot.frame': { subjectIds: ['actor-a'], keyAtFrame: 5, framing: { exact: { position: { x: 1, y: 2, z: 6 }, lookAt: { x: 0, y: 1, z: 0 }, focalMm: 35 } } },
 };
