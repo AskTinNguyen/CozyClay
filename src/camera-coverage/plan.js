@@ -12,7 +12,7 @@ import { coveragePattern } from "./patterns.js";
 
 const fail = (code, message) => { throw Object.assign(new Error(message), { code }); };
 const DEG = Math.PI / 180;
-export const MIN_SHOT_FRAMES = 6;
+const MIN_SHOT_FRAMES = 6;
 
 /** Shot ranges for `count` shots over [startFrame, endFrame] (inclusive), or at explicit cut frames. */
 export function splitRange({ startFrame, endFrame }, count, cuts = null) {

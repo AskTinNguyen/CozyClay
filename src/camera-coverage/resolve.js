@@ -30,7 +30,7 @@ export function parseComposition(text) {
 }
 
 /** Cast members named in the words, in the order they are named. */
-export function namedCast(text, cast = []) {
+function namedCast(text, cast = []) {
 	const phrase = ` ${normalizePhrase(text)} `;
 	return cast.map((member) => ({ id: member.id, at: member.name ? phrase.indexOf(` ${normalizePhrase(member.name).split(" ")[0]} `) : -1 }))
 		.filter((row) => row.at >= 0).sort((a, b) => a.at - b.at).map((row) => row.id);
@@ -40,7 +40,7 @@ const ALIASES = COVERAGE_PATTERNS.flatMap((pattern) => [pattern.name, pattern.id
 	.sort((a, b) => b.key.length - a.key.length);
 
 /** The coverage pattern a phrase asks for, or null. */
-export function resolveCoveragePattern(text) {
+function resolveCoveragePattern(text) {
 	const phrase = normalizePhrase(text);
 	return ALIASES.find((row) => has(phrase, row.key))?.id ?? null;
 }

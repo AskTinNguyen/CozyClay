@@ -55,7 +55,7 @@ export function cameraCoverageTools(deps) {
 			{
 				title: "Cover a scene with a coverage pattern",
 				description:
-					`Lay several shots at once from a coverage pattern: ${COVERAGE_PATTERN_IDS.join(", ")}; or say it (\"cover this conversation\", \"master and coverage\", ` +
+					`Lay several shots at once from a coverage pattern: ${COVERAGE_PATTERN_IDS.join(", ")}; or say it ("cover this conversation", "master and coverage", ` +
 					"\"walk and talk\", \"reverse on Joon\"). cast names A then B (ids, letters or slots; default the focused character and the nearest other). Every camera " +
 					"stays on one side of the line between them. With an editor connected it runs camera.cover over start_frame..end_frame (or the shot shot_id names, " +
 					"default the playhead's) as one undo entry and answers each shot and the cut check; in memory it plans the shots and checks their cuts.",

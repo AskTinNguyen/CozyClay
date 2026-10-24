@@ -75,7 +75,7 @@ export function screenDirection(framing, direction) {
 }
 
 /** NDC target for the eyes: the chosen third or centre, or the third that leaves room ahead of `ahead` (screen-x of the facing or travel). */
-export function compositionTarget(composition, ahead = 0) {
+function compositionTarget(composition, ahead = 0) {
 	const c = normalizeComposition(composition);
 	const y = EYE_LINE[c.headroom];
 	if (c.place !== "auto") return { x: PLACE_X[c.place], y, ahead: c.leadRoom !== "none" ? ahead : 0 };
@@ -87,7 +87,7 @@ export function compositionTarget(composition, ahead = 0) {
  * Turn an exact framing so `eye` lands on NDC `target` (camera position and lens unchanged).
  * Solves pitch from the vertical offset, then yaw from the horizontal one (YXZ, no roll).
  */
-export function aimFraming(exact, eye, target, filmback = {}) {
+function aimFraming(exact, eye, target, filmback = {}) {
 	const fovDeg = (focalMmToFov(exact.focalMm, filmback.sensorId, filmback.aspectRatio) * 180) / Math.PI, vTan = vTanOf(fovDeg);
 	const a = target.x * vTan * (filmback.aspectRatio ?? 16 / 9), b = target.y * vTan;
 	const d = { x: eye.x - exact.position.x, y: eye.y - exact.position.y, z: eye.z - exact.position.z }, range = Math.hypot(d.x, d.y, d.z) || 1;

@@ -9,7 +9,7 @@ import { repairTransition } from "./transitions.js";
 const text = (value, max) => (typeof value === "string" ? Array.from(value.trim()).slice(0, max).join("") : "");
 
 /** Persisted coverage: { pattern, index, role, subjectId }; null when unreadable. */
-export function repairCoverage(value) {
+function repairCoverage(value) {
 	if (!value || typeof value !== "object" || typeof value.pattern !== "string" || !/^[a-z0-9-]{1,40}$/.test(value.pattern)) return null;
 	return {
 		pattern: value.pattern,
