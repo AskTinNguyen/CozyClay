@@ -3,8 +3,8 @@
 - Working under rev: 1
 - Worker: cloud worker agent (depth-staging)
 - Current step: done; every row met or ready for review
-- Next step: orchestrator review (A8 docs, the proofs, F-1)
-- PR: none yet
+- Next step: none; squash-merge after Codex review
+- PR: #17
 
 ## Acceptance
 
@@ -17,7 +17,7 @@
 | A5 | met (ui:qa, ui:shot) | `node tools/qa-browser.mjs -- node test/verify-shot-checks-browser.mjs` (dev 5210, hub 5310, CDP 9310) -> "shot checks browser QA passed", exit 0: a pillar flags BLOCKED on the Shots lane, `cclay live run camera.checkShots` agrees, the readout explains the flag and the fix, Apply fix clears it and the hub re-check is clean. Shots: `proofs/shot-check-flagged.png`, `proofs/shot-check-readout.png`, `proofs/foreground-lamp-lens.png` (a lamp held at share 0.3 through the lens) |
 | A6 | met (gate) | `node mcp/verify-camera-shot-checks.mjs` -> `11 passed, 0 failed` (in memory and live over a bus fixture); `node test/verify-director-evals.mjs` -> "depth: core 10/10, stretch 0/1", "core: 119/119"; `node mcp/verify-director-evals.mjs` -> `104 passed, 0 failed`; `cclay live run camera.checkShots` exercised by the A5 QA |
 | A7 | met (gate) | After the director-packet merge (42c14da2): `npm run lint` -> "knip: 138 findings, 0 new", "loc: 72 files over 250 (baseline 72), 0 violations", "eslint: 0 regressions" (no baseline raised); `npm run build` exit 0; `suite-all.mjs --jobs 4` (AWS vars unset) -> "475 files, 473 passed, 2 failed", only the known timing failures verify-motion3-exitcar and verify-motion3-repair |
-| A8 | ready for review | `mcp/README.md` (`check_shots` row, Depth staging section, `foreground` in composition, 37 tools), `docs/agent-cli.md` (Shot checks section, foreground words), `docs/studio-ui-ia.md` (Shot check section, Shots-lane bars, FG ring), `CHANGELOG.md` Unreleased |
+| A8 | met (review R1) | `mcp/README.md` (`check_shots` row, Depth staging section, `foreground` in composition, 38 tools after the merges), `docs/agent-cli.md` (Shot checks section, foreground words), `docs/studio-ui-ia.md` (Shot check section, Shots-lane bars, FG ring), `CHANGELOG.md` Unreleased |
 
 ## Steps
 
@@ -40,3 +40,13 @@
 - `camera.fixShot` moves only the camera keys. A rail or follow shot is refused and pointed at its rail.
 
 ## Reconciliations
+
+## Reviews
+
+- R1 (cloud orchestrator, 2026-10-24, at 8f5f13db): opened the three proof images.
+  - `proofs/shot-check-flagged.png`: the Shots lane with a red BLOCKED bar under both shots (Dialogue and Exchange), next to the JUMP cut tag.
+  - `proofs/shot-check-readout.png`: the Shot check readout, "2 shots, 2 flagged". It reads "Blocked · high: Pillar hides Mara's eyes from the lens on 17 of 17 sampled frames", lists the frames, gives "Fix: slide the camera 2.8 m right" with an Apply fix button, and a depth line ("the pillar soft in the foreground, Joon level with Mara, ... behind").
+  - `proofs/foreground-lamp-lens.png`: through the lens, a prop held large at the near left edge, the character at mid frame and the other props behind. These are the three layers A3/A4 describe.
+  - A8: `mcp/README.md`, `docs/agent-cli.md`, `docs/studio-ui-ia.md` and CHANGELOG describe `camera.checkShots`, `camera.fixShot`, `check_shots`, `foreground` composition and the depth layers.
+  - F-1 is resolved as option 1 (see findings).
+  - The packet's new `depth` entry in `PACKET_CHECKS` matches director-packet's prompt, which says the packet carries depth-staging output when it has landed.

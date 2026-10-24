@@ -12,3 +12,4 @@ Discoveries that may change the intent. The worker adds entries; the orchestrato
   2. Make walk-and-talk's planner refuse, or warn when laid over a pair that faces each other (`camera.cover` note).
   3. Make the planner offset the leading single laterally when the partner is on the walking line.
 - Recommendation: 1 now (the check is correct and the fix is one click). Take 2 as a small follow-up in camera-coverage, because the pattern's premise (walking side by side) is what is violated. 3 changes the pattern's framing for every blocking, so it needs its own review.
+- Resolution (cloud orchestrator, 2026-10-24): option 1. The 4 flags are measured blocks, not false positives. A2's "zero issues" holds for every pattern laid as its premise intends; walk-and-talk over a face-to-face pair breaks the premise. Option 2 stays a candidate follow-up in camera-coverage.
