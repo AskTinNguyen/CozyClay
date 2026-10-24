@@ -9,9 +9,18 @@ import { lensPlan } from "./camera-capabilities/lens-plan.js";
 
 const LENS_PREVIEW_SAMPLES = 8;
 export const LENS_CAPTURE_SAMPLES = 24;
+// A fast blur (a whip pan) raises the count with its sweep up to these; the smear fills what is left.
+const LENS_PREVIEW_MAX = 32, LENS_CAPTURE_MAX = 96;
+const SMEAR_TAPS = 8;
 
 const VERTEX = "varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }";
-const ACCUMULATE = "uniform sampler2D tSample; uniform float weight; varying vec2 vUv; void main() { gl_FragColor = texture2D(tSample, vUv) * weight; }";
+// Each sub-render is averaged along its smear (its slice of the shutter's screen travel), so neighbouring copies join.
+const ACCUMULATE = `uniform sampler2D tSample; uniform float weight; uniform vec2 smear; varying vec2 vUv;
+void main() {
+	vec4 sum = vec4(0.0);
+	for (int i = 0; i < ${SMEAR_TAPS}; i++) sum += texture2D(tSample, vUv + smear * ((float(i) + 0.5) / ${SMEAR_TAPS}.0 - 0.5));
+	gl_FragColor = sum / ${SMEAR_TAPS}.0 * weight;
+}`;
 const RESOLVE = `uniform sampler2D tAccum; varying vec2 vUv;
 void main() {
 	gl_FragColor = texture2D(tAccum, vUv);
@@ -23,7 +32,7 @@ let shared = null;
 function resources() {
 	if (shared) return shared;
 	const target = (samples) => new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples, depthBuffer: samples > 0 });
-	const accumulate = new THREE.ShaderMaterial({ vertexShader: VERTEX, fragmentShader: ACCUMULATE, uniforms: { tSample: { value: null }, weight: { value: 1 } },
+	const accumulate = new THREE.ShaderMaterial({ vertexShader: VERTEX, fragmentShader: ACCUMULATE, uniforms: { tSample: { value: null }, weight: { value: 1 }, smear: { value: new THREE.Vector2() } },
 		// Plain sum (one x source + one x destination): the weight is in the shader, not in alpha.
 		blending: THREE.CustomBlending, blendSrc: THREE.OneFactor, blendDst: THREE.OneFactor, blendSrcAlpha: THREE.OneFactor, blendDstAlpha: THREE.OneFactor,
 		depthTest: false, depthWrite: false, transparent: true, toneMapped: false });
@@ -51,7 +60,8 @@ function lensCamera(camera) {
  * nothing, when the camera carries no lens state; the caller then renders as usual.
  */
 export function renderLens(gl, scene, camera, output = null, samples = LENS_PREVIEW_SAMPLES) {
-	const state = lensCamera(camera), plan = state && lensPlan(state, { samples });
+	const maxSamples = samples >= LENS_CAPTURE_SAMPLES ? Math.max(samples, LENS_CAPTURE_MAX) : Math.max(samples, LENS_PREVIEW_MAX);
+	const state = lensCamera(camera), plan = state && lensPlan(state, { samples, maxSamples });
 	if (!plan) return false;
 	const r = resources(), previous = gl.getRenderTarget(), autoClear = gl.autoClear, shadowMap = gl.shadowMap, shadowAuto = shadowMap.autoUpdate;
 	const clearColor = gl.getClearColor(new THREE.Color()), clearAlpha = gl.getClearAlpha();
@@ -68,7 +78,8 @@ export function renderLens(gl, scene, camera, output = null, samples = LENS_PREV
 	else sub.clearViewOffset();
 	sub.rotation.order = "YXZ";
 	try {
-		plan.samples.forEach(({ pose, dx, dy, weight }, i) => {
+		const vFovDeg = Math.max(1e-3, camera.fov), hFovDeg = Math.max(1e-3, 2 * THREE.MathUtils.radToDeg(Math.atan(Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2) * camera.aspect)));
+		plan.samples.forEach(({ pose, dx, dy, weight, smear }, i) => {
 			sub.position.set(pose.pos.x, pose.pos.y, pose.pos.z);
 			sub.rotation.set(pose.pitch, pose.yaw, THREE.MathUtils.degToRad(pose.rollDeg ?? 0));
 			sub.fov = pose.fovDeg;
@@ -97,6 +108,7 @@ export function renderLens(gl, scene, camera, output = null, samples = LENS_PREV
 			r.quad.material = r.accumulate;
 			r.accumulate.uniforms.tSample.value = r.sample.texture;
 			r.accumulate.uniforms.weight.value = weight ?? 1 / plan.samples.length;
+			r.accumulate.uniforms.smear.value.set(smear ? smear.yawDeg / hFovDeg : 0, smear ? smear.pitchDeg / vFovDeg : 0);
 			gl.render(r.scene, r.ortho);
 		});
 		gl.setRenderTarget(output);
