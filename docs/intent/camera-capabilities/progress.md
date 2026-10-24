@@ -4,7 +4,7 @@
 - Worker: `camera-capabilities-worker`
 - Current step: none (every Acceptance row has its proof; A7, A8 images and A10 await the orchestrator's review rows)
 - Next step: orchestrator review of the proofs and the PR
-- PR: none yet
+- PR: https://github.com/AskTinNguyen/CozyClay/pull/4
 
 ## Acceptance
 
