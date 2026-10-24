@@ -70,7 +70,8 @@ check("the coverage index lists every pattern with its shots, and the agent prom
 	assert.equal(index.find((row) => row[0] === "master-coverage")[1], "Master / MS / MS / CU / CU");
 	assert.ok(STUDIO_SYSTEM_PROMPT.includes("Film terms (push-in, OTS, coverage, a mood): camera.applyTechnique { request }."));
 	assert.ok(STUDIO_SYSTEM_PROMPT.includes("camera.checkCuts checks cuts."));
-	assert.ok(STUDIO_SYSTEM_PROMPT.length <= 12790, `${STUDIO_SYSTEM_PROMPT.length}`);
+	assert.ok(STUDIO_SYSTEM_PROMPT.includes("shot.setCameraMode { mode: keys | follow | rail } switches a shot's camera.") && STUDIO_SYSTEM_PROMPT.includes("camera.cover lays a coverage pattern"), "the camera library paragraph (shot-prompt-engine A6)");
+	assert.ok(STUDIO_SYSTEM_PROMPT.length <= 13400, `${STUDIO_SYSTEM_PROMPT.length}`);
 	for (const pattern of COVERAGE_PATTERNS) assert.ok(pattern.description.length >= 60 && pattern.description.length <= 240, pattern.id);
 });
 

@@ -8,14 +8,13 @@ import { createTiming, timingIsFlat } from "./speed-envelope.js";
 import { createShot } from "./cuts.js";
 import { railShotFields } from "./camera-block.js";
 import { normalizeStableItems } from "./stable-items.js";
-import { VIDEO_MODEL_PRESETS } from "./model-presets.js";
+import { presetById } from "./model-presets.js";
 import { elementByPath } from "./studio-elements.js";
 import { isImageAssetId } from "./scene-assets.js";
 import { createCharacterEntry } from "./scenes.js";
 import { repairShotExtras } from "./camera-coverage/storage.js";
 import { cameraCapabilities } from "./camera-capabilities/fields.js";
 
-const VIDEO_MODEL_IDS = new Set(VIDEO_MODEL_PRESETS.map((preset) => preset.id));
 const CAMERA_KEY_LIMITS = elementByPath("shot.cameraKeys"), KEY_EASES = new Set(["linear", "in", "out"]);
 
 export const SHOT_AUTHORING_VERSION = 5;
@@ -182,7 +181,8 @@ function repairShots(entries, frameCount, inheritedCamera = null, ids = new Set(
 		// one, so an untargeted body round-trips byte-identical; an unknown id
 		// from a newer build is dropped rather than kept, because the badge must
 		// never cite a preset this build cannot describe.
-		const targetModel = VIDEO_MODEL_IDS.has(entry.targetModel) ? { targetModel: entry.targetModel } : null;
+		// A model id an older body stored (kling-2, veo-3) reads as the preset that replaced it.
+		const targetModel = typeof entry.targetModel === "string" && presetById(entry.targetModel) ? { targetModel: presetById(entry.targetModel).id } : null;
 		const nextStart = ordered[index + 1]?.startFrame ?? frameCount;
 		// Pre-overlay v3 bodies had no endFrame and were gapless by definition.
 		// Infer their old boundary exactly; new bodies persist an explicit end.

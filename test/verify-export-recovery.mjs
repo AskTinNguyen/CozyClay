@@ -137,6 +137,8 @@ function fixture() {
 		bufferToPng: (buffer) => `data:image/png;base64,${Buffer.from(buffer).toString("base64")}`,
 		keyLight: {}, shot: { focalMm: 35 }, fovDeg: 35, shotAspectKey: "16:9",
 		shotCaptureMeta: ({ shot, size }) => ({ title: shot.name, size }), buildShotPrompt: () => "fixture prompt",
+		// The pack's sequence brief files (shot-prompt-engine; verify-sequence-references covers their content).
+		readStudioState: () => ({}), shotSequenceFiles: () => [{ name: "sequence-prompt.txt", data: "fixture brief" }],
 		keyframePackEntries, keyframePackName, buildZip,
 		renderPass: (capture) => capture.render(), depthRangeFromFrames, DEPTH_RANGE_M: 40,
 		result: { frame: "data:image/png;base64,AA==", frameB: "data:image/png;base64,AQ==", partColours: { arm: "red" } },

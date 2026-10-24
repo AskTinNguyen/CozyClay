@@ -37,7 +37,7 @@ export function cameraCoverageTools(deps) {
 	function planInMemory({ pattern, castIds, start, end, shots }) {
 		const people = sceneRows(), filmback = deps.filmback();
 		const plan = planCoverage(pattern, { cast: people.map(rowOf), subjects: castIds, range: { startFrame: start, endFrame: end }, filmback, count: shots });
-		state.coverage = { pattern: plan.pattern, shots: plan.shots.map((row) => plannedShot(row, filmback)) };
+		state.coverage = { pattern: plan.pattern, shots: plan.shots.map((row) => ({ ...plannedShot(row, filmback), coverage: { pattern: plan.pattern, index: row.index, role: row.role, subjectId: row.subjectId } })) };
 		const result = checkPlan();
 		return text([
 			`Planned ${coveragePattern(plan.pattern).name} over ${start}-${end} (memory: no shot list here; an editor lays these with camera.cover).`,

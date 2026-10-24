@@ -88,5 +88,5 @@ assert.deepEqual(
 );
 const frames = meta.frameRange.end - meta.frameRange.start + 1;
 const check = checkShotAgainstPreset({ frames, fps: meta.fps, aspect: meta.aspect }, presetById(meta.targetModel));
-assert.equal(check.ok, true, "48 frames @ 24 fps is 2s, inside Seedance's 2–30s reference range");
+assert.deepEqual(check.warnings, ["too short: 2s is under the 4s minimum for Seedance 2.5"], "48 frames @ 24 fps is 2s, under Seedance 2.5's 4-30s clips (checked 2026-10-24)");
 console.log("PASS shot meta: targetModel feeds checkShotAgainstPreset directly");

@@ -20,6 +20,12 @@ export function retimeFrame(shot, frame) {
 	return speed === 1 ? frame : (shot.startFrame ?? 0) + (frame - (shot.startFrame ?? 0)) * speed;
 }
 
+/** The (fractional) timeline frame at which a shot shows a take frame: retimeFrame's inverse. */
+export function timelineFrame(shot, takeFrame) {
+	const speed = shotSpeed(shot);
+	return speed === 1 ? takeFrame : (shot.startFrame ?? 0) + (takeFrame - (shot.startFrame ?? 0)) / speed;
+}
+
 /** The take frame at a timeline frame, through the shot that owns it (a gap plays the take as is). */
 export const takeFrameAt = (shots, frame) => retimeFrame(shotAtFrame(shots ?? [], frame), frame);
 

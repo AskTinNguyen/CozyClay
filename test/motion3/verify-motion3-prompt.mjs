@@ -19,7 +19,9 @@ const sentences = text => text.split(/(?<=[.;:])\s+/).map(s => s.trim()).filter(
 // +253 for physical grasp (#816: let the hand hold, throwObject/catchObject, read LOAD): +260
 // +457 for key writing (extremes not a beat, lead with root and end effectors, break symmetry, read observations.life): +460
 // +168 for the repair loop (patch by frame or name after the first compile, obey output.stuck): +170
-check("the whole prompt is at most 12,790 characters", () => assert.ok(prompt.length <= 12790, `${prompt.length}`));
+// +566 for the camera library (shot-prompt-engine A6, camera-techniques F-1): the setCameraMode sentence back, receipts,
+// capabilities, coverage, transitions and the sequence brief: 12,790 -> 13,400 (findings F-2 of shot-prompt-engine)
+check("the whole prompt is at most 13,400 characters", () => assert.ok(prompt.length <= 13400, `${prompt.length}`));
 check("the motion part is at most 2,690 characters", () => {
 	assert.ok(motion.length > 0 && motion.length <= 2690, `${motion.length}`);
 });

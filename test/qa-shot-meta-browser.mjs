@@ -75,7 +75,7 @@ const select = "document.querySelector('[data-shot-target-model]')";
 expect("the shot inspector offers a Target model select", await waitFor(`!!${select} && !${select}.disabled`, 20000));
 expect("the select lists every shipped preset plus None", await evaluate(`(() => {
 	const values = [...${select}.options].map((option) => option.value);
-	return values[0] === "" && ["seedance-2.5", "kling-2", "veo-3", "minimax-h3-selfhosted"].every((id) => values.includes(id));
+	return values[0] === "" && ["seedance-2.5", "kling-3", "veo-3.1", "minimax-h3", "minimax-h3-selfhosted"].every((id) => values.includes(id));
 })()`));
 // A React-controlled select only sees a change dispatched through its own
 // value setter, the way a user's pick reaches it.

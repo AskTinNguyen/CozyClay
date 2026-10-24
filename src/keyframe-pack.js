@@ -14,12 +14,15 @@ export function slugifyTitle(title) {
 	return slug || "shot";
 }
 
+/** ZIP file name for a sequence pack (every shot of a range in one archive). */
+export const sequencePackName = (title) => `cozyclay-sequence-${slugifyTitle(title)}.zip`;
+
 /** ZIP file name for a shot pack: `cozyclay-shot-<index>-<slug>.zip`. */
 export function keyframePackName(shot) {
 	return `cozyclay-shot-${shot.index}-${slugifyTitle(shot.title)}.zip`;
 }
 
-function readmeText({ shot, fps, hasLast, hasClip, ext, hasStylized }) {
+function readmeText({ shot, fps, hasLast, hasClip, ext, hasStylized, hasSequence }) {
 	const lines = [
 		`CozyClay keyframe pack - shot ${shot.index}: ${shot.title}`,
 		`Frame range ${shot.startFrame}-${shot.endFrame} at ${fps} fps.`,
@@ -58,6 +61,14 @@ function readmeText({ shot, fps, hasLast, hasClip, ext, hasStylized }) {
 		"- prompt.txt: the text prompt describing the intended action.",
 	);
 	if (hasStylized) lines.push("- stylized.png: the stylized picture of this panel; first.png is its greybox.");
+	if (hasSequence) {
+		lines.push(
+			"- ../sequence-prompt.txt: the whole brief for a video model: numbered beats",
+			"  with timecodes, the measured camera, the cast and the continuity line.",
+			"- ../references.json: every reference still by role (first and last frame,",
+			"  composition guide, character sheet, set), its file and the beats it serves.",
+		);
+	}
 	lines.push(
 		"",
 		"Not in this pack: the shot-wide depth video (blocking-depth.mp4) is a",
@@ -81,9 +92,11 @@ function readmeText({ shot, fps, hasLast, hasClip, ext, hasStylized }) {
  * @param {object} args.camera
  * @param {string} args.prompt
  * @param {Uint8Array | null} [args.stylizedPng] the panel's stylized picture
+ * @param {Array<{ name: string, data: string | Uint8Array }>} [args.sequenceFiles] the brief's files
+ *   (shot-prompt-engine sequencePackFiles): sequence-prompt.txt, references.json, composition.svg, references/
  * @returns {Array<{ name: string, data: Uint8Array | string }>} entries for buildZip
  */
-export function keyframePackEntries({ shot, fps, firstFramePng, lastFramePng, clip, camera, prompt, stylizedPng = null, folder = `${shot.index}-${slugifyTitle(shot.title)}` }) {
+export function keyframePackEntries({ shot, fps, firstFramePng, lastFramePng, clip, camera, prompt, stylizedPng = null, sequenceFiles = [], folder = `${shot.index}-${slugifyTitle(shot.title)}` }) {
 	const entries = [{ name: `${folder}/first.png`, data: firstFramePng }];
 	if (lastFramePng != null) entries.push({ name: `${folder}/last.png`, data: lastFramePng });
 	if (clip != null) entries.push({ name: `${folder}/clip.${clip.ext}`, data: clip.data });
@@ -94,7 +107,8 @@ export function keyframePackEntries({ shot, fps, firstFramePng, lastFramePng, cl
 	entries.push(
 		{ name: `${folder}/camera.json`, data: JSON.stringify({ ...camera, fps, ...range }, null, 2) + "\n" },
 		{ name: `${folder}/prompt.txt`, data: `${prompt}\n` },
-		{ name: `${folder}/README.txt`, data: readmeText({ shot, fps, hasLast: lastFramePng != null, hasClip: clip != null, ext: clip ? clip.ext : "mp4", hasStylized: stylizedPng != null }) },
+		{ name: `${folder}/README.txt`, data: readmeText({ shot, fps, hasLast: lastFramePng != null, hasClip: clip != null, ext: clip ? clip.ext : "mp4", hasStylized: stylizedPng != null, hasSequence: sequenceFiles.length > 0 }) },
+		...sequenceFiles,
 	);
 	return entries;
 }
