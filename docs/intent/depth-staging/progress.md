@@ -2,8 +2,8 @@
 
 - Working under rev: 1
 - Worker: cloud worker agent (depth-staging)
-- Current step: A8 docs, A7 gates
-- Next step: review
+- Current step: done; every row met or ready for review
+- Next step: orchestrator review (A8 docs, the proofs, F-1)
 - PR: none yet
 
 ## Acceptance
@@ -16,8 +16,8 @@
 | A4 | met (gate) | `node test/verify-camera-depth-layers.mjs` -> `2 checks passed` (bands, words, report layers, plan diagram FG ring); `node test/bus/verify-sequence-prompt.mjs` -> `# pass 7 # fail 0` ("Depth: Joon's shoulder soft in the foreground, the window behind.", byte-identical across two builds); `node test/bus/verify-camera-shot-checks.mjs` -> `# pass 2` (receipt `output.layers`) |
 | A5 | met (ui:qa, ui:shot) | `node tools/qa-browser.mjs -- node test/verify-shot-checks-browser.mjs` (dev 5210, hub 5310, CDP 9310) -> "shot checks browser QA passed", exit 0: a pillar flags BLOCKED on the Shots lane, `cclay live run camera.checkShots` agrees, the readout explains the flag and the fix, Apply fix clears it and the hub re-check is clean. Shots: `proofs/shot-check-flagged.png`, `proofs/shot-check-readout.png`, `proofs/foreground-lamp-lens.png` (a lamp held at share 0.3 through the lens) |
 | A6 | met (gate) | `node mcp/verify-camera-shot-checks.mjs` -> `11 passed, 0 failed` (in memory and live over a bus fixture); `node test/verify-director-evals.mjs` -> "depth: core 10/10, stretch 0/1", "core: 119/119"; `node mcp/verify-director-evals.mjs` -> `104 passed, 0 failed`; `cclay live run camera.checkShots` exercised by the A5 QA |
-| A7 | open | |
-| A8 | open | |
+| A7 | met (gate) | `npm run lint` -> "knip: 138 findings, 0 new", "loc: 72 files over 250 (baseline 72), 0 violations", "eslint: 0 regressions" (no baseline raised); `npm run build` exit 0; `suite-all.mjs --jobs 4` (AWS vars unset) -> 469/472 passed: the known timing failures verify-motion3-exitcar and verify-motion3-repair, plus verify-tool-handlers. That test listed the old tool order; `check_shots` was added to its contract list, and it now passes with 37 tools |
+| A8 | ready for review | `mcp/README.md` (`check_shots` row, Depth staging section, `foreground` in composition, 37 tools), `docs/agent-cli.md` (Shot checks section, foreground words), `docs/studio-ui-ia.md` (Shot check section, Shots-lane bars, FG ring), `CHANGELOG.md` Unreleased |
 
 ## Steps
 
