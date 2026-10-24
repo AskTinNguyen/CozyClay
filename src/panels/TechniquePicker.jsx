@@ -7,6 +7,7 @@ import { searchTechniques, slotOf } from "../camera-techniques/resolve.js";
 import { currentTechnique } from "../camera-techniques/storage.js";
 import { techniqueDiagram } from "../camera-techniques/diagram.js";
 import CompositionFields from "./CompositionFields.jsx";
+import FurtherReading from "./FurtherReading.jsx";
 import "./technique-picker.css";
 
 const KINDS = [["all", "All", "전체"], ["size", "Size", "크기"], ["angle", "Angle", "앵글"], ["move", "Move", "무브"], ["lens", "Lens", "렌즈"], ["coverage", "Coverage", "커버리지"], ["modifier", "Modifier", "효과"]];
@@ -128,7 +129,7 @@ export default function TechniquePicker({ hidden, activeShot }) {
 						</div>
 						<CompositionFields value={applied?.composition ?? null} onChange={(next) => (applied ? send(applied.stack, next) : null)} />
 						{status && <p className={status.ok ? "technique-status" : "technique-status refused"} data-technique-status role="status">{status.text}{status.warnings?.length ? ` ${status.warnings.join(" ")}` : ""}</p>}
-						<a className="technique-more" href="https://grokfilm.app" target="_blank" rel="noreferrer">{ko("Further reading", "더 알아보기")}</a>
+						<FurtherReading section="techniques" id={focus.id} setting><a className="technique-more" href="https://grokfilm.app" target="_blank" rel="noreferrer">grokfilm.app</a></FurtherReading>
 					</div>
 				)}
 			</div>

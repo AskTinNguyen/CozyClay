@@ -11,6 +11,12 @@ Camera
   retimes a move onto its beat as one undo entry. A Motivation section in
   Camera mode, flags on the Shots lane, MCP `check_motivation` and
   `story_beats`, and 15 director-eval scenarios.
+- Technique references: each technique, coverage pattern and cut rule lists
+  book citations (author, title, edition, year, pages) from the owner's
+  cinematic-atlas as Further reading in the technique popover and the Coverage
+  section; with the atlas URL set, each page opens there. Agents get them on a
+  detail request (`list_camera_techniques { id }` or `{ references: true }`).
+  Citations only; `tools/atlas-refs.mjs` regenerates them from a local atlas.
 - Director evals: 75 directing scenarios in CozyClay's own words (shot size,
   angle, motivated moves, lens, coverage, composition, cut checks, and
   non-camera "shots") with the expected camera action; the core rows are a

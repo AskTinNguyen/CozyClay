@@ -14,6 +14,7 @@ import { routeCameraRequest } from "../src/camera-coverage/route.js";
 import { classifyKeys, classifyRail, railTrack, techniquePhrase } from "../src/camera-techniques/readback.js";
 import { PLANNED_CAPABILITIES, TECHNIQUE_KINDS } from "../src/camera-techniques/entry.js";
 import { currentTechnique } from "../src/camera-techniques/storage.js";
+import { referenceDigest } from "../src/camera-references/index.js";
 import { shotAtFrame } from "../src/cuts.js";
 import { SUBJECT_HEIGHT_M, focalMmToFov, fovToFocalMm } from "../src/shot.js";
 
@@ -95,14 +96,21 @@ export function cameraTechniqueTools(deps) {
 				description:
 					"Read the camera technique library: 65 film techniques (shot sizes, angles, camera moves, lens moves, coverage, modifiers) " +
 					"as a compact index, the techniques matching a query (a name, alias, misspelling or mood such as \"uneasy\" or \"epic reveal\"), " +
-					"or one technique in full by id. Apply them with apply_camera_technique.",
+					"or one technique in full by id (with its book references). references: true lists the book citations for every technique, coverage pattern " +
+					"and cut rule. Apply them with apply_camera_technique.",
 				inputSchema: {
 					query: z.string().max(200).optional().describe("name, alias or mood to search"),
 					kind: z.enum(TECHNIQUE_KINDS).optional().describe("only this kind"),
 					id: z.string().max(80).optional().describe("one technique id (or phrase) to read in full"),
+					references: z.boolean().optional().describe("true: the book citations (book, pages) for every technique, coverage pattern and cut rule"),
 				},
 			},
-			async ({ query, kind, id }) => {
+			async ({ query, kind, id, references }) => {
+				if (references && !id) {
+					const digest = referenceDigest();
+					return text(["Further reading: book citations from the owner's cinematic-atlas (pages are the atlas reader's). Cite them when explaining a choice.",
+						"books", ...digest.books, "", "techniques", ...digest.techniques, "", "coverage patterns", ...digest.patterns, "", "cut rules", ...digest.cuts].join("\n"));
+				}
 				if (id) {
 					const full = describeTechnique(id) ?? describeTechnique(parseRequest(id).stack[0]?.id ?? "");
 					return text(full ? JSON.stringify(full, null, 1) : `No technique matches "${id}".`);

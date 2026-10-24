@@ -78,7 +78,7 @@ generated frame matches the blocking instead of drifting off into a generic shot
 | `apply_batch` | execute up to 100 object mutations as one user-visible undo transaction |
 | `render_prompt` | the shot as an AI image or video prompt; `scope: "sequence"` writes one brief for a range of shots (`from_shot`, `to_shot`): header, cast, numbered beats with timecodes, the measured camera, coverage roles, transitions and a continuity line. `profile` (`seedance-2.5`, `kling-3`, `veo-3.1`, `minimax-h3`, `minimax-h3-selfhosted`) shapes it for a video model and lists what breaks its limits with a fix. With an editor it reads the editor's shots; in memory the shots `cover_scene` planned |
 | `mark_camera_move` / `describe_camera_move` | name a move between two camera positions |
-| `list_camera_techniques` | the camera technique library: 65 film techniques (sizes, angles, moves, lens moves, coverage, modifiers) as an index, a search by name, alias, misspelling or mood (`query: "uneasy"`), or one technique in full (`id`) |
+| `list_camera_techniques` | the camera technique library: 65 film techniques (sizes, angles, moves, lens moves, coverage, modifiers) as an index, a search by name, alias, misspelling or mood (`query: "uneasy"`), or one technique in full (`id`, with its book `references`); `references: true` lists the book citations for every technique, coverage pattern and cut rule |
 | `apply_camera_technique` | apply a technique stack from words (`request: "low-angle slow push-in on her"`) or ids (`stack`); with an editor it runs `camera.applyTechnique` (one undo entry, a receipt with the classifier-verified move); in memory it sets the camera and marks the move's start for `describe_camera_move`. `render_prompt` then states the technique |
 | `cover_scene` | lay several shots at once from a coverage pattern (`shot-reverse-shot`, `master-coverage`, `dialogue-singles`, `walk-and-talk`, `action-coverage`, `establish-detail`) or words ("cover this conversation", "master and coverage", "reverse on Joon"); `cast` names A then B. With an editor it runs `camera.cover` (one undo entry; every camera on one side of the A-B line); in memory it plans the shots and checks their cuts |
 | `check_cuts` | the editing rules at every cut: 180-degree line crossings, jump cuts, screen-direction flips, shot-reverse-shot eyelines, each with severity, frames and a fix; read only. With an editor it runs `camera.checkCuts`; in memory it checks the `cover_scene` plan |
@@ -134,6 +134,16 @@ Canted Frame, Rack Focus, Handheld Shot, Snorricam, Slow Motion and Whip Pan set
 and `cover_scene` lays the whole exchange (see Camera coverage). Through `studio_run` the same library is `camera.techniques`,
 `camera.describeTechnique` and `camera.applyTechnique`.
 The names are general film vocabulary; https://grokfilm.app is good further reading.
+
+**Further reading.** Each technique, coverage pattern and cut rule carries up to three bibliographic
+references (book, author, edition, year, pages) to camera and directing books indexed by the owner's
+cinematic-atlas (`src/camera-references/`). They are citations only, never book text. A detail request
+returns them: `list_camera_techniques { id }` (and `camera.describeTechnique`) answers `references:
+[{ book, pages, cite }]`, `[]` when the atlas has no page for it, and `list_camera_techniques { references:
+true }` lists every entry's citations in one read. The index stays as it was, and the Studio agent's
+system prompt does not carry them. Agents cite them when explaining a choice ("Katz, Shot by Shot, p. 164").
+The data is generated offline from a local atlas checkout: `ATLAS_DIR=<atlas checkout> node tools/atlas-refs.mjs`
+rewrites `src/camera-references/data.js` (the matching table is `tools/atlas-refs-table.mjs`).
 
 ## Camera capabilities
 

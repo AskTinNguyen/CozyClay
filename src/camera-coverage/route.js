@@ -23,9 +23,17 @@ const NOT_CAMERA = [
 function notCameraShot(phrase) {
 	for (const [sense, pattern] of NOT_CAMERA) {
 		const hit = phrase.match(pattern);
-		if (hit) return { sense, phrase: hit[0] };
+		if (hit && !namedShot(phrase, hit)) return { sense, phrase: hit[0] };
 	}
 	return null;
+}
+
+/** A "shot" a technique names outright (not a spelling slip) is a camera shot: "full shot down the corridor" is not a gunshot. */
+function namedShot(phrase, hit) {
+	const shot = /\bshots?\b/.exec(hit[0]);
+	if (!shot) return false;
+	const head = phrase.slice(0, hit.index + shot.index + shot[0].length).split(" ").slice(-3).join(" ");
+	return parseRequest(head).matched.some((row) => !["mood", "fuzzy"].includes(row.via) && /\bshots?$/.test(row.phrase));
 }
 
 // Composition words are not technique words: "tight headroom" is not a tight shot.
