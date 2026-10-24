@@ -11,7 +11,7 @@
 // `cclay live tool render_packet` answers the data. Runs inside
 // tools/qa-browser.mjs with COZYCLAY_LIVE_PORT on the dev server's hub.
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterPageLoad } from "./bus/browser-navigation.mjs";
@@ -174,11 +174,15 @@ const checkZip = (path, shots, label) => {
 if (zip) checkZip(zip, 2, "Download");
 
 // The live half: cclay live writes the pack for one shot; render_packet answers the data.
-const before = new Set(zips());
+const before = new Set(zips()), stamp = () => Object.fromEntries(zips().map((name) => [name, statSync(join(downloads, name)).mtimeMs]));
+const stamped = stamp();
 const exported = run("export.directorPacket", { from: 16, to: 16 });
 expect("export.directorPacket answers the file and the packet files", exported.output?.fileName === "cozyclay-sequence-coverage.zip" && exported.output?.files?.length === 6 && exported.output?.shots?.length === 1, JSON.stringify(exported.output).slice(0, 400));
-for (let i = 0; i < 40 && !zips().some((name) => !before.has(name)); i++) await pause(250);
-const second = zips().find((name) => !before.has(name));
+// Chrome writes the same name again (a new file, or the old one replaced): either is the second pack.
+const fresh = () => zips().find((name) => !before.has(name) || stamp()[name] !== stamped[name]);
+for (let i = 0; i < 40 && !fresh(); i++) await pause(250);
+await pause(500);
+const second = fresh();
 expect("cclay live run export.directorPacket wrote a second zip", Boolean(second), zips().join(", "));
 if (second) checkZip(join(downloads, second), 1, "cclay live");
 const tool = live("tool", "render_packet", "--args", JSON.stringify({ from_shot: 14, to_shot: 18, include_plan: false }));
