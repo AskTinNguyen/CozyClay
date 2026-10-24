@@ -14,6 +14,7 @@ import { isImageAssetId } from "./scene-assets.js";
 import { createCharacterEntry } from "./scenes.js";
 import { repairShotExtras } from "./camera-coverage/storage.js";
 import { cameraCapabilities } from "./camera-capabilities/fields.js";
+import { storyBeatsField } from "./camera-motivation/story-beats.js";
 
 const CAMERA_KEY_LIMITS = elementByPath("shot.cameraKeys"), KEY_EASES = new Set(["linear", "in", "out"]);
 
@@ -321,7 +322,7 @@ function migratedCamera(followCam, cameraRail, railFollow = null) {
 function repairShared(parsed, frameCount, ids) {
 	return {
 		frameCount,
-		waypoints: repairWaypoints(parsed.waypoints, ids),
+		waypoints: repairWaypoints(parsed.waypoints, ids), ...storyBeatsField(parsed.storyBeats, frameCount),
 	};
 }
 
@@ -329,7 +330,7 @@ function repairShared(parsed, frameCount, ids) {
  * Build a transport-neutral shot document. It can live at the root today or
  * be nested under a future Scene document without changing its schema.
  */
-export function createShotAuthoringDocument({ shots = [], waypoints = [], frameCount = null } = {}) {
+export function createShotAuthoringDocument({ shots = [], waypoints = [], frameCount = null, storyBeats = [] } = {}) {
 	const repairedFrameCount = repairFrameCount(frameCount);
 	const effectiveFrameCount = repairedFrameCount ?? DEFAULT_FRAME_COUNT;
 	const ids = new Set();
@@ -337,7 +338,7 @@ export function createShotAuthoringDocument({ shots = [], waypoints = [], frameC
 		version: SHOT_AUTHORING_VERSION,
 		frameCount: repairedFrameCount,
 		waypoints: repairWaypoints(waypoints, ids),
-		shots: repairShots(shots, effectiveFrameCount, null, ids),
+		shots: repairShots(shots, effectiveFrameCount, null, ids), ...storyBeatsField(storyBeats, effectiveFrameCount),
 	};
 }
 

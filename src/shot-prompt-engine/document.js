@@ -44,7 +44,7 @@ export function sequenceDocument(state) {
 	const look = [state.style, state.look].map((text) => (typeof text === "string" ? text.trim() : "")).filter(Boolean).join(", ");
 	return {
 		title: state.title || "Untitled", fps: state.fps ?? 24, aspect: state.aspect ?? null, filmback: state.filmback ?? {}, frameCount: state.frameCount,
-		activeCharacterId: state.activeCharacterId ?? null, look, cast, shots: state.shots ?? [], motion: state.motion ?? [],
+		activeCharacterId: state.activeCharacterId ?? null, look, cast, shots: state.shots ?? [], motion: state.motion ?? [], storyBeats: state.storyBeats ?? [],
 		set: { environment: typeof state.environment === "string" ? state.environment : "", ...(typeof state.environmentImage === "string" && state.environmentImage ? { image: state.environmentImage } : {}) },
 	};
 }

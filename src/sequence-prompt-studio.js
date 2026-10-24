@@ -33,12 +33,12 @@ function compileTake(take, character, objects) {
  * @param {object} s  readStudioState(): sceneName, aspect, stage, characters (sessionMotion), shots, frameCount, activeCharacterId, filmback, objects
  * @param {{ title?: string }} [options]
  */
-function studioSequenceDocument(s, { title } = {}) {
+export function studioSequenceDocument(s, { title } = {}) {
 	const motion = (s.characters ?? []).filter((row) => !row.hidden && row.sessionMotion?.schema === TAKE_SCHEMA && row.sessionMotion.spec)
 		.map((row) => motionEntry(row, row.sessionMotion, compileTake(row.sessionMotion, row, s.objects)));
 	return sequenceDocument({
 		title: title ?? s.sceneName, shots: s.shots ?? [], characters: s.characters ?? [], fps: 24, aspect: s.aspect ?? s.stage?.shotAspect ?? null, filmback: s.filmback,
-		frameCount: s.frameCount, activeCharacterId: s.activeCharacterId, look: s.stage?.style, environment: s.stage?.environment, environmentImage: s.stage?.environmentImage, motion,
+		frameCount: s.frameCount, activeCharacterId: s.activeCharacterId, look: s.stage?.style, environment: s.stage?.environment, environmentImage: s.stage?.environmentImage, motion, storyBeats: s.storyBeats,
 	});
 }
 
