@@ -37,7 +37,7 @@ export const COVERAGE_PATTERNS = Object.freeze([
 	},
 	{
 		id: "action-coverage", name: "Action Coverage", tag: "ACTION", cast: 1, moods: ["action", "energy", "impact"],
-		aliases: ["action coverage", "cover the action", "cover this action", "action sequence coverage", "fight coverage", "chase coverage"],
+		aliases: ["action coverage", "cover the action", "cover this action", "action sequence coverage", "fight coverage", "chase coverage", "cover the fight", "cover this fight", "cover the chase", "cover this chase"],
 		description: "Establish the space wide, track the action at medium, punch in on the beat with an insert or close-up, then land on the reaction.",
 		shots: (count, beat = "insert") => [shot("Establish", 0, [{ id: "establishing-shot", params: { height: 3 } }]), shot("Track", 0, [{ id: "medium-shot" }, { id: "tracking-shot" }], { alternates: [[{ id: "medium-shot" }, { id: "smooth-tracking-shot", params: { speed: "medium" } }]] }),
 			shot(beat === "close-up" ? "Beat CU" : "Insert", 0, [{ id: beat === "close-up" ? "close-up" : "insert-shot" }]), shot("Reaction", 1, [{ id: "close-up" }])],

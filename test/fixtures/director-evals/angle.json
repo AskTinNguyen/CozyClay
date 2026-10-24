@@ -1,0 +1,15 @@
+{
+	"category": "angle",
+	"label": "angle and power",
+	"scenarios": [
+		{"id": "angle-tower-below", "tier": "core", "category": "angle", "request": "the villain should tower over us, shoot Joon from below", "cast": ["mara", "joon"], "expected": {"action": "camera.applyTechnique", "stack": ["low-angle"], "subject": "joon"}, "apply": {"height": "below", "move": "static"}, "why": "Looking up at him gives him the power in the room."},
+		{"id": "angle-look-down-small", "tier": "core", "category": "angle", "request": "look down on Joon so he feels small and beaten", "cast": ["mara", "joon"], "expected": {"action": "camera.applyTechnique", "stack": ["high-angle"], "subject": "joon", "confidence": "low"}, "apply": {"height": "above", "move": "static"}, "why": "A camera above him shrinks him; only the mood says so, hence low confidence."},
+		{"id": "angle-dutch-spin", "tier": "core", "category": "angle", "request": "a dutch tilt as the floor starts spinning in her head", "cast": ["mara", "joon"], "expected": {"action": "camera.applyTechnique", "stack": ["dutch-angle"]}, "why": "The tilted horizon is the spin; floor and head are not shot names here."},
+		{"id": "angle-gods-eye-tiles", "tier": "core", "category": "angle", "request": "god's eye view of the two of them on the tiles", "cast": ["mara", "joon"], "expected": {"action": "camera.applyTechnique", "stack": ["birds-eye-view"]}, "why": "Straight down turns the couple into a pattern on the floor; \"two\" is a count, not a two-shot."},
+		{"id": "angle-eye-level-plain", "tier": "core", "category": "angle", "request": "keep the camera at eye level on Mara, nothing showy", "cast": ["mara", "joon"], "expected": {"action": "camera.applyTechnique", "stack": ["eye-level"], "subject": "mara"}, "apply": {"move": "static"}, "why": "Eye level is the honest, unjudging height."},
+		{"id": "angle-ground-up", "tier": "core", "category": "angle", "request": "from the ground looking up at Joon", "cast": ["mara", "joon"], "expected": {"action": "camera.applyTechnique", "stack": ["worms-eye-view"], "subject": "joon"}, "apply": {"height": "below"}, "why": "From the floor the angle is the worm's eye; the low angle it also implies is dropped, one angle per stack."},
+		{"id": "angle-profile-window", "tier": "core", "category": "angle", "request": "Mara in profile against the window", "cast": ["mara", "joon"], "expected": {"action": "camera.applyTechnique", "stack": ["profile-shot"], "subject": "mara"}, "why": "Side-on shows her outline against the light."},
+		{"id": "angle-cant-nervous", "tier": "core", "category": "angle", "request": "a slight cant to the frame, she is nervous", "cast": ["mara", "joon"], "expected": {"action": "camera.applyTechnique", "stack": ["canted-frame"], "confidence": "low"}, "why": "A small tilt for nerves; the resolver reads it from the mood alone."},
+		{"id": "angle-head-on-walk", "tier": "core", "category": "angle", "request": "head on as Joon walks toward the lens", "cast": ["mara", "joon"], "expected": {"action": "camera.applyTechnique", "stack": ["head-on-shot"], "subject": "joon"}, "why": "Straight at the lens is a confrontation with the audience."}
+	]
+}

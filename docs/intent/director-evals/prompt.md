@@ -1,7 +1,7 @@
 # Director Evals
 
 - Rev: 1
-- Status: planned
+- Status: completed
 - Waits for: the owner's go-ahead. First of the cinematic-atlas plan; every later intent in it adds scenarios here.
 - Area: Camera and Shots
 - Owner: TinNguyen
@@ -61,3 +61,4 @@ Today that layer is tested on a handful of phrases per intent (`test/verify-came
 ## Changelog
 
 - rev 1 (2026-10-24): written as a planned intent from the cinematic-atlas review (L-1, L-2).
+- rev 1 (2026-10-24): completed; squash-merged into `main` by the cloud orchestrator under `after-proof`.
