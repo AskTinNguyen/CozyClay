@@ -189,3 +189,24 @@ test('camera.setLine stores the line a shot keeps, the cut check judges by it an
     console.log(`PASS setLine: ${set.summary}`);
   } finally { f.dispose(); }
 });
+
+test('coverage laid over a shot with an authored line clears that line unless the new pattern sets one; undo restores it', () => {
+  const f = fixtureFor(TRIO);
+  try {
+    load(f, [seed(0, 1299)], 1400);
+    assert.equal(f.run('camera.cover', { pattern: 'triangle-dialogue', cast: TRIO.map(row => row.id), shotId: 'shot-a' }, 'agent').ok, true);
+    const old = shotsOf(f).find(row => row.coverage?.role !== 'Master' && row.line), pair = old.line.between;
+    const third = TRIO.find(row => !pair.includes(row.id)).id, before = f.snapshot();
+    const receipt = f.run('camera.cover', { pattern: 'master-coverage', cast: [third, pair[0]], shotId: old.id }, 'agent');
+    assert.equal(receipt.ok, true, JSON.stringify(receipt).slice(0, 400));
+    const laid = shotsOf(f).filter(row => row.startFrame >= old.startFrame && row.endFrame <= old.endFrame);
+    assert.ok(laid.length >= 2 && laid.every(row => row.coverage?.pattern === 'master-coverage'), laid.map(row => row.name).join());
+    assert.deepEqual(laid.map(row => row.line), laid.map(() => undefined), 'no shot keeps the old pair\'s line');
+    const cuts = f.run('camera.checkCuts', {}, 'agent').output.cuts.filter(cut => laid.some(row => row.id === cut.to) && laid.some(row => row.id === cut.from));
+    assert.ok(cuts.length && cuts.every(cut => cut.measures.line?.source !== 'authored'), JSON.stringify(cuts.map(cut => cut.measures.line)));
+    assert.equal(f.run('edit.undo', { receiptId: receipt.receiptId }, 'agent').status, 'undone');
+    assert.deepEqual(f.snapshot(), before, 'one undo restores the triangle shot and its line');
+    assert.deepEqual(shotsOf(f).find(row => row.id === old.id).line, old.line);
+    console.log(`PASS replaced line: ${old.name} (${pair.join('-')}) -> ${laid.length} master-coverage shots with no line`);
+  } finally { f.dispose(); }
+});

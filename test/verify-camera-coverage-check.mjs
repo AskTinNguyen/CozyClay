@@ -131,6 +131,23 @@ check("branch setups compare aim and lens as well as position, at both ends", ()
 	assert.equal(checkCoverage(shots, scene(DUO)).checks.branches, true, "unchanged branches still match");
 });
 
+check("the inferred cast includes every measured subject: a hand-framed close-up of a third person is checked too", () => {
+	const sela = { id: "c", name: "Sela", x: 2, z: 12, rot: 0, height: 1.8 }, TRIAD = [...DUO, sela];
+	const base = laid("master-coverage", DUO), bare = checkCoverage(base, scene(TRIAD));
+	assert.equal(bare.complete, true, bare.gaps.map((gap) => gap.message).join(" | "));
+	assert.deepEqual(bare.cast, ["a", "b"], "Sela is in no shot");
+	const end = base.at(-1).endFrame, close = { ...plannedShot({ index: 9, name: "Sela close", subjectId: "c", startFrame: end + 1, endFrame: end + 40,
+		plan: { keys: [{ frame: end + 1, framing: { position: { x: 2, y: 1.5, z: 15 }, lookAt: { x: 2, y: 1.3, z: 12 }, focalMm: 50 } }] } }, filmback), id: "sela-close", coverage: null };
+	const report = checkCoverage([...base, close], scene(TRIAD));
+	assert.ok(report.cast.includes("c"), `the measured subject joins the cast: ${report.cast}`);
+	assert.equal(report.complete, false);
+	assert.ok(report.gaps.some((gap) => gap.kind === "sizes" && gap.subjectId === "c"), report.gaps.map((gap) => gap.message).join(" | "));
+	console.log(`  with Sela: ${report.gaps.map((gap) => gap.message).join(" | ")}`);
+	assert.ok(report.gaps.some((gap) => gap.kind === "master" && /Mara, Joon, Sela/.test(gap.message)), "no master holds Sela");
+	const narrowed = checkCoverage([...base, close], scene(TRIAD), { castIds: ["a", "b"] });
+	assert.ok(narrowed.checks.master && narrowed.checks.sizes && !narrowed.cast.includes("c"), "a named cast still narrows the master and sizes checks");
+});
+
 check("camera.checkCoverage through the bus: read only, from words, a cast and a range", () => {
 	const characters = [createCharacterEntry({ id: "actor-a", model: "y-bot-tpose", x: 0, z: 0, rot: 90, subject: "Mara" }), createCharacterEntry({ id: "actor-b", model: "y-bot-tpose", x: 4, z: 0, rot: -90, subject: "Joon" })];
 	const f = shotsFixture({ characters });

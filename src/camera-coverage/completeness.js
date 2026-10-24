@@ -66,7 +66,8 @@ export function checkCoverage(shots, scene, { range = null, castIds = null, bran
 	const clips = range ? ordered.filter((shot) => shot.endFrame >= range.startFrame && shot.startFrame <= range.endFrame) : ordered;
 	const span = range ?? { startFrame: clips[0]?.startFrame ?? 0, endFrame: clips.at(-1)?.endFrame ?? 0 };
 	const read = clips.map((shot) => readShot(shot, scene, aspect)), gaps = [];
-	const named = new Set(castIds ?? clips.flatMap((shot) => [shot.coverage?.subjectId, ...(authoredLine(shot) ?? [])]).filter(Boolean));
+	// The cast: named, else everyone the shots are about: coverage subjects, authored line members and each measured subject (cutaways aside).
+	const named = new Set(castIds ?? read.flatMap((entry) => [entry.shot.coverage?.subjectId, ...(authoredLine(entry.shot) ?? []), entry.cutaway ? null : entry.subject?.id]).filter(Boolean));
 	const cast = scene.cast.filter((row) => (named.size ? named.has(row.id) : true));
 	const gap = (kind, message, suggest, extra = {}) => gaps.push({ kind, message: message.slice(0, 200), ...extra, suggest });
 

@@ -125,7 +125,8 @@ export function registerCoverage(registry, ports, { castRow }) {
       const target = shotAtFrame(owner().read(), shot.startFrame);
       context.run('shot.rename', { shotId: target.id, name: shot.name });
       const applied = context.run('camera.applyTechnique', { shotId: target.id, subjectId: shot.subjectId, stack: shot.stack, side: shot.side, ...(args.composition && shot.plan.composition ? { composition: args.composition } : {}) });
-      patch(target.id, row => ({ ...row, coverage: { pattern: plan.pattern, index: shot.index, role: shot.role, subjectId: shot.subjectId, ...(shot.setup ? { setup: shot.setup, branch: shot.branch } : {}) }, ...(shot.line ? { line: { between: shot.line } } : {}) }));
+      // A line the replaced shot carried goes unless this pattern sets one (the cut rules would judge the new shot against the old pair).
+      patch(target.id, ({ line: _old, ...row }) => ({ ...row, coverage: { pattern: plan.pattern, index: shot.index, role: shot.role, subjectId: shot.subjectId, ...(shot.setup ? { setup: shot.setup, branch: shot.branch } : {}) }, ...(shot.line ? { line: { between: shot.line } } : {}) }));
       for (const warning of applied.warnings ?? []) if (warning.code !== 'TECHNIQUE_NOTE') warnings.push({ ...warning, id: target.id });
       laid.push({ id: target.id, name: shot.name, startFrame: shot.startFrame, endFrame: shot.endFrame, subjectId: shot.subjectId, technique: applied.checks?.technique, move: applied.checks?.move, ...(shot.line ? { line: shot.line } : {}), ...(shot.setup ? { setup: shot.setup, branch: shot.branch } : {}) });
     }
