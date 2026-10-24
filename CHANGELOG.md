@@ -4,6 +4,13 @@
 
 Camera
 
+- Camera motivation: story beats (a line, a reveal, a decision) on the
+  timeline, in OTIO markers and in the sequence brief; `camera.checkMotivation`
+  says why each camera move happens (a story beat, a motion beat, its subject)
+  and flags moves with no reason or off their beat, and `camera.alignMove`
+  retimes a move onto its beat as one undo entry. A Motivation section in
+  Camera mode, flags on the Shots lane, MCP `check_motivation` and
+  `story_beats`, and 15 director-eval scenarios.
 - Director evals: 75 directing scenarios in CozyClay's own words (shot size,
   angle, motivated moves, lens, coverage, composition, cut checks, and
   non-camera "shots") with the expected camera action; the core rows are a
