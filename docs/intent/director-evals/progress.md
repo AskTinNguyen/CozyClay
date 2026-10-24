@@ -2,8 +2,8 @@
 
 - Working under rev: 1
 - Worker: cloud worker agent (director-evals)
-- Current step: 2. MCP parity (A6)
-- Next step: 3. docs (A7, A9), then the repository gates (A8)
+- Current step: 3. repository gates (A8)
+- Next step: report
 - PR: orchestrator opens on report
 
 ## Acceptance
@@ -15,10 +15,10 @@
 | A3 | met | Step 1: 46 rows marked `apply` run through the bus in memory (`test/director-evals-apply.mjs` on `test/bus/shots-fixture.mjs`): "applied: 46/46 measured results hold through the bus" (move verdict, size step, camera height, side of the line, composition by `measureComposition` on every key, `camera.checkCuts` flags) |
 | A4 | met | Step 1: "negatives: 11/11 resolve to no camera action, 3 refused by the bus"; "receipts: 75/75 state their matched words and a confidence"; bus receipts carry `output.matched` and `output.confidence` (checked on every applied row) |
 | A5 | met | Step 1: 12 core failures fixed (list below); `core: 74/74`; existing resolver verify files pass (step 1) |
-| A6 | open | |
-| A7 | open | |
+| A6 | met | Step 2: `node mcp/verify-director-evals.mjs` exit 0, "67 passed, 0 failed": 65 core rows (all but composition rows) through `apply_camera_technique` 49, `cover_scene` 9, `check_cuts` 7, each `resolved` line equal to the runner's `routeCameraRequest` (action, ids, pattern, frame, matched words, confidence) and to the row |
+| A7 | ready for review | `test/fixtures/director-evals/README.md` (row format, `apply` measures, adding rows, when stretch moves to core) |
 | A8 | open | |
-| A9 | open | |
+| A9 | ready for review | `CHANGELOG.md` Unreleased (Director evals line); `mcp/README.md` "Camera requests in words" (the `resolved` line, `output.matched` / `output.confidence`, the non-camera refusal) |
 
 ## Steps
 
@@ -41,6 +41,13 @@
   - Existing resolver and camera files, each exit 0: `test/verify-camera-techniques.mjs` "12 checks passed", `test/verify-camera-coverage-resolve.mjs` "5 checks passed", `test/verify-camera-cut-rules.mjs` "6 checks passed", `test/verify-camera-technique-prompt.mjs` "6 checks passed", `test/bus/verify-camera-coverage.mjs` "# pass 4 # fail 0", `test/bus/verify-camera-composition.mjs` "# pass 3 # fail 0", `test/bus/verify-camera-techniques-apply.mjs` "# pass 5 # fail 0", `test/bus/verify-camera-transitions.mjs` "# pass 5 # fail 0", `test/bus/verify-camera-capability-techniques.mjs` "# pass 3 # fail 0", `mcp/verify-camera-techniques.mjs` "14 passed, 0 failed", `mcp/verify-camera-coverage.mjs` "14 passed, 0 failed", `mcp/verify-camera-capabilities.mjs` "9 passed, 0 failed".
   - `npm run lint`: "knip: 138 findings, 0 new, 1 fixed (baseline 139)", "loc: 72 files over 250 (baseline 72), 0 violations", "eslint: 396 errors across 20 rules (baseline 403), 0 regressions".
 - Merged `origin/main` (b975c55, camera-polish) into the branch before this step.
-- Commit: see the next step's line (hash recorded after commit).
+- Commit: `5cfd3f1a` (pushed to `origin/intent/director-evals`).
+
+### Step 2: MCP parity, docs (A6, A7, A9)
+
+- `apply_camera_technique` (in memory) routes its request through `routeCameraRequest`: a non-camera request answers "No camera action in ...", a coverage or cut request names the tool to use, and every answer ends with `resolved  <action> <ids|pattern|frame> · matched "..." · confidence <level>` (`resolvedLine`, `mcp/camera-technique-tools.mjs`). `cover_scene` and `check_cuts` (in memory) end with the same line when given a request. Editor-connected answers are the editor's receipts (step 1: `output.matched`, `output.confidence`).
+- `mcp/verify-director-evals.mjs` (new, registered in `tools/run-tests.mjs`): the eval cast in memory, then every core row except composition rows (in memory there is no shot to compose) through its tool.
+- Docs: `test/fixtures/director-evals/README.md` (A7), `CHANGELOG.md` Unreleased and `mcp/README.md` "Camera requests in words" (A9).
+- Evidence (worktree): `node mcp/verify-director-evals.mjs` exit 0 "67 passed, 0 failed" ("at least 10 scenarios ran through the MCP tools (apply_camera_technique 49, cover_scene 9, check_cuts 7)"); `mcp/verify.mjs` exit 0 "all checks passed"; `mcp/verify-tool-annotations.mjs` exit 0 "PASS G005 tools/list safety contract (32 tools; deterministic order)"; `mcp/verify-camera-techniques.mjs` "14 passed, 0 failed"; `mcp/verify-camera-coverage.mjs` "14 passed, 0 failed"; `mcp/verify-render-prompt-sequence.mjs` "18 passed, 0 failed".
 
 ## Reconciliations

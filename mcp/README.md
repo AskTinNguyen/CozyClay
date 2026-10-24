@@ -161,6 +161,20 @@ tight|normal|loose, leadRoom none|facing|travel|more }` and answer `checks.scree
 (dissolve, fades, whip, match cut, J- or L-cut); OTIO writes it as a `Transition.1` where OTIO has one
 and as clip metadata always, and the prompt gains a `TRANSITION:` line.
 
+## Camera requests in words
+
+Every camera request in words goes through one router (`src/camera-coverage/route.js`): coverage,
+composition and cut words first, then the technique stack. A "shot" that is not a camera shot (a drink,
+a gunshot, a flu shot, a basketball shot, a mugshot) names no camera action unless a camera word sits
+beside it ("close-up on Joon as the gunshot rings out" is a close-up). `camera.applyTechnique`,
+`camera.cover` and `camera.checkCuts` state the words they matched and a confidence in their receipt
+(`output.matched`, `output.confidence`: high when named outright, medium for a spelling slip or a cut word
+without a question, low for a mood); a request with no camera action is refused (`INVALID_ARGUMENT`) with
+the words and the confidence. In memory, `apply_camera_technique`, `cover_scene` and `check_cuts` end with
+the same as a `resolved` line ("low-angle slow push-in" answers `resolved  camera.applyTechnique low-angle +
+push-in · matched "low angle", "slow push" · confidence high`). The director eval set (`test/fixtures/director-evals/`) holds the
+scenarios they are measured on.
+
 ## Motion
 
 Motion is compiled, not generated: run `motion.compile` through `studio_run` with a motion

@@ -10,6 +10,7 @@
 import { compileStack } from "../src/camera-techniques/compile.js";
 import { describeTechnique, techniqueIndex } from "../src/camera-techniques/index.js";
 import { parseRequest, searchTechniques } from "../src/camera-techniques/resolve.js";
+import { routeCameraRequest } from "../src/camera-coverage/route.js";
 import { classifyKeys, classifyRail, railTrack, techniquePhrase } from "../src/camera-techniques/readback.js";
 import { PLANNED_CAPABILITIES, TECHNIQUE_KINDS } from "../src/camera-techniques/entry.js";
 import { currentTechnique } from "../src/camera-techniques/storage.js";
@@ -17,6 +18,12 @@ import { shotAtFrame } from "../src/cuts.js";
 import { SUBJECT_HEIGHT_M, focalMmToFov, fovToFocalMm } from "../src/shot.js";
 
 const MEMORY_FRAMES = 72;
+
+/** The words a request was resolved from, as camera.applyTechnique's receipt states them (output.matched, output.confidence). */
+export function resolvedLine(routed) {
+	const what = routed.args?.stack?.map((row) => row.id).join(" + ") ?? routed.args?.pattern ?? (routed.args?.frame !== undefined ? `frame ${routed.args.frame}` : "");
+	return `resolved  ${routed.action}${what ? ` ${what}` : ""} · matched ${routed.matched.map((words) => `"${words}"`).join(", ") || "nothing"} · confidence ${routed.confidence}`;
+}
 const cameraKey = (camera) => JSON.stringify([camera.x, camera.y, camera.z, camera.focalMm]);
 
 /** The technique render_prompt states: the editor's stored stack on the shot under the playhead (while it still
@@ -135,9 +142,14 @@ export function cameraTechniqueTools(deps) {
 							args: { ...(request ? { request } : {}), ...(stack ? { stack } : {}), ...(subjectId ? { subjectId } : {}), ...(shot_id ? { shotId: shot_id } : {}), ...shared } });
 					}
 					const castRows = deps.cast().map((row) => ({ id: row.id, name: row.subject ?? row.name }));
-					const parsed = request ? parseRequest(request, { cast: castRows }) : null, resolved = stack ?? parsed.stack;
+					// The router camera.applyTechnique uses: a drink, a gunshot or a basketball "shot" names no camera action.
+					const routed = request && !stack ? routeCameraRequest(request, { cast: castRows }) : null;
+					if (routed?.action === "none") return text(`No camera action in "${request}": ${routed.reason}.\n${resolvedLine(routed)}`);
+					if (routed && routed.action !== "camera.applyTechnique") return text(`"${request}" asks for ${routed.action}: use ${routed.action === "camera.cover" ? "cover_scene" : "check_cuts"}.\n${resolvedLine(routed)}`);
+					const resolved = stack ?? routed.args.stack ?? [];
 					if (!resolved.length) return text(`No camera technique in "${request}". Try list_camera_techniques { query }.`);
-					return applyInMemory(resolved, subject ?? parsed?.subjectId, shared);
+					const answer = applyInMemory(resolved, subject ?? routed?.args.subjectId, shared);
+					return routed ? text(`${answer.content[0].text}\n${resolvedLine(routed)}`) : answer;
 				} catch (error) {
 					return error.code ? text(`Refused (${error.code}): ${error.message}`) : liveError(error);
 				}

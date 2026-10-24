@@ -185,7 +185,7 @@ const NODE_FILES = [
 	"test/verify-usd-camera.mjs", "test/verify-headless-studio-cli.mjs",
 	"test/verify-zip-store.mjs",
 	"test/verify-render-passes.mjs",
-	"mcp/verify.mjs", "mcp/verify-camera-techniques.mjs", "mcp/verify-camera-capabilities.mjs", "mcp/verify-camera-coverage.mjs", "mcp/verify-render-prompt-sequence.mjs",
+	"mcp/verify.mjs", "mcp/verify-camera-techniques.mjs", "mcp/verify-camera-capabilities.mjs", "mcp/verify-camera-coverage.mjs", "mcp/verify-director-evals.mjs", "mcp/verify-render-prompt-sequence.mjs",
 	"mcp/verify-http-origin.mjs",
 	"mcp/verify-live.mjs",
 	"mcp/verify-live-proxy-frame.mjs",
