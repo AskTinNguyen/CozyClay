@@ -82,7 +82,9 @@ export function groupFraming(members, state, filmback) {
 	const axis = unit({ x: far.x - members[0].x, z: far.z - members[0].z });
 	const faced = members.reduce((sum, row) => ({ x: sum.x + facing(row).x, z: sum.z + facing(row).z }), { x: 0, z: 0 });
 	let normal = { x: -axis.z, z: axis.x };
-	if (normal.x * faced.x + normal.z * faced.z < 0) normal = { x: -normal.x, z: -normal.z };
+	// The camera goes to the side the group faces; when they face each other (no net facing) the side param picks the side of their line.
+	const facesEachOther = Math.hypot(faced.x, faced.z) < 0.5;
+	if (facesEachOther ? state.side === "left" : normal.x * faced.x + normal.z * faced.z < 0) normal = { x: -normal.x, z: -normal.z };
 	normal = rotateXZ(normal, (state.side === "left" ? -1 : 1) * 18 * DEG);
 	const tallest = Math.max(...members.map((row) => SUBJECT_HEIGHT_M * scaleOf(row)));
 	const spec = SIZE_SPECS[state.size] ?? SIZE_SPECS["medium-wide shot"], focalMm = clampFocal(state.focalMm ?? Math.min(spec.lens, 32), filmback);

@@ -16,6 +16,11 @@ import { StudioSchemas } from '../studio-agent-protocol.js';
 import { fail, shotLabel } from './shared.js';
 import { registerRig, rigDeclarations } from './camera-rig.js';
 import { capabilityReadback, capabilityScene } from '../camera-capabilities/readback.js';
+import { compositionSchema, coverageDeclarations, registerCoverage } from './camera-coverage.js';
+import { resolveCameraRequest } from '../camera-coverage/resolve.js';
+import { eyePoint, measureComposition } from '../camera-coverage/composition.js';
+import { travelAt } from '../camera-coverage/cut-geometry.js';
+import { currentTechnique } from '../camera-techniques/storage.js';
 
 const id = StudioSchemas.TargetGuard.properties.targetId;
 const input = (properties, required = []) => ({ type: 'object', properties, required, additionalProperties: false });
@@ -31,17 +36,19 @@ export const declarations = Object.freeze([
     description: 'One camera technique in full: description, aliases, moods, params with defaults and ranges, the move the classifier confirms, and any camera capability it waits for (then it applies as prompt words only). Give id, or a phrase to resolve.',
     input: input({ id: { type: 'string', maxLength: 200 } }, ['id']) },
   { id: 'camera.applyTechnique', label: 'Apply camera technique', kind: 'mutation', undoDomain: 'shot',
-    description: `Frame or move a shot's camera with a technique stack, as one undo entry. ${STACK_HELP} It compiles to shot.frame keys (moves ease in and out; a crash zoom, whip pan and 360 run at constant speed) or a shot.setCameraRail rail (tracking, follow, Steadicam, dolly, helicopter, one-er), and answers what it achieved: the move the classifier reads back from the real keys (checks.moveVerified), the derived size, framing checks, group members in frame, and what the camera capabilities it sets through camera.set do (Dutch/canted roll, rack focus, handheld shake, Snorricam mount, slow motion, whip-pan blur: checks rollDeg, focus, focusDistances, shakeAmplitude, mountBone, speed, shutterDeg). Shared params: speed slow|medium|fast, focalMm, direction, degrees. shotId defaults to the shot under the playhead (one is added when there is none); subjectId to the active character. The stack is stored on the shot and states itself in the export prompt.`,
+    description: `Frame or move a shot's camera with a technique stack, as one undo entry. ${STACK_HELP} It compiles to shot.frame keys (moves ease in and out; a crash zoom, whip pan and 360 run at constant speed) or a shot.setCameraRail rail (tracking, follow, Steadicam, dolly, helicopter, one-er), and answers what it achieved: the move the classifier reads back from the real keys (checks.moveVerified), the derived size, framing checks, group members in frame, and what the camera capabilities it sets through camera.set do (Dutch/canted roll, rack focus, handheld shake, Snorricam mount, slow motion, whip-pan blur: checks rollDeg, focus, focusDistances, shakeAmplitude, mountBone, speed, shutterDeg). Shared params: speed slow|medium|fast, focalMm, direction, degrees. shotId defaults to the shot under the playhead (one is added when there is none); subjectId to the active character. side left|right puts the camera on that side of the subject. composition { place auto|left-third|centre|right-third, headroom tight|normal|loose, leadRoom none|facing|travel|more } turns the aim so the eyes sit on a third or the centre with room ahead (checks screenX, eyeLineY: frame fractions from the top-left). A request about coverage ("cover this conversation") runs camera.cover, about cuts ("check my cuts") camera.checkCuts. The stack is stored on the shot and states itself in the export prompt.`,
     input: input({ shotId: id, subjectId: id, stack: { type: 'array', items: item, minItems: 1, maxItems: 8 }, request: { type: 'string', minLength: 1, maxLength: 300 },
       speed: { type: 'string', enum: ['slow', 'medium', 'fast'] }, focalMm: { type: 'number', minimum: 8, maximum: 300 }, direction: { type: 'string', enum: ['left', 'right', 'up', 'down', 'in', 'out'] },
-      degrees: { type: 'number', minimum: 5, maximum: 720 } }) },
+      degrees: { type: 'number', minimum: 5, maximum: 720 }, side: { type: 'string', enum: ['left', 'right'] }, composition: compositionSchema }) },
   // camera.set and camera.setKey: roll, lens, shake, mount, speed, shutter and rig keys (camera-rig.js).
   ...rigDeclarations,
+  // camera.cover, camera.checkCuts and camera.setTransition (camera-coverage.js).
+  ...coverageDeclarations,
 ]);
 
 const scaled = row => SUBJECT_HEIGHT_M * (row.scale ?? 1);
 /** A character as the compiler reads it: this shot's placement override wins, and a head bone gives a point of view its eyes. */
-function castRow(row, shot, rig) {
+export function castRow(row, shot, rig) {
   const placed = { ...row, ...(shot?.cast?.[row.id] ?? {}) }, eye = rig && attachFrameMatrix(rig, 'head') ? { x: attachPos.x, y: attachPos.y + 0.08 * (row.scale ?? 1), z: attachPos.z } : null;
   return { id: row.id, name: row.subject ?? row.name ?? row.id, x: placed.x ?? 0, z: placed.z ?? 0, rot: placed.rot ?? 0, height: scaled(row), ...(eye ? { eye } : {}) };
 }
@@ -63,22 +70,31 @@ export function register(registry, ports) {
   registry.register({ ...declarations[2], available: state => mounted() === true ? (state.characters?.some(row => !row.hidden) || 'Add a character first; a technique frames a character.') : mounted(),
     target: args => args.shotId, run(args, context) { return apply(args, context); } });
   registerRig(registry, ports);
+  registerCoverage(registry, ports, { castRow });
 
   function apply(args, context) {
-    const view = ports.readView(), visible = view.characters.filter(row => !row.hidden);
-    const parsed = args.request ? parseRequest(args.request, { cast: visible.map(row => ({ id: row.id, name: row.subject ?? row.name })) }) : null;
-    const stack = args.stack ?? parsed.stack;
-    if (!stack.length) fail('INVALID_ARGUMENT', `No camera technique in "${args.request}"; name one (push-in, low angle, OTS) or a mood (uneasy, epic). Read camera.techniques.`);
+    const view = ports.readView(), visible = view.characters.filter(row => !row.hidden), named = visible.map(row => ({ id: row.id, name: row.subject ?? row.name }));
+    // Coverage and cut questions go to their own actions; composition words ride on this one.
+    const routed = args.request && !args.stack ? resolveCameraRequest(args.request, { cast: named }) : null;
+    if (routed && routed.action !== 'camera.applyTechnique') return context.run(routed.action, { ...routed.args, ...(args.shotId && routed.action === 'camera.cover' ? { shotId: args.shotId } : {}), ...(routed.action === 'camera.cover' ? {} : { request: args.request }) });
+    const parsed = args.request ? parseRequest(args.request, { cast: named }) : null, composition = args.composition ?? routed?.args.composition;
+    if (parsed && routed && parsed.matched.every(row => row.via === 'mood')) parsed.stack = [];
     let shot = args.shotId ? owner().read().find(row => row.id === args.shotId) ?? fail('STALE_TARGET', `Shot ${args.shotId} is not in this scene.`)
       : shotAtFrame(owner().read(), view.view?.frame ?? ports.state().frame) ?? owner().read().find(row => row.id === view.selectedShotId);
     if (!shot && !owner().read().length) { context.run('shot.create'); shot = owner().read()[0]; }
     if (!shot) fail('AMBIGUOUS_TARGET', 'No shot owns the playhead; name one with shotId.');
-    const subjectId = args.subjectId ?? parsed?.subjectId ?? (visible.some(row => row.id === view.activeCharacterId) ? view.activeCharacterId : visible[0]?.id);
-    const rows = visible.map(row => castRow(row, shot, view.targets?.get?.(row.id)?.rig)), subject = rows.find(row => row.id === subjectId) ?? fail('STALE_TARGET', `${subjectId} is not a visible character in this scene.`);
+    // Composition words alone re-place the subject in the shot's current stack.
+    // A call with neither stack nor request (composition alone) reads as an empty request.
+    const asked = parsed?.stack ?? [], reuse = !args.stack && !asked.length && composition ? currentTechnique(shot) : null, stack = args.stack ?? (reuse || composition && !asked.length ? reuse?.stack ?? [{ id: 'medium-shot' }] : asked);
+    if (!stack.length) fail('INVALID_ARGUMENT', `No camera technique in "${args.request}"; name one (push-in, low angle, OTS) or a mood (uneasy, epic). Read camera.techniques.`);
+    const subjectId = args.subjectId ?? parsed?.subjectId ?? routed?.args.subjectId ?? shot.coverage?.subjectId ?? (visible.some(row => row.id === view.activeCharacterId) ? view.activeCharacterId : visible[0]?.id);
+    const rows = visible.map(row => castRow(row, shot, view.targets?.get?.(row.id)?.rig)), found = rows.find(row => row.id === subjectId) ?? fail('STALE_TARGET', `${subjectId} is not a visible character in this scene.`);
+    const travel = composition ? travelAt(visible.find(row => row.id === subjectId), shot, Math.round((shot.startFrame + shot.endFrame) / 2)) : null, subject = travel ? { ...found, travel } : found;
     const camera = view.camera && { position: view.camera.position, lookAt: view.camera.lookAt, focalMm: view.camera.focalMm };
-    const shared = Object.fromEntries(['speed', 'focalMm', 'direction', 'degrees'].filter(key => args[key] !== undefined).map(key => [key, args[key]]));
+    const shared = Object.fromEntries(['speed', 'focalMm', 'direction', 'degrees', 'side'].filter(key => args[key] !== undefined).map(key => [key, args[key]])), side = shared.side ?? reuse?.side;
+    if (side) shared.side = side;
     let plan;
-    try { plan = compileStack(stack, { subject, cast: rows, shot, filmback: view.filmback, camera }, shared); }
+    try { plan = compileStack(stack, { subject, cast: rows, shot, filmback: view.filmback, camera, ...(composition ? { composition } : {}) }, shared); }
     catch (error) { fail(error.code ?? 'INVALID_ARGUMENT', error.message); }
     const still = shot.kind === 'still' && plan.keys?.length > 1, notes = [...plan.notes, ...(still ? ['a still holds one picture, so the move is stated in the prompt and the first framing is kept'] : [])];
     const keys = still ? plan.keys.slice(0, 1) : plan.keys;
@@ -101,7 +117,10 @@ export function register(registry, ports) {
     const length = shot.endFrame - shot.startFrame + 1, readOpts = { fps: TIMELINE_FPS, height: subject.height, filmback: view.filmback };
     const move = plan.rail ? classifyRail(plan.rail, subject, length, readOpts) : shot.cameraKeys.length && keys ? classifyKeys(shot.cameraKeys, subject, readOpts) : null;
     const technique = { stack: plan.stack.map(row => ({ id: row.id, params: row.params })), label: plan.label, phrase: techniquePhrase(plan, still ? null : move),
-      move: move?.id ?? '', promptOnly: plan.promptOnly.map(part => part.id), signature: techniqueSignature(shot), ...(Object.keys(plan.capabilities).length ? { capabilities: Object.keys(plan.capabilities) } : {}) };
+      move: move?.id ?? '', promptOnly: plan.promptOnly.map(part => part.id), signature: techniqueSignature(shot), ...(Object.keys(plan.capabilities).length ? { capabilities: Object.keys(plan.capabilities) } : {}),
+      ...(plan.composition ? { composition: { place: plan.composition.place, headroom: plan.composition.headroom, leadRoom: plan.composition.leadRoom } } : {}), ...(side ? { side } : {}) };
+    // Where the eyes landed, measured through every stored key.
+    const placed = plan.composition && keys ? shot.cameraKeys.map(key => ({ frame: key.frame, ...measureComposition(key.framing, eyePoint(subject), view.filmback?.aspectRatio) })) : null;
     const castName = castId => (rows.find(row => row.id === castId)?.name ?? castId).split(',')[0], achieved = capabilityReadback(shot, capabilityScene(view, owner().state().frameCount), castName);
     patch(shot.id, row => ({ ...row, technique }));
     const verified = !plan.expectedMove || still || move?.id === plan.expectedMove;
@@ -115,8 +134,10 @@ export function register(registry, ports) {
     const said = [move ? `${move.label}${plan.expectedMove ? (verified ? ' (verified)' : ` (expected ${plan.expectedMove})`) : ''}` : null, ...achieved.words].filter(Boolean).join('; ') || 'prompt only';
     return { affectedIds: [shot.id], summary: `Applied ${plan.label} to ${shotLabel(shot)}: ${said}.`.slice(0, 240), warnings,
       checks: { technique: plan.label, ...achieved.checks, ...(plan.expectedMove ? { expectedMove: plan.expectedMove } : {}), ...(move ? { move: move.id, moveVerified: verified, fromSize: move.from.sizeLabel, toSize: move.to.sizeLabel } : {}),
-        ...pick(checks, ['derivedSize', 'screenFraction', 'clipped', 'behindCamera', 'occluded', 'cameraSide']), ...(plan.members ? { membersInFrame: plan.members.filter(row => row.inFrame).length, members: plan.members.length } : {}) },
-      output: { technique, subjectId: subject.id, keys: shot.cameraKeys.length, mode: shot.camera.mode, ...(parsed ? { resolved: parsed.matched } : {}) } };
+        ...pick(checks, ['derivedSize', 'screenFraction', 'clipped', 'behindCamera', 'occluded', 'cameraSide']), ...(plan.members ? { membersInFrame: plan.members.filter(row => row.inFrame).length, members: plan.members.length } : {}),
+        ...(placed ? { composition: plan.composition.label, screenX: placed[0].screenX, eyeLineY: placed[0].eyeLineY } : {}) },
+      output: { technique, subjectId: subject.id, keys: shot.cameraKeys.length, mode: shot.camera.mode, ...(parsed ? { resolved: parsed.matched } : {}),
+        ...(placed ? { composition: { ...technique.composition, target: { screenX: (plan.composition.target.x + 1) / 2, eyeLineY: (1 - plan.composition.target.y) / 2 }, keys: placed } } : {}) } };
   }
   const pick = (value, keys) => Object.fromEntries(keys.filter(key => value?.[key] !== undefined).map(key => [key, value[key]]));
   const patch = (shotId, update) => owner().write(rows => rows.map(row => (row.id === shotId ? update(row) : row)));

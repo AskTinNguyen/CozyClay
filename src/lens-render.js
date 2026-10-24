@@ -42,7 +42,7 @@ function lensCamera(camera) {
 	// Blur poses are absolute: once the camera is flown off its sample they no longer describe it.
 	const onSample = lens.pos && Math.abs(lens.pos.x - camera.position.x) + Math.abs(lens.pos.y - camera.position.y) + Math.abs(lens.pos.z - camera.position.z) < 1e-6;
 	return { pos: camera.position, yaw: camera.rotation.y, pitch: camera.rotation.x, rollDeg: THREE.MathUtils.radToDeg(camera.rotation.z), fovDeg: camera.fov,
-		focalMm: lens.focalMm, fStop: lens.fStop, focusDistance: lens.focusDistance, blur: onSample ? lens.blur : null };
+		focalMm: lens.focalMm, fStop: lens.fStop, focusDistance: lens.focusDistance, blur: onSample ? lens.blur : null, transition: onSample ? lens.transition ?? null : null };
 }
 
 /**
@@ -68,7 +68,7 @@ export function renderLens(gl, scene, camera, output = null, samples = LENS_PREV
 	else sub.clearViewOffset();
 	sub.rotation.order = "YXZ";
 	try {
-		plan.samples.forEach(({ pose, dx, dy }, i) => {
+		plan.samples.forEach(({ pose, dx, dy, weight }, i) => {
 			sub.position.set(pose.pos.x, pose.pos.y, pose.pos.z);
 			sub.rotation.set(pose.pitch, pose.yaw, THREE.MathUtils.degToRad(pose.rollDeg ?? 0));
 			sub.fov = pose.fovDeg;
@@ -96,7 +96,7 @@ export function renderLens(gl, scene, camera, output = null, samples = LENS_PREV
 			gl.autoClear = false;
 			r.quad.material = r.accumulate;
 			r.accumulate.uniforms.tSample.value = r.sample.texture;
-			r.accumulate.uniforms.weight.value = 1 / plan.samples.length;
+			r.accumulate.uniforms.weight.value = weight ?? 1 / plan.samples.length;
 			gl.render(r.scene, r.ortho);
 		});
 		gl.setRenderTarget(output);

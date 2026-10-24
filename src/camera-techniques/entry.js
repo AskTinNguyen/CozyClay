@@ -15,10 +15,9 @@ export const TECHNIQUE_KINDS = Object.freeze(["size", "angle", "move", "lens", "
 /** Shot sizes a move can start or end on, tight to wide (compile.js SIZE_SPECS). */
 export const SIZE_LADDER = Object.freeze(["extreme close-up", "close-up", "medium close-up", "medium shot", "medium-wide shot", "wide shot", "extreme wide shot"]);
 
-/** Capabilities still planned: a technique that needs one applies as prompt words only. */
-export const PLANNED_CAPABILITIES = Object.freeze({
-	"coverage-generator": "a coverage generator that lays several shots (camera-coverage intent)",
-});
+/** Capabilities still planned: a technique that needs one applies as prompt words only. None are left:
+ * the coverage generator is camera.cover (src/camera-coverage/). */
+export const PLANNED_CAPABILITIES = Object.freeze({});
 
 export const speed = (value = "medium") => ({ type: "enum", options: ["slow", "medium", "fast"], default: value });
 export const degrees = (value, min = 5, max = 360) => ({ type: "number", min, max, default: value, unit: "deg" });

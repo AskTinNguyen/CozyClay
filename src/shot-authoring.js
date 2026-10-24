@@ -12,7 +12,7 @@ import { VIDEO_MODEL_PRESETS } from "./model-presets.js";
 import { elementByPath } from "./studio-elements.js";
 import { isImageAssetId } from "./scene-assets.js";
 import { createCharacterEntry } from "./scenes.js";
-import { repairShotTechnique } from "./camera-techniques/storage.js";
+import { repairShotExtras } from "./camera-coverage/storage.js";
 import { cameraCapabilities } from "./camera-capabilities/fields.js";
 
 const VIDEO_MODEL_IDS = new Set(VIDEO_MODEL_PRESETS.map((preset) => preset.id));
@@ -200,8 +200,8 @@ function repairShots(entries, frameCount, inheritedCamera = null, ids = new Set(
 			caption: repairCaption(entry.caption),
 			cast: repairCast(entry.cast),
 			stylizedAssetId: isImageAssetId(entry.stylizedAssetId) ? entry.stylizedAssetId : null,
-			// The camera technique stack applied to this shot (camera.applyTechnique); absent unless one was.
-			...(repairShotTechnique(entry.technique) ? { technique: repairShotTechnique(entry.technique) } : {}),
+			// The technique stack (camera.applyTechnique), coverage pattern (camera.cover) and transition in; each absent unless set.
+			...repairShotExtras(entry),
 		};
 	});
 }

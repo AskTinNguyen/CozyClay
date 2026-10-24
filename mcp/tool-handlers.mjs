@@ -73,7 +73,7 @@ import { DEFAULT_PREVIS_MODE, PREVIS_MODES, createProjectDocument, readProjectDo
 import { kindRefusal } from "../src/character-kind.js";
 import { documentWithCamera, splitSavedCamera } from "./project-camera.mjs";
 import { cameraTechniqueTools, promptTechnique } from "./camera-technique-tools.mjs";
-import { cameraCapabilityTools, promptCapabilities } from "./camera-capability-tools.mjs";
+import { cameraCapabilityTools, cameraCoverageTools, COVERAGE_TOOL_ANNOTATIONS, promptCapabilities } from "./camera-capability-tools.mjs";
 
 /** The authoring state. One scene document, one camera, one project name. */
 export const state = {
@@ -104,7 +104,7 @@ const noLiveEditor = (requirement) =>
 		: requirement;
 export const liveWorkspace = new AsyncLocalStorage();
 const liveWorkspaceTools = new Set([
-	"describe_scene", "describe_shot", "render_prompt", "mark_camera_move", "describe_camera_move", "list_camera_techniques", "apply_camera_technique", "set_camera_capabilities", "save_project",
+	"describe_scene", "describe_shot", "render_prompt", "mark_camera_move", "describe_camera_move", "list_camera_techniques", "apply_camera_technique", "set_camera_capabilities", "cover_scene", "check_cuts", "save_project",
 	"set_camera", "frame_shot", "add_character", "place_character", "remove_character",
 	"focus_character", "place_object", "import_mesh", "sculpt_object", "compare_sculpt", "group_objects", "update_object",
 	"remove_object", "apply_batch", "add_scene", "switch_scene", "open_project", "capture_frame",
@@ -172,7 +172,7 @@ const TOOL_ANNOTATIONS = Object.freeze({
 	describe_camera_move: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
 	list_camera_techniques: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
 	apply_camera_technique: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
-	set_camera_capabilities: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+	set_camera_capabilities: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false }, ...COVERAGE_TOOL_ANNOTATIONS,
 	add_scene: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
 	switch_scene: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
 	open_project: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
@@ -584,7 +584,7 @@ function shotReport() {
 }
 
 const studioAliasTools = new Set([
-	"set_camera", "frame_shot", "apply_camera_technique", "set_camera_capabilities", "place_object", "update_object", "remove_object",
+	"set_camera", "frame_shot", "apply_camera_technique", "set_camera_capabilities", "cover_scene", "place_object", "update_object", "remove_object",
 	"import_mesh", "sculpt_object", "group_objects", "add_scene", "switch_scene", "apply_batch", "open_project",
 	"add_character", "place_character", "remove_character",
 ]);
@@ -1597,7 +1597,7 @@ export const createToolHandlers = ({ projectRootPromise } = {}) => {
 			},
 		),
 		...cameraTechniqueTools({ tool, z, text, liveError, state, cast, findCharacter, filmback, slateLine, currentShot, refreshLiveDescription, runStudioCommand, isLive: () => Boolean(liveHub?.connected) }),
-		...cameraCapabilityTools({ tool, z, text, liveError, state, cast, findCharacter, refreshLiveDescription, runStudioCommand, isLive: () => Boolean(liveHub?.connected) }),
+		...cameraCapabilityTools({ tool, z, text, liveError, state, cast, findCharacter, refreshLiveDescription, runStudioCommand, isLive: () => Boolean(liveHub?.connected) }), ...cameraCoverageTools({ tool, z, text, liveError, state, cast, findCharacter, filmback, refreshLiveDescription, runStudioCommand, isLive: () => Boolean(liveHub?.connected) }),
 
 		tool(
 			"add_scene",

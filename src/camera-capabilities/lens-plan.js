@@ -9,26 +9,30 @@ const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
 /**
  * @param {object} camera  sampleAt's camera: fStop, focusDistance, focalMm, blur
  * @param {{samples?:number}} [options]
- * @returns null when the frame is a plain render (no aperture, or no shutter),
- *   else { apertureRadiusM, focusDistance, samples: [{ pose, dx, dy }] }:
- *   pose is the camera to draw (a blur pose or the camera itself) and dx, dy
- *   are metres along its right and up axes on the aperture disc.
+ * @returns null when the frame is a plain render (no aperture, no shutter, no transition),
+ *   else { apertureRadiusM, focusDistance, samples: [{ pose, dx, dy, weight }] }:
+ *   pose is the camera to draw (a blur pose or the camera itself), dx, dy
+ *   are metres along its right and up axes on the aperture disc, and weight
+ *   its share of the frame. Inside a transition (camera-coverage) the camera's
+ *   own samples share selfWeight and the far shot's camera takes otherWeight;
+ *   a fade leaves the rest black.
  */
 export function lensPlan(camera, { samples = 16 } = {}) {
 	if (!camera?.pos) return null;
 	const dof = camera.fStop > 0 && camera.focusDistance > 0 && camera.focalMm > 0;
 	const blur = Array.isArray(camera.blur) && camera.blur.length > 1 ? camera.blur : null;
-	if (!dof && !blur) return null;
-	const count = Math.max(2, Math.round(samples));
+	const transition = camera.transition && camera.transition.selfWeight < 1 ? camera.transition : null;
+	if (!dof && !blur && !transition) return null;
+	const count = dof || blur ? Math.max(2, Math.round(samples)) : 1, self = transition ? transition.selfWeight : 1;
 	const apertureRadiusM = dof ? camera.focalMm / camera.fStop / 2 / 1000 : 0;
 	const own = { pos: camera.pos, yaw: camera.yaw, pitch: camera.pitch, rollDeg: camera.rollDeg ?? 0, fovDeg: camera.fovDeg };
 	return {
 		apertureRadiusM,
 		focusDistance: dof ? camera.focusDistance : null,
-		samples: Array.from({ length: count }, (_, i) => {
+		samples: [...Array.from({ length: count }, (_, i) => {
 			const r = apertureRadiusM * Math.sqrt((i + 0.5) / count), angle = i * GOLDEN_ANGLE;
-			return { pose: blur ? poseAt(blur, (i + 0.5) / count) : own, dx: r * Math.cos(angle), dy: r * Math.sin(angle) };
-		}),
+			return { pose: blur ? poseAt(blur, (i + 0.5) / count) : own, dx: r * Math.cos(angle), dy: r * Math.sin(angle), weight: self / count };
+		}), ...(transition?.other && transition.otherWeight > 0 ? [{ pose: transition.other, dx: 0, dy: 0, weight: transition.otherWeight }] : [])],
 	};
 }
 

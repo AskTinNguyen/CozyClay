@@ -59,7 +59,7 @@ test('the seven techniques apply their capability and the receipt reads it back'
     assert.ok(!/RIG:/.test(prompt), 'and the RIG line does not repeat what the technique said');
     assert.match(buildShotPrompt(shotCaptureMeta({ shot: { ...whip.shot, technique: null }, fps: 24 })), /RIG: heavy motion blur \(270-degree shutter\)/, 'without a technique the RIG line states it');
     for (const id of ['dutch-angle', 'canted-frame', 'rack-focus', 'handheld-shot', 'snorricam', 'slow-motion', 'whip-pan']) assert.ok(describeTechnique(id).sets?.length && !describeTechnique(id).promptOnly, id);
-    assert.deepEqual(Object.keys(PLANNED_CAPABILITIES), ['coverage-generator']);
+    assert.deepEqual(Object.keys(PLANNED_CAPABILITIES), [], 'no planned capability is left (camera-coverage: camera.cover)');
   } finally { f.dispose(); }
 });
 

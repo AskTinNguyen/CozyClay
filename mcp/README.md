@@ -35,7 +35,7 @@ Then point a client at it. For Claude Desktop, in `claude_desktop_config.json`:
 }
 ```
 
-Restart the client; 30 tools appear.
+Restart the client; 32 tools appear.
 
 Prefer a long-lived endpoint? `node server.mjs --http 5183` serves Streamable HTTP at
 `http://127.0.0.1:5183/mcp` (one isolated session per client), with a plain status page at `/`.
@@ -80,6 +80,8 @@ generated frame matches the blocking instead of drifting off into a generic shot
 | `mark_camera_move` / `describe_camera_move` | name a move between two camera positions |
 | `list_camera_techniques` | the camera technique library: 65 film techniques (sizes, angles, moves, lens moves, coverage, modifiers) as an index, a search by name, alias, misspelling or mood (`query: "uneasy"`), or one technique in full (`id`) |
 | `apply_camera_technique` | apply a technique stack from words (`request: "low-angle slow push-in on her"`) or ids (`stack`); with an editor it runs `camera.applyTechnique` (one undo entry, a receipt with the classifier-verified move); in memory it sets the camera and marks the move's start for `describe_camera_move`. `render_prompt` then states the technique |
+| `cover_scene` | lay several shots at once from a coverage pattern (`shot-reverse-shot`, `master-coverage`, `dialogue-singles`, `walk-and-talk`, `action-coverage`, `establish-detail`) or words ("cover this conversation", "master and coverage", "reverse on Joon"); `cast` names A then B. With an editor it runs `camera.cover` (one undo entry; every camera on one side of the A-B line); in memory it plans the shots and checks their cuts |
+| `check_cuts` | the editing rules at every cut: 180-degree line crossings, jump cuts, screen-direction flips, shot-reverse-shot eyelines, each with severity, frames and a fix; read only. With an editor it runs `camera.checkCuts`; in memory it checks the `cover_scene` plan |
 | `set_camera_capabilities` | give the shot camera what placement cannot: `roll_deg` (Dutch angle), `f_stop` with `focus_on` (a character, followed per frame) or `focus_distance` (depth of field), `shake` (handheld or vehicle, seeded), `mount` (a Snorricam on a character's chest, head, hips or back), `speed` (0.5 = slow motion) and `shutter_deg` (motion blur); `at_frame` keys roll and focus (two focus keys rack focus). With an editor it runs `camera.set` / `camera.setKey`; in memory `render_prompt` states them |
 | `add_scene` / `switch_scene` | multiple scenes per project |
 | `open_project` / `save_project` | read and write `.cclayproject` files |
@@ -126,8 +128,8 @@ one angle, one roll, one move and one coverage framing plus any modifiers; it co
 primitives the editor already has (`shot.frame` keys, `shot.setCameraRail`, `camera.set`), and the move
 the geometry classifier reads back is checked against the move the technique promises. Dutch Angle,
 Canted Frame, Rack Focus, Handheld Shot, Snorricam, Slow Motion and Whip Pan set a real camera capability
-(see below) and the answer reads back what it achieved; only Shot-Reverse-Shot, which waits for a coverage
-generator, applies as prompt words. Through `studio_run` the same library is `camera.techniques`,
+(see below) and the answer reads back what it achieved; Shot-Reverse-Shot frames its first side on one shot,
+and `cover_scene` lays the whole exchange (see Camera coverage). Through `studio_run` the same library is `camera.techniques`,
 `camera.describeTechnique` and `camera.applyTechnique`.
 The names are general film vocabulary; https://grokfilm.app is good further reading.
 
@@ -144,6 +146,21 @@ without stopping the camera. `set_camera_capabilities` (or `camera.set` / `camer
 camera (`fStop`, `focusDistance`, `shutter:open/close`, a rolled orient, shake and mount baked into the
 samples) and OTIO metadata carry them.
 
+## Camera coverage
+
+`cover_scene` (or `camera.cover` through `studio_run`) lays a coverage pattern over a range as one
+undo entry: the range becomes the pattern's shots, each named ("SRS 2 · OTS Joon") and framed with
+`camera.applyTechnique`, and every camera keeps one side of the line between the two principals (a
+pattern laid next to another keeps the neighbour's side). Each shot stores `coverage { pattern,
+index, role, subjectId }`. `check_cuts` (`camera.checkCuts`) reads every cut between consecutive
+shots from the cameras and cast at the cut frames: `line`, `jump`, `screen` and `eyeline` issues with
+a severity, the two frames and a suggested fix; it never changes a shot. `camera.applyTechnique` and
+`frame_shot` take `composition { place auto|left-third|centre|right-third, headroom
+tight|normal|loose, leadRoom none|facing|travel|more }` and answer `checks.screenX` / `eyeLineY`
+(frame fractions from the top-left). `camera.setTransition` stores the transition into a shot
+(dissolve, fades, whip, match cut, J- or L-cut); OTIO writes it as a `Transition.1` where OTIO has one
+and as clip metadata always, and the prompt gains a `TRANSITION:` line.
+
 ## Motion
 
 Motion is compiled, not generated: run `motion.compile` through `studio_run` with a motion
@@ -154,7 +171,7 @@ frame on the rig, answers the QA groups, and installs the take; `motion.sample` 
 
 ## Storyboard projects and capsule figures
 
-The tool list is fixed when the server starts, so it is the same 30 tools in every project. A
+The tool list is fixed when the server starts, so it is the same 32 tools in every project. A
 tool that does not apply to the project or to its target answers a structured refusal instead
 of acting; nothing is sent to the editor and nothing changes. The refusal is the tool's only
 text content, with `isError: true`:

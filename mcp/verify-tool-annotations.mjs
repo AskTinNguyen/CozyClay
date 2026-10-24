@@ -31,6 +31,8 @@ const EXPECTED_ANNOTATIONS = Object.freeze({
 	list_camera_techniques: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
 	apply_camera_technique: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
 	set_camera_capabilities: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+	cover_scene: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+	check_cuts: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
 	add_scene: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
 	switch_scene: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
 	open_project: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },

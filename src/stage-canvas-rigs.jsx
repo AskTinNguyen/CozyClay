@@ -5,7 +5,7 @@ import { aimAt } from "./controls.jsx";
 import { SUBJECT_HEIGHT_M } from "./shot.js";
 import { shotAtFrame } from "./cuts.js";
 import { sampleAt } from "./sample-at.js";
-import { applyShotCamera } from "./shot-camera-apply.js";
+import { applyShotCamera, withShotTransition } from "./shot-camera-apply.js";
 import { playbackProbe, probeVisibility } from "./motion/playback-probe.js";
 import { RENDER_ACTIVITY_EVENT } from "./use-render-activity.js";
 import { PRESETS, editorFrameForSubject } from "./stage-startup-defaults.js";
@@ -166,7 +166,7 @@ export function MoveRig({ playing, following, followFrame, frameRef, fps, keys, 
 			const sampledShot = timelineShot
 				? { ...timelineShot, camera: { ...timelineShot.camera, mode: "keys" } }
 				: following ? null : { camera: { mode: "keys" }, cameraKeys: keys };
-			const f = sampleAt(scene, sampledShot, frame).camera;
+			const f = withShotTransition(sampleAt(scene, sampledShot, frame).camera, scene, timelineShot ? shots : null, frame);
 			// Roll, mount, shake, focus and shutter ride the sample (camera-capabilities).
 			if (f) applyShotCamera(cam, look, f);
 			return f;
@@ -199,7 +199,7 @@ export function MoveRig({ playing, following, followFrame, frameRef, fps, keys, 
  * prefers frameRef over the frame prop so the camera lands in the same paint
  * as the routed props and riders it follows.
  */
-export function FollowCamRig({ enabled, frame, frameRef, scene, shot, camRef, look, isInterrupted }) {
+export function FollowCamRig({ enabled, frame, frameRef, scene, shot, shots, camRef, look, isInterrupted }) {
 	const invalidate = useThree((state) => state.invalidate);
 	const applied = useRef(null);
 	useEffect(() => {
@@ -213,7 +213,7 @@ export function FollowCamRig({ enabled, frame, frameRef, scene, shot, camRef, lo
 		const cam = camRef.current;
 		if (!cam) return;
 		const playhead = frameRef?.current ?? frame;
-		const sample = sampleAt(scene, shot, playhead).camera;
+		const sample = withShotTransition(sampleAt(scene, shot, playhead).camera, scene, shots, playhead);
 		if (!sample || applied.current === playhead) return;
 		applied.current = playhead;
 		// A rail with a lens of its own carries it; otherwise this is the scene lens.

@@ -6,6 +6,7 @@ import { TECHNIQUES, describeTechnique, techniqueById } from "../camera-techniqu
 import { searchTechniques, slotOf } from "../camera-techniques/resolve.js";
 import { currentTechnique } from "../camera-techniques/storage.js";
 import { techniqueDiagram } from "../camera-techniques/diagram.js";
+import CompositionFields from "./CompositionFields.jsx";
 import "./technique-picker.css";
 
 const KINDS = [["all", "All", "전체"], ["size", "Size", "크기"], ["angle", "Angle", "앵글"], ["move", "Move", "무브"], ["lens", "Lens", "렌즈"], ["coverage", "Coverage", "커버리지"], ["modifier", "Modifier", "효과"]];
@@ -68,8 +69,9 @@ export default function TechniquePicker({ hidden, activeShot }) {
 		const kept = (applied?.stack ?? []).filter((row) => techniqueById(row.id) && row.id !== id && (slot === "modifier" || slotOf(techniqueById(row.id)) !== slot));
 		send([...kept, { id, params: own }]);
 	}
-	function send(stack) {
-		const receipt = run("camera.applyTechnique", { shotId: activeShot.id, stack });
+	// The stored composition and side ride every re-apply, so a new pick keeps where the subject sits (camera-coverage).
+	function send(stack, composition = applied?.composition ?? null) {
+		const receipt = run("camera.applyTechnique", { shotId: activeShot.id, stack, ...(composition ? { composition } : {}), ...(applied?.side ? { side: applied.side } : {}) });
 		setStatus(receipt?.ok ? { ok: true, text: receipt.summary, warnings: receipt.warnings.map((row) => row.message) } : { ok: false, text: receipt?.message ?? "" });
 	}
 	function pick(id) {
@@ -124,6 +126,7 @@ export default function TechniquePicker({ hidden, activeShot }) {
 						<div className="technique-params" data-technique-params>
 							{Object.entries(focus.params).map(([key, schema]) => <ParamField key={key} name={key} schema={schema} value={params[key]} onChange={(value) => change(key, value)} />)}
 						</div>
+						<CompositionFields value={applied?.composition ?? null} onChange={(next) => (applied ? send(applied.stack, next) : null)} />
 						{status && <p className={status.ok ? "technique-status" : "technique-status refused"} data-technique-status role="status">{status.text}{status.warnings?.length ? ` ${status.warnings.join(" ")}` : ""}</p>}
 						<a className="technique-more" href="https://grokfilm.app" target="_blank" rel="noreferrer">{ko("Further reading", "더 알아보기")}</a>
 					</div>

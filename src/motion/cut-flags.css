@@ -1,0 +1,38 @@
+/* Cut flags on the Shots lane (camera-coverage): a tag on the cut frame naming the editing rules a cut breaks, and its transition. */
+.v2-sequencer .tl-cut-flag {
+	position: absolute;
+	top: 2px;
+	left: clamp(0px, calc(var(--tl-f) * 100%), calc(100% - 4px));
+	transform: translateX(-50%);
+	display: inline-flex;
+	gap: 3px;
+	align-items: center;
+	padding: 0 4px;
+	min-height: 13px;
+	border-radius: 3px;
+	font-size: 9px;
+	font-weight: 700;
+	letter-spacing: .03em;
+	line-height: 13px;
+	white-space: nowrap;
+	color: var(--text-1, #e4e4e7);
+	background: var(--surface-2, #2a2a30);
+	box-shadow: 0 0 0 1px var(--camera, #a78bfa);
+	pointer-events: auto;
+	cursor: help;
+	z-index: 9;
+}
+.v2-sequencer .tl-cut-flag.high { background: var(--danger, #d65f55); box-shadow: 0 0 0 1px rgba(0, 0, 0, .35); color: #fff; }
+.v2-sequencer .tl-cut-flag.medium { background: var(--warn, #f5b453); box-shadow: 0 0 0 1px rgba(0, 0, 0, .35); color: #1d1d1f; }
+.v2-sequencer .tl-cut-flag em { font-style: normal; font-weight: 600; opacity: .9; }
+.v2-sequencer .tl-cut-flag.high em, .v2-sequencer .tl-cut-flag.medium em { border-left: 1px solid currentColor; padding-left: 3px; }
+.v2-sequencer .tl-cut-flag::after {
+	content: "";
+	position: absolute;
+	left: 50%;
+	top: 100%;
+	width: 1px;
+	height: 26px;
+	background: currentColor;
+	opacity: .55;
+}

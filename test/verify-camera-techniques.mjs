@@ -62,11 +62,11 @@ check("every entry has every field, well formed", () => {
 	}
 });
 
-check("the capability techniques set their camera field; only the coverage generator is still waited for", () => {
+check("the capability techniques set their camera field; nothing waits for a planned capability (camera.cover is the coverage generator)", () => {
 	for (const [name, field] of Object.entries(SETS)) assert.deepEqual(capabilityFields(TECHNIQUES.find((entry) => entry.name === name)), [field], name);
 	const waiting = TECHNIQUES.filter((entry) => entry.requires.length).map((entry) => entry.name).sort();
-	assert.deepEqual(waiting, ["Shot-Reverse-Shot"]);
-	assert.deepEqual(Object.keys(PLANNED_CAPABILITIES), ["coverage-generator"]);
+	assert.deepEqual(waiting, []);
+	assert.deepEqual(Object.keys(PLANNED_CAPABILITIES), []);
 });
 
 check("descriptions are written fresh: none repeats a technique's name as a dictionary gloss", () => {
@@ -87,7 +87,7 @@ check("the compact index fits one receipt and describeTechnique answers the rest
 	assert.equal(vertigo.expectedMove, "dolly-zoom");
 	assert.equal(describeTechnique("dutch-angle").promptOnly, undefined);
 	assert.deepEqual(describeTechnique("whip-pan").sets, ["shutterDeg"]);
-	assert.equal(describeTechnique("shot-reverse-shot").promptOnly, "partly");
+	assert.equal(describeTechnique("shot-reverse-shot").promptOnly, undefined, "camera.cover lays the reverse pattern now");
 	assert.equal(techniqueIndex({ kind: "size" }).count, 13);
 	console.log(`  index ${bytes} bytes`);
 });

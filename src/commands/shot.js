@@ -15,6 +15,8 @@ import { STUDIO_TOOL_SCHEMAS, StudioSchemas } from '../studio-agent-protocol.js'
 import { elementSetSchema, registerElementSet } from './elements.js';
 import './elements/shot.js';
 import { changedIds, fail, shotLabel } from './shared.js';
+import { composeStoredFraming } from '../camera-coverage/composition.js';
+import { SUBJECT_HEIGHT_M } from '../shot.js';
 
 const id = StudioSchemas.TargetGuard.properties.targetId;
 const TAKE_FRAME_MAX = 28800;
@@ -34,7 +36,7 @@ const extra = [
   mutation('shot.setTimeline', 'Set shot timeline', input({ frameCount: { type: 'integer', minimum: 24, maximum: TAKE_FRAME_MAX } })),
   mutation('shot.setLens', 'Set camera lens', input({ fovDeg: { ...number, minimum: 14, maximum: 90 } })),
   mutation('shot.frame', 'Frame the shot', { ...input({ ...STUDIO_TOOL_SCHEMAS.frame_shot.properties, preset: { type: 'string' } }, []), oneOf: [STUDIO_TOOL_SCHEMAS.frame_shot, input({ preset: { type: 'string' } })] },
-    'Frame a shot on one character (the frame_shot tool): framing.intent { size, level, view, side, focalMm } or framing.exact { position, lookAt, focalMm }. Without keyAtFrame a shot that holds one framing is reframed whole: a held shot. keyAtFrame adds a camera key there; every key eases in and out, so the camera slows to a stop at each one: key a pan or zoom from one spot with two keys (its start and end), lay a moving camera as a rail (shot.setCameraRail) and cut to a new shot for a new view. On a rail shot it puts the shot back on keys. Answers checks { derivedSize, screenFraction, clipped, behindCamera, occluded, cameraSide } for the subject at that frame.'),
+    'Frame a shot on one character (the frame_shot tool): framing.intent { size, level, view, side, focalMm } or framing.exact { position, lookAt, focalMm }; composition { place auto|left-third|centre|right-third, headroom tight|normal|loose, leadRoom none|facing|travel|more } then turns the aim so the eyes sit there (checks screenX, eyeLineY). Without keyAtFrame a shot that holds one framing is reframed whole: a held shot. keyAtFrame adds a camera key there; every key eases in and out, so the camera slows to a stop at each one: key a pan or zoom from one spot with two keys (its start and end), lay a moving camera as a rail (shot.setCameraRail) and cut to a new shot for a new view. On a rail shot it puts the shot back on keys. Answers checks { derivedSize, screenFraction, clipped, behindCamera, occluded, cameraSide } for the subject at that frame.'),
   { ...mutation('shot.replace', 'Replace shot authoring', input({ shots: { type: 'array', items: { type: 'object', properties: {}, additionalProperties: true } } })), exposure: 'ui-only' },
   { ...mutation('shot.captureCamera', 'Capture camera framing', input({ shotId: id }, [])), exposure: 'ui-only' },
   // The Board's Stylize result (or null to clear it). UI-only: the picture has
@@ -225,11 +227,19 @@ export function register(registry, ports) {
   });
   // frame_shot answers what it measured, and what its keys do to a move.
   function framed(args) {
-    const before = owner().read(), plan = owner().frame(args), shot = owner().read().find(row => row.id === plan.details.shotId);
+    const before = owner().read(), plan = owner().frame(args), composed = args.composition ? compose(plan, args) : null, shot = owner().read().find(row => row.id === plan.details.shotId);
     const wasRail = createCameraBlock(before.find(row => row.id === shot.id)?.camera).mode === 'rail';
-    return { affectedIds: plan.affectedIds, summary: `Framed ${shotLabel(shot)}: ${plan.checks.derivedSize} at frame ${plan.details.frame}, ${shot.cameraKeys.length} camera key${shot.cameraKeys.length === 1 ? '' : 's'}.`.slice(0, 240),
-      checks: plan.checks, warnings: [...plan.warnings, ...(wasRail ? [{ code: 'RAIL_REPLACED', id: shot.id, message: 'This shot is back on camera keys; its rail no longer drives it. Re-lay it with shot.setCameraRail.' }] : []),
+    return { affectedIds: plan.affectedIds, summary: `Framed ${shotLabel(shot)}: ${plan.checks.derivedSize} at frame ${plan.details.frame}, ${shot.cameraKeys.length} camera key${shot.cameraKeys.length === 1 ? '' : 's'}${composed ? `, ${composed.label} (eyes at ${composed.screenX}, ${composed.eyeLineY})` : ''}.`.slice(0, 240),
+      checks: { ...plan.checks, ...(composed ? { composition: composed.label, screenX: composed.screenX, eyeLineY: composed.eyeLineY } : {}) }, warnings: [...plan.warnings, ...(wasRail ? [{ code: 'RAIL_REPLACED', id: shot.id, message: 'This shot is back on camera keys; its rail no longer drives it. Re-lay it with shot.setCameraRail.' }] : []),
         ...cameraKeyWarnings(shot)] };
+  }
+  // A composition turns the key frame_shot just wrote so the subject's eyes sit on a third or the centre (camera-coverage).
+  function compose(plan, args) {
+    const view = ports.readView(), row = view.characters.find(entry => entry.id === args.subjectIds[0]), shot = owner().read().find(entry => entry.id === plan.details.shotId);
+    const placed = { ...row, ...(shot.cast?.[row.id] ?? {}) }, key = shot.cameraKeys.find(entry => entry.id === plan.details.keyId);
+    const result = composeStoredFraming(key.framing, { x: placed.x ?? 0, z: placed.z ?? 0, rot: placed.rot ?? 0, height: SUBJECT_HEIGHT_M * (row.scale ?? 1) }, args.composition, view.filmback);
+    owner().write(rows => rows.map(entry => (entry.id === shot.id ? { ...entry, cameraKeys: entry.cameraKeys.map(item => (item.id === key.id ? { ...item, framing: result.framing } : item)) } : entry)));
+    return result;
   }
   if (ports.storeDomain?.('shot')) registry.registerToolAlias('frame_shot', 'shot.frame');
 }

@@ -55,8 +55,8 @@ export const COVERAGE_TECHNIQUES = [
 		params: { over: cast(), side: side() }, recipe: { ots: true }, prompt: "over the shoulder of the foreground character" }),
 	technique("shot-reverse-shot", "Shot-Reverse-Shot", "coverage", "SRS", {
 		aliases: ["shot reverse shot", "shot/reverse shot", "shot countershot", "reverse coverage"], moods: ["conversation", "dialogue", "exchange"],
-		description: "A dialogue pattern that alternates between two speakers' views; here it frames the first over-the-shoulder side and leaves the reverse to coverage.",
-		params: { over: cast(), side: side() }, recipe: { ots: true }, requires: ["coverage-generator"], prompt: "the first side of a shot-reverse-shot exchange" }),
+		description: "A dialogue pattern that alternates between two speakers' views; on one shot it frames the first over-the-shoulder side, and camera.cover lays the whole exchange.",
+		params: { over: cast(), side: side() }, recipe: { ots: true }, prompt: "the first side of a shot-reverse-shot exchange" }),
 	technique("reverse-angle", "Reverse Angle", "coverage", "REVERSE", {
 		aliases: ["reverse", "reverse shot", "opposite angle", "180 reverse"], moods: ["reveal", "answer", "contrast"],
 		description: "Swings to the opposite side of the subject from the current camera, showing what the previous view was facing.",

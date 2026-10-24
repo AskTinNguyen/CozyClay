@@ -26,7 +26,27 @@ Camera
   and Whip Pan (with blur) apply their capability and the receipt reads it
   back; only Shot-Reverse-Shot stays prompt words.
 - MCP: `list_camera_techniques`, `apply_camera_technique` and
-  `set_camera_capabilities` (30 tools).
+  `set_camera_capabilities`.
+- Camera coverage: `camera.cover` lays several shots at once from a pattern
+  (shot-reverse-shot, master and coverage, dialogue singles, walk and talk,
+  action coverage, establish to detail) over a range as one undo entry, every
+  camera on one side of the line between the two speakers; Shot-Reverse-Shot
+  is no longer prompt words only.
+- Composition: `camera.applyTechnique` and `shot.frame` place the subject's
+  eyes on the left or right third or the centre, with tight, normal or loose
+  headroom and lead room ahead of the facing or travel direction, and report
+  the measured screen position; composition fields in the technique popover.
+- Editing-rule checks: `camera.checkCuts` reports 180-degree line crossings,
+  jump cuts, screen-direction flips and shot-reverse-shot eyeline mismatches
+  at every cut, each with a severity and a suggested fix; the timeline flags
+  them and a Cut inspector reads them out.
+- Transitions on a cut (`camera.setTransition`): dissolve, fades to and from
+  black, whip, match cut, J- and L-cuts; written to OTIO (Transition.1 or clip
+  metadata) and the prompt, and the Shot Camera preview blends dissolves and
+  fades.
+- Agents: coverage, composition and cut requests in words ("cover this
+  conversation", "rule of thirds left", "check my cuts"); MCP `cover_scene`
+  and `check_cuts` (32 tools).
 
 ## 3.1.2 - 2026-10-23
 

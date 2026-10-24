@@ -10,9 +10,10 @@ import { compileMove } from "./moves.js";
 import { slotOf } from "./resolve.js";
 import { focalMmToFov, nearestPrime } from "../shot.js";
 import { capabilityWords } from "../camera-capabilities/words.js";
+import { composeKeys, compositionLabel, compositionWords, normalizeComposition } from "../camera-coverage/composition.js";
 
 const fail = (code, message) => { throw Object.assign(new Error(message), { code }); };
-const SHARED = ["speed", "focalMm", "direction", "degrees"];
+const SHARED = ["speed", "focalMm", "direction", "degrees", "side"];
 const distanceTo = (a) => (b) => Math.hypot(b.x - a.x, b.z - a.z);
 const byDistance = (cast, from) => cast.filter((row) => row.id !== from.id).sort((a, b) => distanceTo(from)(a) - distanceTo(from)(b));
 
@@ -64,11 +65,11 @@ function capabilityPatch(items, { subject, cast, shot, length, castRow, notes })
  * @param {Array<string|{id:string,params?:object}>} stack
  * @param {object} ctx  { subject, cast (visible, subject included), shot: { startFrame, endFrame }, filmback, camera? }
  *   rows are { id, name?, x, z, rot, height?, eye? }; camera is { position, lookAt, focalMm }
- * @param {object} [shared]  stack-wide params: speed, focalMm, direction, degrees
+ * @param {object} [shared]  stack-wide params: speed, focalMm, direction, degrees, side; ctx.composition places the subject (camera-coverage)
  */
 export function compileStack(stack, ctx, shared = {}) {
 	const items = readStack(stack, shared), { subject, filmback, shot } = ctx, cast = ctx.cast ?? [subject];
-	const state = { size: null, level: "eye", view: "front three-quarter", side: "right", focalMm: Number.isFinite(shared.focalMm) ? shared.focalMm : null, levelMetres: null };
+	const state = { size: null, level: "eye", view: "front three-quarter", side: shared.side === "left" ? "left" : "right", focalMm: Number.isFinite(shared.focalMm) ? shared.focalMm : null, levelMetres: null };
 	const notes = [], promptOnly = [], set = { level: false, view: false };
 	let coverage = null, move = null, lens = null;
 	for (const { entry, params } of items) {
@@ -134,7 +135,12 @@ export function compileStack(stack, ctx, shared = {}) {
 		if (length < 3 && !move.recipe.move.match(/^(static|rail)$/)) fail("TARGET_NOT_READY", `A move needs a shot of at least 3 frames; this one has ${length}.`);
 		compiled = compileMove(move, { base, frameAt, state, length, filmback, subject, cast });
 	}
-	const keys = compiled.keys?.map(({ offset, framing, ease }) => ({ frame: shot.startFrame + offset, framing, ...(ease ? { ease } : {}) })) ?? null;
+	let keys = compiled.keys?.map(({ offset, framing, ease }) => ({ frame: shot.startFrame + offset, framing, ...(ease ? { ease } : {}) })) ?? null;
+	// A composition (camera-coverage) turns each key's aim so the subject's eyes sit on a third or the centre with lead room.
+	const composition = normalizeComposition(ctx.composition), composable = composition && keys && !members && !coverage?.entry.recipe.pov;
+	if (composition && !composable) notes.push("a composition places one subject on keyed framings; this stack keeps its own framing");
+	let composedTarget = null;
+	if (composable) { const composed = composeKeys(keys, subject, composition, filmback); keys = composed.keys; composedTarget = composed.target; notes.push(...composed.notes); }
 	if (keys && new Set(keys.map((key) => key.frame)).size !== keys.length) fail("TARGET_NOT_READY", `The shot is too short (${length} frames) to hold this move's ${keys.length} keys.`);
 	// The slate names the nearest real prime, as every other studio slate does (shot.js nearestPrime).
 	const prime = (mm) => nearestPrime(focalMmToFov(mm, filmback.sensorId, filmback.aspectRatio), filmback.sensorId, filmback.aspectRatio);
@@ -147,11 +153,12 @@ export function compileStack(stack, ctx, shared = {}) {
 		stack: items.map(({ entry, params }) => ({ id: entry.id, params: Object.fromEntries(Object.entries(params).filter(([, value]) => value !== null && value !== undefined)) })),
 		subjectIds, keys, rail: compiled.rail ?? null, expectedMove: compiled.expect, sizes: compiled.sizes ?? null, degrees: compiled.degrees ?? null,
 		label: [...tags, ...(lensText ? [lensText] : [])].join(" · "),
-		words: items.filter(({ entry }) => hasGeometry(entry) && slotOf(entry) !== "move" && !entry.requires.length).map(({ entry }) => entry.prompt),
+		words: [...items.filter(({ entry }) => hasGeometry(entry) && slotOf(entry) !== "move" && !entry.requires.length).map(({ entry }) => entry.prompt), ...(composable ? [compositionWords(composedTarget)] : [])],
 		moveWords: move && !move.entry.requires.length ? move.entry.prompt : null,
 		promptOnly, notes: [...new Set(notes)],
 		// What camera.set writes for roll, rack focus, shake, mount, slow motion and whip-pan blur, and its words.
 		capabilities, capabilityWords: capabilityWords(capabilities, { castName }),
 		members: members && members.map((row) => ({ id: row.id, inFrame: inFrame(base, row, filmback) })),
+		...(composable ? { composition: { ...composition, label: compositionLabel(composition), target: composedTarget } } : {}),
 	};
 }
