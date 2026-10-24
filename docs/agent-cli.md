@@ -733,8 +733,8 @@ keys, `checks.moveVerified` says it is the move the technique promises, and
 the capability techniques (Dutch Angle, Canted Frame, Rack Focus, Handheld
 Shot, Snorricam, Slow Motion, Whip Pan's blur) answer what they set:
 `checks.rollDeg`, `focus` and `focusDistances`, `shakeAmplitude`, `mountBone`,
-`speed`, `shutterDeg`. A `PROMPT_ONLY` warning is left only for
-Shot-Reverse-Shot, which waits for a coverage generator.
+`speed`, `shutterDeg`. No technique is prompt words only any more:
+Shot-Reverse-Shot frames its first side, and `camera.cover` lays the exchange.
 
 ```sh
 cclay live run camera.techniques --args '{"query":"uneasy"}'
@@ -779,6 +779,32 @@ forward); `speed` below 1 plays the take slower over the shot (slow motion);
 `shutterDeg` blurs fast camera moves. `null` clears a field; a `lens` patch
 merges. `cclay live capture --framing` renders through the lens, and the
 exports (`camera.json`, USD, OTIO, the prompt) carry the same values.
+
+## Camera coverage
+
+`camera.cover` lays a coverage pattern over a range (default the shot under
+the playhead) as one undo entry; `camera.checkCuts` reads the editing rules at
+every cut; `camera.setTransition` sets the transition into a shot. A request in
+words to `camera.applyTechnique` reaches the same actions ("cover this
+conversation", "check my cuts"), and composition words ("rule of thirds left",
+"more lead room") re-place the subject in the shot's stack.
+
+```sh
+cclay live run camera.cover --args '{"request":"cover this conversation between Mara and Joon","shotId":"shot-dialogue"}'
+cclay live run camera.cover --args '{"pattern":"master-coverage","cast":["char-mara","char-joon"],"range":{"startFrame":192,"endFrameExclusive":432}}'
+cclay live run camera.checkCuts --args '{"request":"is the cut at 96 crossing the line?"}'
+cclay live run camera.applyTechnique --args '{"shotId":"shot-cu","request":"rule of thirds left, more headroom"}'
+cclay live run camera.setTransition --args '{"cutFrame":48,"type":"dissolve","frames":16}'
+```
+```json
+{"ok":true,"summary":"Laid Shot-Reverse-Shot over 0-191: OTS Mara, OTS Joon, OTS Mara, OTS Joon; every cut clean.","checks":{"pattern":"shot-reverse-shot","shots":4,"cuts":4,"issues":0,"lineSide":"left"}, …}
+```
+
+Patterns: `shot-reverse-shot`, `master-coverage`, `dialogue-singles`,
+`walk-and-talk`, `action-coverage`, `establish-detail`; `shots` sets how many a
+repeating pattern lays and `cuts` puts the cuts on given frames. Cut issues come
+back as warnings (`CUT_LINE`, `CUT_JUMP`, `CUT_SCREEN`, `CUT_EYELINE`) and in
+`output.cuts` with the fix.
 
 ## Limits
 

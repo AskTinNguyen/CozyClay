@@ -233,6 +233,20 @@ timeline camera lane as round dots beside the framing-key diamonds. A shot with
 a speed shows it on its Shot block after the frame range ("· 0.5×"). The
 section adds no always-visible control outside Camera Details.
 
+The technique popover also holds **Compose**: Place (Auto with lead room, Left
+third, Centre, Right third), Headroom (Tight, Normal, Loose) and Lead room
+(None, Facing, Travel, More); each change re-applies the shot's stack with the
+composition, and the shot guide overlay (Thirds) shows the lines.
+
+Below Camera rig, a **Coverage** section picks a pattern, Cast A and B and (for
+a repeating pattern) the shot count, and **Lay over** the selected shot runs
+`camera.cover`. A **Cut** section inspects the cut into the selected shot: its
+Transition (Cut, Dissolve, Fade to or from black, Whip pan, Match cut, J-cut,
+L-cut, with Frames or an Audio offset) and the editing-rule readout (line,
+jump, screen direction, eyeline) with each fix; flagged cuts are listed as jump
+buttons. On the timeline Shots lane a cut that breaks a rule carries a red or
+amber tag ("180°", "JUMP"), and a cut with a transition its tag ("DISS").
+
 G10 leaves exactly two visible add routes: viewport **+ Add** (the object
 catalogue plus Character and Camera) and **Content › Basic Shapes** (drag or
 double-click a primitive). The Outliner right-click **Create ▸** accelerator
