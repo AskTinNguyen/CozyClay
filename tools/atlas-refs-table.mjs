@@ -104,6 +104,8 @@ export const TABLE = {
 		"walk-and-talk": row(["walking and talking"], ["walking and talking", "track character"], ["coverage"]),
 		"action-coverage": row(["action coverage", "fight coverage", "chase coverage", "staging action"], ["dynamic action"], ["coverage"]),
 		"establish-detail": row(["establishing shot", "establishing shots"], [], ["establishing-shot", "close-up"]),
+		"triangle-dialogue": row(["group conversation"], ["line of three", "group conversation", "offset group", "staging for multiple subjects"], ["coverage"]),
+		"group-singles": row(["group conversation"], ["group conversation", "group pivot", "expanding group", "group break"], ["coverage", "close-up"]),
 	},
 	cuts: {
 		line: row(LINE, ["crossing lines", "line cross", "side switch"], ["axis-eyeline"]),

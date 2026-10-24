@@ -102,7 +102,7 @@ const noLiveEditor = (requirement) =>
 		: requirement;
 export const liveWorkspace = new AsyncLocalStorage();
 const liveWorkspaceTools = new Set([
-	"describe_scene", "describe_shot", "render_prompt", "mark_camera_move", "describe_camera_move", "list_camera_techniques", "apply_camera_technique", "set_camera_capabilities", "cover_scene", "check_cuts", "check_motivation", "story_beats", "check_structure", "save_project",
+	"describe_scene", "describe_shot", "render_prompt", "mark_camera_move", "describe_camera_move", "list_camera_techniques", "apply_camera_technique", "set_camera_capabilities", "cover_scene", "check_cuts", "check_coverage", "check_motivation", "story_beats", "check_structure", "save_project",
 	"set_camera", "frame_shot", "add_character", "place_character", "remove_character",
 	"focus_character", "place_object", "import_mesh", "sculpt_object", "compare_sculpt", "group_objects", "update_object",
 	"remove_object", "apply_batch", "add_scene", "switch_scene", "open_project", "capture_frame",

@@ -3,9 +3,10 @@ import Foldout from "./Foldout.jsx";
 import { ko } from "../locale.js";
 import { useBus } from "../app-context.js";
 import { useStudioShell } from "../shell/studio-shell-context.js";
-import { COVERAGE_PATTERNS, coveragePattern } from "../camera-coverage/patterns.js";
+import { ALL_COVERAGE_PATTERNS, coveragePattern } from "../camera-coverage/patterns.js";
 import { TRANSITION_TYPES, repairTransition, transitionWords } from "../camera-coverage/transitions.js";
 import { useCutChecks } from "../motion/cut-flags.jsx";
+import CoverageReadout from "./CoverageReadout.jsx";
 import FurtherReading from "./FurtherReading.jsx";
 import "./coverage.css";
 
@@ -14,13 +15,18 @@ const TYPE_LABELS = { cut: ["Cut", "컷"], dissolve: ["Dissolve", "디졸브"], 
 	whip: ["Whip pan", "휩 팬"], "match-cut": ["Match cut", "매치 컷"], "j-cut": ["J-cut (audio first)", "J컷 (소리 먼저)"], "l-cut": ["L-cut (audio runs over)", "L컷 (소리 이어짐)"] };
 const nameOf = (row) => (row.subject ?? row.name ?? row.id).split(",")[0];
 
-/** Coverage: pick a pattern and cast and lay it over the selected shot's range (camera.cover, one undo entry). */
+/** Coverage: pick a pattern and cast (two, or three to six for a group pattern) and lay it over the selected shot's range (camera.cover, one undo entry). */
 function CoverageAction({ activeShot, characters, run }) {
 	const visible = characters.filter((row) => !row.hidden);
 	const [pattern, setPattern] = useState("shot-reverse-shot"), [a, setA] = useState(""), [b, setB] = useState(""), [count, setCount] = useState(4), [status, setStatus] = useState(null);
-	const first = a || visible[0]?.id || "", second = b || visible.find((row) => row.id !== first)?.id || "";
+	const [members, setMembers] = useState(null), [branches, setBranches] = useState(3);
+	const first = a || visible[0]?.id || "", second = b || visible.find((row) => row.id !== first)?.id || "", spec = coveragePattern(pattern), group = Boolean(spec.castMax);
+	// A group pattern's cast: the members ticked, by default everyone it takes, in scene order.
+	const picked = (members ?? visible.slice(0, spec.castMax ?? 2).map((row) => row.id)).filter((id) => visible.some((row) => row.id === id));
+	const toggle = (id) => setMembers(picked.includes(id) ? picked.filter((other) => other !== id) : visible.map((row) => row.id).filter((other) => other === id || picked.includes(other)));
 	function lay() {
-		const receipt = run("camera.cover", { pattern, cast: [first, ...(second && second !== first ? [second] : [])], ...(activeShot ? { shotId: activeShot.id } : {}), ...(REPEATING.has(pattern) ? { shots: count } : {}) });
+		const cast = group ? picked : [first, ...(second && second !== first ? [second] : [])];
+		const receipt = run("camera.cover", { pattern, cast, ...(activeShot ? { shotId: activeShot.id } : {}), ...(REPEATING.has(pattern) ? { shots: count } : {}), ...(spec.branching ? { branches } : {}) });
 		setStatus(receipt?.ok ? { ok: true, text: receipt.summary } : { ok: false, text: receipt?.message ?? "" });
 	}
 	const castSelect = (value, set, testId, label) => (
@@ -34,18 +40,32 @@ function CoverageAction({ activeShot, characters, run }) {
 		<div className="coverage-action" data-coverage-action>
 			<label className="coverage-field"><span>{ko("Pattern", "패턴")}</span>
 				<select data-coverage-pattern value={pattern} onChange={(event) => setPattern(event.target.value)}>
-					{COVERAGE_PATTERNS.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}
+					{ALL_COVERAGE_PATTERNS.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}
 				</select>
 			</label>
 			<p className="inspector-hint v2-details-hint">{coveragePattern(pattern).description}</p><FurtherReading section="patterns" id={pattern} />
-			{castSelect(first, setA, "a", ko("Cast A", "인물 A"))}
-			{coveragePattern(pattern).cast > 1 || pattern === "action-coverage" ? castSelect(second, setB, "b", ko("Cast B", "인물 B")) : null}
+			{group ? (
+				<fieldset className="coverage-members" data-coverage-members={picked.length}>
+					<legend>{ko(`Cast (${spec.cast}–${spec.castMax})`, `인물 (${spec.cast}–${spec.castMax}명)`)}</legend>
+					{visible.map((row) => (
+						<label key={row.id}><input type="checkbox" data-coverage-member={row.id} checked={picked.includes(row.id)} onChange={() => toggle(row.id)} /> {nameOf(row)}</label>
+					))}
+				</fieldset>
+			) : (<>
+				{castSelect(first, setA, "a", ko("Cast A", "인물 A"))}
+				{spec.cast > 1 || pattern === "action-coverage" ? castSelect(second, setB, "b", ko("Cast B", "인물 B")) : null}
+			</>)}
+			{spec.branching && (
+				<label className="coverage-field"><span>{ko("Branches", "분기 수")}</span>
+					<input data-coverage-branches type="number" min={2} max={8} value={branches} onChange={(event) => setBranches(Math.max(2, Math.min(8, Number(event.target.value) || 2)))} />
+				</label>
+			)}
 			{REPEATING.has(pattern) && (
 				<label className="coverage-field"><span>{ko("Shots", "샷 수")}</span>
 					<input data-coverage-shots type="number" min={2} max={8} value={count} onChange={(event) => setCount(Math.max(2, Math.min(8, Number(event.target.value) || 2)))} />
 				</label>
 			)}
-			<button type="button" className="coverage-lay" data-coverage-lay disabled={!first} onClick={lay}>
+			<button type="button" className="coverage-lay" data-coverage-lay disabled={group ? picked.length < spec.cast || picked.length > spec.castMax : !first} onClick={lay}>
 				{activeShot ? ko(`Lay over ${activeShot.name} (${activeShot.startFrame}–${activeShot.endFrame})`, `${activeShot.name}에 커버리지 깔기`) : ko("Lay over the timeline", "타임라인에 커버리지 깔기")}
 			</button>
 			{status && <p className={status.ok ? "technique-status" : "technique-status refused"} data-coverage-status role="status">{status.text}</p>}
@@ -106,6 +126,9 @@ export default function CoveragePanel({ hidden, activeShot }) {
 	return (<>
 		<Foldout hidden={hidden} title={ko("Coverage", "커버리지")}>
 			<CoverageAction activeShot={activeShot} characters={characters} run={run} />
+		</Foldout>
+		<Foldout hidden={hidden} title={ko("Coverage check", "커버리지 점검")}>
+			<CoverageReadout shots={shots} />
 		</Foldout>
 		<Foldout hidden={hidden} title={ko("Cut", "컷")}>
 			<CutInspector activeShot={activeShot} shots={shots} run={run} seek={(frame) => (run("timeline.seek", { frame })?.ok ? null : setTlFrame?.(frame))} />

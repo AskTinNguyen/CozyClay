@@ -15,14 +15,15 @@ export const CATEGORIES = Object.freeze(["size", "angle", "move", "lens", "cover
 const MOTIVATION_KEYS = { "camera.checkMotivation": ["confidence"], "camera.alignMove": ["beat", "edge", "confidence"], "story.addBeat": ["frame", "label", "kind", "confidence"], "story.moveBeat": ["beat", "frame", "confidence"], "story.removeBeat": ["beat", "confidence"] };
 // The structure check (intensity-curve): a question about the intensity curve, or a beat it must build into.
 const STRUCTURE_KEYS = { "camera.checkStructure": ["beat", "confidence"] };
-const ACTIONS = ["camera.applyTechnique", "camera.cover", "camera.checkCuts", "none", ...Object.keys(MOTIVATION_KEYS), ...Object.keys(STRUCTURE_KEYS)];
+const ACTIONS = ["camera.applyTechnique", "camera.cover", "camera.checkCuts", "camera.checkCoverage", "camera.setLine", "none", ...Object.keys(MOTIVATION_KEYS), ...Object.keys(STRUCTURE_KEYS)];
 const CONFIDENCE = ["high", "medium", "low"];
 // The fixture cast every scenario names its people from (ids are what `cast` and `expected.subject` hold).
-export const CAST = Object.freeze([{ id: "mara", name: "Mara", x: 0, z: 0, rot: 90 }, { id: "joon", name: "Joon", x: 4, z: 0, rot: -90 }]);
+// Sela (group-coverage) watches the two from 3.4 m off their line; a row brings her in by naming her in its cast.
+export const CAST = Object.freeze([{ id: "mara", name: "Mara", x: 0, z: 0, rot: 90 }, { id: "joon", name: "Joon", x: 4, z: 0, rot: -90 }, { id: "sela", name: "Sela", x: 2, z: 3.4, rot: 180 }]);
 const FIELDS = ["id", "tier", "category", "request", "cast", "expected", "why"];
-const EXPECTED_KEYS = { "camera.applyTechnique": ["stack", "params", "subject", "composition", "confidence"], "camera.cover": ["pattern", "cast", "confidence"],
-	"camera.checkCuts": ["frame", "confidence"], none: ["confidence"], ...MOTIVATION_KEYS, ...STRUCTURE_KEYS };
-const APPLY_KEYS = ["move", "size", "sizes", "height", "screenX", "eyeLineY", "shots", "oneSide", "issues", "setup", "flags", "refused"];
+const EXPECTED_KEYS = { "camera.applyTechnique": ["stack", "params", "subject", "composition", "confidence"], "camera.cover": ["pattern", "cast", "branches", "confidence"],
+	"camera.checkCuts": ["frame", "confidence"], "camera.checkCoverage": ["cast", "confidence"], "camera.setLine": ["between", "confidence"], none: ["confidence"], ...MOTIVATION_KEYS, ...STRUCTURE_KEYS };
+const APPLY_KEYS = ["move", "size", "sizes", "height", "screenX", "eyeLineY", "shots", "oneSide", "issues", "setup", "flags", "refused", "complete", "line"];
 
 /** Every scenario row, in file then row order, each with the file it came from. */
 export function loadScenarios() {
@@ -56,7 +57,7 @@ export function schemaErrors(rows) {
 		for (const id of [...(expected.stack ?? []), ...Object.keys(expected.params ?? {})]) if (!techniqueById(id)) say(row, `no technique ${id}`);
 		if (expected.action === "camera.applyTechnique" && !expected.stack?.length && !expected.composition) say(row, "a technique row names a stack or a composition");
 		if (expected.action === "camera.cover" && !coveragePattern(expected.pattern)) say(row, `no pattern ${expected.pattern}`);
-		for (const id of [expected.subject, ...(expected.cast ?? [])].filter(Boolean)) if (!row.cast.includes(id)) say(row, `${id} is not in the row's cast`);
+		for (const id of [expected.subject, ...(expected.cast ?? []), ...(expected.between ?? [])].filter(Boolean)) if (!row.cast.includes(id)) say(row, `${id} is not in the row's cast`);
 		for (const name of Object.keys(row.apply ?? {})) if (!APPLY_KEYS.includes(name)) say(row, `apply.${name} is not a measured result`);
 	}
 	for (const category of CATEGORIES) {
@@ -72,7 +73,7 @@ const canonical = (value) => (Array.isArray(value) ? value.map(canonical) : valu
 const same = (a, b) => JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
 /**
  * What differs between a row's expected resolution and a got one:
- * { action, stack: [{ id, params? }], subject, composition, pattern, cast, frame, confidence }. [] when they agree.
+ * { action, stack: [{ id, params? }], subject, composition, pattern, cast, frame, between, branches, confidence }. [] when they agree.
  */
 export function resolutionMismatch(expected, got) {
 	const problems = [], want = (label, a, b) => { if (!same(a, b)) problems.push(`${label} ${JSON.stringify(b)}, want ${JSON.stringify(a)}`); };
@@ -88,6 +89,8 @@ export function resolutionMismatch(expected, got) {
 	if (expected.composition) want("composition", expected.composition, got.composition);
 	if (expected.pattern) want("pattern", expected.pattern, got.pattern);
 	if (expected.cast) want("cast", expected.cast, got.cast);
+	if (expected.between) want("between", expected.between, got.between);
+	if (expected.branches) want("branches", expected.branches, got.branches);
 	if (expected.action === "camera.checkCuts") want("frame", expected.frame, got.frame);
 	else if (expected.frame !== undefined) want("frame", expected.frame, got.frame);
 	for (const key of ["label", "kind", "beat", "edge"]) if (expected[key] !== undefined) want(key, expected[key], got[key]);
@@ -98,7 +101,7 @@ export function resolutionMismatch(expected, got) {
 /** A routeCameraRequest answer in the fields resolutionMismatch compares. */
 export function resolutionOf(routed) {
 	const args = routed.args ?? {};
-	return { action: routed.action, stack: args.stack, subject: args.subjectId, composition: args.composition, pattern: args.pattern, cast: args.cast, frame: args.frame, confidence: routed.confidence,
+	return { action: routed.action, stack: args.stack, subject: args.subjectId, composition: args.composition, pattern: args.pattern, cast: args.cast, frame: args.frame, between: args.between, branches: args.branches, confidence: routed.confidence,
 		label: args.label, kind: args.kind, beat: args.beat, edge: args.edge };
 }
 

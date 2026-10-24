@@ -1,24 +1,55 @@
 # Group Coverage: Progress
 
 - Working under rev: 1
-- Worker: none yet (planned)
-- Current step: none
-- Next step: start when the `Waits for` line in prompt.md is met
-- PR: none yet
+- Worker: cloud worker agent (group-coverage)
+- Current step: done; every item met or ready for review (A7 suite line below)
+- Next step: orchestrator review (A4 ui:shot, A8 docs), PR
+- PR: https://github.com/AskTinNguyen/CozyClay/pull/14
 
 ## Acceptance
 
 | Item | Verdict | Evidence |
 | --- | --- | --- |
-| A1 | open | |
-| A2 | open | |
-| A3 | open | |
-| A4 | open | |
-| A5 | open | |
-| A6 | open | |
-| A7 | open | |
-| A8 | open | |
+| A1 | met (gate) | `node test/verify-camera-cut-rules.mjs` -> `10 checks passed`, incl. "three people: the line is the pair the shots are about...", "...when the pair cannot be told the report says so...; two authored pairs are a line change", "three people, D2: a line change through a neutral shot or through an in-shot move is legal; the same cut straight across is flagged", "zero false flags: the group patterns over five blockings and two ranges cut clean". `camera.setLine` in `test/bus/verify-group-coverage.mjs` ok 5. Commit 3f0c61a5 |
+| A2 | met (gate) | `node test/bus/verify-group-coverage.mjs` -> ok 1-5 (triangle 13 shots, group-singles 3 and 6, branching 3 branches, refusals, setLine + undo); shot counts, ranges, stacks, sides per pair, one undo entry, 0 cut flags. Commit 3f0c61a5 |
+| A3 | met (gate) | `node test/verify-camera-coverage-check.mjs` -> `6 checks passed` (complete: triangle, group-singles, branching x2 and x3, master-coverage; gapped: no master, one size, line change without bridge, pair from both sides, branch missing/moved setup; every gap a technique stack; bus `camera.checkCoverage` read only). Commit 3f0c61a5 |
+| A4 | met (ui:qa, ui:shot reviewed R1) | `QA_CHROME_FLAGS='--no-sandbox --proxy-server=http://127.0.0.1:8444 --ignore-certificate-errors' COZYCLAY_LIVE_PORT=5309 CDP_PORT=9309 QA_URL=http://127.0.0.1:5209/app/ CHROME_PATH=/opt/pw-browsers/chromium QA_SHOT_DIR=docs/intent/group-coverage/proofs node tools/qa-browser.mjs -- node test/verify-group-coverage-browser.mjs` exit 0, "group coverage browser QA passed" (after the main merge too). Proofs: `docs/intent/group-coverage/proofs/coverage-group-controls.png`, `docs/intent/group-coverage/proofs/contact-triangle-dialogue.png`. Commits 15a15b5c, df04d8b5 |
+| A5 | met (gate) | `node mcp/verify-camera-coverage.mjs` -> `21 passed, 0 failed`; `node test/verify-director-evals.mjs` -> core 86/86 (10 new core rows: 7 coverage, 3 cuts); `node mcp/verify-director-evals.mjs` -> `79 passed, 0 failed`; `node test/verify-camera-coverage-resolve.mjs` -> `5 checks passed`; MCP 33 tools (`mcp/verify.mjs`, tool-annotations, tool-handlers). Commit 9554e8b0 |
+| A6 | met (gate) | `node test/bus/verify-sequence-prompt.mjs` -> ok 4 "with three cast the continuity line names each pair's line, byte-identical across runs". Commit 9554e8b0 |
+| A7 | met (gate, known exception) | lint exit 0 (0 new / 0 violations / 0 regressions), build exit 0, `SUITE-ALL: 462 files, 459 passed, 3 failed`: the two timing checks plus a spawn timeout in verify-final-suite-compatibility that passes alone (Steps 6) |
+| A8 | met (review R1) | `mcp/README.md` (33 tools, cover_scene group cast/branches, check_coverage row, line paragraph), `docs/agent-cli.md` (examples, group paragraph), `docs/studio-ui-ia.md` (cast checkboxes, Branches, Coverage check), `CHANGELOG.md` Unreleased > Camera. Commit e3e34a1e |
 
 ## Steps
 
+1. A1-A3 core (3f0c61a5): `src/camera-coverage/cut-line.js` (D1 pair choice), `patterns-group.js`, `plan-group.js`, `completeness.js`, `src/commands/camera-coverage-group.js` (`camera.setLine`, `camera.checkCoverage`); cut rules judge per pair. Evidence in the table.
+2. A5/A6 agents, evals, brief (9554e8b0): resolver rules, MCP `cover_scene` cast <= 6 + `branches`, `check_coverage`; 10 core eval rows; `continuity-group.js`.
+3. A4 UI (15a15b5c): cast checkboxes, Branches, `CoverageReadout.jsx`; `test/verify-group-coverage-browser.mjs` registered in `tools/run-tests.mjs` BROWSER_FILES, `test/verify-camera-coverage-check.mjs` in NODE_FILES. QA needs the container's jsdelivr stub flags (worker-common).
+4. A8 docs (e3e34a1e).
+5. Merged origin/main 513ab7bf (df04d8b5): conflicts in CHANGELOG, CoveragePanel (FurtherReading + readout both kept), run-tests lists (both kept). Group patterns listed in `NO_REFERENCES.patterns` and the references generator count 71 -> 74 (F-1). Reran the key gates and the browser QA: all pass.
+6. A7 gates: `npm run lint` exit 0 (knip 0 new, 1 fixed; loc 0 violations; eslint 0 regressions; no baseline changed); `npm run build` exit 0; suite (`env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_CA_BUNDLE node /home/claude/local-tools/suite-all.mjs --jobs 4`, after the main merge, no dev server): `SUITE-ALL: 462 files, 459 passed, 3 failed` - the two known timing checks (`test/motion3/verify-motion3-exitcar.mjs` 4896 ms CPU, `test/motion3/verify-motion3-repair.mjs` 22509 ms) and `test/bus/verify-final-suite-compatibility.mjs` (`spawnSync node ETIMEDOUT` under the shared-CPU load; rerun alone: `# fail 0`, exit 0).
+7. PR #14 review fixes in `src/camera-coverage/completeness.js`. (a) An unmeasurable camera (a follow cam, a shot with no keys) is now an unknown side (`null`), never neutral, so it cannot bridge a line change. The report lists such shots in `measures.unmeasured`. (b) Repeated branch setups are compared by position, yaw/pitch (2 deg), field of view (0.5 deg) and the end pose, not by the start position alone. New checks in `test/verify-camera-coverage-check.mjs`: "unmeasurable cameras ... never bridge a line change" and "branch setups compare aim and lens as well as position, at both ends". Both fail on the previous code. Results: `node test/verify-camera-coverage-check.mjs` -> `8 checks passed`; `node test/bus/verify-group-coverage.mjs` -> `# pass 5 # fail 0`; `node test/verify-director-evals.mjs` -> core 86/86; `node mcp/verify-director-evals.mjs` -> `79 passed, 0 failed`; `node mcp/verify-camera-coverage.mjs` -> `21 passed, 0 failed`; `node test/verify-camera-cut-rules.mjs` -> `10 checks passed`; `npm run lint` exit 0 (0 new / 0 violations / 0 regressions); `npm run build` exit 0.
+
+8. Merged origin/main 761cae7e (camera-motivation, #13) without rebasing (3338f882). Conflicts were in CHANGELOG, mcp/README.md, docs/agent-cli.md, the MCP tool lists and counts, `mcp/verify-director-evals.mjs`, `src/camera-coverage/route.js`, `src/commands/camera.js` (shotId also passes through for a routed camera.setLine), the command registry count, `test/bus/verify-sequence-prompt.mjs`, `test/director-evals-data.mjs` (CATEGORIES with motivation; actions and keys from both sides) and `tools/run-tests.mjs`. Both sides' behaviour is kept in each. Now 35 MCP tools and 135 registry actions. `test/verify-camera-motivation.mjs` A3 now loops over the two-person `COVERAGE_PATTERNS`: its sequence fixture stages two people, and `COVERAGE_PATTERN_IDS` now includes the group patterns. Results: command-registry `135 actions`; command-declarations exit 0; verify-sequence-prompt `# pass 5 # fail 0` (Motive and pair-line tests); director evals core 101/101; mcp director-evals `89 passed, 0 failed`; mcp/verify-camera-coverage `21 passed, 0 failed`; mcp/verify-camera-motivation `14 passed, 0 failed`; verify-camera-motivation `# pass 3 # fail 0`; verify-camera-coverage-check `8 checks passed`; bus verify-group-coverage `# pass 5 # fail 0`; verify-camera-cut-rules `10 checks passed`; mcp/verify `35 tools registered`; lint exit 0 (0 new / 0 violations / 0 regressions); build exit 0. Browser QA (shared stub flags) exit 0, "group coverage browser QA passed"; `coverage-group-controls.png` was re-shot (it now shows Further reading and the Motivation section). Suite (AWS vars unset): `SUITE-ALL: 466 files, 464 passed, 2 failed`. The two failures are the known timing checks: verify-motion3-exitcar at 4228 ms CPU and verify-motion3-repair at 33781 ms.
+
+9. Second review round on PR #14.
+   - (a) `completeness.js`: when no cast is named, the inferred cast now also takes each shot's measured subject (cutaways aside), so a hand-framed close-up of a third person is checked. This applies to `camera.checkCoverage` and the Coverage panel. A named `cast` still narrows it.
+   - (b) `src/commands/camera-coverage.js`: laying coverage over a shot that carries an authored line drops that line unless the new pattern sets one. Undo restores it.
+   - Tests: `test/verify-camera-coverage-check.mjs` "the inferred cast includes every measured subject: a hand-framed close-up of a third person is checked too" (master-coverage for Mara and Joon plus a close-up of Sela: before, complete; now a master gap and a sizes gap for Sela). `test/bus/verify-group-coverage.mjs` "coverage laid over a shot with an authored line clears that line unless the new pattern sets one; undo restores it" (a triangle OTS replaced by master-coverage for another pair; no shot keeps the old line, no cut is judged by it, one undo restores it). Both fail on the previous code.
+   - Results: verify-camera-coverage-check `9 checks passed`; bus verify-group-coverage `# pass 6 # fail 0`; bus verify-camera-coverage `# pass 4 # fail 0`; verify-camera-cut-rules `10 checks passed`; verify-sequence-prompt `# pass 5`; verify-camera-motivation `# pass 3`; director evals core 101/101; mcp director-evals `89 passed, 0 failed`; mcp/verify-camera-coverage `21 passed, 0 failed`; lint exit 0 (0 new / 0 violations / 0 regressions); build exit 0.
+
+## Decisions
+
+- D1 as built: pair = authored `shot.line`, else the two subjects when they differ, else subject + gaze target (within 60 deg, a tie within 10 deg is unclear). Unclear is reported (`measures.line.unclear`), never guessed. Two different pairs across a cut are a line change (`measures.line.change`), not a crossing; the eyeline rule is skipped there.
+- D2: sides are read at the cut frames only, so an in-shot move across the line is legal; a neutral (within 0.2 m of the line) or a cutaway shot clears a crossing in the coverage check.
+- Group patterns live in `patterns-group.js`; `COVERAGE_PATTERNS` stays the six two-person ones (existing tests unchanged), `ALL_COVERAGE_PATTERNS` / `COVERAGE_PATTERN_IDS` span all.
+- Each pair's side is outside the group (away from the others); a triangle tries the six member orders and keeps the first that cuts with 0 flags. A near-collinear trio can still raise an eyeline flag: a staging limit, reported by the plan's notes.
+- `camera.setLine` is a single write, so its receipt has no `output`; matched words and confidence ride in `checks` (protocol checks schema extended additively).
+- Group plans put brief cuts (no measures) in the receipt to stay under 8 KiB.
+- Command registry 127 -> 129 actions; MCP 32 -> 33 tools. Studio agent prompt untouched (13,355 of 13,400): the new actions are reached through action descriptions and the router.
+- Merge risks for camera-motivation: `test/bus/verify-command-registry.mjs` count, director-evals CAST (adds sela) and apply harness, `src/studio-agent-protocol.js` checks fields, `tools/run-tests.mjs` lists.
+
 ## Reconciliations
+
+## Reviews
+
+- R1 (cloud orchestrator, 2026-10-24, at d66e585d): opened `proofs/contact-triangle-dialogue.png`. It shows 13 frames: TRI 1 master, then OTS and singles for the Mara-Joon pair (camera left), the Joon-Sela pair (camera right) and the Sela-Mara pair (camera left). Each pair's cameras stay on one side of that pair's line, and the over-the-shoulder frames show the near shoulder. `proofs/coverage-group-controls.png` shows the Coverage section with Triangle Dialogue and Cast (3-3) Mara, Joon and Sela checked. Its receipt reads "Laid Triangle Dialogue over 0-191 ... every cut clean", the Coverage check reads "Enough to edit: 14 shots, 3 cast", Cut shows "13 cuts, 0 flagged", and the timeline has the 13 TRI shot blocks. The suite's third failure (`verify-final-suite-compatibility`, spawnSync ETIMEDOUT under load) passes run alone (`# fail 0`, rerun by the orchestrator). A8: `mcp/README.md`, `docs/agent-cli.md`, `docs/studio-ui-ia.md` and `CHANGELOG.md` are updated. F-1 is resolved (see findings).

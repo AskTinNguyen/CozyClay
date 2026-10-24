@@ -3,7 +3,9 @@
 // library (src/camera-techniques), on the first or second cast member. The
 // planner (plan.js) splits the frame range, picks the side of the line, and
 // camera.cover lays the shots and applies each stack. Descriptions are
-// CozyClay's own words.
+// CozyClay's own words. These are the one- and two-person patterns; the group
+// and branching ones (three to six people) live in patterns-group.js.
+import { GROUP_PATTERNS } from "./patterns-group.js";
 
 /** One shot of a pattern: a role word for the name, whose shot it is (0 = A, 1 = B), its stack, and stacks to try when it cannot keep the line. */
 const shot = (role, who, stack, extra = {}) => ({ role, who, stack, ...extra });
@@ -50,8 +52,10 @@ export const COVERAGE_PATTERNS = Object.freeze([
 	},
 ]);
 
-export const COVERAGE_PATTERN_IDS = Object.freeze(COVERAGE_PATTERNS.map((pattern) => pattern.id));
-export const coveragePattern = (id) => COVERAGE_PATTERNS.find((pattern) => pattern.id === id) ?? null;
+/** Every pattern camera.cover lays: the two-person ones, then the group and branching ones. */
+export const ALL_COVERAGE_PATTERNS = Object.freeze([...COVERAGE_PATTERNS, ...GROUP_PATTERNS]);
+export const COVERAGE_PATTERN_IDS = Object.freeze(ALL_COVERAGE_PATTERNS.map((pattern) => pattern.id));
+export const coveragePattern = (id) => ALL_COVERAGE_PATTERNS.find((pattern) => pattern.id === id) ?? null;
 
 /** The compact index an agent reads: [id, shots, cast it wants, one line]. */
 export function coverageIndex() {

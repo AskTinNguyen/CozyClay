@@ -65,3 +65,34 @@
 
 .technique-composition { display: grid; gap: 4px; margin: 4px 0 2px; padding-top: 4px; border-top: 1px solid var(--line, rgba(255, 255, 255, .08)); }
 .technique-composition input[type="checkbox"] { justify-self: start; width: auto; height: auto; }
+
+/* Group cast picker (three to six) and the coverage check readout (CoverageReadout.jsx). */
+.coverage-members {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px 10px;
+	margin: 0;
+	padding: 4px 0 2px;
+	border: 0;
+	color: var(--text-1, #e4e4e7);
+}
+
+.coverage-members legend {
+	padding: 0 0 2px;
+	color: var(--text-2, #a1a1aa);
+}
+
+.coverage-members label {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.coverage-readout {
+	display: grid;
+	gap: 5px;
+	padding: 0 var(--sp-2, 12px) var(--sp-1, 8px);
+	font-family: var(--sans, system-ui);
+	font-size: 12px;
+	color: var(--text-1, #e4e4e7);
+}
