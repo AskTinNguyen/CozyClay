@@ -26,7 +26,7 @@ const EXPECTED_TOOLS = [
 	"frame_shot", "add_character", "place_character", "remove_character", "focus_character",
 	"place_object", "import_mesh", "sculpt_object", "compare_sculpt", "group_objects",
 	"update_object", "remove_object", "apply_batch", "render_prompt", "render_packet", "mark_camera_move",
-	"describe_camera_move", "list_camera_techniques", "apply_camera_technique", "set_camera_capabilities", "cover_scene", "check_cuts", "check_coverage", "check_motivation", "story_beats", "add_scene", "switch_scene", "open_project", "save_project", "studio_commands", "studio_run",
+	"describe_camera_move", "list_camera_techniques", "apply_camera_technique", "set_camera_capabilities", "cover_scene", "check_cuts", "check_coverage", "check_motivation", "story_beats", "check_structure", "add_scene", "switch_scene", "open_project", "save_project", "studio_commands", "studio_run",
 ];
 const ANNOTATION_KEYS = ["readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint"];
 // live_status reports the workspaces; it is the one tool that is not routed into one.

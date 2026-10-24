@@ -18,6 +18,7 @@ import { registerRig, rigDeclarations } from './camera-rig.js';
 import { capabilityReadback, capabilityScene } from '../camera-capabilities/readback.js';
 import { compositionSchema, coverageDeclarations, registerCoverage } from './camera-coverage.js';
 import { motivationDeclarations, registerMotivation } from './camera-motivation.js';
+import { registerStructure, structureDeclarations } from './camera-structure.js';
 import { routeCameraRequest } from '../camera-coverage/route.js';
 import { eyePoint, measureComposition } from '../camera-coverage/composition.js';
 import { travelAt } from '../camera-coverage/cut-geometry.js';
@@ -47,6 +48,8 @@ export const declarations = Object.freeze([
   ...coverageDeclarations,
   // story.addBeat / moveBeat / removeBeat, camera.checkMotivation and camera.alignMove (camera-motivation.js).
   ...motivationDeclarations,
+  // camera.checkStructure: the intensity curve against the story beats (camera-structure.js).
+  ...structureDeclarations,
 ]);
 
 const scaled = row => SUBJECT_HEIGHT_M * (row.scale ?? 1);
@@ -75,6 +78,7 @@ export function register(registry, ports) {
   registerRig(registry, ports);
   registerCoverage(registry, ports, { castRow });
   registerMotivation(registry, ports);
+  registerStructure(registry, ports);
 
   function apply(args, context) {
     const view = ports.readView(), visible = view.characters.filter(row => !row.hidden), named = visible.map(row => ({ id: row.id, name: row.subject ?? row.name }));

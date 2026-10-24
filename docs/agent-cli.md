@@ -846,6 +846,30 @@ Issues come back as warnings (`MOVE_UNMOTIVATED`, `MOVE_STARTS_OFF_BEAT`,
 (`camera.alignMove` args, or "hold"). A rail or follow camera is refused by
 `camera.alignMove`: it travels with its subject.
 
+## Intensity curve
+
+`camera.checkStructure` measures the sequence's intensity per shot (size,
+height against the eyes, lens, movement, cutting rate, roll, screen jump; each
+0-1 and weighted into one value) and each cut's contrast, and flags where it
+goes `flat`, peaks off its strongest story beat (`peak-off-beat`), or does not
+rise into a reveal, threat or decision (`no-build`). Read only. Words to
+`camera.applyTechnique` reach it too ("where does this sequence go flat?",
+"show me the intensity", "build to the reveal"); `beat` names a beat the
+sequence must build into, `shotIds` or `from`/`to` narrow it.
+
+```sh
+cclay live run camera.checkStructure --args '{"request":"where does this sequence go flat?"}'
+```
+```json
+{"ok":true,"summary":"5 shots: intensity builds from 0.40 at beat 1 to a peak of 0.46 at beat 2, then releases to 0.09 by beat 5; flat over beats 1-4. Shots 1-4 (f0-191) go flat: ...","checks":{"shots":5,"issues":1}, …}
+```
+
+Issues come back as warnings (`STRUCTURE_FLAT`, `STRUCTURE_PEAK_OFF_BEAT`,
+`STRUCTURE_NO_BUILD`) and in `output.issues` with the suggestion: a technique
+stack in `fixAction` / `fixArgs` (`camera.applyTechnique`), plus shorter shots
+in words. `output.shots` holds each shot's components and combined value,
+`output.cuts` each cut's contrast.
+
 ## Sequence prompt
 
 `render_prompt` with `scope: "sequence"` writes the brief a video model gets for

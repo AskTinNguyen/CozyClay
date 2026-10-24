@@ -37,6 +37,7 @@ const EXPECTED_ANNOTATIONS = Object.freeze({
 	check_coverage: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
 	check_motivation: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
 	story_beats: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+	check_structure: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
 	add_scene: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
 	switch_scene: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
 	open_project: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },

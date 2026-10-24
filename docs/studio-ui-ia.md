@@ -275,6 +275,16 @@ fix** runs `camera.alignMove`. On the Shots lane each story beat is a labelled
 green tick, and a flagged move carries a red or amber bar ("NO MOTIVE", "OFF
 BEAT") across its frames.
 
+Below Motivation, a **Structure** section says where the sequence builds and
+peaks, lists each shot's intensity, and reads out every structure flag (goes
+flat, peaks off the beat, no build) with its suggestion; **Apply suggestion**
+runs the technique stack through `camera.applyTechnique`. Under the Shots
+lane's blocks, with two shots or more, an **Intensity** strip draws the
+combined curve as a step per shot, a toggle per component (size, height, lens,
+movement, cutting, roll, screen jump) draws that line beside it, story beats
+are dashed ticks, and flagged stretches are shaded with a tag ("FLAT", "OFF
+PEAK", "NO BUILD").
+
 G10 leaves exactly two visible add routes: viewport **+ Add** (the object
 catalogue plus Character and Camera) and **Content › Basic Shapes** (drag or
 double-click a primitive). The Outliner right-click **Create ▸** accelerator
