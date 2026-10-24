@@ -2,29 +2,39 @@
 
 - Working under rev: 1
 - Worker: `camera-techniques-worker`
-- Current step: A4 agent, MCP and CLI access
-- Next step: A7 prompt sync (shot-prompt, keyframe pack, render_prompt), then A6 picker and A5 live captures
+- Current step: A8 repository gates on the final tree
+- Next step: open the PR, then report
 - PR: none yet
 
 ## Acceptance
 
 | Item | Verdict | Evidence |
 | --- | --- | --- |
-| A1 | met | `node test/verify-camera-techniques.mjs` -> `12 checks passed` (65 names resolve, ids/aliases unique, every field present) |
-| A2 | met | same file: `ok - the resolver maps 32 phrases to the right technique`, mood search and sentence-to-stack checks pass |
-| A3 | met | `node test/bus/verify-camera-techniques-apply.mjs` -> `pass 5, fail 0`; `PASS 59 techniques` with classifyMove equal to the expected move for each |
-| A4 | open | |
-| A5 | open | |
-| A6 | open | |
-| A7 | open | storage round trip covered in the A3 file; prompt text still to do |
-| A8 | open | |
-| A9 | open | |
+| A1 | met | `node test/verify-camera-techniques.mjs` -> `12 checks passed` (65 names resolve, ids/aliases unique, every field present, Non-Goal techniques name their capability) |
+| A2 | met | same file: `ok - the resolver maps 32 phrases to the right technique`, plus mood ranking and sentence-to-stack checks |
+| A3 | met | `node test/bus/verify-camera-techniques-apply.mjs` -> `tests 5 ... pass 5 ... fail 0`; `PASS 59 techniques: ... push-in=push-in ... dolly-zoom=dolly-zoom ... 360-degree-shot=orbit ...` (classifyMove on the stored result equals the expected move for every applicable technique; one undo restores each) |
+| A4 | met | `node mcp/verify.mjs` -> `29 tools registered` ... `all checks passed`; `node mcp/verify-camera-techniques.mjs` -> `14 passed, 0 failed` (in-memory apply, describe_camera_move, render_prompt); `node mcp/verify-tool-annotations.mjs` -> `PASS G005 tools/list safety contract (29 tools; deterministic order)`; live CLI: `cclay live run camera.applyTechnique` in the A5 run; agent prompt pointer (see F-1) |
+| A5 | met (pending orchestrator review of the images) | ui:shot: `test/qa-camera-technique-live-browser.mjs` exit 0 -> `proofs/live-low-angle-close-up.png`, `proofs/live-push-in-start.png`, `proofs/live-push-in-end.png`, `proofs/live-over-the-shoulder.png` |
+| A6 | met (pending orchestrator review of the images) | ui:qa: `node tools/qa-browser.mjs -- node test/verify-camera-technique-picker-browser.mjs` exit 0 (`camera technique picker browser QA passed`); ui:shot `proofs/picker.png`, `proofs/applied.png` |
+| A7 | met | `node test/verify-camera-technique-prompt.mjs` -> `6 checks passed` (save/reload, older body, prompt TECHNIQUE line carries the classifier's phrase, keyframe pack prompt.txt, prompt-only words, edited camera drops it); MCP render_prompt in `mcp/verify-camera-techniques.mjs` |
+| A8 | open | final gate run in progress |
+| A9 | met (review) | `mcp/README.md` (29 tools, two rows, Camera techniques section), `docs/agent-cli.md` (Camera techniques section), `docs/studio-ui-ia.md` (Techniques section), `CHANGELOG.md` Unreleased > Camera; commit 0b593dbc |
 
 ## Steps
 
 1. Setup: `npm ci` and `npm --prefix mcp ci` in the worktree (exit 0). Baseline `npm run lint` on b6806868: `knip: 139 findings, 0 new`, `loc: 72 files over 250 (baseline 72), 0 violations`, `eslint: 399 errors across 20 rules (baseline 403), 0 regressions`.
-2. A1/A2: catalog in `src/camera-techniques/` (`entry.js`, `catalog-framing.js` 13 sizes + 11 angles, `catalog-moves.js` 21 moves and lens moves, `catalog-rigs.js` 7 rail moves, 9 coverage, 4 modifiers; `index.js` lookups and the compact index; `resolve.js` names, aliases, word-by-word spelling tolerance, moods, sentence-to-stack). Descriptions written fresh (D1). `node test/verify-camera-techniques.mjs` -> `12 checks passed`.
-3. A3: `framing.js` (sizes, levels, views, group, OTS, POV, reverse), `moves.js` (keyed moves and rails), `compile.js` (stack -> keys or rail, expected move, label, prompt-only parts), `readback.js` (classify keys and the integrated rail track, prompt phrase), `storage.js` (persisted shape, signature). `src/commands/camera.js` registers `camera.techniques`, `camera.describeTechnique` (read-only jobs) and `camera.applyTechnique` (mutation, one bus run: clears keys, nested `shot.frame` per key, eases, or nested `shot.setCameraRail`; stores `shot.technique`). Key `ease` (`linear`, `in`, `out`) added to `cameraMoveAt`, the shot document repair and the cameraKey patch schema. Receipt check fields added to the protocol schema. `node test/bus/verify-camera-techniques-apply.mjs` -> `tests 5, pass 5, fail 0`.
+2. A1/A2 (c0dfaea3): catalog in `src/camera-techniques/` (`entry.js`, `catalog-framing.js` 13 sizes + 11 angles, `catalog-moves.js` 21 moves and lens moves, `catalog-rigs.js` 7 rail moves, 9 coverage, 4 modifiers; `index.js` lookups and the compact index; `resolve.js` names, aliases, word-by-word spelling tolerance, moods, sentence-to-stack). Descriptions written fresh (D1). `node test/verify-camera-techniques.mjs` -> `12 checks passed`.
+3. A3 (c0dfaea3): `framing.js`, `moves.js`, `compile.js`, `readback.js`, `storage.js`; `src/commands/camera.js` registers `camera.techniques`, `camera.describeTechnique` (read-only jobs) and `camera.applyTechnique` (mutation, one bus run: clears keys, nested `shot.frame` per key with eases, or nested `shot.setCameraRail`; stores `shot.technique`). Key `ease` in `cameraMoveAt`, the shot document repair and the cameraKey patch schema; receipt check fields in the protocol schema. `node test/bus/verify-camera-techniques-apply.mjs` -> `tests 5, pass 5, fail 0`.
+4. A4/A7 (2c81a8bf): `mcp/camera-technique-tools.mjs` (list_camera_techniques, apply_camera_technique; live runs `camera.applyTechnique`, memory marks A/B for describe_camera_move), render_prompt states the technique; `shot-meta.js` and `shot-prompt.js` add a `TECHNIQUE:` line (keyframe pack prompt.txt follows). Results: `node mcp/verify-camera-techniques.mjs` -> `14 passed, 0 failed`; `node mcp/verify.mjs` -> `29 tools registered`, `all checks passed`; `node test/verify-camera-technique-prompt.mjs` -> `6 checks passed`; `node test/verify-tool-handlers.mjs` -> `PASS tool handler registry (29 tools, importable without an MCP server)`; `node test/motion3/verify-motion3-prompt.mjs` -> `verify-motion3-prompt: all checks passed`. Existing expectations updated for the new module and tools: `test/bus/verify-command-registry.mjs` (13 modules, 122 actions), `test/verify-tool-handlers.mjs`, `mcp/verify-live.mjs`, `mcp/verify-tool-annotations.mjs`.
+5. A6 (9a5959f4): `src/panels/TechniquePicker.jsx` (search, kind tabs, mood filter, list, parameter popover with the top-down plan from `src/camera-techniques/diagram.js`, applied chips), `technique-picker.css` (theme tokens), mounted under Camera in `CameraPanel.jsx`; `src/motion/shot-technique-tag.jsx` on the timeline Shot block. Dev server `COZYCLAY_LIVE_PORT=5301 npm run dev -- --port 5201`; `CHROME_PATH=... CDP_PORT=9301 QA_URL=http://127.0.0.1:5201/app/ QA_SHOT_DIR=docs/intent/camera-techniques/proofs node tools/qa-browser.mjs -- node test/verify-camera-technique-picker-browser.mjs` -> 17 PASS lines, `camera technique picker browser QA passed`, exit 0.
+   - `proofs/picker.png`: Camera mode, Details > Techniques: applied chips LOW and PUSH-IN with 35mm, the search box, kind tabs (All selected), the mood select, the technique list with slate tags, and the open popover: a top-down plan (green subject dot with facing tick, violet dashed start wedge, violet path toward the subject, filled end camera and lens wedge), the Push In description, params speed=fast, steps 2, from/to auto, and the receipt line "Applied LOW · PUSH-IN · 35mm to Reveal [0, 120): Push-in (dolly in) (verified)." The timeline Shot block reads "0–119 · 5.0s · LOW · PUSH-IN · 35mm".
+   - `proofs/applied.png`: playhead at frame 119 after adding Over-the-Shoulder: chips LOW, PUSH-IN, OTS, 50mm; the Shot Camera preview shows Mara framed past Joon's shoulder; the Shot block reads "LOW · OTS · PUSH-IN · 50mm"; the popover shows the OTS plan (two cast dots, camera behind the partner) and its receipt line.
+6. A5 (0b593dbc): `headless-studio.mjs` cannot start here (F-2), so the live path runs inside the QA browser against the dev server and its live hub: `CHROME_PATH=... CDP_PORT=9301 COZYCLAY_LIVE_PORT=5301 QA_URL=http://127.0.0.1:5201/app/ QA_SHOT_DIR=docs/intent/camera-techniques/proofs node tools/qa-browser.mjs -- node test/qa-camera-technique-live-browser.mjs` -> exit 0, `camera technique live path QA passed`. Each step is a real `cclay live` invocation (printed with `$`), e.g. `cclay live run camera.applyTechnique --args '{"shotId":"shot-reveal","request":"slow push-in on Mara"}'` -> `Applied PUSH-IN · 35mm to Reveal [0, 96): Push-in (dolly in) (verified).`, `"move":"push-in","moveVerified":true,"fromSize":"medium-wide shot","toSize":"medium close-up"`; "give me a vertigo shot on Mara" -> `Dolly-zoom (vertigo) (verified)`; `cclay live tool render_prompt` -> `technique VERTIGO · 28→50mm: a dolly-zoom (vertigo effect), ...`.
+   - `proofs/live-low-angle-close-up.png` ("low-angle close-up on Mara", `LOW · CU · 50mm`, derivedSize close-up): the lens sits below Mara's eyes looking up; head and shoulders against the sky, no floor visible.
+   - `proofs/live-push-in-start.png` (frame 0 of "slow push-in on Mara"): Mara full figure in the middle distance on the grid floor, Joon's back at the right edge.
+   - `proofs/live-push-in-end.png` (frame 95): the same angle much closer; Mara from the waist up fills the centre, the floor grid still behind her.
+   - `proofs/live-over-the-shoulder.png` ("over the shoulder of Joon onto Mara, medium close-up", `MCU · OTS · 50mm`): Joon's head and shoulder soft at the left edge, Mara facing the lens from the chest up.
+7. A9 (0b593dbc): docs as listed in the Acceptance row.
 
 ## Decisions
 
@@ -34,5 +44,9 @@
 - The applied stack is stored as `shot.technique { stack, label, phrase, move, promptOnly, signature }` without a document version bump (an optional field; older bodies stay byte-identical). The signature fingerprints the keys and rail; once the camera is edited by hand the stack no longer shows or speaks for the shot (`currentTechnique`).
 - Speed sets how much of the shot a keyed move takes (slow: all of it, medium: 65 %, fast: 35 %); for rails it scales the rail length.
 - A still keeps the first framing of a move and states the move in the prompt.
+- Slate labels name the nearest prime (as every studio slate does), so the prompt never says two lenses.
+- In the picker a pick stacks on the shot's applied stack (same slot replaces, modifiers add); changing a parameter re-applies at once. The "parameter popover" is the detail card that opens under the list on a pick.
+- The MCP verify drives the registry the server serves (createToolHandlers + each tool's zod schema) rather than an SDK client, so it adds no unlisted-dependency finding to knip.
+- The agent prompt pointer replaced one sentence to stay inside the prompt's size budget (F-1).
 
 ## Reconciliations
