@@ -5,7 +5,7 @@
 // tolerances after it comes to rest); the subject motivates it when the
 // camera keeps a travelling subject in place on screen, or when the rig was
 // laid to travel with the subject (a follow camera, a body mount, a tracking
-// rail, walk-and-talk coverage). A move whose beat is more than the tolerance
+// rail or any rail camera, walk-and-talk coverage). A move whose beat is more than the tolerance
 // from its start or its rest starts or settles off the beat. Holds are never
 // flagged. Report only: nothing here changes a shot. Pure.
 import { createCameraBlock } from "../camera-block.js";
@@ -39,6 +39,8 @@ function subjectMotive(shot, segment, scene, place) {
 	const subject = shotSubjectRow(scene, shot, segment.start, segment.startFrame, place);
 	if (!subject) return null;
 	if (block.mount) return { how: "mounted on the subject", subjectId: subject.id };
+	// A rail camera follows its aim subject along the rail (the editor's rail follow), so it is a follow rig too.
+	if (block.mode === "rail") return { how: "rides a rail that follows the subject", subjectId: block.aim?.ids?.[0] ?? subject.id, byDesign: true };
 	const rail = technique?.stack.some((row) => techniqueById(row.id)?.recipe?.move === "rail" && techniqueById(row.id)?.expect === "tracking");
 	if (rail || TRAVELLING_PATTERNS.has(shot.coverage?.pattern)) return { how: "laid to travel with the subject", subjectId: subject.id, byDesign: true };
 	const row = scene.cast.find((entry) => entry.id === subject.id), a = place(row, shot, segment.startFrame), b = place(row, shot, segment.endFrame);
@@ -60,6 +62,9 @@ function judge(shot, segment, beats, { scene, place, tolerance }) {
 	const start = starters.sort((a, b) => Math.abs(a.frame - segment.startFrame) - Math.abs(b.frame - segment.startFrame))[0] ?? null;
 	const settle = beats.filter((beat) => beat !== start && beat.frame > mid && beat.frame <= segment.endFrame + 2 * tolerance)
 		.sort((a, b) => Math.abs(a.frame - segment.endFrame) - Math.abs(b.frame - segment.endFrame))[0] ?? null;
+	// A move that travels with its subject answers to the subject, whatever beats fall inside it.
+	const subject = subjectMotive(shot, segment, scene, place);
+	if (subject) return { motivation: { by: "subject", ...subject }, issues: [] };
 	const issues = [], align = (beat, edge) => ({ action: "camera.alignMove", args: { shotId: shot.id, beat: beat.source === "story" ? beat.id : beat.frame, edge, segment: segment.index } });
 	if (start || settle) {
 		if (start && Math.abs(start.frame - segment.startFrame) > tolerance) {
@@ -76,8 +81,6 @@ function judge(shot, segment, beats, { scene, place, tolerance }) {
 		}
 		return { motivation: { by: "beat", beat: start ?? settle, ...(start && settle ? { settle } : {}), edge: start ? "start" : "settle" }, issues };
 	}
-	const subject = subjectMotive(shot, segment, scene, place);
-	if (subject) return { motivation: { by: "subject", ...subject }, issues };
 	const big = segment.distanceM >= TRAVEL_M || Math.abs(segment.panDeg) >= 5 || Math.abs(segment.tiltDeg) >= 5 || Math.abs(segment.focalMm[1] - segment.focalMm[0]) >= 5;
 	issues.push({ rule: "unmotivated", severity: big ? "high" : "medium", frames: [segment.startFrame, segment.endFrame],
 		message: `The ${verb} over f${segment.startFrame}-${segment.endFrame} has no story beat, motion beat or travelling subject to answer to.`,

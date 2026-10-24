@@ -7,14 +7,14 @@
 import { normalizePhrase } from "../camera-techniques/resolve.js";
 import { STORY_BEAT_KINDS } from "./story-beats.js";
 
-const QUESTION = /\b(unmotivated|motivated|motivation|motivate|motivates|why (?:does|did|is) the camera (?:move|moving|push|pushing|pan|panning))\b/;
+const QUESTION = /\b(unmotivated|motivated|motivation|motivate|motivates|why (?:does|did|is) the camera (?:move|moving|push|pushing|pan|panning)|reason (?:for (?:the|this|that) (?:move|push|pan|tilt|dolly|zoom|crane|track|camera)|to move))\b/;
 const BEAT = /\b(story beats?|beats?|story marks?)\b/;
 const ADD = /\b(add|mark|put|place|drop in|insert|set)\b/, MOVE = /\b(move|shift|slide|retime)\b/, REMOVE = /\b(remove|delete|clear|drop)\b/;
 const MOVE_WORDS = /\b(push in|push|pull out|pull back|pull|pan|tilt|zoom|dolly|crane|track|tracking|arc|orbit|move|camera)\b/;
 const START = /\b(start|begin|kick off|trigger|time|align|sync|cue)\b/, SETTLE = /\b(settle|land|end|finish|stop|rest)\b/;
 // "start the push on the reveal": the verb takes the move as its object, then the beat it lands on.
 const TIMED = /\b(?:start|begin|kick off|trigger|time|align|sync|cue|settle|land|end|finish|stop|rest)\s+(?:the|this|that|my|our|his|her|its)\s+(?:camera\s+)?(?:push in|push|pull out|pull back|pull|pan|tilt|zoom|dolly|crane|track|tracking|arc|orbit|move|camera)\b/;
-const ANCHOR = /\b(?:on|at|to|with|for)\s+(?:the\s+|her\s+|his\s+|their\s+)?(f?\d{1,5}|[a-z][a-z0-9 ]{1,40}?)\s*$/;
+const ANCHOR = /\b(?:on|at|to|with|for)\s+(?:the\s+|her\s+|his\s+|their\s+|frame\s+)?(f?\d{1,5}|[a-z][a-z0-9 ]{1,40}?)\s*$/;
 const KIND_WORDS = { disclosure: /\b(disclosure|confession|confesses|admission|admits|secret|truth|tells)\b/, reveal: /\b(reveal|reveals|revealed|discovery|discovers|finds)\b/,
 	threat: /\b(threat|threatens|danger|gun|knife|attack)\b/, decision: /\b(decision|decides|chooses|choice)\b/, input: /\b(input|button|press|presses|player)\b/ };
 
@@ -27,7 +27,7 @@ function labelOf(text, phrase) {
 	if (quoted?.trim()) return quoted.trim();
 	const named = phrase.match(/\b(?:called|named|labelled|labeled)\s+(.+?)(?:\s+(?:at|on|to)\s+(?:frame\s+|f)?\d+.*)?$/)?.[1];
 	if (named) return named.trim();
-	const rest = phrase.replace(/\b(?:at|to|on)\s+(?:frame\s+|f)?\d{1,5}\b.*$/, "").replace(/^.*?\b(?:story beats?|beats?|marks?)\b\s*(?:for|of)?\s*/, "").trim();
+	const rest = phrase.replace(/\b(?:at|to|on)\s+(?:frame\s+|f)?\d{1,5}\b.*$/, "").replace(/^.*\b(?:story beats?|beats?)\b\s*(?:for|of)?\s*/, "").trim();
 	const before = phrase.match(/\b(?:add|mark|put|place|insert|set)\s+(?:a|an|the)?\s*([a-z][a-z ]{0,40}?)\s+(?:story\s+)?(?:beat|mark)s?\b/)?.[1];
 	return rest || before || null;
 }

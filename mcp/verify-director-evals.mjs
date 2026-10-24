@@ -42,8 +42,10 @@ function readAnswer(out) {
 		frame: frame === undefined ? undefined : Number(frame), confidence, matched: matched === "nothing" ? [] : [...matched.matchAll(/"([^"]*)"/g)].map((hit) => hit[1]), subject };
 }
 
-const rows = loadScenarios().filter((row) => row.tier === "core" && !row.expected.composition);
-const tools = { "camera.applyTechnique": "apply_camera_technique", none: "apply_camera_technique", "camera.cover": "cover_scene", "camera.checkCuts": "check_cuts" };
+// Motivation rows run through check_motivation and story_beats; camera.alignMove retimes editor keys, so it has no in-memory tool (studio_run reaches it live).
+const tools = { "camera.applyTechnique": "apply_camera_technique", none: "apply_camera_technique", "camera.cover": "cover_scene", "camera.checkCuts": "check_cuts",
+	"camera.checkMotivation": "check_motivation", "story.addBeat": "story_beats", "story.moveBeat": "story_beats", "story.removeBeat": "story_beats" };
+const rows = loadScenarios().filter((row) => row.tier === "core" && !row.expected.composition && tools[row.expected.action]);
 const byTool = {};
 await call("cover_scene", { request: "cover this conversation" }); // check_cuts in memory reads a plan.
 for (const row of rows.sort((a, b) => (a.expected.action === "camera.checkCuts") - (b.expected.action === "camera.checkCuts"))) {
@@ -53,13 +55,13 @@ for (const row of rows.sort((a, b) => (a.expected.action === "camera.checkCuts")
 	if (!got) { check(`${row.id}: ${tool} states what it resolved`, false, out.slice(0, 300)); continue; }
 	const sameAsRunner = got.action === want.action && JSON.stringify(got.stack?.map((item) => item.id)) === JSON.stringify(want.stack?.map((item) => item.id))
 		&& (got.pattern ?? null) === (want.pattern ?? null) && (got.frame ?? null) === (want.frame ?? null) && got.confidence === want.confidence && JSON.stringify(got.matched) === JSON.stringify(routed.matched);
-	const expected = resolutionMismatch({ ...row.expected, params: undefined, cast: undefined, subject: row.expected.action === "camera.applyTechnique" ? row.expected.subject : undefined },
+	const expected = resolutionMismatch({ ...row.expected, params: undefined, cast: undefined, label: undefined, kind: undefined, beat: undefined, edge: undefined, subject: row.expected.action === "camera.applyTechnique" ? row.expected.subject : undefined },
 		{ ...got, subject: got.subject && (names[ids[got.subject]] ?? got.subject) });
 	byTool[tool] = (byTool[tool] ?? 0) + 1;
 	check(`${row.id} via ${tool}: ${got.action}${got.stack ? ` ${got.stack.map((item) => item.id).join("+")}` : ""}${got.pattern ? ` ${got.pattern}` : ""} (${got.confidence}) matches the runner and the row`,
 		sameAsRunner && !expected.length, `${sameAsRunner ? "" : `runner ${JSON.stringify({ ...want, matched: routed.matched })} vs mcp ${JSON.stringify(got)}; `}${expected.join("; ")}\n${out.slice(0, 300)}`);
 }
-check(`at least 10 scenarios ran through the MCP tools (${Object.entries(byTool).map(([tool, count]) => `${tool} ${count}`).join(", ")})`, passes >= 11 && Object.keys(byTool).length === 3);
+check(`at least 10 scenarios ran through the MCP tools (${Object.entries(byTool).map(([tool, count]) => `${tool} ${count}`).join(", ")})`, passes >= 11 && Object.keys(byTool).length === new Set(Object.values(tools)).size);
 
 console.log(`\n${passes} passed, ${failures} failed`);
 process.exit(failures ? 1 : 0);
